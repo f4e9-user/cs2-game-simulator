@@ -271,7 +271,7 @@ export function synthesizeMatchEvent(
       },
       {
         id: 'play-team',
-        label: '体系打法：让 IGL 主导',
+        label: '体系打法：让指挥主导',
         description: '稳。',
         check: {
           primary: 'intelligence',
