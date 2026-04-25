@@ -1,0 +1,259 @@
+import { Hono } from 'hono';
+import { BACKGROUNDS } from '../data/backgrounds.js';
+import { TRAITS } from '../data/traits.js';
+import {
+  applyChoice,
+  computeTraitMods,
+  createSession,
+  initPlayer,
+  rollRandomTraits,
+  validateAllocation,
+} from '../engine/gameEngine.js';
+import { checkNaturalPromotion } from '../engine/stages.js';
+import { getTrait } from '../data/traits.js';
+import {
+  getTournament,
+  tournamentsOpenForSignup,
+} from '../data/tournaments.js';
+import { POINT_POOL } from '../engine/constants.js';
+import { makeStorage } from '../storage/index.js';
+import { makeAiService } from '../ai/service.js';
+import type { Env, Stats } from '../types.js';
+
+const app = new Hono<{ Bindings: Env }>();
+
+app.get('/health', (c) => {
+  const ai = makeAiService(c.env);
+  return c.json({
+    ok: true,
+    ts: new Date().toISOString(),
+    ai: { provider: c.env.AI_PROVIDER ?? 'none', active: ai.active },
+  });
+});
+
+app.get('/traits', (c) => c.json({ traits: TRAITS }));
+app.get('/backgrounds', (c) => c.json({ backgrounds: BACKGROUNDS }));
+
+app.post('/game/roll-traits', (c) => {
+  return c.json({ traits: rollRandomTraits(3) });
+});
+
+app.post('/game/start', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { name, traitIds, backgroundId, stats } = body ?? {};
+
+  if (!Array.isArray(traitIds) || traitIds.length !== 3) {
+    return c.json({ error: '必须选择 3 个特质' }, 400);
+  }
+  // backgroundId is optional now; engine falls back to DEFAULT_BACKGROUND_ID.
+  if (stats !== undefined) {
+    if (typeof stats !== 'object' || stats === null) {
+      return c.json({ error: 'stats 必须是对象' }, 400);
+    }
+    const traits = (traitIds as string[])
+      .map(getTrait)
+      .filter((t): t is NonNullable<typeof t> => Boolean(t));
+    if (traits.length !== 3) {
+      return c.json({ error: '特质无效或重复' }, 400);
+    }
+    const { floor } = computeTraitMods(traits);
+    const err = validateAllocation(stats as Stats, floor);
+    if (err) return c.json({ error: err }, 400);
+  }
+
+  try {
+    const player = initPlayer({
+      name: typeof name === 'string' ? name : '',
+      traitIds,
+      backgroundId,
+      stats: stats as Stats | undefined,
+    });
+    const seed = Math.floor(Math.random() * 0x7fffffff);
+    const session = createSession(player, seed);
+
+    const storage = makeStorage(c.env);
+    await storage.sessions.save(session);
+
+    return c.json({
+      sessionId: session.id,
+      player: session.player,
+      currentEvent: session.currentEvent,
+      leaderboard: session.leaderboard,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+app.get('/game/:sessionId', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  // Annotate with current promotion check so the UI can show next-stage hints.
+  const promotion = checkNaturalPromotion(session.player);
+  return c.json({ ...session, promotion });
+});
+
+app.post('/game/:sessionId/choice', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { choiceId } = body ?? {};
+  if (typeof choiceId !== 'string' || !choiceId) {
+    return c.json({ error: 'choiceId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const { session: updated, result } = applyChoice(session, choiceId);
+
+    const ai = makeAiService(c.env);
+    const polished = await ai.narrate({
+      player: updated.player,
+      baseNarrative: result.narrative,
+      eventTitle: result.eventTitle,
+      choiceLabel: result.choiceLabel,
+      success: result.success,
+    });
+    result.narrative = polished;
+
+    const lastIdx = updated.history.length - 1;
+    if (lastIdx >= 0) {
+      updated.history[lastIdx] = {
+        ...updated.history[lastIdx]!,
+        narrative: polished,
+      };
+    }
+
+    await storage.sessions.save(updated);
+    await storage.sessions.appendRound(
+      updated.id,
+      result.round,
+      result.eventId,
+      result.eventType,
+      result.choiceId,
+      result.success,
+      result,
+      result.createdAt,
+    );
+
+    return c.json({
+      result,
+      player: updated.player,
+      currentEvent: updated.currentEvent,
+      status: updated.status,
+      ending: updated.ending,
+      promotion: checkNaturalPromotion(updated.player),
+      leaderboard: updated.leaderboard,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+app.get('/game/meta/rules', (c) =>
+  c.json({
+    pointPool: POINT_POOL,
+  }),
+);
+
+// Tournaments whose signup window is open this week for the player's stage.
+app.get('/game/:sessionId/tournaments', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  const playerPoints =
+    session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0;
+  const open = tournamentsOpenForSignup(
+    session.player.stage,
+    session.player.fame ?? 0,
+    playerPoints,
+    session.player.week ?? 1,
+  );
+  return c.json({
+    open,
+    pendingMatch: session.player.pendingMatch ?? null,
+  });
+});
+
+// Sign up for a tournament — schedules its first stage for the *next* week.
+app.post('/game/:sessionId/signup', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { tournamentId } = body ?? {};
+  if (typeof tournamentId !== 'string' || !tournamentId) {
+    return c.json({ error: 'tournamentId 必填' }, 400);
+  }
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  const t = getTournament(tournamentId);
+  if (!t) return c.json({ error: '未知赛事' }, 400);
+  if (!t.stages.includes(session.player.stage)) {
+    return c.json({ error: '当前阶段不符合参赛资格' }, 400);
+  }
+  if (
+    t.fameRequired !== undefined &&
+    (session.player.fame ?? 0) < t.fameRequired
+  ) {
+    return c.json(
+      { error: `名气不足，需要 ≥ ${t.fameRequired}（当前 ${session.player.fame}）` },
+      400,
+    );
+  }
+  const playerPoints = session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0;
+  if (t.pointsRequired !== undefined && playerPoints < t.pointsRequired) {
+    return c.json(
+      { error: `战队积分不足，需要 ≥ ${t.pointsRequired}（当前 ${playerPoints}）` },
+      400,
+    );
+  }
+  const week = session.player.week ?? 1;
+  const inWindow =
+    t.signupWeeks === 'always' || t.signupWeeks.includes(week);
+  if (!inWindow) {
+    return c.json({ error: '当前周不在该赛事报名窗口' }, 400);
+  }
+  if (session.player.pendingMatch) {
+    return c.json({ error: '已经报名了一项赛事，先打完再说' }, 400);
+  }
+
+  const year = session.player.year ?? 1;
+  const next = week >= 48 ? { year: year + 1, week: 1 } : { year, week: week + 1 };
+
+  session.player.pendingMatch = {
+    tournamentId: t.id,
+    tier: t.tier,
+    name: t.name,
+    resolveYear: next.year,
+    resolveWeek: next.week,
+    stageIndex: 0,
+  };
+  session.updatedAt = new Date().toISOString();
+  await storage.sessions.save(session);
+
+  return c.json({
+    pendingMatch: session.player.pendingMatch,
+    player: session.player,
+  });
+});
+
+app.post('/game/:sessionId/withdraw', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  session.player.pendingMatch = null;
+  session.updatedAt = new Date().toISOString();
+  await storage.sessions.save(session);
+  return c.json({ player: session.player });
+});
+
+export default app;

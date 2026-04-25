@@ -1,0 +1,21 @@
+{
+  "name": "cs2-sim-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init:local": "wrangler d1 execute cs2-sim-db --local --file=./schema.sql",
+    "db:init:remote": "wrangler d1 execute cs2-sim-db --remote --file=./schema.sql",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240924.0",
+    "typescript": "^5.5.0",
+    "wrangler": "^3.78.0"
+  }
+}
