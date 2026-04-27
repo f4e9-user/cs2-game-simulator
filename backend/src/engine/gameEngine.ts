@@ -387,8 +387,10 @@ export function applyChoice(
 
     if (t) {
       const reward = stageRewardDelta(t, idx, outcome.success);
-      if (reward.points !== 0) {
-        leaderboard = addPlayerPoints(leaderboard, reward.points);
+      const extraPoints = outcome.chosenOutcome.pointsDelta ?? 0;
+      const totalPoints = reward.points + extraPoints;
+      if (totalPoints !== 0) {
+        leaderboard = addPlayerPoints(leaderboard, totalPoints);
       }
     }
 

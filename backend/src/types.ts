@@ -159,6 +159,8 @@ export interface Outcome {
   fameDelta?: number;
   // Force N rounds of "rest" events after this outcome.
   injuryRestRounds?: number;
+  // Extra leaderboard points credited on top of the stage base reward.
+  pointsDelta?: number;
 }
 
 export interface DetectionCheck {
