@@ -9,7 +9,7 @@ import {
   rollRandomTraits,
   validateAllocation,
 } from '../engine/gameEngine.js';
-import { checkNaturalPromotion } from '../engine/stages.js';
+import { checkTournamentPromotion } from '../engine/stages.js';
 import { getTrait } from '../data/traits.js';
 import {
   getTournament,
@@ -92,7 +92,7 @@ app.get('/game/:sessionId', async (c) => {
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
   // Annotate with current promotion check so the UI can show next-stage hints.
-  const promotion = checkNaturalPromotion(session.player);
+  const promotion = checkTournamentPromotion(session.player);
   return c.json({ ...session, promotion });
 });
 
@@ -147,7 +147,7 @@ app.post('/game/:sessionId/choice', async (c) => {
       currentEvent: updated.currentEvent,
       status: updated.status,
       ending: updated.ending,
-      promotion: checkNaturalPromotion(updated.player),
+      promotion: checkTournamentPromotion(updated.player),
       leaderboard: updated.leaderboard,
     });
   } catch (err) {

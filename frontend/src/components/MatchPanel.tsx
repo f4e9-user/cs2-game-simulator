@@ -7,8 +7,6 @@ import type { PendingMatch, Player, Tournament } from '@/lib/types';
 interface Props {
   sessionId: string;
   player: Player;
-  // Notify parent that the player object changed (after signup/withdraw),
-  // so it can refresh state. We just pass back the updated player.
   onPlayerUpdate: (p: Player) => void;
 }
 
@@ -32,7 +30,6 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
     return () => {
       cancelled = true;
     };
-    // Re-fetch when week or stage changes (tournaments depend on both).
   }, [sessionId, player.week, player.stage, player.fame]);
 
   const signup = async (tournamentId: string) => {
@@ -62,8 +59,21 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
   };
 
   return (
-    <div className="panel">
-      <div className="panel-title">赛事日历</div>
+    <div style={{ marginBottom: 6 }}>
+      <div
+        style={{
+          padding: '7px 8px 5px',
+          fontSize: 9,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+          color: 'var(--fg-3)',
+          borderBottom: '1px solid var(--border)',
+          marginBottom: 6,
+        }}
+      >
+        赛事日历
+      </div>
 
       {player.pendingMatch ? (
         <PendingMatchCard
@@ -71,27 +81,30 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
           onWithdraw={withdraw}
           busy={busyId === 'withdraw'}
         />
+      ) : loading ? (
+        <div style={{ padding: '6px 2px', fontSize: 11, color: 'var(--fg-3)' }}>
+          加载中…
+        </div>
+      ) : open.length === 0 ? (
+        <div style={{ padding: '6px 2px', fontSize: 11, color: 'var(--fg-3)' }}>
+          本周无可报名赛事
+        </div>
       ) : (
-        <div>
-          {loading ? (
-            <div className="stat-desc">加载中…</div>
-          ) : open.length === 0 ? (
-            <div className="stat-desc">本月没有可报名的赛事。</div>
-          ) : (
-            <div className="grid" style={{ gap: 10 }}>
-              {open.map((t) => (
-                <TournamentCard
-                  key={t.id}
-                  t={t}
-                  onSignup={() => signup(t.id)}
-                  busy={busyId === t.id}
-                />
-              ))}
-            </div>
-          )}
+        open.map((t) => (
+          <TournamentCard
+            key={t.id}
+            t={t}
+            onSignup={() => signup(t.id)}
+            busy={busyId === t.id}
+          />
+        ))
+      )}
+
+      {error && (
+        <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>
+          {error}
         </div>
       )}
-      {error && <div className="error">{error}</div>}
     </div>
   );
 }
@@ -106,27 +119,17 @@ function PendingMatchCard({
   busy: boolean;
 }) {
   return (
-    <div
-      style={{
-        background: 'var(--bg-elev-2)',
-        border: '1px solid var(--accent)',
-        borderRadius: 10,
-        padding: 12,
-      }}
-    >
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>
-        已报名：{pm.name}
-      </div>
-      <div className="stat-desc">
-        将在第 {pm.resolveYear} 年 第 {pm.resolveWeek} 周开赛
-        {' · '}阶段 {pm.stageIndex + 1}
+    <div className="pending-match-card">
+      <div className="pending-match-name">{pm.name}</div>
+      <div className="pending-match-meta">
+        Y{pm.resolveYear} W{pm.resolveWeek} · 阶段 {pm.stageIndex + 1}
       </div>
       <button
         type="button"
         className="ghost-button"
         disabled={busy}
         onClick={onWithdraw}
-        style={{ marginTop: 8 }}
+        style={{ fontSize: 11, padding: '3px 8px' }}
       >
         {busy ? '退出中…' : '退赛'}
       </button>
@@ -145,50 +148,46 @@ function TournamentCard({
 }) {
   const r = t.reward;
   return (
-    <div
-      style={{
-        background: 'var(--bg-elev-2)',
-        border: '1px solid var(--border)',
-        borderRadius: 10,
-        padding: 12,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: 10,
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600 }}>
-            {t.name}
-            <span className="badge" style={{ marginLeft: 8 }}>
-              {t.tier}
-            </span>
-          </div>
-          <div className="stat-desc">{t.description}</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-            <span className="delta-chip up">钱 +{r.money}</span>
-            <span className="delta-chip up">经验 +{r.experience}</span>
-            <span className="delta-chip up">名气 +{r.fame}</span>
-            {r.stressDelta !== undefined && r.stressDelta > 0 && (
-              <span className="delta-chip down">压力 +{r.stressDelta}</span>
-            )}
-            {t.fameRequired !== undefined && (
-              <span className="delta-chip">门槛 名气≥{t.fameRequired}</span>
-            )}
-            <span className="delta-chip">难度 {t.difficulty}</span>
-          </div>
-        </div>
+    <div className="tourney-card">
+      <div className="tourney-name">
+        {t.name}
+        <span
+          style={{
+            marginLeft: 6,
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: 'var(--accent-dim)',
+          }}
+        >
+          {t.tier}
+        </span>
+      </div>
+      <div className="tourney-meta">{t.description}</div>
+      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6 }}>
+        <span className="chip chip-up">¥+{r.money}</span>
+        <span className="chip chip-up">经验+{r.experience}</span>
+        <span className="chip chip-up">名气+{r.fame}</span>
+        {r.stressDelta !== undefined && r.stressDelta > 0 && (
+          <span className="chip chip-down">压力+{r.stressDelta}</span>
+        )}
+        <span className="chip chip-neu">难度 {t.difficulty}</span>
+      </div>
+      <div className="tourney-footer">
+        {t.fameRequired !== undefined && (
+          <span style={{ fontSize: 10, color: 'var(--fg-2)' }}>
+            名气≥{t.fameRequired}
+          </span>
+        )}
         <button
           type="button"
           className="primary-button"
           disabled={busy}
           onClick={onSignup}
+          style={{ fontSize: 11, padding: '4px 10px', marginLeft: 'auto' }}
         >
-          {busy ? '报名中…' : '报名'}
+          {busy ? '…' : '报名'}
         </button>
       </div>
     </div>

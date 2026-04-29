@@ -15,7 +15,6 @@ import {
   STAT_MAX,
   STAT_MIN,
 } from './constants.js';
-import { checkNaturalPromotion } from './stages.js';
 
 export function clampStats(stats: Stats): Stats {
   const out = { ...stats };
@@ -171,12 +170,10 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
       stageIndex(player.stage) + chosenOutcome.stageDelta,
     );
   } else {
-    // Natural promotion: requires the stage gate (exp + fame/tag) to pass.
-    // We use a snapshot of the player with updated stats so freshly-earned
-    // experience counts toward this check.
-    const probe = { ...player, stats: nextStats };
-    const promo = checkNaturalPromotion(probe);
-    if (promo.canPromote && promo.to) stageAfter = promo.to;
+    // Stage only changes via explicit stageDelta / stageSet in event outcomes.
+    // Tournament-record-based promotion is handled in gameEngine after each
+    // tournament stage, and delivered via a narrative promotion event.
+    stageAfter = player.stage;
   }
 
   return {

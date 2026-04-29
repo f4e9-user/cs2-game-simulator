@@ -1,98 +1,121 @@
 import type { Player, Stage } from '../types.js';
-import { STAGE_ORDER, STAGE_PROMOTION_EXPERIENCE } from './constants.js';
+import { STAGE_ORDER } from './constants.js';
 
-// A stage gate is the set of *additional* requirements (beyond raw experience)
-// to advance from `from` to the next stage. All conditions are AND'd by default;
-// `anyTag` means "any one of the listed tags is enough" (OR-style satisfier).
-export interface StageGate {
+// --- Tournament-based stage gate system ---
+
+export interface TournamentGate {
   from: Stage;
   to: Stage;
-  experience?: number;       // override the experience threshold from constants
-  fame?: number;             // require fame >= N
-  anyTag?: string[];         // require ANY of these tags as a shortcut path
+  /** Tiers that count toward the participation threshold */
+  tiers: string[];
+  minParticipations: number;
+  /** Tiers that count toward the championship threshold */
+  champTiers: string[];
+  minChampionships: number;
+  /** ID of the promotion narrative event injected when gate conditions are met */
+  promotionEventId: string;
 }
 
-export const STAGE_GATES: StageGate[] = [
+export const TOURNAMENT_GATES: TournamentGate[] = [
   {
     from: 'rookie',
     to: 'youth',
-    fame: 2,
-    anyTag: ['signed-second-team', 'tournament-winner', 'fan-favorite'],
+    tiers: ['netcafe', 'city', 'platform'],
+    minParticipations: 5,
+    champTiers: ['netcafe', 'city', 'platform'],
+    minChampionships: 2,
+    promotionEventId: 'promotion-rookie-to-youth',
   },
   {
     from: 'youth',
     to: 'second',
-    fame: 5,
-    anyTag: ['signed-second-team', 'tournament-winner'],
+    tiers: ['secondary-league', 'development-league'],
+    minParticipations: 3,
+    champTiers: ['secondary-league', 'development-league'],
+    minChampionships: 1,
+    promotionEventId: 'promotion-youth-to-second',
   },
   {
     from: 'second',
     to: 'pro',
-    fame: 10,
-    anyTag: ['tournament-winner', 'highlight-clip'],
+    tiers: ['development-league', 'tier2'],
+    minParticipations: 3,
+    champTiers: ['development-league', 'tier2'],
+    minChampionships: 1,
+    promotionEventId: 'promotion-second-to-pro',
   },
   {
     from: 'pro',
     to: 'star',
-    fame: 20,
-    anyTag: ['tournament-winner'],
+    tiers: ['tier1', 's-class', 'major'],
+    minParticipations: 2,
+    champTiers: ['tier1', 's-class', 'major'],
+    minChampionships: 1,
+    promotionEventId: 'promotion-pro-to-star',
   },
 ];
 
-export function getGate(from: Stage): StageGate | undefined {
-  return STAGE_GATES.find((g) => g.from === from);
+export function getGate(from: Stage): TournamentGate | undefined {
+  return TOURNAMENT_GATES.find((g) => g.from === from);
 }
 
 export interface PromotionCheck {
   canPromote: boolean;
   to?: Stage;
-  reasons: string[];   // list of unmet requirements (for UI hints)
+  reasons: string[];
 }
 
-// Returns whether `player` can naturally advance from their current stage.
-// Outcome-driven `stageDelta`/`stageSet` overrides bypass this entirely.
-export function checkNaturalPromotion(player: Player): PromotionCheck {
+function sumTiers(record: Record<string, number>, tiers: string[]): number {
+  return tiers.reduce((s, t) => s + (record[t] ?? 0), 0);
+}
+
+const TIER_LABELS: Record<string, string> = {
+  netcafe: '网吧赛',
+  city: '城市赛',
+  platform: '平台赛',
+  'secondary-league': '次级联赛',
+  'development-league': '发展联赛',
+  tier2: 'Tier2 邀请赛',
+  tier1: 'Tier1 邀请赛',
+  's-class': 'S 级赛事',
+  major: 'Major',
+};
+
+function tierLabel(tiers: string[]): string {
+  return tiers.map((t) => TIER_LABELS[t] ?? t).join('、');
+}
+
+export function checkTournamentPromotion(player: Player): PromotionCheck {
   const idx = STAGE_ORDER.indexOf(player.stage);
   if (idx < 0 || idx >= STAGE_ORDER.length - 1) {
     return { canPromote: false, reasons: [] };
   }
-  // 'star' / 'veteran' don't auto-promote — story-driven only.
-  if (player.stage === 'star' || player.stage === 'veteran') {
+
+  const gate = getGate(player.stage);
+  if (!gate) {
+    // star / veteran — story-driven only, no auto-check
     return { canPromote: false, reasons: [] };
   }
 
-  const next = STAGE_ORDER[idx + 1] as Stage;
+  const participations = sumTiers(player.tierParticipations ?? {}, gate.tiers);
+  const championships = sumTiers(player.tierChampionships ?? {}, gate.champTiers);
   const reasons: string[] = [];
 
-  const gate = getGate(player.stage);
-  const expReq = gate?.experience ?? STAGE_PROMOTION_EXPERIENCE[player.stage];
-  if (player.stats.experience < expReq) {
-    reasons.push(`经验需要 ≥ ${expReq}（当前 ${player.stats.experience}）`);
+  if (participations < gate.minParticipations) {
+    reasons.push(
+      `参赛场次不足：需在 ${tierLabel(gate.tiers)} 参赛 ≥ ${gate.minParticipations} 场（当前 ${participations} 场）`,
+    );
+  }
+  if (championships < gate.minChampionships) {
+    reasons.push(
+      `夺冠次数不足：需在 ${tierLabel(gate.champTiers)} 夺冠 ≥ ${gate.minChampionships} 次（当前 ${championships} 次）`,
+    );
   }
 
-  if (gate) {
-    const fameOk = gate.fame === undefined || player.fame >= gate.fame;
-    const tagShortcut =
-      gate.anyTag !== undefined &&
-      gate.anyTag.some((t) => player.tags.includes(t));
-
-    // The shortcut tags can substitute for the fame requirement, but
-    // experience is always required.
-    if (!fameOk && !tagShortcut) {
-      const fameMsg =
-        gate.fame !== undefined ? `名气需要 ≥ ${gate.fame}（当前 ${player.fame}）` : '';
-      const tagMsg =
-        gate.anyTag && gate.anyTag.length > 0
-          ? `或拥有标签：${gate.anyTag.map((t) => '#' + t).join(' / ')}`
-          : '';
-      const combined = [fameMsg, tagMsg].filter(Boolean).join(' ');
-      if (combined) reasons.push(combined);
-    }
-  }
-
+  const canPromote = reasons.length === 0;
   return {
-    canPromote: reasons.length === 0,
-    to: reasons.length === 0 ? next : undefined,
+    canPromote,
+    to: canPromote ? gate.to : undefined,
     reasons,
   };
 }

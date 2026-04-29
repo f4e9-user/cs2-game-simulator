@@ -8,9 +8,10 @@ import { EventCard } from '@/components/EventCard';
 import { ChoiceList } from '@/components/ChoiceList';
 import { PlayerStats } from '@/components/PlayerStats';
 import { ResultPanel } from '@/components/ResultPanel';
-import { HistoryPanel } from '@/components/HistoryPanel';
 import { MatchPanel } from '@/components/MatchPanel';
 import { Leaderboard } from '@/components/Leaderboard';
+import { FeedPanel } from '@/components/FeedPanel';
+import { HudTopBar } from '@/components/HudTopBar';
 import { useGameStore } from '@/store/gameStore';
 import { ENDING_LABELS } from '@/lib/format';
 import type { Player, Trait } from '@/lib/types';
@@ -69,15 +70,44 @@ export default function GamePage() {
   };
 
   if (!player && loading) {
-    return <div className="panel">载入中…</div>;
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg)',
+          fontSize: 13,
+          color: 'var(--fg-2)',
+        }}
+      >
+        载入中…
+      </div>
+    );
   }
+
   if (!player) {
     return (
-      <div className="panel">
-        <div className="narrative">找不到这个会话。</div>
-        <Link href="/" className="ghost-button" style={{ marginTop: 12 }}>
-          回到首页
-        </Link>
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg)',
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: 'var(--fg-2)', marginBottom: 12 }}>
+            找不到这个会话
+          </div>
+          <Link href="/" className="ghost-button">
+            回到首页
+          </Link>
+        </div>
       </div>
     );
   }
@@ -85,53 +115,14 @@ export default function GamePage() {
   const ended = status === 'ended';
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}>
-        <Link href="/" className="ghost-button">← 开始新的生涯</Link>
-        <div className="stat-desc">会话 ID：{sessionId.slice(0, 8)}…</div>
-      </div>
+    <div className="hud-root">
+      {/* Top bar */}
+      <HudTopBar player={player} leaderboard={leaderboard} />
 
-      <div className="grid grid-2">
-        <div>
-          {lastResult && <ResultPanel result={lastResult} />}
-
-          {ended ? (
-            <div className="panel">
-              <div className="panel-title">生涯结束</div>
-              <div className="narrative">
-                你的结局：
-                <strong>
-                  {ending ? (ENDING_LABELS[ending] ?? ending) : '未知'}
-                </strong>
-                。
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <Link href="/" className="primary-button">
-                  再来一次
-                </Link>
-              </div>
-            </div>
-          ) : currentEvent ? (
-            <>
-              <EventCard event={currentEvent} />
-              <div className="panel">
-                <div className="panel-title">你的选择</div>
-                <ChoiceList
-                  choices={currentEvent.choices}
-                  disabled={loading}
-                  onPick={pickChoice}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="panel">等待下一回合…</div>
-          )}
-
-          {error && <div className="error">错误：{error}</div>}
-        </div>
-
-        <div>
-          <PlayerStats player={player} traits={traits} promotion={promotion} />
+      {/* Main body */}
+      <div className="hud-body">
+        {/* Left: tournaments + leaderboard */}
+        <aside className="hud-left">
           {!ended && (
             <MatchPanel
               sessionId={sessionId}
@@ -140,9 +131,102 @@ export default function GamePage() {
             />
           )}
           <Leaderboard teams={leaderboard} />
-          <HistoryPanel history={history} />
-        </div>
+        </aside>
+
+        {/* Center: event narrative + choices */}
+        <main className="hud-center">
+          {ended ? (
+            <div className="ending-panel">
+              <div className="ending-title">生涯结束</div>
+              <div className="ending-result">
+                {ending ? (ENDING_LABELS[ending] ?? ending) : '未知结局'}
+              </div>
+              <Link href="/" className="primary-button">
+                再来一次
+              </Link>
+            </div>
+          ) : (
+            <>
+              {lastResult && <ResultPanel result={lastResult} />}
+
+              {currentEvent ? (
+                <>
+                  <EventCard event={currentEvent} />
+                  <div
+                    style={{
+                      marginTop: 8,
+                      marginBottom: 4,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      color: 'var(--fg-3)',
+                    }}
+                  >
+                    选择行动
+                  </div>
+                  <ChoiceList
+                    choices={currentEvent.choices}
+                    disabled={loading}
+                    onPick={pickChoice}
+                  />
+                </>
+              ) : (
+                <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>
+                  等待下一回合…
+                </div>
+              )}
+
+              {error && (
+                <div className="error" style={{ marginTop: 8 }}>
+                  错误：{error}
+                </div>
+              )}
+            </>
+          )}
+        </main>
+
+        {/* Right: player info + feed */}
+        <aside className="hud-right">
+          <PlayerStats player={player} traits={traits} promotion={promotion} />
+          <FeedPanel history={history} />
+        </aside>
       </div>
+
+      {/* Bottom bar */}
+      <footer className="hud-bottom">
+        <Link
+          href="/"
+          className="ghost-button"
+          style={{ fontSize: 11, padding: '3px 10px' }}
+        >
+          ← 新生涯
+        </Link>
+        <span
+          style={{
+            fontSize: 10,
+            color: 'var(--fg-3)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {sessionId.slice(0, 8)}…
+        </span>
+        {player.restRounds > 0 && (
+          <span className="status-alert danger">
+            休养中 {player.restRounds}回合
+          </span>
+        )}
+        {player.stressMaxRounds > 0 && (
+          <span className="status-alert danger">
+            压力临界 {player.stressMaxRounds} 回合
+          </span>
+        )}
+        {loading && (
+          <span style={{ fontSize: 11, color: 'var(--fg-3)', marginLeft: 'auto' }}>
+            处理中…
+          </span>
+        )}
+      </footer>
     </div>
   );
 }

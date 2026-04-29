@@ -7,7 +7,6 @@ interface Props {
 }
 
 export function Leaderboard({ teams }: Props) {
-  // Always include the player's row, even if it would be off-screen.
   const sorted = [...teams].sort((a, b) => b.points - a.points);
   const top = sorted.slice(0, VISIBLE);
   const playerInTop = top.some((t) => t.isPlayer);
@@ -15,68 +14,70 @@ export function Leaderboard({ teams }: Props) {
   const playerRank = sorted.findIndex((t) => t.isPlayer) + 1;
 
   return (
-    <div className="panel">
+    <div style={{ marginBottom: 0 }}>
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: 8,
+          padding: '7px 8px 5px',
+          borderBottom: '1px solid var(--border)',
         }}
       >
-        <div className="panel-title" style={{ margin: 0 }}>
-          战队积分榜
-        </div>
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            color: 'var(--fg-3)',
+          }}
+        >
+          积分榜
+        </span>
         {playerRow && !playerInTop && (
-          <span className="badge">你 #{playerRank}</span>
+          <span style={{ fontSize: 10, color: 'var(--accent)' }}>
+            你 #{playerRank}
+          </span>
         )}
       </div>
 
-      <div>
-        {top.map((t, i) => (
-          <Row key={t.name} rank={i + 1} t={t} />
-        ))}
-        {!playerInTop && playerRow && (
-          <>
-            <div className="stat-desc" style={{ padding: '4px 0' }}>
-              ...
-            </div>
-            <Row rank={playerRank} t={playerRow} />
-          </>
-        )}
+      <div className="hltv-header">
+        <span className="hltv-rank">#</span>
+        <span style={{ flex: 1 }}>战队</span>
+        <span>分</span>
       </div>
+
+      {top.map((t, i) => (
+        <HltvRow key={t.name} rank={i + 1} t={t} />
+      ))}
+
+      {!playerInTop && playerRow && (
+        <>
+          <div
+            style={{
+              padding: '2px 8px',
+              fontSize: 10,
+              color: 'var(--fg-3)',
+              borderBottom: '1px solid var(--border)',
+            }}
+          >
+            ···
+          </div>
+          <HltvRow rank={playerRank} t={playerRow} />
+        </>
+      )}
     </div>
   );
 }
 
-function Row({ rank, t }: { rank: number; t: LeaderboardTeam }) {
+function HltvRow({ rank, t }: { rank: number; t: LeaderboardTeam }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '6px 0',
-        borderBottom: '1px dashed var(--border)',
-        fontFamily: t.isPlayer ? undefined : 'inherit',
-        color: t.isPlayer ? 'var(--accent)' : undefined,
-        fontWeight: t.isPlayer ? 600 : 400,
-      }}
-    >
-      <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0 }}>
-        <span style={{ minWidth: 28, color: 'var(--fg-dim)' }}>#{rank}</span>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</span>
-        <span className="stat-desc">[{t.region}]</span>
-      </div>
-      <span
-        style={{
-          fontVariantNumeric: 'tabular-nums',
-          fontWeight: 600,
-          color: t.isPlayer ? 'var(--accent)' : 'var(--fg)',
-        }}
-      >
-        {t.points}
-      </span>
+    <div className={`hltv-row ${t.isPlayer ? 'is-player' : ''}`}>
+      <span className={`hltv-rank ${rank <= 3 ? 'top3' : ''}`}>{rank}</span>
+      <span className="hltv-name">{t.name}</span>
+      <span className="hltv-tag">[{t.region}]</span>
+      <span className="hltv-pts">{t.points}</span>
     </div>
   );
 }

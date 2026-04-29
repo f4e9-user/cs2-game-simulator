@@ -39,6 +39,7 @@ import {
   passiveStressFromMentality,
 } from './constants.js';
 import { pickEvent, substituteRivals, toPublicEvent } from './events.js';
+import { checkTournamentPromotion } from './stages.js';
 import { applyDelta, clampStats, makeRng, resolveChoice } from './resolver.js';
 
 export interface InitInput {
@@ -160,6 +161,12 @@ export function initPlayer(input: InitInput): Player {
     week: 1,
     pendingMatch: null,
     rivals: generateRivals(4),
+    tournamentParticipations: 0,
+    tournamentChampionships: 0,
+    tierParticipations: {},
+    tierChampionships: {},
+    promotionPending: null,
+    promotionCooldown: 0,
   };
 }
 
@@ -374,8 +381,8 @@ export function applyChoice(
 
   const ending = checkEnding(nextPlayer, outcome.endRun, outcome.endReason);
 
-  // Multi-stage tournament progression: handle stage advance / elimination
-  // and credit player team points to the leaderboard.
+  // Multi-stage tournament progression: handle stage advance / elimination,
+  // credit leaderboard points, and track career participation/championship records.
   let leaderboard = session.leaderboard ?? buildLeaderboard(session.player);
   if (
     nextPlayer.pendingMatch &&
@@ -392,6 +399,21 @@ export function applyChoice(
       if (totalPoints !== 0) {
         leaderboard = addPlayerPoints(leaderboard, totalPoints);
       }
+
+      // Count participation when first stage (stageIndex 0) resolves.
+      if (idx === 0) {
+        const tierPart = { ...(nextPlayer.tierParticipations ?? {}) };
+        tierPart[t.tier] = (tierPart[t.tier] ?? 0) + 1;
+        nextPlayer.tierParticipations = tierPart;
+        nextPlayer.tournamentParticipations = (nextPlayer.tournamentParticipations ?? 0) + 1;
+      }
+      // Count championship when final stage is won.
+      if (isFinal && outcome.success) {
+        const tierChamp = { ...(nextPlayer.tierChampionships ?? {}) };
+        tierChamp[t.tier] = (tierChamp[t.tier] ?? 0) + 1;
+        nextPlayer.tierChampionships = tierChamp;
+        nextPlayer.tournamentChampionships = (nextPlayer.tournamentChampionships ?? 0) + 1;
+      }
     }
 
     if (!t || !outcome.success || isFinal) {
@@ -404,6 +426,33 @@ export function applyChoice(
         resolveYear: adv.year,
         resolveWeek: adv.week,
       };
+    }
+
+    // After updating tournament record, check whether the player has met
+    // the gate conditions for the next stage. Only trigger if no cooldown active.
+    if (!nextPlayer.promotionPending) {
+      const promoCheck = checkTournamentPromotion(nextPlayer);
+      if (promoCheck.canPromote && promoCheck.to) {
+        const cooldownOk = (nextPlayer.promotionCooldown ?? 0) <= nextPlayer.round;
+        if (cooldownOk) {
+          nextPlayer.promotionPending = promoCheck.to;
+        }
+      }
+    }
+  }
+
+  // Promotion event resolution:
+  //   - If stage advanced via stageSet in a promotion event → clear pending.
+  //   - If player picked decline (stage unchanged after promotion event) → clear
+  //     pending and set cooldown so they're not immediately re-triggered.
+  if (eventDef.id.startsWith('promotion-')) {
+    if (nextPlayer.stage !== stageBefore) {
+      // Successfully accepted promotion.
+      nextPlayer.promotionPending = null;
+    } else {
+      // Declined or failed — clear pending and set an 8-round cooldown.
+      nextPlayer.promotionPending = null;
+      nextPlayer.promotionCooldown = nextPlayer.round + 8;
     }
   }
 

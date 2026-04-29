@@ -3,7 +3,7 @@ import { getTournament, synthesizeMatchEvent } from '../tournaments.js';
 import { TRAINING_EVENTS } from './training.js';
 import { RANKED_EVENTS } from './ranked.js';
 import { TEAM_EVENTS } from './team.js';
-import { TRYOUT_EVENTS } from './tryout.js';
+import { TRYOUT_EVENTS, PROMOTION_EVENTS } from './tryout.js';
 import { MATCH_EVENTS } from './match.js';
 import { MEDIA_EVENTS } from './media.js';
 import { LIFE_EVENTS } from './life.js';
@@ -30,7 +30,12 @@ export const EVENT_POOL: EventDef[] = [
   ...BROADCAST_EVENTS,
 ];
 
+export { PROMOTION_EVENTS };
+
 export function getEventById(id: string): EventDef | undefined {
+  if (id.startsWith('promotion-')) {
+    return PROMOTION_EVENTS.find((e) => e.id === id);
+  }
   if (id.startsWith('tournament-')) {
     // tournament-{tid}--{stageIndex}
     const rest = id.slice('tournament-'.length);

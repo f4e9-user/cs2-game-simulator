@@ -89,6 +89,15 @@ export interface Player extends DynamicState {
   round: number;
   tags: string[];
   rivals: Rival[];
+  // Tournament career record
+  tournamentParticipations: number;
+  tournamentChampionships: number;
+  tierParticipations: Record<string, number>;
+  tierChampionships: Record<string, number>;
+  // Pending stage promotion (set when gate conditions are met, cleared on accept/decline)
+  promotionPending: Stage | null;
+  // Round number after which promotion can re-trigger (cooldown after decline)
+  promotionCooldown: number;
 }
 
 export interface ChoicePublic {

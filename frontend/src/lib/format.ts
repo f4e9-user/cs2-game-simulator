@@ -9,6 +9,15 @@ export const STAT_LABELS: Record<StatKey, string> = {
   constitution: '体质',
 };
 
+export const HUD_STAT_LABELS: Record<StatKey, string> = {
+  intelligence: '战术',
+  agility: '手感',
+  experience: '经验',
+  money: '资金',
+  mentality: '心态',
+  constitution: '体能',
+};
+
 export const STAT_DESCRIPTION: Record<StatKey, string> = {
   intelligence: '战术理解、应变、残局决策',
   agility: '枪法、反应、对枪能力',

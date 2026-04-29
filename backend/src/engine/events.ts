@@ -1,4 +1,5 @@
-import { EVENT_POOL } from '../data/events/index.js';
+import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
+import { getGate } from './stages.js';
 import type { EventDef, Player, Rival } from '../types.js';
 
 export interface EventContext {
@@ -47,6 +48,15 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   if ((player.restRounds ?? 0) > 0) {
     const restPool = EVENT_POOL.filter((e) => e.type === 'rest');
     if (restPool.length > 0) return weightedPick(restPool, rng, () => 1);
+  }
+
+  // Promotion pending: inject the stage-specific narrative event.
+  if (player.promotionPending) {
+    const gate = getGate(player.stage);
+    if (gate) {
+      const ev = PROMOTION_EVENTS.find((e) => e.id === gate.promotionEventId);
+      if (ev) return ev;
+    }
   }
 
   const eligible = EVENT_POOL.filter((e) => {

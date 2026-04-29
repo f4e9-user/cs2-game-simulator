@@ -89,6 +89,12 @@ export interface Player extends DynamicState {
   round: number;
   tags: string[];
   rivals: Rival[];
+  tournamentParticipations: number;
+  tournamentChampionships: number;
+  tierParticipations: Record<string, number>;
+  tierChampionships: Record<string, number>;
+  promotionPending: Stage | null;
+  promotionCooldown: number;
 }
 
 export interface Choice {

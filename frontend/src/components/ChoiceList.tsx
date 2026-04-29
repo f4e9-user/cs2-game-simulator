@@ -8,17 +8,18 @@ interface Props {
 
 export function ChoiceList({ choices, disabled, onPick }: Props) {
   return (
-    <div className="grid" style={{ gap: 12 }}>
-      {choices.map((c) => (
+    <div className="cs-choices">
+      {choices.map((c, i) => (
         <button
           key={c.id}
           type="button"
-          className="choice-card"
+          className="cs-choice"
           disabled={disabled}
           onClick={() => onPick(c.id)}
         >
-          <div className="choice-label">{c.label}</div>
-          <div className="choice-desc">{c.description}</div>
+          <span className="cs-choice-num">{i + 1}</span>
+          <div className="cs-choice-label">{c.label}</div>
+          <div className="cs-choice-desc">{c.description}</div>
         </button>
       ))}
     </div>
