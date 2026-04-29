@@ -108,6 +108,7 @@ export interface Player extends DynamicState {
   stage: Stage;
   round: number;
   tags: string[];
+  tagExpiry: Record<string, number>;
   rivals: Rival[];
   tournamentParticipations: number;
   tournamentChampionships: number;

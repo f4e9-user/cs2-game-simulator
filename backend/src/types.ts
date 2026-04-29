@@ -116,6 +116,7 @@ export interface Player extends DynamicState {
   stage: Stage;
   round: number;
   tags: string[];
+  tagExpiry: Record<string, number>; // tag → round number when it expires
   rivals: Rival[];
   tournamentParticipations: number;
   tournamentChampionships: number;
@@ -218,6 +219,8 @@ export interface Outcome {
   dailyGrowth?: StatKey;  // 指定哪个核心属性从此次行动获得成长机会
   // ── 新增：添加 Buff ──
   buffAdd?: Buff;
+  // ── 冷却 tag：key = tag 名称，value = 持续轮数（从本轮起算）──
+  tagCooldowns?: Record<string, number>;
 }
 
 export interface DetectionCheck {

@@ -184,6 +184,7 @@ export function initPlayer(input: InitInput): Player {
     stage: bg.startStage,
     round: 0,
     tags: [...bg.tags],
+    tagExpiry: {},
     stress: 0,
     fame: 0,
     restRounds: 0,
@@ -493,10 +494,28 @@ export function applyChoice(
     if (Math.abs(diff) > 0.001) statChanges[k] = diff;
   }
 
+  const nextRound = session.player.round + 1;
+
+  // ── 冷却 tag 处理 ──────────────────────────────────────────────
+  // 1. 先剪掉已过期的冷却 tag
+  const nextTagExpiry: Record<string, number> = { ...(session.player.tagExpiry ?? {}) };
+  const expiredCdTags = Object.entries(nextTagExpiry)
+    .filter(([, exp]) => exp <= nextRound)
+    .map(([t]) => t);
+  for (const t of expiredCdTags) delete nextTagExpiry[t];
+
+  // 2. 组装 nextTags（先去掉 tagsRemoved 和过期冷却 tag，再加 tagsAdded）
   const nextTags = dedupe([
-    ...session.player.tags.filter((t) => !tagsRemoved.includes(t)),
+    ...session.player.tags.filter((t) => !tagsRemoved.includes(t) && !expiredCdTags.includes(t)),
     ...tagsAdded,
   ]);
+
+  // 3. 写入本次事件新增的冷却 tag
+  const newCooldowns = outcome.chosenOutcome.tagCooldowns ?? {};
+  for (const [tag, duration] of Object.entries(newCooldowns)) {
+    if (!nextTags.includes(tag)) nextTags.push(tag);
+    nextTagExpiry[tag] = nextRound + duration;
+  }
 
   const { year: nextYear, week: nextWeek } = advanceWeek(
     session.player.year ?? 1,
@@ -510,8 +529,9 @@ export function applyChoice(
     buffs,
     growthSpent,
     stage: outcome.stageAfter,
-    round: session.player.round + 1,
+    round: nextRound,
     tags: nextTags,
+    tagExpiry: nextTagExpiry,
     stress,
     fame,
     restRounds,

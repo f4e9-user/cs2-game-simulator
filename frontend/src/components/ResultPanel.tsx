@@ -27,7 +27,6 @@ export function ResultPanel({ result }: { result: RoundResult }) {
   const hasChips =
     deltas.length > 0 ||
     stageChanged ||
-    result.tagsAdded.length > 0 ||
     buffsAdded.length > 0 ||
     stressChange !== 0 ||
     fameChange !== 0 ||
@@ -118,11 +117,6 @@ export function ResultPanel({ result }: { result: RoundResult }) {
           {buffsAdded.map((b) => (
             <span key={b.id} className="chip chip-buff">
               {describeBuffAdded(b)}
-            </span>
-          ))}
-          {result.tagsAdded.map((t) => (
-            <span key={t} className="chip chip-neu">
-              #{t}
             </span>
           ))}
         </div>
