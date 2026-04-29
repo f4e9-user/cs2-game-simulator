@@ -424,7 +424,7 @@ input[type='text']:focus {
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-rows: 52px 1fr 44px;
+  grid-template-rows: 64px 1fr 44px;
   background: var(--bg);
   z-index: 10;
   overflow: hidden;
@@ -922,6 +922,82 @@ input[type='text']:focus {
   background: var(--bg-2);
 }
 
+.chip-buff {
+  color: #e8a020;
+  border-color: #6b4a10;
+  background: #2a1f0a;
+}
+
+/* ── Match stats card ────────────────────────────────────────── */
+.match-stats-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.match-score-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+}
+
+.match-score-team,
+.match-score-enemy {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.match-score-team.won,
+.match-score-enemy.won {
+  color: var(--success);
+}
+
+.match-score-team.lost,
+.match-score-enemy.lost {
+  color: var(--danger);
+}
+
+.match-score-sep {
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--fg-3);
+}
+
+.match-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.match-stat-cell {
+  text-align: center;
+  padding: 4px 2px;
+  background: var(--bg-1);
+  border-radius: 3px;
+}
+
+.match-stat-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg-1);
+  line-height: 1.2;
+}
+
+.match-stat-label {
+  font-size: 9px;
+  color: var(--fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 1px;
+}
+
 /* ── HLTV-style leaderboard ──────────────────────────────────── */
 
 .hltv-header {
@@ -1195,4 +1271,77 @@ input[type='text']:focus {
   color: var(--warn);
   border-color: rgba(210, 153, 34, 0.3);
   background: rgba(210, 153, 34, 0.06);
+}
+
+/* ── HUD derived stat bars ───────────────────────────────────── */
+
+.hud-derived-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.hud-derived-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1;
+}
+
+.hud-derived-icon {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.hud-derived-name {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--fg-3);
+  line-height: 1;
+}
+
+.hud-derived-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hud-derived-val {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 24px;
+  line-height: 1;
+}
+
+.hud-derived-bar {
+  height: 3px;
+  width: 48px;
+  background: var(--bg-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* ── Feel color states ───────────────────────────────────────── */
+
+.feel-hot .hud-gauge-val {
+  color: #ffa726;
+}
+
+.feel-cold .hud-gauge-val {
+  color: #42a5f5;
+}
+
+.feel-neutral .hud-gauge-val {
+  color: var(--fg-2);
+}
+
+/* ── Routine event badge ─────────────────────────────────────── */
+
+.event-type-badge.routine {
+  color: var(--fg-2);
+  border-color: var(--border);
+  background: var(--bg-2);
 }

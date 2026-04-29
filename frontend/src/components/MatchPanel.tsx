@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { PendingMatch, Player, Tournament } from '@/lib/types';
+import {
+  describeTournamentMoney,
+  describeTournamentExp,
+  describeTournamentFame,
+  describeTournamentStress,
+} from '@/lib/format';
 
 interface Props {
   sessionId: string;
@@ -166,11 +172,11 @@ function TournamentCard({
       </div>
       <div className="tourney-meta">{t.description}</div>
       <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6 }}>
-        <span className="chip chip-up">¥+{r.money}</span>
-        <span className="chip chip-up">经验+{r.experience}</span>
-        <span className="chip chip-up">名气+{r.fame}</span>
+        <span className="chip chip-up">{describeTournamentMoney(r.money)}</span>
+        <span className="chip chip-up">{describeTournamentExp(r.experience)}</span>
+        <span className="chip chip-up">{describeTournamentFame(r.fame)}</span>
         {r.stressDelta !== undefined && r.stressDelta > 0 && (
-          <span className="chip chip-down">压力+{r.stressDelta}</span>
+          <span className="chip chip-down">{describeTournamentStress(r.stressDelta)}</span>
         )}
         <span className="chip chip-neu">难度 {t.difficulty}</span>
       </div>

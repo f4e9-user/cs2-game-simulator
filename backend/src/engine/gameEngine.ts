@@ -1,5 +1,6 @@
 import { DEFAULT_BACKGROUND_ID, getBackground } from '../data/backgrounds.js';
 import {
+  type Tournament,
   getTournament,
   stageRewardDelta,
   synthesizeMatchEvent,
@@ -16,8 +17,12 @@ import type {
   Buff,
   GameEventPublic,
   GameSession,
+  MatchStats,
+  Outcome,
   Player,
   RoundResult,
+  StatDelta,
+  StatKey,
   Stats,
   Trait,
   VolatileState,
@@ -51,7 +56,8 @@ import {
 } from './constants.js';
 import { pickEvent, substituteRivals, toPublicEvent } from './events.js';
 import { checkTournamentPromotion } from './stages.js';
-import { applyDelta, clampStats, makeRng, resolveChoice } from './resolver.js';
+import { applyDelta, applyGrowth, clampStats, makeRng, resolveChoice, translateStatDelta } from './resolver.js';
+import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
 
 export interface InitInput {
   name: string;
@@ -224,6 +230,93 @@ export function createSession(player: Player, rngSeed: number): GameSession {
   };
 }
 
+// Build a synthetic ResolveResult from a match simulation, bypassing d20.
+function buildMatchResolveResult(
+  player: Player,
+  sim: MatchSimResult,
+  t: Tournament,
+  stageIdx: number,
+): ReturnType<typeof resolveChoice> {
+  const won = sim.won;
+  const isFinal = stageIdx >= t.bracket.length - 1;
+  const r = t.reward;
+  const stage = t.bracket[stageIdx]!;
+  const lossShare = stage.rewardShareOnEarlyExit;
+
+  // Reward calculation mirrors old synthesizeMatchEvent logic
+  const winReward: StatDelta = isFinal
+    ? { money: r.money, experience: r.experience }
+    : { money: Math.max(0, Math.floor(r.money / 4)), experience: Math.max(1, Math.floor(r.experience / 4)) };
+  const lossReward: StatDelta = {
+    money: Math.max(0, Math.floor(r.money * lossShare)),
+    experience: Math.max(1, Math.floor(r.experience * lossShare)),
+  };
+  const winFame = isFinal ? r.fame : Math.floor(r.fame / 5);
+  const lossFame = Math.floor(r.fame * lossShare);
+  // Win a final still costs stress at high tiers; loss is always stressful.
+  const winStressDelta = isFinal ? (r.stressDelta ?? 0) : 0;
+  const lossStressDelta = (r.stressDelta ?? 1) + 2;
+
+  const statChanges: StatDelta = won ? winReward : lossReward;
+
+  // Apply stat changes via translateStatDelta for consistency
+  const legacy = translateStatDelta(statChanges);
+  let nextStats = { ...player.stats };
+  nextStats.money = Math.max(0, Math.min(20, nextStats.money + legacy.moneyDelta));
+
+  let growthApplied = 0;
+  let growthKey: StatKey | undefined;
+  if (legacy.expGrowth > 0) {
+    const res = applyGrowth(
+      nextStats,
+      'experience',
+      legacy.expGrowth,
+      player.growthSpent,
+      player.buffs,
+      'match',
+    );
+    nextStats = res.stats;
+    growthApplied = res.grown;
+    growthKey = 'experience';
+  }
+  nextStats = clampStats(nextStats);
+
+  const tagAdds = won && isFinal ? ['tournament-winner'] : [];
+
+  const chosenOutcome: Outcome = {
+    narrative: sim.summary,
+    statChanges,
+    feelDelta: sim.feelDelta,
+    tiltDelta: sim.tiltDelta,
+    fatigueDelta: sim.fatigueDelta,
+    stressDelta: won ? winStressDelta : lossStressDelta,
+    fameDelta: won ? winFame : lossFame,
+    tagAdds,
+  };
+
+  // roll = rating×100 for display; dc = enemy aim proxy
+  const effectiveDiff = t.baseDifficulty + stage.difficultyBonus;
+  const enemyAimProxy = Math.max(20, Math.min(90, 25 + effectiveDiff * 8));
+
+  return {
+    success: won,
+    roll: Math.round(sim.rating * 100),
+    dc: enemyAimProxy,
+    chosenOutcome,
+    nextStats,
+    stageAfter: player.stage,
+    tagsAdded: tagAdds,
+    tagsRemoved: [],
+    endRun: false,
+    feelDelta: sim.feelDelta,
+    tiltDelta: sim.tiltDelta,
+    fatigueDelta: sim.fatigueDelta,
+    moneyDelta: legacy.moneyDelta,
+    growthApplied,
+    growthKey,
+  };
+}
+
 export interface ApplyChoiceResult {
   session: GameSession;
   result: RoundResult;
@@ -250,13 +343,29 @@ export function applyChoice(
     hashString(session.id) ^ ((session.player.round + 1) * 2654435761),
   );
 
-  const outcome = resolveChoice({
-    player: session.player,
-    event: eventDef,
-    choice: choiceDef,
-    traits,
-    rng,
-  });
+  // ── 比赛模拟拦截（tournament-* 事件走数值模拟而非 d20）──
+  let pendingMatchSim: MatchSimResult | undefined;
+  const tournamentMatch = /^tournament-(.+)--(\d+)$/.exec(eventDef.id);
+
+  const outcome = (() => {
+    if (tournamentMatch) {
+      const t = getTournament(tournamentMatch[1]!);
+      const stageIdx = parseInt(tournamentMatch[2]!, 10);
+      const stage = t?.bracket[stageIdx];
+      if (t && stage) {
+        const effectiveDiff = t.baseDifficulty + stage.difficultyBonus;
+        pendingMatchSim = simulateMatch(session.player, effectiveDiff, rng);
+        return buildMatchResolveResult(session.player, pendingMatchSim, t, stageIdx);
+      }
+    }
+    return resolveChoice({
+      player: session.player,
+      event: eventDef,
+      choice: choiceDef,
+      traits,
+      rng,
+    });
+  })();
 
   const stageBefore = session.player.stage;
   const wasBroke = session.player.stats.money <= 0;
@@ -433,6 +542,18 @@ export function applyChoice(
     feelChange,
     tiltChange,
     fatigueChange,
+    buffsAdded: outcome.chosenOutcome.buffAdd ? [outcome.chosenOutcome.buffAdd] : [],
+    matchStats: pendingMatchSim
+      ? {
+          kills: pendingMatchSim.kills,
+          deaths: pendingMatchSim.deaths,
+          assists: pendingMatchSim.assists,
+          headshotRate: pendingMatchSim.headshotRate,
+          rating: pendingMatchSim.rating,
+          teamScore: pendingMatchSim.teamScore,
+          enemyScore: pendingMatchSim.enemyScore,
+        } satisfies MatchStats
+      : undefined,
     createdAt: nowIso(),
   };
 

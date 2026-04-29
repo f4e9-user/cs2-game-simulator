@@ -512,49 +512,35 @@ function buildFinaleChoices(
   ];
 }
 
-// Synthesize an EventDef for a specific stage of a tournament. Choices vary
-// by phase (opening / crunch / finale) to create a semi-interactive narrative.
+// Synthesize an EventDef for a specific stage of a tournament.
+// A single "上场" choice is returned; the actual outcome is determined by
+// matchSimulator.simulateMatch in applyChoice, not by a d20 roll.
 export function synthesizeMatchEvent(
   t: Tournament,
   stageIndex: number,
 ): EventDef {
   const stage = t.bracket[stageIndex] ?? t.bracket[0]!;
   const isFinal = stageIndex === t.bracket.length - 1;
-  const r = t.reward;
   const diff = t.baseDifficulty + stage.difficultyBonus;
-  const lossShare = stage.rewardShareOnEarlyExit;
-
-  const winNarrative = isFinal
-    ? `决赛终局，你们抬起《${t.name}》冠军奖杯。`
-    : `${stage.name} 通关，进入下一阶段。`;
-  const advanceNote = isFinal ? '' : `（下一阶段：${t.bracket[stageIndex + 1]!.name}）`;
-
-  const winReward: StatDelta = isFinal
-    ? { money: r.money, experience: r.experience, agility: 1 }
-    : { money: Math.max(0, Math.floor(r.money / 4)), experience: Math.max(1, Math.floor(r.experience / 4)) };
-  const winFame = isFinal ? r.fame : Math.floor(r.fame / 5);
-  const winStress = isFinal ? (r.stressDelta ?? 0) : 0;
-
-  const lossReward: StatDelta = {
-    money: Math.max(0, Math.floor(r.money * lossShare)),
-    experience: Math.max(1, Math.floor(r.experience * lossShare)),
-    mentality: -1,
-  };
-  const lossFame = Math.floor(r.fame * lossShare);
-  const lossStress = (r.stressDelta ?? 1) + 2;
+  const nextStageName = !isFinal ? t.bracket[stageIndex + 1]!.name : '';
 
   const phase = getPhase(stageIndex, isFinal);
   const tierGroup = getTierGroup(t.tier);
   const narrative = `《${t.name}》${stage.name}。${STAGE_NARRATIVES[phase][tierGroup]}`;
 
-  let choices: ChoiceDef[];
-  if (phase === 'opening') {
-    choices = buildOpeningChoices(diff, isFinal, winReward, winFame, winStress, lossReward, lossFame, lossStress, advanceNote, winNarrative);
-  } else if (phase === 'crunch') {
-    choices = buildCrunchChoices(diff, isFinal, winReward, winFame, winStress, lossReward, lossFame, lossStress, advanceNote, winNarrative);
-  } else {
-    choices = buildFinaleChoices(diff, winReward, winFame, lossReward, lossFame, lossStress, winNarrative);
-  }
+  const choices: ChoiceDef[] = [
+    {
+      id: 'match-play',
+      label: '上场比赛',
+      description: isFinal
+        ? '决赛，全力以赴。'
+        : `赢下晋级${nextStageName ? `，进入${nextStageName}` : '下一阶段'}。`,
+      // dc=0: 实际胜负由 matchSimulator 决定，resolveChoice 不会被调用
+      check: { primary: 'agility', dc: 0 },
+      success: { narrative: '' }, // 由 simulateMatch.summary 覆盖
+      failure: { narrative: '' },
+    },
+  ];
 
   return {
     id: `tournament-${t.id}--${stageIndex}`,

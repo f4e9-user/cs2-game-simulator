@@ -38,7 +38,7 @@ export const CHEAT_EVENTS: EventDef[] = [
     title: '群里推销的"秒压压枪宏"',
     narrative:
       '老队友偷偷发来一条链接：「这个宏不被反作弊识别，上分利器。」',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro', 'star', 'veteran'],
     difficulty: 3,
     weight: 0.3,
     choices: [

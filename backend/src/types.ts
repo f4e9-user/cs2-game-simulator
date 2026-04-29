@@ -141,6 +141,16 @@ export interface GameEventPublic {
 
 export type StatDelta = Partial<Stats>;
 
+export interface MatchStats {
+  kills: number;
+  deaths: number;
+  assists: number;
+  headshotRate: number;
+  rating: number;
+  teamScore: number;
+  enemyScore: number;
+}
+
 export interface RoundResult {
   round: number;
   eventId: string;
@@ -164,6 +174,8 @@ export interface RoundResult {
   feelChange: number;
   tiltChange: number;
   fatigueChange: number;
+  buffsAdded: Buff[];
+  matchStats?: MatchStats;
   createdAt: string;
 }
 

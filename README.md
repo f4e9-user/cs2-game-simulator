@@ -40,6 +40,7 @@ cs2-game-simulator/
 │       │       ├── stress.ts     高压力专属事件
 │       │       ├── rival.ts      对手战队事件（用 {rival0}/{rival1} 占位）
 │       │       ├── broadcast.ts  Major 落幕广播（不参赛时触发）
+│       │       ├── daily.ts      每日行动（routine 类型，主成长途径）
 │       │       └── index.ts      汇总注册 + tournament-* ID 合成
 │       ├── storage/              D1 + KV 包装
 │       └── ai/
@@ -55,12 +56,14 @@ cs2-game-simulator/
         │   ├── page.tsx                  开局页（特质 → 分配属性 → 开始）
         │   └── game/[sessionId]/page.tsx
         ├── components/
-        │   ├── PlayerStats.tsx           六维 + 心理/身体/压力/名气 + 阶段倒计时
+        │   ├── HudTopBar.tsx             顶栏：玩家名/阶段/派生属性条/volatile 状态/排名
+        │   ├── PlayerStats.tsx           右侧面板：生涯记录/晋级条件/特质/标签
         │   ├── TraitRoll.tsx             随机抽特质 + 1 次重抽
         │   ├── StatAllocatorModal.tsx    底线感知分配器
         │   ├── EventCard.tsx
         │   ├── ChoiceList.tsx
-        │   ├── ResultPanel.tsx           判定 + 属性变化 + 压力/名气 + 被动
+        │   ├── ResultPanel.tsx           判定 + volatile变化(feel/tilt/fatigue) + 压力/名气 + 被动
+        │   ├── FeedPanel.tsx             历史动态，含 volatile 变化 chip
         │   ├── HistoryPanel.tsx
         │   ├── StageBadge.tsx
         │   ├── MatchPanel.tsx            赛事日历 + 报名/退赛 + 阶段进度
@@ -79,18 +82,73 @@ cs2-game-simulator/
 
 ## 系统总览
 
-### 基础属性（6 项，0-20 范围）
+### 基础属性（核心属性，隐藏值，0-20 范围）
+
+核心属性**不直接展示给玩家**，通过派生属性换算后显示。
 
 | 键 | 名称 | 作用 |
 |---|---|---|
-| `intelligence` | 智力 | 战术、应变、残局决策 |
-| `agility` | 敏捷 | 枪法、反应、对枪 |
-| `experience` | 经验 | 比赛经验、版本适应、晋升阈值 |
+| `intelligence` | 智力 | 战术、应变、残局决策；驱动"决策"派生属性 |
+| `agility` | 敏捷 | 枪法、反应、对枪；驱动"枪法"派生属性 |
+| `experience` | 经验 | 比赛经验（修正项，权重 0.3）；驱动晋升阈值 |
 | `money` | 金钱 | 训练资源、生活、康复（豁免成长曲线） |
-| `mentality` | 心态 | 高压发挥；驱动压力增减 |
-| `constitution` | 体质 | 手腕颈椎；身体状态 = constitution × 2 |
+| `mentality` | 心态 | 高压发挥；驱动"稳定性"派生属性；调节压力增减 |
+| `constitution` | 体质 | 手腕颈椎；驱动"续航"派生属性 |
 
 **分配规则**：每项 0 起步，玩家分配 12 点；正向特质加成作为底线（不可降低），负向特质加成在确认后扣减（可被分配点抵消）。
+
+### 派生属性（展示给玩家，0-100 分）
+
+派生属性是核心属性的加权换算，以进度条形式显示在 HUD 顶栏。
+
+| 派生属性 | 公式 | 说明 |
+|---|---|---|
+| 枪法 (AIM) | `(agility×0.7 + experience×0.3) / 20 × 100` | 对枪能力 |
+| 决策 | `(intelligence×0.7 + experience×0.3) / 20 × 100` | 战术意识 |
+| 稳定性 | `mentality / 20 × 100` | 高压稳定 |
+| 续航 | `constitution / 20 × 100` | 持久能力 |
+
+### 状态系统（volatile，高频变化）
+
+volatile 状态每回合实时变化，不受成长上限约束。
+
+| 字段 | 范围 | 说明 |
+|---|---|---|
+| `feel` | −3 ~ +3（0.5 步进）| 手感：影响对枪表现，失误会降低，连胜会升高 |
+| `tilt` | 0 ~ 3 | 心态波动：tilt ≥ 2 时手感上限下降 0.5；tilt 3 = 崩盘边缘 |
+| `fatigue` | 0 ~ 100 | 疲劳：≥ 70 时压力增益 ×1.4；≥ 85 时手感自动衰减 −1 |
+
+**volatile 交互规则**：
+- `tilt ≥ 2 && feel > 1` → `feel -= 0.5`（心态差抑制手感峰值）
+- `fatigue ≥ 85 && feel > 0` → `feel -= 1`（极度疲劳压手感）
+- 事件通过 `feelDelta / tiltDelta / fatigueDelta` 直接调整
+
+### 成长系统
+
+核心属性的成长走**衰减曲线 + 生涯总上限**，避免无限堆属性。
+
+| 当前值范围 | 成长倍率 |
+|---|---|
+| 0 – 4 | ×1.0 |
+| 5 – 9 | ×0.7 |
+| 10 – 14 | ×0.4 |
+| 15 – 20 | ×0.15 |
+
+- **生涯总成长上限**：`GROWTH_CAP = 30`（累计成长量，跨所有属性）
+- **每日行动成长**：每次天梯/训练成功随机增长 0.1–0.3（乘以衰减因子）
+- **叙事事件**：不再直接修改核心属性；旧版 `statChanges` 通过 `translateStatDelta` 转译为 volatile 效果（agility+ → feel+，mentality- → tilt+，constitution- → fatigue+）；仅 `experience` 可从叙事事件获得极小成长（×0.04）
+- **Buff 倍率**：匹配 `actionTag` 的 buff 在成长应用阶段乘上 `multiplier`
+
+### Buff 系统
+
+Buff 是临时性成长加成，有使用次数限制。
+
+| 字段 | 说明 |
+|---|---|
+| `actionTag` | 触发的事件类型（如 `'training'`, `'match'`, `'all'`） |
+| `growthKey` | 可选：只对指定属性生效 |
+| `multiplier` | 成长倍率（如 1.2 = +20%） |
+| `remainingUses` | 剩余可用次数；用完自动移除 |
 
 ### 动态状态
 
@@ -98,6 +156,9 @@ cs2-game-simulator/
 |---|---|---|
 | `stress` | 0–100 | 压力值，**100 → 立即结束（生涯压力崩盘）** |
 | `fame` | 0–100 | 名气，决定阶段晋升和媒体事件权重 |
+| `volatile` | 见上节 | 手感/心态波动/疲劳，每回合高频变化 |
+| `buffs` | 数组 | 当前生效的临时成长加成 |
+| `growthSpent` | ≥0 | 生涯已用成长量（上限 30） |
 | `restRounds` | ≥0 | 强制休养剩余周数 |
 | `stressMaxRounds` | ≥0 | 压力拉满连续周计数（>=1 即触发结局） |
 | `pendingMatch` | 可空 | 已报名的赛事 + 当前阶段 + 解析周 |
@@ -108,13 +169,15 @@ cs2-game-simulator/
 
 - **判定**：`attack = d20 + primary*2 + secondary*1 + Σ(traitBonus 命中 tag) − Σ(traitPenalty)`，DC = `choice.dc + event.difficulty*2 + floor(stageIndex/2)`
 - **博彩/外挂**：纯概率分支，按 stage 阶梯探测率（rookie 5–8% → star 40–55%），被抓即 `endRun`
-- **成长曲线**：正向属性增益按 `gain / (1 + currentStat/10)` 递减，至少 +1；负向直接扣；money 豁免
+- **成长曲线**：`applied = rawAmount × growthFactor(currentStat) × buffMultiplier`，受 `GROWTH_CAP` 约束
+- **疲劳放大**：`fatigue ≥ 70` → 压力增益 × 1.4
 - **心态 → 压力被动**：每回合按 mentality 计算
-  - `mentality ≥ 7`：压力 −6
-  - `mentality ≥ 4`：压力 −3
-  - `mentality ≤ 2`：压力 +4
-  - `mentality ≤ 0`：压力 +8
-- **失败惩罚**：选项失败若没显式 `stressDelta` 自动 +6；事件声明的 stressDelta 按 ×5 缩放到 0-100 量级
+  - `mentality ≥ 14`：压力 −8
+  - `mentality ≥ 10`：压力 −5
+  - `mentality ≥ 6`：压力 −2
+  - `mentality ≤ 2`：压力 +4（精确）
+  - `mentality ≤ 4`：压力 +4（区间）
+- **失败惩罚**：选项失败若没显式 `stressDelta` 自动 +12（原 +6，已增强）；事件声明的 stressDelta 按 ×5 缩放
 - **破产**：`money ≤ 0` 每回合心态 −1、压力 +8
 
 ### 阶段晋升（gates）
@@ -190,6 +253,25 @@ cs2-game-simulator/
 - 显示格式："第 X 年 第 Y 周"
 - Major 在周 22/46 报名、周 23/47 入围；广播事件在周 24/48 触发（玩家未报名时）
 
+### 每日行动（routine 事件）
+
+每周在没有硬性任务时触发，是核心属性**主要成长途径**（通过 `dailyGrowth` 字段）。共 3 类场景 × 4 个选项：
+
+| 场景 | 触发条件 | 权重 |
+|---|---|---|
+| `routine-standard` 普通一周 | 所有阶段 | 4 |
+| `routine-peak-season` 赛季冲刺 | youth/second/pro/star | 2 |
+| `routine-light-week` 轻训周 | youth~veteran | 2 |
+
+每个场景提供 4 个互斥选择：
+
+| 选项 | 主属性 | 成长 | 主要效果 |
+|---|---|---|---|
+| 天梯：刷分上分 | agility | `dailyGrowth: 'agility'` | feel+，fatigue+，stress+ |
+| 训练：体系化练习 | intelligence | `dailyGrowth: 'intelligence'` | feel+(小)，fatigue+（轻），某些场景给 buff |
+| 休息：充个电 | mentality | — | stress−，fatigue−（大） |
+| 度假：彻底断网 | mentality | — | stress−−，fatigue−，feel−（生疏），tilt− |
+
 ### 事件分类与权重
 
 | EventType | 用途 |
@@ -197,6 +279,7 @@ cs2-game-simulator/
 | `training / ranked / team / tryout / match / media / life` | 常规事件池 |
 | `betting / cheat` | 高风险纯概率分支（被抓 endRun） |
 | `rest` | 仅在 `restRounds > 0` 触发 |
+| `routine` | 每周行动选择，主成长途径 |
 
 **state-aware weight**：
 - `fame ≥ 15` → media ×1.6
@@ -379,6 +462,40 @@ npx wrangler deploy
 - Major 落幕广播事件
 - AI 服务 active 字段 + leaderboard 模拟钩子
 
+### Phase E（属性重构 + 每日行动 + HUD 派生属性展示）
+
+**属性系统重构**
+- 核心属性改为隐藏值（0-20），玩家只看派生属性（0-100）
+- 派生属性四项：枪法（agility×0.7+exp×0.3）、决策（intelligence×0.7+exp×0.3）、稳定性（mentality）、续航（constitution）
+- 叙事事件不再直接修改核心属性；旧 `statChanges` 通过 `translateStatDelta` 转译为 volatile 效果
+- 成长曲线从 `gain/(1+stat/10)` 改为分档衰减（0-4: ×1.0 / 5-9: ×0.7 / 10-14: ×0.4 / 15-20: ×0.15）
+- 生涯总成长上限 `GROWTH_CAP = 30`，累计跨属性
+- 失败惩罚强化：隐式压力从 +6 → +12
+
+**volatile 状态系统**
+- 新增三维高频状态：手感 feel（−3~+3, 0.5步进）、心态波动 tilt（0-3）、疲劳 fatigue（0-100）
+- feel/tilt/fatigue 通过 `feelDelta/tiltDelta/fatigueDelta` 在每个 Outcome 中直接声明
+- tilt ≥ 2 时手感峰值压低；fatigue ≥ 85 时手感自动衰减；fatigue ≥ 70 时压力增益 ×1.4
+- `RoundResult` 新增 `feelChange/tiltChange/fatigueChange` 字段
+
+**Buff 系统**
+- Player 新增 `buffs: Buff[]` 字段
+- Buff 匹配事件类型（actionTag）后在成长阶段乘以 multiplier
+- remainingUses 递减，归零后自动移除
+- 训练类日常行动成功可赠予 buff（如 `pre-match-analysis` 提升赛事成长效率）
+
+**每日行动（routine 类型事件）**
+- 新增 `backend/src/data/events/daily.ts`，3 种场景 × 4 选项
+- `Outcome.dailyGrowth: StatKey` 字段：声明本次行动对哪个核心属性进行成长（0.1–0.3）
+- 天梯 → agility 成长；训练 → intelligence 成长；休息/度假 → 状态恢复
+- 注册到 EVENT_POOL（weight 2-4）
+
+**前端更新**
+- `HudTopBar`：4 个派生属性条（AIM/决策/稳定性/续航）+ 手感/疲劳颜色状态 + 压力/名气/排名
+- `ResultPanel`：优先展示 feelChange/tiltChange/fatigueChange，再展示 stress/fame/statChanges
+- `FeedPanel`：每条历史记录显示 volatile 变化 chip
+- `globals.css`：HUD 顶栏从 52px → 64px；新增 `.hud-derived-*`、`.feel-hot/cold/neutral`、`.event-type-badge.routine`
+
 ---
 
 ## 后续扩展（待办）
@@ -404,9 +521,10 @@ npx wrangler deploy
 - 战队系统真正建模：成员 / 替补 / 主教练；目前 rivals 仅是名字
 
 ### 已知遗留问题
-- 旧会话（D1 存储里的 JSON）字段缺失时不会自动迁移，需要清 `.wrangler/state` 重开
+- 旧会话（D1 存储里的 JSON）字段缺失时不会自动迁移，需要清 `.wrangler/state` 后重新 `wrangler d1 execute --local --file=schema.sql` 重开；Phase E 重构后特别需要注意（新增 `volatile/buffs/growthSpent` 字段）
 - 报名后立即结束游戏（如博彩被抓）时 pendingMatch 会丢失，没补救
 - 事件占位符替换只支持 `{rival0..3}`，未支持队友/赞助商等
+- 旧版叙事事件（training/ranked/team 等）的 `statChanges` 仍保留在 EventDef 定义里，运行时通过 `translateStatDelta` 转译；未来考虑重写为直接使用 feelDelta/tiltDelta 字段
 
 ---
 
@@ -418,3 +536,7 @@ npx wrangler deploy
 - **多阶段比赛 vs 单回合比赛**：选了多阶段，因为单回合"打 Major"和"打网吧赛"难以体现差异
 - **占位符替换在 toPublicEvent**：保持 EventDef 数据纯净，渲染时再注入 rival 名
 - **rookie-default 背景**：用户反映起点身份 UI 与特质冲突 → 隐藏 UI 但保留数据结构供未来扩展
+- **核心属性隐藏 / 派生属性展示**：玩家直接看"枪法 72 / 决策 55"而非"agility 8"，直觉更符合 CS 选手视角；隐藏值保留供引擎检定使用
+- **translateStatDelta 兼容层**：旧事件的 `statChanges` 不重写，运行时翻译为 volatile 效果。好处是改了100多个事件定义会引入大量回归风险；代价是有轻微双路径复杂度
+- **Stats 保留 6 键（含 money）**：将 money 分离为独立字段会导致背景 statBias / 特质 modifiers / 破产检查全部需要改动；保持类型兼容让 money 继续走 `stats.money`
+- **成长上限 GROWTH_CAP = 30 跨属性统计**：避免专注堆单项到满级，迫使玩家在敏捷和智力之间做取舍

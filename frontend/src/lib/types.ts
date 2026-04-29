@@ -1,4 +1,5 @@
-// Mirror of shared/types.ts (kept in sync by hand for the MVP).
+// Mirror of backend/src/types.ts (kept in sync by hand for the MVP).
+
 export type StatKey =
   | 'intelligence'
   | 'agility'
@@ -8,6 +9,21 @@ export type StatKey =
   | 'constitution';
 
 export type Stats = Record<StatKey, number>;
+
+export interface VolatileState {
+  feel: number;    // -3 ~ +3
+  tilt: number;    // 0 ~ 3
+  fatigue: number; // 0 ~ 100
+}
+
+export interface Buff {
+  id: string;
+  label: string;
+  actionTag: string;
+  growthKey?: StatKey;
+  multiplier: number;
+  remainingUses: number;
+}
 
 export type Stage =
   | 'rookie'
@@ -28,7 +44,8 @@ export type EventType =
   | 'life'
   | 'betting'
   | 'cheat'
-  | 'rest';
+  | 'rest'
+  | 'routine';
 
 export interface Trait {
   id: string;
@@ -83,6 +100,9 @@ export interface DynamicState {
 export interface Player extends DynamicState {
   name: string;
   stats: Stats;
+  volatile: VolatileState;
+  buffs: Buff[];
+  growthSpent: number;
   traits: string[];
   backgroundId: string;
   stage: Stage;
@@ -111,6 +131,16 @@ export interface GameEvent {
   choices: Choice[];
 }
 
+export interface MatchStats {
+  kills: number;
+  deaths: number;
+  assists: number;
+  headshotRate: number;
+  rating: number;
+  teamScore: number;
+  enemyScore: number;
+}
+
 export interface RoundResult {
   round: number;
   eventId: string;
@@ -130,6 +160,11 @@ export interface RoundResult {
   passiveEffects: string[];
   stressChange: number;
   fameChange: number;
+  feelChange: number;
+  tiltChange: number;
+  fatigueChange: number;
+  buffsAdded: Buff[];
+  matchStats?: MatchStats;
   createdAt: string;
 }
 
@@ -190,4 +225,12 @@ export interface ChoiceResponse {
   ending?: string;
   promotion?: PromotionCheck;
   leaderboard?: LeaderboardTeam[];
+}
+
+// ── 派生属性（显示用）──────────────────────────────────────────
+export interface DerivedStats {
+  aim: number;       // 枪法 0-100  = agility*0.7 + experience*0.3 → /20*100
+  gameSense: number; // 决策 0-100  = intelligence*0.7 + experience*0.3 → /20*100
+  stability: number; // 稳定性 0-100 = mentality/20*100
+  stamina: number;   // 续航 0-100   = constitution/20*100
 }
