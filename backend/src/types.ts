@@ -1,4 +1,6 @@
 // Mirror of shared/types.ts, kept in sync by hand for the MVP.
+
+// ── 核心属性 key（旧 key 保留用于事件兼容）──────────────────────
 export type StatKey =
   | 'intelligence'
   | 'agility'
@@ -8,6 +10,23 @@ export type StatKey =
   | 'constitution';
 
 export type Stats = Record<StatKey, number>;
+
+// ── 状态系统（高频变化、不永久影响核心属性）──────────────────────
+export interface VolatileState {
+  feel: number;    // -3 ~ +3  (手感冷热 Cold/Hot)
+  tilt: number;    // 0 ~ 3    (心态波动 Tilt)
+  fatigue: number; // 0 ~ 100  (疲劳)
+}
+
+// ── 临时 Buff ──────────────────────────────────────────────────
+export interface Buff {
+  id: string;
+  label: string;
+  actionTag: string;    // 'training' | 'ranked' | 'all'
+  growthKey?: StatKey;  // 受益的属性 key
+  multiplier: number;   // e.g. 1.3 = +30%
+  remainingUses: number;
+}
 
 export type Stage =
   | 'rookie'
@@ -28,7 +47,8 @@ export type EventType =
   | 'life'
   | 'betting'
   | 'cheat'
-  | 'rest';
+  | 'rest'
+  | 'routine'; // 每日行动（天梯/训练/休息/度假）
 
 export interface Trait {
   id: string;
@@ -44,6 +64,7 @@ export interface Background {
   description: string;
   startStage: Stage;
   statBias: Partial<Stats>;
+  startMoney?: number; // 初始资金覆盖（0-20 scale）
   tags: string[];
 }
 
@@ -83,20 +104,24 @@ export interface DynamicState {
 export interface Player extends DynamicState {
   name: string;
   stats: Stats;
+  // ── 状态系统 ──
+  volatile: VolatileState;
+  // ── Buff 系统 ──
+  buffs: Buff[];
+  // ── 成长上限追踪（生涯累计成长点数，上限 30）──
+  growthSpent: number;
+  // ──
   traits: string[];
   backgroundId: string;
   stage: Stage;
   round: number;
   tags: string[];
   rivals: Rival[];
-  // Tournament career record
   tournamentParticipations: number;
   tournamentChampionships: number;
   tierParticipations: Record<string, number>;
   tierChampionships: Record<string, number>;
-  // Pending stage promotion (set when gate conditions are met, cleared on accept/decline)
   promotionPending: Stage | null;
-  // Round number after which promotion can re-trigger (cooldown after decline)
   promotionCooldown: number;
 }
 
@@ -127,7 +152,7 @@ export interface RoundResult {
   roll: number;
   dc: number;
   narrative: string;
-  statChanges: StatDelta;
+  statChanges: StatDelta;   // 实际核心属性变化（极小，来自成长系统）
   newStats: Stats;
   stageBefore: Stage;
   stageAfter: Stage;
@@ -135,6 +160,10 @@ export interface RoundResult {
   passiveEffects: string[];
   stressChange: number;
   fameChange: number;
+  // ── 新增：状态变化（主要展示项）──
+  feelChange: number;
+  tiltChange: number;
+  fatigueChange: number;
   createdAt: string;
 }
 
@@ -152,24 +181,31 @@ export interface GameSession {
   leaderboard: LeaderboardTeam[];
 }
 
-// --- Internal-only engine types (not sent to client) ---
+// --- Internal-only engine types ---
 
 export interface Outcome {
   narrative: string;
-  statChanges: StatDelta;
+  // 旧版属性变化（现在转译为状态效果，不直接改核心属性）
+  statChanges?: StatDelta;
   tagAdds?: string[];
   tagRemoves?: string[];
   stageDelta?: number;
   stageSet?: Stage;
   endRun?: boolean;
   endReason?: string;
-  // Dynamic state deltas — NOT subject to growth curve.
   stressDelta?: number;
   fameDelta?: number;
-  // Force N rounds of "rest" events after this outcome.
   injuryRestRounds?: number;
-  // Extra leaderboard points credited on top of the stage base reward.
   pointsDelta?: number;
+  // ── 新增：直接状态效果 ──
+  feelDelta?: number;
+  tiltDelta?: number;
+  fatigueDelta?: number;
+  moneyDelta?: number;
+  // ── 新增：每日行动触发核心成长 ──
+  dailyGrowth?: StatKey;  // 指定哪个核心属性从此次行动获得成长机会
+  // ── 新增：添加 Buff ──
+  buffAdd?: Buff;
 }
 
 export interface DetectionCheck {
@@ -213,4 +249,11 @@ export interface Env {
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
   AI?: unknown;
+}
+
+// ── 晋级检查 ──────────────────────────────────────────────────
+export interface PromotionCheck {
+  canPromote: boolean;
+  to?: Stage;
+  reasons: string[];
 }

@@ -13,12 +13,14 @@ import {
 import { getEventById } from '../data/events/index.js';
 import { TRAITS, getTrait } from '../data/traits.js';
 import type {
+  Buff,
   GameEventPublic,
   GameSession,
   Player,
   RoundResult,
   Stats,
   Trait,
+  VolatileState,
 } from '../types.js';
 import {
   BASE_STATS,
@@ -26,6 +28,13 @@ import {
   CONSTITUTION_COLLAPSE,
   FAME_MAX,
   FAME_MIN,
+  FATIGUE_MAX,
+  FATIGUE_MIN,
+  FATIGUE_STRESS_MULTIPLIER,
+  FATIGUE_STRESS_THRESHOLD,
+  FEEL_MAX,
+  FEEL_MIN,
+  GROWTH_CAP,
   IMPLICIT_FAILURE_STRESS,
   INJURY_REST_ROUNDS,
   LEGEND_FAME_THRESHOLD,
@@ -36,6 +45,8 @@ import {
   STRESS_MAX,
   STRESS_MIN,
   STRESS_SCALE,
+  TILT_MAX,
+  TILT_MIN,
   passiveStressFromMentality,
 } from './constants.js';
 import { pickEvent, substituteRivals, toPublicEvent } from './events.js';
@@ -63,6 +74,18 @@ function clampStress(v: number): number {
 
 function clampFame(v: number): number {
   return Math.max(FAME_MIN, Math.min(FAME_MAX, Math.round(v)));
+}
+
+function clampFeel(v: number): number {
+  return Math.max(FEEL_MIN, Math.min(FEEL_MAX, Math.round(v * 2) / 2)); // 0.5 步进
+}
+
+function clampTilt(v: number): number {
+  return Math.max(TILT_MIN, Math.min(TILT_MAX, Math.round(v)));
+}
+
+function clampFatigue(v: number): number {
+  return Math.max(FATIGUE_MIN, Math.min(FATIGUE_MAX, Math.round(v)));
 }
 
 export function rollRandomTraits(count = 3): Trait[] {
@@ -137,7 +160,6 @@ export function initPlayer(input: InitInput): Player {
   }
 
   const { floor, negative } = computeTraitMods(traits);
-
   const allocation = input.stats ? { ...input.stats } : randomStatsWithFloor(floor);
   const err = validateAllocation(allocation, floor);
   if (err) throw new Error(err);
@@ -148,6 +170,9 @@ export function initPlayer(input: InitInput): Player {
   return {
     name: input.name.trim() || 'nameless',
     stats: clampStats(finalStats),
+    volatile: { feel: 0, tilt: 0, fatigue: 0 },
+    buffs: [],
+    growthSpent: 0,
     traits: traits.map((t) => t.id),
     backgroundId: bg.id,
     stage: bg.startStage,
@@ -170,18 +195,15 @@ export function initPlayer(input: InitInput): Player {
   };
 }
 
-// Step time forward by one week, wrapping at year-end (48 weeks / year).
 function advanceWeek(year: number, week: number): { year: number; week: number } {
   const WEEKS = 48;
   if (week >= WEEKS) return { year: year + 1, week: 1 };
   return { year, week: week + 1 };
 }
 
-// Convert week index (1-48) → month (1-12) for display only.
 export function weekToMonth(week: number): number {
   return Math.min(12, Math.max(1, Math.ceil(week / 4)));
 }
-
 
 export function createSession(player: Player, rngSeed: number): GameSession {
   const rng = makeRng(rngSeed);
@@ -239,71 +261,103 @@ export function applyChoice(
   const stageBefore = session.player.stage;
   const wasBroke = session.player.stats.money <= 0;
 
-  let statsAfterPassive = outcome.nextStats;
+  // ── 核心属性（resolver 已应用成长）──
+  let statsAfterGrowth = outcome.nextStats;
   const passiveEffects: string[] = [];
   const tagsAdded = [...outcome.tagsAdded];
   const tagsRemoved = [...outcome.tagsRemoved];
 
-  // --- Broke drain ---
-  // Declared here so passive stress can read it even if the actual
-  // addition happens below.
+  // ── 成长上限更新 ──
+  let growthSpent = (session.player.growthSpent ?? 0) + outcome.growthApplied;
+  if (growthSpent > GROWTH_CAP) growthSpent = GROWTH_CAP;
+
+  // ── Buff 消耗 & 新增 ──
+  let buffs: Buff[] = (session.player.buffs ?? []).map((b) => {
+    if (
+      outcome.growthKey &&
+      (b.actionTag === 'all' || b.actionTag === eventDef.type) &&
+      outcome.growthApplied > 0
+    ) {
+      return { ...b, remainingUses: b.remainingUses - 1 };
+    }
+    return b;
+  }).filter((b) => b.remainingUses > 0);
+
+  if (outcome.chosenOutcome.buffAdd) {
+    buffs = [...buffs, outcome.chosenOutcome.buffAdd];
+  }
+
+  // ── 破产处理（money 仍在 stats 中）──
   let brokeStressBump = 0;
-  if (statsAfterPassive.money <= 0) {
-    statsAfterPassive = applyDelta(statsAfterPassive, {
-      mentality: -BROKE_MENTALITY_DRAIN,
-    });
+  if (statsAfterGrowth.money <= 0) {
+    statsAfterGrowth = applyDelta(statsAfterGrowth, { mentality: -BROKE_MENTALITY_DRAIN });
     passiveEffects.push('broke-mentality-drain');
     brokeStressBump = 8;
     if (!wasBroke && !tagsAdded.includes('broke')) tagsAdded.push('broke');
   }
 
-  // --- Dynamic state: stress & fame deltas from outcome ---
+  // ── 压力计算 ──
   let stress = session.player.stress ?? 0;
   let fame = session.player.fame ?? 0;
   const stressBefore = stress;
   const fameBefore = fame;
-  // Rescale event-declared stressDelta from the old 0-20 scale to 0-100.
+
+  const volatile = session.player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
+
+  // 疲劳放大系数（高疲劳时压力增益更强）
+  const fatigueFactor =
+    volatile.fatigue >= FATIGUE_STRESS_THRESHOLD ? FATIGUE_STRESS_MULTIPLIER : 1;
+
   const explicitStress = outcome.chosenOutcome.stressDelta;
   if (typeof explicitStress === 'number' && explicitStress !== 0) {
-    stress = clampStress(stress + explicitStress * STRESS_SCALE);
+    const raw = explicitStress * STRESS_SCALE;
+    stress = clampStress(stress + (raw > 0 ? raw * fatigueFactor : raw));
   } else if (!outcome.success) {
-    // Failure outcomes with no explicit stressDelta still push stress up —
-    // every negative choice should hurt.
-    stress = clampStress(stress + IMPLICIT_FAILURE_STRESS);
+    stress = clampStress(stress + IMPLICIT_FAILURE_STRESS * fatigueFactor);
     passiveEffects.push('stress-from-failure');
   }
   if (outcome.chosenOutcome.fameDelta) {
     fame = clampFame(fame + outcome.chosenOutcome.fameDelta);
   }
 
-  // Passive stress driven by mentality:
-  //   high mentality bleeds stress off; low mentality piles it on.
-  const mentalityStress = passiveStressFromMentality(statsAfterPassive.mentality);
+  // 心态被动压力（基于 mentality 核心属性）
+  const mentalityStress = passiveStressFromMentality(statsAfterGrowth.mentality);
   if (mentalityStress !== 0) {
     stress = clampStress(stress + mentalityStress);
-    if (mentalityStress > 0) passiveEffects.push('stress-from-anxiety');
-    else passiveEffects.push('stress-decay-mentality');
+    passiveEffects.push(mentalityStress > 0 ? 'stress-from-anxiety' : 'stress-decay-mentality');
   }
   if (brokeStressBump > 0) {
-    stress = clampStress(stress + brokeStressBump);
+    stress = clampStress(stress + brokeStressBump * fatigueFactor);
     passiveEffects.push('stress-from-broke');
   }
 
-  // --- Injury & forced rest ---
+  // ── 状态系统更新（feel / tilt / fatigue）──
+  let feel = clampFeel(volatile.feel + outcome.feelDelta);
+  let tilt = clampTilt(volatile.tilt + outcome.tiltDelta);
+  let fatigue = clampFatigue(volatile.fatigue + outcome.fatigueDelta);
+
+  // Tilt 影响手感：tilt >= 2 → 手感上限降低
+  if (tilt >= 2 && feel > 1) feel = clampFeel(feel - 0.5);
+  // 手感很热但疲劳极高 → 自然衰减
+  if (fatigue >= 85 && feel > 0) feel = clampFeel(feel - 1);
+
+  const feelChange = feel - volatile.feel;
+  const tiltChange = tilt - volatile.tilt;
+  const fatigueChange = fatigue - volatile.fatigue;
+
+  // ── 受伤/强制休养 ──
   let restRounds = session.player.restRounds ?? 0;
   if (outcome.chosenOutcome.injuryRestRounds && outcome.chosenOutcome.injuryRestRounds > 0) {
     restRounds = Math.max(restRounds, outcome.chosenOutcome.injuryRestRounds);
     if (!tagsAdded.includes('injured')) tagsAdded.push('injured');
     passiveEffects.push('injury-triggered');
   }
-  // Constitution collapse: 身体状态 = constitution * 2 <= 0 → forced rest
-  if (statsAfterPassive.constitution <= CONSTITUTION_COLLAPSE && restRounds <= 0) {
+  if (statsAfterGrowth.constitution <= CONSTITUTION_COLLAPSE && restRounds <= 0) {
     restRounds = INJURY_REST_ROUNDS;
     if (!tagsAdded.includes('injured')) tagsAdded.push('injured');
     passiveEffects.push('physical-collapse-rest');
   }
   if (restRounds > 0 && eventDef.type === 'rest') {
-    // Completed a forced rest round — decrement counter.
     restRounds -= 1;
     if (restRounds === 0) {
       if (!tagsRemoved.includes('injured')) tagsRemoved.push('injured');
@@ -311,15 +365,11 @@ export function applyChoice(
     }
   }
 
-  // --- Stress breakdown grace ---
-  // The fatal mental-health gauge is now stress, not mentality. Mentality
-  // controls how fast it accumulates (above) but doesn't end the game directly.
+  // ── 压力崩溃检查 ──
   let stressMaxRounds = session.player.stressMaxRounds ?? 0;
   if (stress >= STRESS_MAX) {
     stressMaxRounds += 1;
-    passiveEffects.push(
-      `stress-pegged-${Math.min(stressMaxRounds, STRESS_GRACE_ROUNDS)}`,
-    );
+    passiveEffects.push(`stress-pegged-${Math.min(stressMaxRounds, STRESS_GRACE_ROUNDS)}`);
     if (!tagsAdded.includes('breaking-down')) tagsAdded.push('breaking-down');
   } else {
     if (stressMaxRounds > 0) passiveEffects.push('stress-eased');
@@ -327,10 +377,11 @@ export function applyChoice(
     tagsRemoved.push('breaking-down');
   }
 
-  const totalStatChanges: Partial<Stats> = {};
+  // ── 属性变化 delta（用于 RoundResult）──
+  const statChanges: Partial<Stats> = {};
   for (const k of STAT_KEYS) {
-    const diff = statsAfterPassive[k] - session.player.stats[k];
-    if (diff !== 0) totalStatChanges[k] = diff;
+    const diff = statsAfterGrowth[k] - session.player.stats[k];
+    if (Math.abs(diff) > 0.001) statChanges[k] = diff;
   }
 
   const nextTags = dedupe([
@@ -345,7 +396,10 @@ export function applyChoice(
 
   const nextPlayer: Player = {
     ...session.player,
-    stats: statsAfterPassive,
+    stats: statsAfterGrowth,
+    volatile: { feel, tilt, fatigue },
+    buffs,
+    growthSpent,
     stage: outcome.stageAfter,
     round: session.player.round + 1,
     tags: nextTags,
@@ -368,7 +422,7 @@ export function applyChoice(
     roll: outcome.roll,
     dc: outcome.dc,
     narrative: outcome.chosenOutcome.narrative,
-    statChanges: totalStatChanges,
+    statChanges,
     newStats: nextPlayer.stats,
     stageBefore,
     stageAfter: outcome.stageAfter,
@@ -376,13 +430,15 @@ export function applyChoice(
     passiveEffects,
     stressChange: stress - stressBefore,
     fameChange: fame - fameBefore,
+    feelChange,
+    tiltChange,
+    fatigueChange,
     createdAt: nowIso(),
   };
 
   const ending = checkEnding(nextPlayer, outcome.endRun, outcome.endReason);
 
-  // Multi-stage tournament progression: handle stage advance / elimination,
-  // credit leaderboard points, and track career participation/championship records.
+  // ── 赛事进度 ──
   let leaderboard = session.leaderboard ?? buildLeaderboard(session.player);
   if (
     nextPlayer.pendingMatch &&
@@ -396,18 +452,14 @@ export function applyChoice(
       const reward = stageRewardDelta(t, idx, outcome.success);
       const extraPoints = outcome.chosenOutcome.pointsDelta ?? 0;
       const totalPoints = reward.points + extraPoints;
-      if (totalPoints !== 0) {
-        leaderboard = addPlayerPoints(leaderboard, totalPoints);
-      }
+      if (totalPoints !== 0) leaderboard = addPlayerPoints(leaderboard, totalPoints);
 
-      // Count participation when first stage (stageIndex 0) resolves.
       if (idx === 0) {
         const tierPart = { ...(nextPlayer.tierParticipations ?? {}) };
         tierPart[t.tier] = (tierPart[t.tier] ?? 0) + 1;
         nextPlayer.tierParticipations = tierPart;
         nextPlayer.tournamentParticipations = (nextPlayer.tournamentParticipations ?? 0) + 1;
       }
-      // Count championship when final stage is won.
       if (isFinal && outcome.success) {
         const tierChamp = { ...(nextPlayer.tierChampionships ?? {}) };
         tierChamp[t.tier] = (tierChamp[t.tier] ?? 0) + 1;
@@ -428,55 +480,37 @@ export function applyChoice(
       };
     }
 
-    // After updating tournament record, check whether the player has met
-    // the gate conditions for the next stage. Only trigger if no cooldown active.
     if (!nextPlayer.promotionPending) {
       const promoCheck = checkTournamentPromotion(nextPlayer);
       if (promoCheck.canPromote && promoCheck.to) {
         const cooldownOk = (nextPlayer.promotionCooldown ?? 0) <= nextPlayer.round;
-        if (cooldownOk) {
-          nextPlayer.promotionPending = promoCheck.to;
-        }
+        if (cooldownOk) nextPlayer.promotionPending = promoCheck.to;
       }
     }
   }
 
-  // Promotion event resolution:
-  //   - If stage advanced via stageSet in a promotion event → clear pending.
-  //   - If player picked decline (stage unchanged after promotion event) → clear
-  //     pending and set cooldown so they're not immediately re-triggered.
   if (eventDef.id.startsWith('promotion-')) {
     if (nextPlayer.stage !== stageBefore) {
-      // Successfully accepted promotion.
       nextPlayer.promotionPending = null;
     } else {
-      // Declined or failed — clear pending and set an 8-round cooldown.
       nextPlayer.promotionPending = null;
       nextPlayer.promotionCooldown = nextPlayer.round + 8;
     }
   }
 
-  // Each round, opponents gain points naturally so the board feels alive.
   leaderboard = tickLeaderboard(leaderboard);
 
-  // Schedule resolution: if a pending match matures NEXT month, force its
-  // synthesized event onto the queue. Otherwise pick from the regular pool.
   const recent = [...session.history.slice(-2).map((r) => r.eventId), eventDef.id];
   const nextEventDef = (() => {
     if (ending) return null;
     const pm = nextPlayer.pendingMatch;
-    if (
-      pm &&
-      pm.resolveYear === nextYear &&
-      pm.resolveWeek === nextWeek
-    ) {
+    if (pm && pm.resolveYear === nextYear && pm.resolveWeek === nextWeek) {
       const t = getTournament(pm.tournamentId);
       if (t) return synthesizeMatchEvent(t, pm.stageIndex);
     }
     return pickEvent({ player: nextPlayer, recentEventIds: recent, rng });
   })();
 
-  // Substitute rival placeholders in the result narrative as well.
   result.narrative = substituteRivals(result.narrative, nextPlayer.rivals);
   result.eventTitle = substituteRivals(result.eventTitle, nextPlayer.rivals);
 
@@ -494,15 +528,9 @@ export function applyChoice(
   return { session: updated, result };
 }
 
-function checkEnding(
-  player: Player,
-  endRun: boolean,
-  endReason?: string,
-): string | undefined {
+function checkEnding(player: Player, endRun: boolean, endReason?: string): string | undefined {
   if (endRun) return endReason ?? 'career_ended';
-  // Stress is the fatal mental-health gauge: pegged at MAX for K rounds → break.
   if ((player.stressMaxRounds ?? 0) >= STRESS_GRACE_ROUNDS) return 'stress_breakdown';
-  // Career-ending injury: chronic injury-prone player whose body has collapsed.
   if (player.tags.includes('injury-prone') && player.stats.constitution <= 0) {
     return 'injury_ended_career';
   }

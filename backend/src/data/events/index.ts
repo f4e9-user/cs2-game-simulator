@@ -13,6 +13,7 @@ import { REST_EVENTS } from './rest.js';
 import { STRESS_EVENTS } from './stress.js';
 import { RIVAL_EVENTS } from './rival.js';
 import { BROADCAST_EVENTS } from './broadcast.js';
+import { DAILY_EVENTS } from './daily.js';
 
 export const EVENT_POOL: EventDef[] = [
   ...TRAINING_EVENTS,
@@ -28,6 +29,7 @@ export const EVENT_POOL: EventDef[] = [
   ...STRESS_EVENTS,
   ...RIVAL_EVENTS,
   ...BROADCAST_EVENTS,
+  ...DAILY_EVENTS,
 ];
 
 export { PROMOTION_EVENTS };
@@ -37,7 +39,6 @@ export function getEventById(id: string): EventDef | undefined {
     return PROMOTION_EVENTS.find((e) => e.id === id);
   }
   if (id.startsWith('tournament-')) {
-    // tournament-{tid}--{stageIndex}
     const rest = id.slice('tournament-'.length);
     const sep = rest.lastIndexOf('--');
     if (sep < 0) return undefined;
