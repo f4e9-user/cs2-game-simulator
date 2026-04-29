@@ -21,7 +21,7 @@ export const LIFE_EVENTS: EventDef[] = [
           traitBonuses: { steady: 2, tactical: 1 },
         },
         success: {
-          narrative: '你把自己的训练日程、薪资、合约一条条解释清楚，对方沉默后说了声「注意身体」。',
+          narrative: '你把自己的训练计划和目标一条条解释清楚，对方沉默后说了声「注意身体」。',
           statChanges: { mentality: 2, intelligence: 1 },
         },
         failure: {

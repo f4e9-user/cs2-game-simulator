@@ -6,6 +6,7 @@ import {
   computeDerivedStats,
   feelColorClass,
   feelLabel,
+  formatMoney,
   scoreBar,
   tiltLabel,
 } from '@/lib/format';
@@ -89,6 +90,12 @@ export function HudTopBar({ player, leaderboard }: Props) {
         <div className={`hud-gauge ${stressClass}`}>
           <span className="hud-gauge-label">压力</span>
           <span className="hud-gauge-val">{player.stress}</span>
+        </div>
+
+        {/* 资金 */}
+        <div className={`hud-gauge ${player.stats.money <= 1 ? 'stress-hi' : ''}`}>
+          <span className="hud-gauge-label">资金</span>
+          <span className="hud-gauge-val">{formatMoney(player.stats.money)}</span>
         </div>
 
         {/* 名气 */}

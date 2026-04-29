@@ -51,7 +51,7 @@ export const BETTING_EVENTS: EventDef[] = [
           detection: { chanceByStage: DETECT_BIG },
         },
         success: {
-          narrative: '没人查到你头上。账户多了一串数字，你装作什么都没发生。',
+          narrative: '没人查到你头上。账户悄悄进账 60K，你装作什么都没发生。',
           statChanges: { money: 6, mentality: -1 },
           tagAdds: ['dirty-money'],
         },
@@ -67,7 +67,7 @@ export const BETTING_EVENTS: EventDef[] = [
           detection: { chanceByStage: DETECT_SMALL },
         },
         success: {
-          narrative: '账面上多了点钱，安全下庄。',
+          narrative: '账面进账 20K，安全下庄。',
           statChanges: { money: 2, mentality: -1 },
           tagAdds: ['dirty-money'],
         },
@@ -115,7 +115,7 @@ export const BETTING_EVENTS: EventDef[] = [
           detection: { chanceByStage: DETECT_BIG },
         },
         success: {
-          narrative: '对方赢了图，你收到一个加密钱包地址。没人追问。',
+          narrative: '对方赢了图，加密钱包进账 50K。没人追问。',
           statChanges: { money: 5, mentality: -2 },
           tagAdds: ['dirty-money'],
         },
@@ -131,7 +131,7 @@ export const BETTING_EVENTS: EventDef[] = [
           detection: { chanceByStage: DETECT_SMALL },
         },
         success: {
-          narrative: '你只在两把关键局放水。钱到账，大部分队友没察觉。',
+          narrative: '你只在两把关键局放水。30K 到账，大部分队友没察觉。',
           statChanges: { money: 3, mentality: -2 },
           tagAdds: ['dirty-money'],
         },
@@ -180,7 +180,7 @@ export const BETTING_EVENTS: EventDef[] = [
           detection: { chanceByStage: DETECT_BIG },
         },
         success: {
-          narrative: '你拿到了一个让你几年不用愁的数字。钱没人找上门，但梦里开始出现审讯室。',
+          narrative: '账户进账 80K——几年不用愁的数字。没人找上门，但梦里开始出现审讯室。',
           statChanges: { money: 8, mentality: -3 },
           tagAdds: ['dirty-money'],
         },
@@ -196,7 +196,7 @@ export const BETTING_EVENTS: EventDef[] = [
           detection: { chanceByStage: DETECT_SMALL },
         },
         success: {
-          narrative: '你给了他几个含糊的判断。他收到后给了笔咨询费。',
+          narrative: '你给了他几个含糊的判断。他转来了 30K"咨询费"。',
           statChanges: { money: 3, mentality: -1 },
           tagAdds: ['dirty-money'],
         },

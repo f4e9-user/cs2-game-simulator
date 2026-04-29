@@ -120,7 +120,7 @@ export const CHEAT_EVENTS: EventDef[] = [
           detection: { chanceByStage: DETECT_MACRO },
         },
         success: {
-          narrative: '账号起飞，你在平台被称为"天才少年"。你开始忘了自己真实段位是什么。',
+          narrative: '账号起飞，你在平台被称为"天才少年"，顺手进账 40K。你开始忘了自己真实段位是什么。',
           statChanges: { agility: 3, experience: 2, money: 4 },
           stressDelta: 5,
           tagAdds: ['cheater', 'dirty-money'],

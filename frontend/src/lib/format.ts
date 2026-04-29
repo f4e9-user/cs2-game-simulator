@@ -202,10 +202,14 @@ const STAT_GROWTH_NAMES: Record<StatKey, string> = {
   constitution: '身体状态',
 };
 
+export function formatMoney(points: number): string {
+  return `${Math.round(points) * 10}K`;
+}
+
 export function describeStatChange(key: StatKey, delta: number): string {
   if (key === 'money') {
-    const sign = delta > 0 ? '+' : '';
-    return `资金 ${sign}${Math.round(delta)}`;
+    const k = Math.round(Math.abs(delta)) * 10;
+    return delta > 0 ? `获得 ${k}K` : `花费 ${k}K`;
   }
   const name = STAT_GROWTH_NAMES[key];
   const dir = delta > 0 ? '提升' : '下降';
@@ -219,10 +223,7 @@ export function describeStatChange(key: StatKey, delta: number): string {
 // ── 赛事奖励描述（报名前展示，量纲不同）────────────────────────
 
 export function describeTournamentMoney(v: number): string {
-  if (v <= 2) return '小额奖金';
-  if (v <= 5) return '可观奖金';
-  if (v <= 9) return '丰厚奖金';
-  return '高额奖金';
+  return `奖金 ${v * 10}K`;
 }
 
 export function describeTournamentExp(v: number): string {

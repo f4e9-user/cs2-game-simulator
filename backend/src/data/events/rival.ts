@@ -9,7 +9,7 @@ export const RIVAL_EVENTS: EventDef[] = [
     title: '{rival0} 雇了水军',
     narrative:
       '社交媒体首页突然涌出大量贴文，质疑你最近一次比赛的发挥。圈内人指给你看：水军IP指向 {rival0} 战队的运营公司。',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star'],
+    stages: ['youth', 'second', 'pro', 'star'],
     difficulty: 2,
     weight: 0.4,
     choices: [

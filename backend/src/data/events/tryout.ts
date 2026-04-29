@@ -312,9 +312,10 @@ export const TRYOUT_EVENTS: EventDef[] = [
     type: 'tryout',
     title: '二线队的试训邀约',
     narrative:
-      '一支二线队发来试训邀请，三天吃住自付，第四天打训练赛定去留。',
+      '一支二线队的星探私信你：在城市赛里看过你的几场比赛，想让你去参加一次试训，三天吃住自付，第四天打训练赛定去留。',
     stages: ['rookie', 'youth'],
-    difficulty: 2,
+    difficulty: 3,
+    requireTags: ['elite-prospect', 'has-open-match-exp'],
     choices: [
       {
         id: 'accept-tryout',
@@ -323,7 +324,7 @@ export const TRYOUT_EVENTS: EventDef[] = [
         check: {
           primary: 'agility',
           secondary: 'mentality',
-          dc: 12,
+          dc: 14,
           traitBonuses: { mechanical: 2, grinder: 2, clutch: 2 },
         },
         success: {
@@ -343,7 +344,7 @@ export const TRYOUT_EVENTS: EventDef[] = [
         description: '冷静谈判。',
         check: {
           primary: 'intelligence',
-          dc: 10,
+          dc: 12,
           traitBonuses: { tactical: 2, streamer: 1, media: 1 },
         },
         success: {

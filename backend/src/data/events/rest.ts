@@ -4,13 +4,90 @@ import type { EventDef } from '../../types.js';
 // or physical collapse). Engine decrements restRounds each time a rest event
 // is consumed — see gameEngine.applyChoice.
 export const REST_EVENTS: EventDef[] = [
+  // ── 路人 / 青训：没有俱乐部队医，靠自己或家人处理 ────────────────
+  {
+    id: 'rest-physio-rookie',
+    type: 'rest',
+    title: '手腕撑不住了',
+    narrative:
+      '你翻了翻手腕，肌腱又酸又胀。网上查了说是 RSI，意思是必须停下来，不然可能留下永久损伤。',
+    stages: ['rookie', 'youth'],
+    difficulty: 1,
+    weight: 1,
+    choices: [
+      {
+        id: 'full-rest',
+        label: '老实在家躺满一周，冰敷加按摩',
+        description: '完全修养，恢复体质和心态。',
+        check: {
+          primary: 'mentality',
+          dc: 5,
+          traitBonuses: { steady: 2 },
+          traitPenalties: { grinder: 2, obsessed: 2 },
+        },
+        success: {
+          narrative: '一周后你感觉手腕轻盈，脑子也清爽了不少。',
+          statChanges: { constitution: 3, mentality: 2 },
+          stressDelta: -3,
+        },
+        failure: {
+          narrative: '你半夜偷偷摸过键盘，恢复打了折扣。',
+          statChanges: { constitution: 1, mentality: 1 },
+          stressDelta: -1,
+        },
+      },
+      {
+        id: 'light-drill',
+        label: '只做轻量练习，不碰正式局',
+        description: '折中：稍微恢复，但保留手感。',
+        check: {
+          primary: 'intelligence',
+          dc: 8,
+          traitBonuses: { steady: 1, tactical: 1 },
+        },
+        success: {
+          narrative: '克制地练了几组反应训练，身体也跟着缓过来了。',
+          statChanges: { constitution: 2, agility: 1 },
+          stressDelta: -1,
+        },
+        failure: {
+          narrative: '不小心练狠了，疼了两天，康复效果一般。',
+          statChanges: { constitution: 1 },
+          stressDelta: 0,
+        },
+      },
+      {
+        id: 'sneak-stream',
+        label: '偷偷开播两小时',
+        description: '赚一点钱，休养被打断。',
+        check: {
+          primary: 'money',
+          dc: 6,
+          traitBonuses: { streamer: 2 },
+          traitPenalties: { steady: 2 },
+        },
+        success: {
+          narrative: '观众不多，但礼物够你下周点几顿外卖。',
+          statChanges: { money: 2, constitution: 1 },
+          stressDelta: 1,
+        },
+        failure: {
+          narrative: '撑不住，开播一个半小时就下播。什么都没收获。',
+          statChanges: { constitution: 0, mentality: -1 },
+          stressDelta: 2,
+        },
+      },
+    ],
+  },
+
+  // ── 二线及以上：俱乐部有队医资源 ─────────────────────────────────
   {
     id: 'rest-physio',
     type: 'rest',
     title: '被队医按在床上',
     narrative:
       '俱乐部队医看了 MRI 单子，把键盘从你手里抽走：「你这周就躺着。」',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro', 'star', 'veteran'],
     difficulty: 1,
     weight: 1,
     choices: [

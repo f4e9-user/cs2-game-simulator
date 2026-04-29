@@ -84,7 +84,7 @@ export const DAILY_EVENTS: EventDef[] = [
       {
         id: 'vacation',
         label: '度假：彻底断网',
-        description: '远离电脑和战队群，彻底放空。压力大幅下降，但手感会生疏。',
+        description: '远离电脑和游戏，彻底放空。压力大幅下降，但手感会生疏。',
         check: { primary: 'mentality', dc: 1 },
         success: {
           narrative:

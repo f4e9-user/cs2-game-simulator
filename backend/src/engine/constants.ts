@@ -53,7 +53,7 @@ export const BASE_STATS: Stats = {
   experience: 0,
   money: 0,
   mentality: 0,
-  constitution: 0,
+  constitution: 3, // 基础体能底线：所有人都有基本的身体素质，不花属性点
 };
 
 export const POINT_POOL = 12;
@@ -94,8 +94,8 @@ export const STRESS_MAX = 100;
 export const FAME_MIN = 0;
 export const FAME_MAX = 100;
 
-// 压力挂满后多少回合崩溃（1 = 立即）
-export const STRESS_GRACE_ROUNDS = 1;
+// 压力挂满后多少回合崩溃（3 = 撑满三轮再终结）
+export const STRESS_GRACE_ROUNDS = 3;
 
 // 心态对每回合压力的被动影响（基于 0-20 心态值）
 export function passiveStressFromMentality(mentality: number): number {
@@ -121,7 +121,7 @@ export const STRESS_SCALE = 5;
 export const BROKE_MENTALITY_DRAIN = 1;
 
 // 体能崩溃（constitution ≤ 这个值 → 强制休养）
-export const CONSTITUTION_COLLAPSE = 0;
+export const CONSTITUTION_COLLAPSE = -2;
 export const INJURY_REST_ROUNDS = 2;
 
 // ── 游戏周期 ──────────────────────────────────────────────────

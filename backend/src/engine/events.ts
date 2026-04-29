@@ -1,5 +1,6 @@
 import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
 import { getGate } from './stages.js';
+import { getTrait } from '../data/traits.js';
 import type { EventDef, Player, Rival } from '../types.js';
 
 export interface EventContext {
@@ -20,9 +21,22 @@ function dynamicTags(player: Player): string[] {
   // broadcast at week 24/48 to give it space.
   const w = player.week ?? 1;
   const isMajorAftermath = w === 24 || w === 48;
-  const inMajorMatch =
-    player.pendingMatch?.tournamentId === 't-major';
+  const inMajorMatch = player.pendingMatch?.tournamentId === 't-major';
   if (isMajorAftermath && !inMajorMatch) out.push('major-broadcast');
+
+  // ── 特质派生 tag ───────────────────────────────────────────────
+  // elite-prospect：有"枪法天才"(aim-god) 或 "天梯之王"(ranked-warrior) 特质
+  const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
+  if (traitTags.includes('aimer') || traitTags.includes('solo')) {
+    out.push('elite-prospect');
+  }
+
+  // ── 参赛经验 tag ───────────────────────────────────────────────
+  // has-open-match-exp：参加过城市赛或平台赛合计超过1次（被星探发现的前提）
+  const tp = player.tierParticipations ?? {};
+  const openMatchCount = (tp['city'] ?? 0) + (tp['platform'] ?? 0);
+  if (openMatchCount > 1) out.push('has-open-match-exp');
+
   return out;
 }
 

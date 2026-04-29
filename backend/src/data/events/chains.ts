@@ -226,7 +226,7 @@ export const CHAIN_EVENTS: EventDef[] = [
           traitPenalties: { ego: 2 },
         },
         success: {
-          narrative: '内部处理完结：接受赞助禁令 + 自愿捐出那笔钱。没有公开处分。你睡得踏实一些了。',
+          narrative: '内部处理完结：接受赞助禁令 + 自愿退还 30K。没有公开处分。你睡得踏实一些了。',
           statChanges: { mentality: 1, money: -3 },
           tagRemoves: ['dirty-money'],
           stressDelta: -1,
@@ -383,7 +383,7 @@ export const CHAIN_EVENTS: EventDef[] = [
           traitPenalties: { steady: 1 },
         },
         success: {
-          narrative: '合同签了。你的脸开始出现在外设网站首页。钱进来了，日程也密了。',
+          narrative: '合同签了，60K 到账。你的脸开始出现在外设网站首页。日程也跟着密了。',
           statChanges: { money: 6 },
           tagRemoves: ['fan-favorite'],
           fameDelta: 4,
@@ -407,7 +407,7 @@ export const CHAIN_EVENTS: EventDef[] = [
           traitBonuses: { tactical: 2, steady: 2 },
         },
         success: {
-          narrative: '品牌方接受了条件。钱少一些，但自由度保住了。',
+          narrative: '品牌方接受了条件。30K，少一些，但自由度保住了。',
           statChanges: { money: 3, experience: 1 },
           tagRemoves: ['fan-favorite'],
           fameDelta: 2,
@@ -539,7 +539,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '教练叫你去谈',
     narrative:
       '教练发消息让你饭后留一下。你知道是为了上周那次无故缺席训练的事。',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
     difficulty: 2,
     weight: 1.0,
     requireTags: ['missed-practice'],
@@ -844,7 +844,7 @@ export const CHAIN_EVENTS: EventDef[] = [
           stressDelta: -1,
         },
         failure: {
-          narrative: '沉默被解读为默认。帖子热度持续了更久，俱乐部扣了你一笔违约金。',
+          narrative: '沉默被解读为默认。帖子热度持续了更久，俱乐部扣了 20K 违约金。',
           statChanges: { money: -2, mentality: -1 },
           tagRemoves: ['media-backlash'],
           fameDelta: -3,
@@ -967,7 +967,6 @@ export const CHAIN_EVENTS: EventDef[] = [
           statChanges: { mentality: 2, constitution: 1 },
           tagRemoves: ['family-strain'],
           stressDelta: -3,
-          feelDelta: 1,
         },
         failure: {
           narrative: '聊了一会儿就陷入争吵，话题滑向了"你什么时候放弃打游戏"。你挂断了电话。',

@@ -25,7 +25,7 @@ function zeroStats(): Stats {
     experience: 0,
     money: 0,
     mentality: 0,
-    constitution: 0,
+    constitution: 3, // 基础体能底线，不花点数
   };
 }
 
