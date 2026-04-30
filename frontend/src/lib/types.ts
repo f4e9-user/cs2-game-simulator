@@ -95,6 +95,37 @@ export interface DynamicState {
   year: number;
   week: number;
   pendingMatch: PendingMatch | null;
+  actionPoints: number;
+  shopCooldowns: Record<string, number>;
+}
+
+export interface ActionResult {
+  actionId: string;
+  actionLabel: string;
+  success: boolean;
+  roll: number;
+  dc: number;
+  narrative: string;
+  feelChange: number;
+  fatigueChange: number;
+  stressChange: number;
+  growthKey?: StatKey;
+  growthAmount?: number;
+  newStats: Stats;
+  newVolatile: { feel: number; tilt: number; fatigue: number };
+}
+
+export type ShopCategory = 'consumable' | 'service' | 'equipment' | 'social';
+
+export interface ShopItem {
+  id: string;
+  name: string;
+  description: string;
+  category: ShopCategory;
+  priceMoney: number;
+  cooldownRounds: number;
+  requireFame?: number;
+  requireStage?: Stage[];
 }
 
 export interface Player extends DynamicState {

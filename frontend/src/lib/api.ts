@@ -1,9 +1,11 @@
 import type {
+  ActionResult,
   Background,
   ChoiceResponse,
   GameSession,
   Player,
   RollTraitsResponse,
+  ShopItem,
   StartGameResponse,
   Stats,
   TournamentsResponse,
@@ -104,7 +106,19 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ tournamentId }) },
     ),
   withdraw: (sessionId: string) =>
-    request<{ player: Player }>(`/api/game/${sessionId}/withdraw`, {
+    request<{ player: Player; penalties: string[] }>(`/api/game/${sessionId}/withdraw`, {
       method: 'POST',
     }),
+  submitAction: (sessionId: string, actionId: string) =>
+    request<{ actionResult: ActionResult; player: Player }>(
+      `/api/game/${sessionId}/action`,
+      { method: 'POST', body: JSON.stringify({ actionId }) },
+    ),
+  buyShopItem: (sessionId: string, itemId: string) =>
+    request<{ player: Player; itemName: string }>(
+      `/api/game/${sessionId}/shop`,
+      { method: 'POST', body: JSON.stringify({ itemId }) },
+    ),
+  listShopItems: () =>
+    request<{ items: ShopItem[] }>('/api/game/meta/shop'),
 };

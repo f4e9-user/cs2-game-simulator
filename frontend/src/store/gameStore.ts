@@ -20,6 +20,9 @@ interface GameState {
   promotion: PromotionCheck | null;
   leaderboard: LeaderboardTeam[];
 
+  // 行动阶段：事件决策完成后解锁，进入下一回合时关闭
+  actionsPhase: boolean;
+
   loading: boolean;
   error: string | null;
 
@@ -39,6 +42,7 @@ interface GameState {
     leaderboard?: LeaderboardTeam[];
   }) => void;
   setPlayer: (player: Player) => void;
+  setActionsPhase: (v: boolean) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
@@ -54,6 +58,7 @@ export const useGameStore = create<GameState>((set) => ({
   lastResult: null,
   promotion: null,
   leaderboard: [],
+  actionsPhase: false,
   loading: false,
   error: null,
 
@@ -102,10 +107,13 @@ export const useGameStore = create<GameState>((set) => ({
       lastResult: result,
       promotion: promotion ?? state.promotion,
       leaderboard: leaderboard ?? state.leaderboard,
+      // 进入行动阶段（事件未结束时才开启）
+      actionsPhase: status === 'active',
       error: null,
     })),
 
   setPlayer: (player) => set({ player }),
+  setActionsPhase: (v) => set({ actionsPhase: v }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
   reset: () =>
@@ -118,6 +126,7 @@ export const useGameStore = create<GameState>((set) => ({
       ending: null,
       lastResult: null,
       promotion: null,
+      actionsPhase: false,
       loading: false,
       error: null,
     }),

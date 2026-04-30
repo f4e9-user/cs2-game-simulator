@@ -64,6 +64,8 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
     }
   };
 
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+
   return (
     <div style={{ marginBottom: 6 }}>
       <div
@@ -86,6 +88,9 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
           pm={player.pendingMatch}
           onWithdraw={withdraw}
           busy={busyId === 'withdraw'}
+          confirmWithdraw={confirmWithdraw}
+          setConfirmWithdraw={setConfirmWithdraw}
+          stage={player.stage}
         />
       ) : loading ? (
         <div style={{ padding: '6px 2px', fontSize: 11, color: 'var(--fg-3)' }}>
@@ -119,26 +124,64 @@ function PendingMatchCard({
   pm,
   onWithdraw,
   busy,
+  confirmWithdraw,
+  setConfirmWithdraw,
+  stage,
 }: {
   pm: PendingMatch;
   onWithdraw: () => void;
   busy: boolean;
+  confirmWithdraw: boolean;
+  setConfirmWithdraw: (v: boolean) => void;
+  stage: string;
 }) {
+  const hasContract = ['second', 'pro', 'star', 'veteran'].includes(stage);
   return (
     <div className="pending-match-card">
       <div className="pending-match-name">{pm.name}</div>
       <div className="pending-match-meta">
         Y{pm.resolveYear} W{pm.resolveWeek} · 阶段 {pm.stageIndex + 1}
       </div>
-      <button
-        type="button"
-        className="ghost-button"
-        disabled={busy}
-        onClick={onWithdraw}
-        style={{ fontSize: 11, padding: '3px 8px' }}
-      >
-        {busy ? '退出中…' : '退赛'}
-      </button>
+      {confirmWithdraw ? (
+        <div className="withdraw-confirm">
+          <div className="withdraw-warning">弃赛后果：</div>
+          <div className="withdraw-penalties">
+            <span className="chip chip-down">压力 +25</span>
+            <span className="chip chip-down">名气 -10</span>
+            {hasContract && <span className="chip chip-down">资金 -30K</span>}
+            <span className="chip chip-down">弃赛标记</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+            <button
+              type="button"
+              className="ghost-button"
+              style={{ fontSize: 10, padding: '2px 8px', flex: 1 }}
+              onClick={() => setConfirmWithdraw(false)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              disabled={busy}
+              onClick={onWithdraw}
+              style={{ fontSize: 10, padding: '2px 8px', color: 'var(--danger)', borderColor: 'var(--danger)', flex: 1 }}
+            >
+              {busy ? '弃赛中…' : '确认弃赛'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="ghost-button"
+          disabled={busy}
+          onClick={() => setConfirmWithdraw(true)}
+          style={{ fontSize: 11, padding: '3px 8px' }}
+        >
+          弃赛
+        </button>
+      )}
     </div>
   );
 }

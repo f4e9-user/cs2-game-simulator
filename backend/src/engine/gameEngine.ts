@@ -13,7 +13,10 @@ import {
 } from '../data/leaderboard.js';
 import { getEventById } from '../data/events/index.js';
 import { TRAITS, getTrait } from '../data/traits.js';
+import { ACTIONS, getAction } from '../data/actions.js';
+import { getShopItem, SHOP_ITEMS } from '../data/shop.js';
 import type {
+  ActionResult,
   Buff,
   GameEventPublic,
   GameSession,
@@ -45,6 +48,7 @@ import {
   LEGEND_FAME_THRESHOLD,
   MAX_ROUNDS,
   POINT_POOL,
+  STAGE_ORDER,
   STAT_KEYS,
   STRESS_GRACE_ROUNDS,
   STRESS_MAX,
@@ -54,7 +58,7 @@ import {
   TILT_MIN,
   passiveStressFromMentality,
 } from './constants.js';
-import { pickEvent, substituteRivals, toPublicEvent } from './events.js';
+import { buildTournamentPrepEvent, pickEvent, substituteRivals, toPublicEvent } from './events.js';
 import { checkTournamentPromotion } from './stages.js';
 import { applyDelta, applyGrowth, clampStats, makeRng, resolveChoice, translateStatDelta } from './resolver.js';
 import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
@@ -192,6 +196,8 @@ export function initPlayer(input: InitInput): Player {
     year: 1,
     week: 1,
     pendingMatch: null,
+    actionPoints: 100,
+    shopCooldowns: {},
     rivals: generateRivals(4),
     tournamentParticipations: 0,
     tournamentChampionships: 0,
@@ -283,6 +289,7 @@ function buildMatchResolveResult(
   nextStats = clampStats(nextStats);
 
   const tagAdds = won && isFinal ? ['tournament-winner'] : [];
+  if (won && isFinal && t.tier === 'major') tagAdds.push('major-champion');
 
   const chosenOutcome: Outcome = {
     narrative: sim.summary,
@@ -330,7 +337,11 @@ export function applyChoice(
   if (session.status !== 'active') throw new Error('session is not active');
   if (!session.currentEvent) throw new Error('no pending event on this session');
 
-  const eventDef = getEventById(session.currentEvent.id);
+  const eventDef = getEventById(session.currentEvent.id) ??
+    // Dynamically-generated prep events aren't in EVENT_POOL — reconstruct from pendingMatch
+    (session.currentEvent.id.startsWith('tourney-prep-') && session.player.pendingMatch
+      ? buildTournamentPrepEvent(session.player.pendingMatch)
+      : null);
   if (!eventDef) throw new Error(`unknown event: ${session.currentEvent.id}`);
 
   const choiceDef = eventDef.choices.find((c) => c.id === choiceId);
@@ -522,6 +533,21 @@ export function applyChoice(
     session.player.week ?? 1,
   );
 
+  // ── 行动力重置（赛事比赛周冻结为 0）──────────────────────────────
+  const pm = session.player.pendingMatch;
+  const isMatchWeek =
+    pm !== null &&
+    pm !== undefined &&
+    pm.resolveYear === nextYear &&
+    pm.resolveWeek === nextWeek;
+  const nextActionPoints = isMatchWeek ? 0 : 100;
+
+  // ── 商店冷却修剪（过期 round 已过）──────────────────────────────
+  const nextShopCooldowns: Record<string, number> = {};
+  for (const [itemId, until] of Object.entries(session.player.shopCooldowns ?? {})) {
+    if (until > nextRound) nextShopCooldowns[itemId] = until;
+  }
+
   const nextPlayer: Player = {
     ...session.player,
     stats: statsAfterGrowth,
@@ -538,6 +564,8 @@ export function applyChoice(
     stressMaxRounds,
     year: nextYear,
     week: nextWeek,
+    actionPoints: nextActionPoints,
+    shopCooldowns: nextShopCooldowns,
   };
 
   const result: RoundResult = {
@@ -676,13 +704,241 @@ function checkEnding(player: Player, endRun: boolean, endReason?: string): strin
     return 'injury_ended_career';
   }
   if (player.round >= MAX_ROUNDS) {
-    if ((player.fame ?? 0) >= LEGEND_FAME_THRESHOLD) return 'legend';
-    if (player.tags.includes('tournament-winner')) return 'champion';
+    const proStages = ['pro', 'star', 'veteran'] as const;
+    const semipro = ['second', 'pro', 'star', 'veteran'] as const;
+    const isProPlus = proStages.includes(player.stage as typeof proStages[number]);
+    const isSemiProPlus = semipro.includes(player.stage as typeof semipro[number]);
+    if (isProPlus && (player.fame ?? 0) >= LEGEND_FAME_THRESHOLD) return 'legend';
+    if (isSemiProPlus && player.tags.includes('major-champion')) return 'champion';
     return 'retired_on_top';
   }
   if (player.stage === 'retired') return 'quiet_exit';
   return undefined;
 }
+
+export interface ApplyActionResult {
+  actionResult: ActionResult;
+  player: Player;
+}
+
+export function applyAction(
+  session: GameSession,
+  actionId: string,
+): ApplyActionResult {
+  if (session.status !== 'active') throw new Error('session is not active');
+
+  const actionDef = getAction(actionId);
+  if (!actionDef) throw new Error(`未知行动: ${actionId}`);
+
+  const ap = session.player.actionPoints ?? 0;
+  if (ap < actionDef.apCost) throw new Error('行动力不足');
+
+  // 赛事比赛周不允许日常行动
+  const pm = session.player.pendingMatch;
+  if (
+    pm &&
+    pm.resolveYear === (session.player.year ?? 1) &&
+    pm.resolveWeek === (session.player.week ?? 1)
+  ) {
+    throw new Error('赛事比赛周无法进行日常行动');
+  }
+
+  const traits = session.player.traits
+    .map(getTrait)
+    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+
+  const rng = makeRng(
+    hashString(session.id) ^ ((session.player.round * 1000 + ap) * 2654435761),
+  );
+
+  // Build synthetic EventDef + ChoiceDef compatible with resolveChoice
+  const syntheticEvent = {
+    id: `action-${actionId}`,
+    type: actionDef.eventType,
+    title: actionDef.label,
+    narrative: '',
+    stages: STAGE_ORDER,
+    difficulty: 0,
+    choices: [
+      {
+        id: 'do',
+        label: actionDef.label,
+        description: actionDef.description,
+        check: actionDef.check,
+        success: actionDef.success,
+        failure: actionDef.failure,
+      },
+    ],
+  };
+
+  const outcome = resolveChoice({
+    player: session.player,
+    event: syntheticEvent as Parameters<typeof resolveChoice>[0]['event'],
+    choice: syntheticEvent.choices[0]! as Parameters<typeof resolveChoice>[0]['choice'],
+    traits,
+    rng,
+  });
+
+  const volatile = session.player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
+  const feel = clampFeel(volatile.feel + outcome.feelDelta);
+  const tilt = clampTilt(volatile.tilt + outcome.tiltDelta);
+  const fatigue = clampFatigue(volatile.fatigue + outcome.fatigueDelta);
+
+  let stress = session.player.stress ?? 0;
+  const explicitStress = outcome.chosenOutcome.stressDelta;
+  if (typeof explicitStress === 'number' && explicitStress !== 0) {
+    stress = clampStress(stress + explicitStress * STRESS_SCALE);
+  }
+
+  let growthSpent = (session.player.growthSpent ?? 0) + outcome.growthApplied;
+  if (growthSpent > GROWTH_CAP) growthSpent = GROWTH_CAP;
+
+  // Consume buffs if growth applied
+  let buffs: Buff[] = (session.player.buffs ?? []).map((b) => {
+    if (
+      outcome.growthKey &&
+      (b.actionTag === 'all' || b.actionTag === actionDef.eventType) &&
+      outcome.growthApplied > 0
+    ) {
+      return { ...b, remainingUses: b.remainingUses - 1 };
+    }
+    return b;
+  }).filter((b) => b.remainingUses > 0);
+
+  if (outcome.chosenOutcome.buffAdd) {
+    buffs = [...buffs, outcome.chosenOutcome.buffAdd];
+  }
+
+  const newVolatile = { feel, tilt, fatigue };
+
+  const nextPlayer: Player = {
+    ...session.player,
+    stats: outcome.nextStats,
+    volatile: newVolatile,
+    buffs,
+    growthSpent,
+    stress,
+    actionPoints: ap - actionDef.apCost,
+  };
+
+  const actionResult: ActionResult = {
+    actionId,
+    actionLabel: actionDef.label,
+    success: outcome.success,
+    roll: outcome.roll,
+    dc: outcome.dc,
+    narrative: outcome.chosenOutcome.narrative,
+    feelChange: feel - volatile.feel,
+    fatigueChange: fatigue - volatile.fatigue,
+    stressChange: stress - (session.player.stress ?? 0),
+    growthKey: outcome.growthKey,
+    growthAmount: outcome.growthApplied > 0 ? outcome.growthApplied : undefined,
+    newStats: outcome.nextStats,
+    newVolatile,
+  };
+
+  return { actionResult, player: nextPlayer };
+}
+
+export interface ApplyShopResult {
+  player: Player;
+  itemName: string;
+}
+
+export function applyShopPurchase(
+  session: GameSession,
+  itemId: string,
+): ApplyShopResult {
+  if (session.status !== 'active') throw new Error('session is not active');
+
+  const item = getShopItem(itemId);
+  if (!item) throw new Error(`未知商品: ${itemId}`);
+
+  const player = session.player;
+  const round = player.round;
+
+  // Stage check
+  if (item.requireStage && !item.requireStage.includes(player.stage)) {
+    throw new Error('当前阶段无法购买此商品');
+  }
+
+  // Fame check
+  if (item.requireFame !== undefined && (player.fame ?? 0) < item.requireFame) {
+    throw new Error(`名气不足，需要 ≥ ${item.requireFame}`);
+  }
+
+  // Cooldown check
+  const cooldownUntil = (player.shopCooldowns ?? {})[itemId] ?? 0;
+  if (cooldownUntil > round) {
+    throw new Error(`商品冷却中，还需 ${cooldownUntil - round} 回合`);
+  }
+
+  // Money check (price is in stat points, 1pt = 10K)
+  if (player.stats.money < item.priceMoney) {
+    throw new Error(`资金不足，需要 ${item.priceMoney * 10}K`);
+  }
+
+  const { effect } = item;
+
+  // Apply money cost
+  let stats = { ...player.stats };
+  stats.money = Math.max(0, stats.money - item.priceMoney);
+
+  // Constitution delta
+  if (effect.constitutionDelta) {
+    stats.constitution = Math.max(0, Math.min(20, stats.constitution + effect.constitutionDelta));
+  }
+
+  stats = clampStats(stats);
+
+  const volatile = player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
+  let feel = volatile.feel;
+  let tilt = volatile.tilt;
+  let fatigue = volatile.fatigue;
+
+  if (effect.fatigueDelta) fatigue = clampFatigue(fatigue + effect.fatigueDelta);
+  if (effect.feelReset) feel = clampFeel(0);
+
+  let stress = player.stress ?? 0;
+  let fame = player.fame ?? 0;
+  if (effect.stressDelta) stress = clampStress(stress + effect.stressDelta);
+  if (effect.fameDelta) fame = clampFame(fame + effect.fameDelta);
+
+  let buffs = [...(player.buffs ?? [])];
+  if (effect.buffAdd) {
+    // Remove existing buff with same id before adding
+    buffs = buffs.filter((b) => b.id !== effect.buffAdd!.id);
+    buffs.push(effect.buffAdd);
+  }
+
+  // Tag removal
+  let tags = [...player.tags];
+  if (effect.tagRemove) {
+    tags = tags.filter((t) => t !== effect.tagRemove);
+  }
+
+  // Record cooldown
+  const nextShopCooldowns = { ...(player.shopCooldowns ?? {}) };
+  if (item.cooldownRounds > 0) {
+    nextShopCooldowns[itemId] = round + item.cooldownRounds;
+  }
+
+  const nextPlayer: Player = {
+    ...player,
+    stats,
+    volatile: { feel, tilt, fatigue },
+    buffs,
+    stress,
+    fame,
+    tags,
+    shopCooldowns: nextShopCooldowns,
+  };
+
+  return { player: nextPlayer, itemName: item.name };
+}
+
+// Expose ACTIONS and SHOP_ITEMS for routes
+export { ACTIONS, SHOP_ITEMS };
 
 function dedupe(xs: string[]): string[] {
   return Array.from(new Set(xs));

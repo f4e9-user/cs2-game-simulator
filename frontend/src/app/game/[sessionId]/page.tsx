@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -8,12 +8,14 @@ import { EventCard } from '@/components/EventCard';
 import { ChoiceList } from '@/components/ChoiceList';
 import { PlayerStats } from '@/components/PlayerStats';
 import { ResultPanel } from '@/components/ResultPanel';
+import { EndingPanel } from '@/components/EndingPanel';
 import { MatchPanel } from '@/components/MatchPanel';
+import { ActionPanel } from '@/components/ActionPanel';
+import { ShopPanel } from '@/components/ShopPanel';
 import { Leaderboard } from '@/components/Leaderboard';
 import { FeedPanel } from '@/components/FeedPanel';
 import { HudTopBar } from '@/components/HudTopBar';
 import { useGameStore } from '@/store/gameStore';
-import { ENDING_LABELS } from '@/lib/format';
 import type { Player, Trait } from '@/lib/types';
 
 export default function GamePage() {
@@ -29,16 +31,21 @@ export default function GamePage() {
     lastResult,
     promotion,
     leaderboard,
+    actionsPhase,
     loading,
     error,
     hydrateFromSession,
     applyChoiceResponse,
     setPlayer,
+    setActionsPhase,
     setLoading,
     setError,
   } = useGameStore();
 
   const [traits, setTraits] = useState<Trait[]>([]);
+  const [shaking, setShaking] = useState(false);
+  const [showNewGameModal, setShowNewGameModal] = useState(false);
+  const prevStressMaxRounds = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +62,19 @@ export default function GamePage() {
       cancelled = true;
     };
   }, [sessionId, hydrateFromSession, setLoading, setError]);
+
+  // 压力临界时触发震动动画
+  useEffect(() => {
+    if (!player) return;
+    const cur = player.stressMaxRounds ?? 0;
+    if (cur > 0 && cur > prevStressMaxRounds.current) {
+      setShaking(true);
+      const t = setTimeout(() => setShaking(false), 700);
+      prevStressMaxRounds.current = cur;
+      return () => clearTimeout(t);
+    }
+    prevStressMaxRounds.current = cur;
+  }, [player?.stressMaxRounds]);
 
   const pickChoice = async (choiceId: string) => {
     setLoading(true);
@@ -113,22 +133,40 @@ export default function GamePage() {
   }
 
   const ended = status === 'ended';
+  const isCritical = (player.stressMaxRounds ?? 0) > 0;
 
   return (
-    <div className="hud-root">
+    <div className={`hud-root${isCritical ? ' stress-critical' : ''}${shaking ? ' stress-shaking' : ''}`}>
+      {/* 压力临界红框警告 */}
+      {isCritical && <div className="stress-critical-overlay" />}
+
       {/* Top bar */}
       <HudTopBar player={player} leaderboard={leaderboard} />
 
       {/* Main body */}
       <div className="hud-body">
-        {/* Left: tournaments + leaderboard */}
+        {/* Left: tournaments + actions + shop + leaderboard */}
         <aside className="hud-left">
           {!ended && (
-            <MatchPanel
-              sessionId={sessionId}
-              player={player}
-              onPlayerUpdate={(p: Player) => setPlayer(p)}
-            />
+            <>
+              <MatchPanel
+                sessionId={sessionId}
+                player={player}
+                onPlayerUpdate={(p: Player) => setPlayer(p)}
+              />
+              <ActionPanel
+                key={player.round}
+                sessionId={sessionId}
+                player={player}
+                enabled={actionsPhase}
+                onPlayerUpdate={(p: Player) => setPlayer(p)}
+              />
+              <ShopPanel
+                sessionId={sessionId}
+                player={player}
+                onPlayerUpdate={(p: Player) => setPlayer(p)}
+              />
+            </>
           )}
           <Leaderboard teams={leaderboard} />
         </aside>
@@ -136,20 +174,28 @@ export default function GamePage() {
         {/* Center: event narrative + choices */}
         <main className="hud-center">
           {ended ? (
-            <div className="ending-panel">
-              <div className="ending-title">生涯结束</div>
-              <div className="ending-result">
-                {ending ? (ENDING_LABELS[ending] ?? ending) : '未知结局'}
-              </div>
-              <Link href="/" className="primary-button">
-                再来一次
-              </Link>
-            </div>
+            <EndingPanel player={player} traits={traits} ending={ending ?? undefined} />
           ) : (
             <>
               {lastResult && <ResultPanel result={lastResult} />}
 
-              {currentEvent ? (
+              {actionsPhase ? (
+                /* 行动阶段：事件隐藏，等待玩家完成日常行动 */
+                <div className="actions-phase-banner">
+                  <div className="actions-phase-title">行动阶段</div>
+                  <div className="actions-phase-hint">
+                    在左侧面板执行日常行动（最多 4 次），或直接进入下一回合。
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    style={{ marginTop: 12 }}
+                    onClick={() => setActionsPhase(false)}
+                  >
+                    进入下一回合 →
+                  </button>
+                </div>
+              ) : currentEvent ? (
                 <>
                   <EventCard event={currentEvent} />
                   <div
@@ -193,15 +239,42 @@ export default function GamePage() {
         </aside>
       </div>
 
+      {/* New-game confirm modal */}
+      {showNewGameModal && (
+        <div className="modal-backdrop" onClick={() => setShowNewGameModal(false)}>
+          <div className="modal new-game-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="new-game-modal-warn">
+              开始新生涯将放弃当前档案，此操作不可逆。
+            </div>
+            <div className="new-game-modal-summary">
+              <EndingPanel player={player} traits={traits} ending={ending ?? undefined} />
+            </div>
+            <div className="new-game-modal-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setShowNewGameModal(false)}
+              >
+                取消
+              </button>
+              <Link href="/" className="primary-button">
+                确认，开始新生涯
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bottom bar */}
       <footer className="hud-bottom">
-        <Link
-          href="/"
+        <button
+          type="button"
           className="ghost-button"
           style={{ fontSize: 11, padding: '3px 10px' }}
+          onClick={() => setShowNewGameModal(true)}
         >
           ← 新生涯
-        </Link>
+        </button>
         <span
           style={{
             fontSize: 10,

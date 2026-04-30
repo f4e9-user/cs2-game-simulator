@@ -1,7 +1,7 @@
 import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
-import type { EventDef, Player, Rival } from '../types.js';
+import type { EventDef, Player, Rival, PendingMatch } from '../types.js';
 
 export interface EventContext {
   player: Player;
@@ -54,6 +54,71 @@ function stateWeight(e: EventDef, player: Player): number {
   return Math.max(0.05, w);
 }
 
+// 赛前准备事件：在报名赛事后到比赛周之前的回合出现
+export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
+  return {
+    id: `tourney-prep-${pm.tournamentId}-${pm.stageIndex}`,
+    type: 'match',
+    title: `赛前准备 — ${pm.name}`,
+    narrative: `距离 ${pm.name} 第 ${pm.stageIndex + 1} 阶段比赛还有几天，你需要做好准备。`,
+    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 1,
+    choices: [
+      {
+        id: 'demo-review',
+        label: '分析对手录像',
+        description: '研究对手的战术习惯，寻找可利用的规律。',
+        check: { primary: 'intelligence', dc: 8, traitBonuses: { tactical: 2, igl: 1 } },
+        success: {
+          narrative: '你发现对手在某个点位有固定的战术偏好，这会是关键。',
+          buffAdd: {
+            id: 'pre-match-intel',
+            label: '赛前情报',
+            actionTag: 'match',
+            growthKey: 'intelligence',
+            multiplier: 1.15,
+            remainingUses: 2,
+          },
+        },
+        failure: {
+          narrative: '录像看了两个小时，没找到什么特别的规律。',
+          fatigueDelta: 10,
+        },
+      },
+      {
+        id: 'physical-prep',
+        label: '体能保持训练',
+        description: '轻量体能练习，保持状态不退步。',
+        check: { primary: 'mentality', dc: 5, traitBonuses: { grinder: 1 } },
+        success: {
+          narrative: '轻量训练到位，身体状态维持得不错。',
+          fatigueDelta: -10,
+          feelDelta: 1,
+        },
+        failure: {
+          narrative: '练习感觉很干，状态也没起色。',
+          fatigueDelta: 5,
+        },
+      },
+      {
+        id: 'mental-reset',
+        label: '心态调整',
+        description: '放松放松，不要在比赛前把自己绷死。',
+        check: { primary: 'mentality', dc: 4, traitBonuses: { steady: 2 } },
+        success: {
+          narrative: '脑子里的杂念少了一些，感觉可以专注上场了。',
+          stressDelta: -2,
+          fatigueDelta: -5,
+        },
+        failure: {
+          narrative: '越想放松越焦虑，最后也没怎么休息到。',
+          stressDelta: 1,
+        },
+      },
+    ],
+  };
+}
+
 export function pickEvent(ctx: EventContext): EventDef | null {
   const { player, recentEventIds, rng } = ctx;
   const realTags = new Set(player.tags);
@@ -73,8 +138,14 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     }
   }
 
+  // 赛事隔离：报名赛事期间只出现赛前准备事件
+  if (player.pendingMatch) {
+    return buildTournamentPrepEvent(player.pendingMatch);
+  }
+
   const eligible = EVENT_POOL.filter((e) => {
     if (e.type === 'rest') return false;
+    if (e.type === 'routine') return false; // 日常行动改为行动面板，不再随机出现
     if (!e.stages.includes(player.stage)) return false;
     if (recentEventIds.includes(e.id)) return false;
     if (e.requireTags?.some((t) => !synthTags.has(t))) return false;
@@ -84,7 +155,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
 
   if (eligible.length === 0) {
     const fallback = EVENT_POOL.filter(
-      (e) => e.type !== 'rest' && e.stages.includes(player.stage),
+      (e) => e.type !== 'rest' && e.type !== 'routine' && e.stages.includes(player.stage),
     );
     if (fallback.length === 0) return null;
     return weightedPick(fallback, rng, (e) => stateWeight(e, player));

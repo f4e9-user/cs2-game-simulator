@@ -1022,4 +1022,94 @@ export const CHAIN_EVENTS: EventDef[] = [
       },
     ],
   },
+
+  // ── forfeit-recent → consequence ──────────────────────────────────
+  {
+    id: 'chain-forfeit-consequence',
+    type: 'team',
+    title: '弃赛的代价',
+    narrative:
+      '弃赛的消息在圈子里传开了。队友发来消息，俱乐部也约谈了你。你必须面对这件事。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 2,
+    weight: 1.2,
+    requireTags: ['forfeit-recent'],
+    choices: [
+      {
+        id: 'public-statement',
+        label: '发微博道歉说明原因',
+        description: '公开解释有助于平息舆论，但也可能引来更多质疑。',
+        check: {
+          primary: 'intelligence',
+          dc: 9,
+          traitBonuses: { media: 2, steady: 1 },
+          traitPenalties: { ego: 2 },
+        },
+        success: {
+          narrative: '你的声明措辞合适，评论区情绪基本平稳。粉丝中有人表示理解。',
+          statChanges: {},
+          tagRemoves: ['forfeit-recent'],
+          fameDelta: -2,
+          stressDelta: -1,
+        },
+        failure: {
+          narrative: '声明里有一句话被断章取义，话题热度反而更大了。',
+          statChanges: { mentality: -1 },
+          tagRemoves: ['forfeit-recent'],
+          fameDelta: -5,
+          stressDelta: 2,
+        },
+      },
+      {
+        id: 'talk-to-teammates',
+        label: '私下找队友解释，不公开',
+        description: '内部关系比外部舆论更重要。',
+        check: {
+          primary: 'mentality',
+          secondary: 'intelligence',
+          dc: 8,
+          traitBonuses: { selfless: 2, steady: 2 },
+          traitPenalties: { ego: 1, shy: 2 },
+        },
+        success: {
+          narrative: '队友们虽然不满，但听了你的解释后接受了。团队内部没有进一步撕裂。',
+          statChanges: { mentality: 1 },
+          tagRemoves: ['forfeit-recent'],
+          stressDelta: -1,
+        },
+        failure: {
+          narrative: '有人当场说了重话。气氛很差，团队信任又少了一些。',
+          statChanges: { mentality: -2 },
+          tagRemoves: ['forfeit-recent'],
+          tagAdds: ['locker-tension'],
+          stressDelta: 3,
+        },
+      },
+      {
+        id: 'ignore-fallout',
+        label: '不管了，等风波自己过去',
+        description: '沉默是最懒的处理方式，但有时候有效。',
+        check: {
+          primary: 'mentality',
+          dc: 7,
+          traitBonuses: { steady: 2 },
+          traitPenalties: { media: 1 },
+        },
+        success: {
+          narrative: '一周后新事件把注意力转移走了。弃赛的事被大家逐渐忘记。',
+          statChanges: {},
+          tagRemoves: ['forfeit-recent'],
+          fameDelta: -3,
+          stressDelta: 0,
+        },
+        failure: {
+          narrative: '沉默被解读成傲慢，俱乐部管理层传来了正式警告。',
+          statChanges: { mentality: -1 },
+          tagRemoves: ['forfeit-recent'],
+          fameDelta: -5,
+          stressDelta: 3,
+        },
+      },
+    ],
+  },
 ];

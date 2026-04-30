@@ -125,11 +125,11 @@ export const CONSTITUTION_COLLAPSE = -2;
 export const INJURY_REST_ROUNDS = 2;
 
 // ── 游戏周期 ──────────────────────────────────────────────────
-export const MAX_ROUNDS = 100;
+export const MAX_ROUNDS = 576; // 12年 × 48周，约16岁入行到28岁退役
 export const WEEKS_PER_YEAR = 48;
 
 // ── 名气阈值 ──────────────────────────────────────────────────
-export const LEGEND_FAME_THRESHOLD = 30;
+export const LEGEND_FAME_THRESHOLD = 70;
 
 // 旧版使用（保留避免引用断裂）
 export const STRESS_BREAKDOWN = STRESS_MAX;

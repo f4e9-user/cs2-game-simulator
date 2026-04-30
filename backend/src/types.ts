@@ -99,6 +99,24 @@ export interface DynamicState {
   year: number;
   week: number;
   pendingMatch: PendingMatch | null;
+  actionPoints: number;        // 每回合重置为 100；赛事比赛周为 0
+  shopCooldowns: Record<string, number>; // itemId → 可购买的最早 round
+}
+
+export interface ActionResult {
+  actionId: string;
+  actionLabel: string;
+  success: boolean;
+  roll: number;
+  dc: number;
+  narrative: string;
+  feelChange: number;
+  fatigueChange: number;
+  stressChange: number;
+  growthKey?: StatKey;
+  growthAmount?: number;
+  newStats: Stats;
+  newVolatile: { feel: number; tilt: number; fatigue: number };
 }
 
 export interface Player extends DynamicState {

@@ -2,7 +2,11 @@ import { Hono } from 'hono';
 import { BACKGROUNDS } from '../data/backgrounds.js';
 import { TRAITS } from '../data/traits.js';
 import {
+  ACTIONS,
+  SHOP_ITEMS,
+  applyAction,
   applyChoice,
+  applyShopPurchase,
   computeTraitMods,
   createSession,
   initPlayer,
@@ -250,10 +254,86 @@ app.post('/game/:sessionId/withdraw', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!session.player.pendingMatch) return c.json({ error: '当前没有报名中的赛事' }, 400);
+
+  const penalties: string[] = [];
+
+  // 弃赛惩罚
+  session.player.stress = Math.min(100, (session.player.stress ?? 0) + 25);
+  penalties.push('压力 +25');
+
+  session.player.fame = Math.max(0, (session.player.fame ?? 0) - 10);
+  penalties.push('名气 -10');
+
+  // 30K 罚款（3 money points）—— 仅在二线及以上有合约的阶段
+  const stageHasContract = ['second', 'pro', 'star', 'veteran'].includes(session.player.stage);
+  if (stageHasContract) {
+    session.player.stats.money = Math.max(0, session.player.stats.money - 3);
+    penalties.push('资金 -30K');
+  }
+
+  if (!session.player.tags.includes('forfeit-recent')) {
+    session.player.tags = [...session.player.tags, 'forfeit-recent'];
+  }
+
   session.player.pendingMatch = null;
   session.updatedAt = new Date().toISOString();
   await storage.sessions.save(session);
-  return c.json({ player: session.player });
+  return c.json({ player: session.player, penalties });
 });
+
+// 日常行动端点
+app.post('/game/:sessionId/action', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { actionId } = body ?? {};
+  if (typeof actionId !== 'string' || !actionId) {
+    return c.json({ error: 'actionId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const { actionResult, player } = applyAction(session, actionId);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ actionResult, player });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+// 购物端点
+app.post('/game/:sessionId/shop', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { itemId } = body ?? {};
+  if (typeof itemId !== 'string' || !itemId) {
+    return c.json({ error: 'itemId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const { player, itemName } = applyShopPurchase(session, itemId);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player, itemName });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+// 获取行动和商品列表（前端初始化用）
+app.get('/game/meta/actions', (c) => c.json({ actions: ACTIONS }));
+app.get('/game/meta/shop', (c) => c.json({ items: SHOP_ITEMS }));
 
 export default app;
