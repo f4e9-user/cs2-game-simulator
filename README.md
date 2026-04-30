@@ -29,6 +29,8 @@ cs2-game-simulator/
 │       │   ├── traits.ts         22 条特质（含正/负/混合）
 │       │   ├── backgrounds.ts    起点身份（数据保留，UI 已隐藏）
 │       │   ├── tournaments.ts    9 个赛事 + 多阶段 bracket + 合成事件
+│       │   ├── actions.ts        4 个日常行动（打天梯/系统训练/休息/度假）
+│       │   ├── shop.ts           9 件商品（消耗品/服务/装备/社交四类）
 │       │   ├── rivals.ts         AI 对手战队名生成
 │       │   ├── leaderboard.ts    战队积分榜构建/tick/加分
 │       │   └── events/           分类事件池
@@ -66,7 +68,10 @@ cs2-game-simulator/
         │   ├── FeedPanel.tsx             历史动态，含 volatile 变化 chip
         │   ├── HistoryPanel.tsx
         │   ├── StageBadge.tsx
-        │   ├── MatchPanel.tsx            赛事日历 + 报名/退赛 + 阶段进度
+        │   ├── MatchPanel.tsx            赛事日历 + 报名/退赛（含弃赛惩罚确认） + 阶段进度
+        │   ├── ActionPanel.tsx           行动力面板：AP条 + 4个日常行动 + 行动结果小卡
+        │   ├── ShopPanel.tsx             购物面板：消耗品/服务/装备/社交四类商品
+        │   ├── EndingPanel.tsx           富结局面板：生涯轨迹/五维/赛事战绩/特质/标签
         │   └── Leaderboard.tsx           战队积分榜（玩家高亮）
         ├── lib/
         │   ├── api.ts                    自动路由（cs.* → cs-api.*）
@@ -249,28 +254,49 @@ Buff 是临时性成长加成，有使用次数限制。
 
 ### 时间系统
 
-- 1 回合 = 1 周；48 周 / 年；MAX_ROUNDS = 80（≈ 1.5 年）
+- 1 回合 = 1 周；48 周 / 年；MAX_ROUNDS = 576（12 年，约 16 岁入行 → 28 岁退役）
 - 显示格式："第 X 年 第 Y 周"
 - Major 在周 22/46 报名、周 23/47 入围；广播事件在周 24/48 触发（玩家未报名时）
 
-### 每日行动（routine 事件）
+### 行动力系统
 
-每周在没有硬性任务时触发，是核心属性**主要成长途径**（通过 `dailyGrowth` 字段）。共 3 类场景 × 4 个选项：
+事件决策完成后，行动阶段解锁，玩家可主动消耗 AP 执行日常行动。
 
-| 场景 | 触发条件 | 权重 |
-|---|---|---|
-| `routine-standard` 普通一周 | 所有阶段 | 4 |
-| `routine-peak-season` 赛季冲刺 | youth/second/pro/star | 2 |
-| `routine-light-week` 轻训周 | youth~veteran | 2 |
+| 字段 | 说明 |
+|---|---|
+| `actionPoints` | 每回合重置为 100；赛事周为 0（赛前准备期不允许日常行动） |
+| 每次行动消耗 | 25 AP（最多 4 次/回合） |
 
-每个场景提供 4 个互斥选择：
+**4 个日常行动**（定义于 `backend/src/data/actions.ts`）：
 
-| 选项 | 主属性 | 成长 | 主要效果 |
-|---|---|---|---|
-| 天梯：刷分上分 | agility | `dailyGrowth: 'agility'` | feel+，fatigue+，stress+ |
-| 训练：体系化练习 | intelligence | `dailyGrowth: 'intelligence'` | feel+(小)，fatigue+（轻），某些场景给 buff |
-| 休息：充个电 | mentality | — | stress−，fatigue−（大） |
-| 度假：彻底断网 | mentality | — | stress−−，fatigue−，feel−（生疏），tilt− |
+| actionId | 名称 | 主属性 | 成功效果 | 失败效果 |
+|---|---|---|---|---|
+| `action-ranked-grind` | 打天梯 | agility | agility 成长 + feel+1 + fatigue+15 | fatigue+10 + tilt+1 |
+| `action-structured-training` | 系统训练 | intelligence | intelligence 成长 + fatigue+12 | fatigue+8 |
+| `action-rest-day` | 休息一天 | mentality | feel+1 + fatigue-20 + stress-5 | fatigue-10 |
+| `action-vacation` | 度假断网 | mentality（DC 1）| fatigue-30 + stress-50 + feel-1 | fatigue-20 + stress-30 |
+
+`applyAction()` 复用 `resolveChoice()` 的 d20 检定逻辑，不推进回合、不重置 AP。
+
+### 购物系统
+
+玩家在行动阶段可用资金购买道具，主要用于降压/恢复体能。
+
+**商品分类**（定义于 `backend/src/data/shop.ts`）：
+
+| 类别 | 商品 | 价格 | 冷却 | 主要效果 |
+|---|---|---|---|---|
+| 消耗品 | 能量饮料 | 10K | 无 | fatigue-20 |
+| 消耗品 | 外卖套餐 | 10K | 无 | fatigue-8 |
+| 消耗品 | 止痛药 | 10K | 无 | fatigue-15 + constitution+1 |
+| 服务 | 心理咨询 | 20K | 5回合 | stress-100 + 心理稳定 buff(×1.15, 3次) |
+| 服务 | 短途旅行 | 40K | 5回合 | stress-35 + fatigue-30 + feel重置 |
+| 装备 | 高端外设 | 50K | 20回合 | agility 成长 buff(×1.2, 10次) |
+| 装备 | 人体工学椅 | 40K | 20回合 | constitution+2 + 人体工学 buff |
+| 社交 | 请队友吃饭 | 20K | 3回合 | stress-10 + 移除 locker-tension tag |
+| 社交 | 粉丝见面会 | 30K | 3回合 | fame+10 + stress+8（需 fame ≥ 20） |
+
+`shopCooldowns` 记录 `{ itemId: roundAvailableFrom }`，`applyShopPurchase()` 校验余额/冷却/fame/stage 门槛。
 
 ### 事件分类与权重
 
@@ -292,17 +318,19 @@ Buff 是临时性成长加成，有使用次数限制。
 
 ### 多结局
 
-| ending | 触发 |
+| ending | 触发条件 |
 |---|---|
-| `legend` | 满 80 回合 + fame ≥ 30 |
-| `champion` | 满 80 回合 + 持 `tournament-winner` |
-| `retired_on_top` | 满 80 回合（默认） |
+| `legend` | 满 576 回合 + stage ∈ {pro/star/veteran} + fame ≥ 70 |
+| `champion` | 满 576 回合 + stage ∈ {second/pro/star/veteran} + 持 `major-champion` tag |
+| `retired_on_top` | 满 576 回合（默认） |
 | `quiet_exit` | stage = retired |
 | `stress_breakdown` | 压力拉满 ≥1 周 |
 | `injury_ended_career` | `injury-prone` 且 constitution ≤ 0 |
 | `banned_for_match_fixing` | 博彩被发现 |
 | `banned_for_cheating` | 外挂被发现 |
 | `career_ended` | outcome.endRun 默认 |
+
+**关键 tag**：赢得 Major 决赛时自动打 `major-champion`；赢得任意决赛打 `tournament-winner`。
 
 ### AI 叙事
 
@@ -328,11 +356,17 @@ Buff 是临时性成长加成，有使用次数限制。
 | POST | `/api/game/:sessionId/choice` | body: `{ choiceId }` |
 | GET | `/api/game/:sessionId/tournaments` | 当周可报名赛事 + 当前 pendingMatch |
 | POST | `/api/game/:sessionId/signup` | body: `{ tournamentId }`（验 stage / fame / points / 报名窗口） |
-| POST | `/api/game/:sessionId/withdraw` | 清空 pendingMatch |
+| POST | `/api/game/:sessionId/withdraw` | 弃赛（stress+25 / fame-10 / money-3 惩罚 + `forfeit-recent` tag） |
+| POST | `/api/game/:sessionId/action` | body: `{ actionId }` 执行日常行动（消耗 25 AP，不推进回合） |
+| POST | `/api/game/:sessionId/shop` | body: `{ itemId }` 购买商品（扣钱 + 应用效果 + 写冷却） |
+| GET | `/api/game/meta/actions` | 返回 4 个日常行动定义 |
+| GET | `/api/game/meta/shop` | 返回全部商品定义 |
 | GET | `/api/game/meta/rules` | 公开常量（pointPool 等） |
 
 `POST /api/game/start` 响应：`{ sessionId, player, currentEvent, leaderboard }`
 `POST /api/game/:sessionId/choice` 响应：`{ result, player, currentEvent, status, ending?, promotion, leaderboard }`
+`POST /api/game/:sessionId/action` 响应：`{ actionResult: ActionResult, player }`
+`POST /api/game/:sessionId/shop` 响应：`{ player, item: ShopItem }`
 
 ---
 
@@ -496,15 +530,50 @@ npx wrangler deploy
 - `FeedPanel`：每条历史记录显示 volatile 变化 chip
 - `globals.css`：HUD 顶栏从 52px → 64px；新增 `.hud-derived-*`、`.feel-hot/cold/neutral`、`.event-type-badge.routine`
 
+### Phase F（行动力 + 购物 + 赛事隔离 + 结局深化）
+
+**行动力系统**
+- 每回合 100 AP；事件决策完成后行动阶段解锁，每次日常行动消耗 25 AP
+- `DynamicState` 新增 `actionPoints`；每次 `applyChoice` 后重置为 100（赛事周为 0）
+- `applyAction()` 使用合成 EventDef 复用 `resolveChoice()` 逻辑，不推进回合
+- 前端状态机：`actionsPhase: boolean`（false=事件阶段，true=行动解锁期）；"进入下一回合"按钮切换
+- `ActionPanel` 组件：AP 格子条（4 段）+ 4 个行动按钮 + 每次行动后展示结果小卡（`key={player.round}` 每回合重置）
+
+**购物系统**
+- `DynamicState` 新增 `shopCooldowns: Record<string, number>`（itemId → 可购买轮次）
+- 9 件商品分四类：消耗品（能量饮料/外卖/止痛药）、服务（心理咨询-100压力/短途旅行）、装备（高端外设/人体工学椅）、社交（请队友吃饭/粉丝见面会）
+- `applyShopPurchase()` 校验余额/冷却/fame/stage 后应用效果
+- `ShopPanel` 组件：按类别展示，实时校验购买条件，显示冷却剩余
+
+**赛事隔离 + 弃赛惩罚**
+- `pickEvent()` 在 `pendingMatch` 存在时返回 `buildTournamentPrepEvent()`（固定 3 选项：分析对手/体能准备/心态调整），不出现随机事件
+- 赛前准备事件 ID 格式 `tourney-prep-{tournamentId}` 动态合成，`applyChoice` 中添加回退重建逻辑
+- 弃赛从"清空 pendingMatch"改为真实惩罚：stress+25 / fame-10 / money-3（二线及以上）/ 添加 `forfeit-recent` tag
+- `chains.ts` 新增 `chain-forfeit-consequence`（弃赛后续：媒体炒作/俱乐部谈话/队友冷眼）
+- `MatchPanel` 弃赛按钮改为弹出确认 UI，显示具体惩罚 chips
+
+**结局条件重构**
+- `MAX_ROUNDS` 从 80 → 576（12 年生涯）
+- `legend`：新增 stage ≥ pro 且 fame ≥ 70 门槛（之前只判 fame ≥ 30）
+- `champion`：改为要求持 `major-champion` tag（赢 Major 决赛时自动打）而非普通 `tournament-winner`
+- 赢得 Major 决赛同时打两个 tag：`tournament-winner` + `major-champion`
+
+**压力临界视觉反馈**
+- `stressMaxRounds` 增加时触发 0.65s 屏幕抖动（`@keyframes stress-shake`）
+- 压力临界期间持续显示脉冲红框覆盖层（`@keyframes stress-border-pulse`，1.2s 循环）
+
+**富结局面板**
+- `EndingPanel` 组件：结局标签（legend 金色光晕）、生涯轨迹（年/周/回合/阶段）、关键数值（人气/资金/压力）、五维属性条、赛事战绩（按 tier 分类的夺冠金色徽章）、开局特质（含描述）、生涯标签（过滤 `-cd` 冷却标签）
+- 底栏"← 新生涯"改为弹出确认框，框内嵌入完整 `EndingPanel`，防止误触丢失存档
+
 ---
 
 ## 后续扩展（待办）
 
-### 高优先级（Phase D2）
+### 高优先级
+- **特质权重机制**：Trait 加 `weight` 字段，`rollRandomTraits` 改为加权采样，支持稀有特质（如 1% 概率的"CS天赋之子"：agility+10 / intelligence+10 / mentality-3）
 - **AI 生成随机事件**：基于玩家状态 + 历史让 LLM 产出全新 EventDef，注入事件池一次性消费
 - **AI 生成战报**：每场比赛阶段用 LLM 产出 demo 文本（"AWPer X 在 mid 架点拿下 1v3"）
-- **Twitter 风格动态 feed**：`/api/game/:id/feed` 返回 LLM 生成的圈内动态条目（玩家、对手、记者发言）
-- **AI 替换 leaderboard tick**：让 LLM 按选手 narrative 调分而非纯随机
 
 ### 中优先级
 - **更多结局**：金钱结局（财务自由提前退役）、纯路人结局（无成就退役）、转教练 / 解说
@@ -512,16 +581,17 @@ npx wrangler deploy
 - **社交关系系统**：队友 / 经纪人 / 教练个体，分别有信任度 / 冲突 / 转会促因
 - **赞助系统**：fame 门槛触发赞助合同，提供持续收入和压力
 - **赛季设定**：版本更新事件，影响 meta；老选手版本不适应 → 经验贬值
+- **Twitter 风格动态 feed**：`/api/game/:id/feed` 返回 LLM 生成的圈内动态条目
 
 ### 低优先级 / Polish
-- 数值平衡：收集多局数据后微调 DC、stressDelta、reward
-- 视觉震屏：心态崩溃时 UI 红边、压力满时呼吸感
+- 数值平衡：收集多局数据后微调 DC、stressDelta、reward、行动力 AP 值
 - i18n：英文版（事件文本量大，需配套 LLM 翻译流水线）
 - 排行榜持久化（sessions ↔ runs 表，跨会话纪录）
 - 战队系统真正建模：成员 / 替补 / 主教练；目前 rivals 仅是名字
+- AI 替换 leaderboard tick：让 LLM 按选手 narrative 调分而非纯随机
 
 ### 已知遗留问题
-- 旧会话（D1 存储里的 JSON）字段缺失时不会自动迁移，需要清 `.wrangler/state` 后重新 `wrangler d1 execute --local --file=schema.sql` 重开；Phase E 重构后特别需要注意（新增 `volatile/buffs/growthSpent` 字段）
+- 旧会话（D1 存储里的 JSON）字段缺失时不会自动迁移，需要清 `.wrangler/state` 后重新 `wrangler d1 execute --local --file=schema.sql` 重开；Phase F 新增 `actionPoints/shopCooldowns` 字段需注意
 - 报名后立即结束游戏（如博彩被抓）时 pendingMatch 会丢失，没补救
 - 事件占位符替换只支持 `{rival0..3}`，未支持队友/赞助商等
 - 旧版叙事事件（training/ranked/team 等）的 `statChanges` 仍保留在 EventDef 定义里，运行时通过 `translateStatDelta` 转译；未来考虑重写为直接使用 feelDelta/tiltDelta 字段
