@@ -15,7 +15,7 @@ import { getEventById } from '../data/events/index.js';
 import { TRAITS, getTrait } from '../data/traits.js';
 import { ACTIONS, getAction } from '../data/actions.js';
 import { getShopItem, SHOP_ITEMS } from '../data/shop.js';
-import { CLUBS, getClub, clubsForStage } from '../data/clubs.js';
+import { CLUBS, getClub, clubsForStage, PRIZE_SPLIT } from '../data/clubs.js';
 import type {
   ActionResult,
   Buff,
@@ -203,6 +203,7 @@ export function initPlayer(input: InitInput): Player {
     team: null,
     pendingApplication: null,
     pendingOffer: null,
+    consecutiveLosses: 0,
     rivals: generateRivals(4),
     tournamentParticipations: 0,
     tournamentChampionships: 0,
@@ -270,6 +271,14 @@ function buildMatchResolveResult(
   const lossStressDelta = (r.stressDelta ?? 1) + 2;
 
   const statChanges: StatDelta = won ? winReward : lossReward;
+
+  // 奖金分成：签约战队后俱乐部从奖金抽成
+  const playerShare = player.team
+    ? (PRIZE_SPLIT[player.team.tier] ?? 1.0)
+    : 1.0;
+  if (player.team && playerShare < 1.0 && statChanges.money) {
+    statChanges.money = Math.round((statChanges.money as number) * playerShare);
+  }
 
   // Apply stat changes via translateStatDelta for consistency
   const legacy = translateStatDelta(statChanges);
@@ -512,6 +521,14 @@ export function applyChoice(
 
   const nextRound = session.player.round + 1;
 
+  // 连败追踪（基于本回合赛事结果）
+  let consecutiveLosses = session.player.consecutiveLosses ?? 0;
+  if (eventDef.id.startsWith('tournament-') && !outcome.success) {
+    consecutiveLosses += 1;
+  } else if (eventDef.id.startsWith('tournament-') && outcome.success) {
+    consecutiveLosses = 0;
+  }
+
   // ── 冷却 tag 处理 ──────────────────────────────────────────────
   // 1. 先剪掉已过期的冷却 tag
   const nextTagExpiry: Record<string, number> = { ...(session.player.tagExpiry ?? {}) };
@@ -571,6 +588,7 @@ export function applyChoice(
     week: nextWeek,
     actionPoints: nextActionPoints,
     shopCooldowns: nextShopCooldowns,
+    consecutiveLosses,
   };
 
   // 周薪入账

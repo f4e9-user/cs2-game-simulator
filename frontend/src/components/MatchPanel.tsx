@@ -3,12 +3,39 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { PendingMatch, Player, Tournament } from '@/lib/types';
+import type { ClubTier } from '@/lib/types';
 import {
   describeTournamentMoney,
   describeTournamentExp,
   describeTournamentFame,
   describeTournamentStress,
 } from '@/lib/format';
+
+const TOURNAMENT_TEAM_REQ: Record<string, ClubTier | null> = {
+  netcafe: null,
+  city: null,
+  platform: null,
+  'secondary-league': 'youth',
+  'development-league': 'semi-pro',
+  tier2: 'pro',
+  tier1: 'pro',
+  's-class': 'top',
+  major: 'top',
+};
+
+const TIER_LABELS: Record<ClubTier, string> = {
+  youth: '青训',
+  'semi-pro': '半职业',
+  pro: '职业',
+  top: '顶级',
+};
+
+function teamReqMet(team: Player['team'], req: ClubTier | null): boolean {
+  if (!req) return true;
+  if (!team) return false;
+  const order: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+  return order.indexOf(team.tier) >= order.indexOf(req);
+}
 
 interface Props {
   sessionId: string;
@@ -105,6 +132,7 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
           <TournamentCard
             key={t.id}
             t={t}
+            team={player.team}
             onSignup={() => signup(t.id)}
             busy={busyId === t.id}
           />
@@ -188,14 +216,18 @@ function PendingMatchCard({
 
 function TournamentCard({
   t,
+  team,
   onSignup,
   busy,
 }: {
   t: Tournament;
+  team: Player['team'];
   onSignup: () => void;
   busy: boolean;
 }) {
   const r = t.reward;
+  const teamReq = TOURNAMENT_TEAM_REQ[t.tier] ?? null;
+  const canEnter = teamReqMet(team, teamReq);
   return (
     <div className="tourney-card">
       <div className="tourney-name">
@@ -214,6 +246,11 @@ function TournamentCard({
         </span>
       </div>
       <div className="tourney-meta">{t.description}</div>
+      {teamReq && (
+        <div style={{ fontSize: 10, color: canEnter ? 'var(--up)' : 'var(--danger)', marginBottom: 4 }}>
+          {canEnter ? '🔓' : '🔒'} 需要 {TIER_LABELS[teamReq]}+ 战队
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6 }}>
         <span className="chip chip-up">{describeTournamentMoney(r.money)}</span>
         <span className="chip chip-up">{describeTournamentExp(r.experience)}</span>
@@ -232,11 +269,11 @@ function TournamentCard({
         <button
           type="button"
           className="primary-button"
-          disabled={busy}
+          disabled={busy || !canEnter}
           onClick={onSignup}
           style={{ fontSize: 11, padding: '4px 10px', marginLeft: 'auto' }}
         >
-          {busy ? '…' : '报名'}
+          {busy ? '…' : canEnter ? '报名' : '缺战队'}
         </button>
       </div>
     </div>

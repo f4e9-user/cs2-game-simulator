@@ -145,6 +145,7 @@ export interface DynamicState {
   shopCooldowns: Record<string, number>;
   team: PlayerTeam | null;
   pendingApplication: PendingApplication | null;
+  consecutiveLosses: number;         // 连续赛事失利计数
 }
 
 export interface ActionResult {

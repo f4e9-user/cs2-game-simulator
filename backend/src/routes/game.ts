@@ -26,7 +26,28 @@ import {
 import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
-import type { Env, Stats } from '../types.js';
+import type { ClubTier, Env, PlayerTeam, Stats } from '../types.js';
+
+// ── 赛事准入战队门槛映射 ──────────────────────────────────────────
+// null = 自由人可参加
+const TOURNAMENT_TEAM_REQUIREMENT: Record<string, ClubTier | null> = {
+  netcafe: null,
+  city: null,
+  platform: null,
+  'secondary-league': 'youth',
+  'development-league': 'semi-pro',
+  tier2: 'pro',
+  tier1: 'pro',
+  's-class': 'top',
+  major: 'top',
+};
+
+function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
+  if (!required) return true;
+  if (!playerTeam) return false;
+  const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+  return tierOrder.indexOf(playerTeam.tier) >= tierOrder.indexOf(required);
+}
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -167,6 +188,19 @@ app.post('/game/:sessionId/choice', async (c) => {
       }
       updated.player.pendingApplication = null;
     }
+    // 合同到期选择不续 → 清空 team
+    if (updated.currentEvent?.id === 'chain-contract-renewal' && result.choiceId === 'leave-team') {
+      updated.player.team = null;
+      updated.player.consecutiveLosses = 0;
+    }
+    // 被踢出战队 → 清空 team
+    if (updated.currentEvent?.id === 'chain-team-fired') {
+      const fired = result.choiceId === 'accept-gracefully' || !result.success;
+      if (fired) {
+        updated.player.team = null;
+        updated.player.consecutiveLosses = 0;
+      }
+    }
 
     return c.json({
       result,
@@ -239,6 +273,23 @@ app.post('/game/:sessionId/signup', async (c) => {
   if (t.pointsRequired !== undefined && playerPoints < t.pointsRequired) {
     return c.json(
       { error: `战队积分不足，需要 ≥ ${t.pointsRequired}（当前 ${playerPoints}）` },
+      400,
+    );
+  }
+  // 战队门槛校验
+  const teamReq = TOURNAMENT_TEAM_REQUIREMENT[t.tier] ?? null;
+  if (teamReq !== null && !teamMeetsRequirement(session.player.team, teamReq)) {
+    if (!session.player.team) {
+      return c.json({ error: `该赛事需要签约战队才能参加` }, 400);
+    }
+    const tierLabels: Record<ClubTier, string> = {
+      youth: '青训',
+      'semi-pro': '半职业',
+      pro: '职业',
+      top: '顶级',
+    };
+    return c.json(
+      { error: `该赛事需要 ${tierLabels[teamReq]} 及以上战队（当前 ${tierLabels[session.player.team.tier]}）` },
       400,
     );
   }

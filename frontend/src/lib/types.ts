@@ -141,6 +141,7 @@ export interface DynamicState {
   shopCooldowns: Record<string, number>;
   team: PlayerTeam | null;
   pendingApplication: PendingApplication | null;
+  consecutiveLosses: number;
 }
 
 export interface ActionResult {

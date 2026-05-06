@@ -1,4 +1,4 @@
-import type { Player } from '../types.js';
+import type { ClubTier, Player } from '../types.js';
 
 export interface MatchStats {
   kills: number;
@@ -22,6 +22,13 @@ export interface MatchSimResult extends MatchStats {
 
 // effectiveDifficulty = tournament.baseDifficulty + stage.difficultyBonus
 // Range in practice: 0 (netcafe entry) to 7 (major final)
+const TEAM_BONUS: Record<ClubTier, number> = {
+  youth: 2,
+  'semi-pro': 4,
+  pro: 7,
+  top: 10,
+};
+
 export function simulateMatch(
   player: Player,
   effectiveDifficulty: number,
@@ -37,8 +44,9 @@ export function simulateMatch(
   const feelEffect = feel * 3;
   const fatigueDebuff = Math.max(0, (fatigue - 60) * 0.2);
   const tiltDebuff = tilt * 3;
+  const teamBonus = player.team ? TEAM_BONUS[player.team.tier] : 0;
   const effectiveAim = Math.max(5, Math.min(99,
-    aimBase + feelEffect - fatigueDebuff - tiltDebuff,
+    aimBase + feelEffect - fatigueDebuff - tiltDebuff + teamBonus,
   ));
 
   // ── 对手强度 ──────────────────────────────────────────────────

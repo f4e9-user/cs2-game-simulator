@@ -1313,4 +1313,276 @@ export const CHAIN_EVENTS: EventDef[] = [
       },
     ],
   },
+
+  // ── 合约续约 ──────────────────────────────────────────────────
+  {
+    id: 'chain-contract-renewal',
+    type: 'team',
+    title: '又到谈合同的时候了',
+    narrative:
+      '经纪人发来消息：你的合同周期到了。俱乐部那边已经准备好了一份新合同，需要你点头。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 2,
+    weight: 0,
+    requireTags: ['contract-up'],
+    forbidTags: ['contract-cd'],
+    choices: [
+      {
+        id: 'renew-stay',
+        label: '签字续约：维持现状',
+        description: '安心打球，不折腾。',
+        check: {
+          primary: 'mentality',
+          dc: 7,
+          traitBonuses: { steady: 2, selfless: 1 },
+          traitPenalties: { ego: 1 },
+        },
+        success: {
+          narrative: '你在合同上签了字，一切照旧。经纪人笑着说"明智的选择"。',
+          stressDelta: -1,
+          tagCooldowns: { 'contract-cd': 48 },
+        },
+        failure: {
+          narrative: '你犹豫了很久，感觉条款里有坑。但最后还是在压力下签了。',
+          stressDelta: 1,
+          tagCooldowns: { 'contract-cd': 48 },
+        },
+      },
+      {
+        id: 'negotiate-raise',
+        label: '要求加薪',
+        description: '你在队里的表现配得上更多。',
+        check: {
+          primary: 'experience',
+          secondary: 'intelligence',
+          dc: 10,
+          traitBonuses: { tactical: 2, ego: 1 },
+          traitPenalties: { support: 1 },
+        },
+        success: {
+          narrative: '经纪人为你争取到了更高的周薪。俱乐部虽然不情愿，但知道你的价值。',
+          moneyDelta: 2,
+          feelDelta: 1,
+          stressDelta: -1,
+          tagCooldowns: { 'contract-cd': 48 },
+        },
+        failure: {
+          narrative: '谈判桌上气氛不太对。俱乐部拒绝了你的要求，说"维持原样"已经是最好的方案。',
+          feelDelta: -0.5,
+          stressDelta: 2,
+          tagCooldowns: { 'contract-cd': 48 },
+        },
+      },
+      {
+        id: 'leave-team',
+        label: '不续了：成为自由人',
+        description: '合同到期，各走各的路。',
+        check: {
+          primary: 'mentality',
+          dc: 8,
+          traitBonuses: { solo: 2, ego: 1 },
+          traitPenalties: { support: 2, selfless: 1 },
+        },
+        success: {
+          narrative: '你站起来握了握经理的手。合同结束，下一站你自己选。',
+          stressDelta: -1,
+          fameDelta: -1,
+        },
+        failure: {
+          narrative: '你说了不续，但回头看到队友们还在那练枪，心里不是滋味。',
+          feelDelta: -0.5,
+          stressDelta: 2,
+          fameDelta: -1,
+        },
+      },
+    ],
+  },
+
+  // ── 队内冲突 ──────────────────────────────────────────────────
+  {
+    id: 'chain-team-conflict',
+    type: 'team',
+    title: '更衣室里的低气压',
+    narrative:
+      '最近的气氛有点奇怪。训练赛里沟通越来越少，有人开始互相甩锅。你知道这样下去不行。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 2,
+    weight: 0,
+    requireTags: ['stressed', 'has-team'],
+    forbidTags: ['team-conflict-cd'],
+    choices: [
+      {
+        id: 'talk-it-out',
+        label: '把大家拉到一起聊',
+        description: '直面问题永远是最好的办法。',
+        check: {
+          primary: 'mentality',
+          secondary: 'intelligence',
+          dc: 9,
+          traitBonuses: { support: 3, selfless: 2, steady: 1 },
+          traitPenalties: { ego: 2, shy: 1 },
+        },
+        success: {
+          narrative: '你们坐下来把话说开了。其实都是训练节奏的问题，没人真对彼此有意见。',
+          dailyGrowth: 'mentality',
+          stressDelta: -2,
+          tagAdds: ['team-trust'],
+          tagCooldowns: { 'team-conflict-cd': 16 },
+        },
+        failure: {
+          narrative: '越说越僵，有人摔门走了。气氛比开会前还差。',
+          feelDelta: -0.5,
+          stressDelta: 3,
+          tiltDelta: 1,
+          tagCooldowns: { 'team-conflict-cd': 12 },
+        },
+      },
+      {
+        id: 'grin-and-bear',
+        label: '什么也不说，自己消化',
+        description: '习惯了。打就行了。',
+        check: {
+          primary: 'mentality',
+          dc: 7,
+          traitBonuses: { steady: 2, solo: 1 },
+          traitPenalties: { support: 1 },
+        },
+        success: {
+          narrative: '你没说什么，但之后几场训练赛打得格外认真。用行动带动了节奏。',
+          feelDelta: 1,
+          stressDelta: 0,
+          tagCooldowns: { 'team-conflict-cd': 12 },
+        },
+        failure: {
+          narrative: '忍久了总会炸。一次小失误之后你终于没忍住发了火，虽然很快就后悔了。',
+          feelDelta: -0.5,
+          stressDelta: 2,
+          tiltDelta: 1,
+          tagCooldowns: { 'team-conflict-cd': 10 },
+        },
+      },
+    ],
+  },
+
+  // ── 被踢出战队 ────────────────────────────────────────────────
+  {
+    id: 'chain-team-fired',
+    type: 'team',
+    title: '经理约你在会议室见',
+    narrative:
+      '经理的名字出现在日程表上。不是训练复盘，不是战术调整——你大概猜到是什么了。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 3,
+    weight: 0,
+    requireTags: ['losing-streak'],
+    choices: [
+      {
+        id: 'accept-gracefully',
+        label: '握手告别',
+        description: '体面是最后的尊严。',
+        check: {
+          primary: 'mentality',
+          dc: 9,
+          traitBonuses: { steady: 2, selfless: 1 },
+          traitPenalties: { ego: 2, volatile: 1 },
+        },
+        success: {
+          narrative: '你站起来握了手。虽然合同终止了，但经理说"你的训练态度没问题，就是运气差了点。"',
+          stressDelta: -1,
+          dailyGrowth: 'mentality',
+        },
+        failure: {
+          narrative: '你说不出话来。经理递过来的解约书你看了好几遍也没签。',
+          feelDelta: -1.0,
+          stressDelta: 4,
+          tiltDelta: 1,
+        },
+      },
+      {
+        id: 'defend-record',
+        label: '据理力争',
+        description: '你的数据没问题，是体系不适合你。',
+        check: {
+          primary: 'intelligence',
+          secondary: 'mentality',
+          dc: 11,
+          traitBonuses: { tactical: 2, ego: 1 },
+          traitPenalties: { selfless: 1 },
+        },
+        success: {
+          narrative: '你把自己的数据和战术贡献一一列出来。经理沉默了半分钟——然后说再给你一个赛季。',
+          stressDelta: -2,
+          fameDelta: 1,
+        },
+        failure: {
+          narrative: '数据对方都有，你的辩解只是延长了尴尬。合同还是被终止了。',
+          feelDelta: -1.0,
+          tiltDelta: 1,
+          stressDelta: 5,
+        },
+      },
+    ],
+  },
+
+  // ── 更高档俱乐部挖角 ──────────────────────────────────────────
+  {
+    id: 'chain-team-promote-offer',
+    type: 'tryout',
+    title: '有一封未署名的邮件',
+    narrative:
+      '邮件里没有太多内容——"我们有兴趣。"落款是那支你一直在看榜单的、比你当前俱乐部高一档的战队。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 3,
+    weight: 0,
+    requireTags: ['promote-eligible'],
+    forbidTags: ['promote-offer-cd'],
+    choices: [
+      {
+        id: 'explore-offer',
+        label: '约个私聊，看看条件',
+        description: '你值得更好的。',
+        check: {
+          primary: 'experience',
+          secondary: 'mentality',
+          dc: 10,
+          traitBonuses: { ego: 1, solo: 1 },
+          traitPenalties: { support: 2, selfless: 1 },
+        },
+        success: {
+          narrative: '对方给出的条件比你现在的合同好一截。经纪人已经开始起草意向书了。',
+          fameDelta: 2,
+          stressDelta: -1,
+          tagCooldowns: { 'promote-offer-cd': 32 },
+        },
+        failure: {
+          narrative: '对方只是打听了一圈。你的价格比他们预期的要高了一点，这次没成。',
+          feelDelta: -0.5,
+          stressDelta: 1,
+          tagCooldowns: { 'promote-offer-cd': 16 },
+        },
+      },
+      {
+        id: 'decline-loyal',
+        label: '婉拒，忠于现在的队',
+        description: '在这还有事情没做完。',
+        check: {
+          primary: 'mentality',
+          dc: 7,
+          traitBonuses: { support: 2, selfless: 2, steady: 1 },
+          traitPenalties: { ego: 1 },
+        },
+        success: {
+          narrative: '你回了邮件表达了感谢。现任经理不知道这件事，但你知道你选择了什么。',
+          dailyGrowth: 'mentality',
+          tagCooldowns: { 'promote-offer-cd': 24 },
+        },
+        failure: {
+          narrative: '拒绝了又后悔。夜深的时候你会想"如果当时去了会怎样"。',
+          feelDelta: -0.5,
+          stressDelta: 1,
+          tagCooldowns: { 'promote-offer-cd': 20 },
+        },
+      },
+    ],
+  },
 ];

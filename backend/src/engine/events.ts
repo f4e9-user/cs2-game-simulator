@@ -1,7 +1,8 @@
 import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
-import type { EventDef, Player, Rival, PendingMatch } from '../types.js';
+import { CLUBS } from '../data/clubs.js';
+import type { EventDef, Player, Rival, PendingMatch, ClubTier } from '../types.js';
 
 export interface EventContext {
   player: Player;
@@ -48,6 +49,32 @@ function dynamicTags(player: Player): string[] {
   // ── 新入队 tag（加入战队后首回合）─────────────────────────────────
   if (player.team && player.team.joinedRound === player.round) {
     out.push('just-joined-team');
+  }
+
+  // ── 在队生命周期 tag ──────────────────────────────────────────────
+  if (player.team) {
+    out.push('has-team');
+    // 合约到期（每 48 回合）
+    if ((player.round - player.team.joinedRound) > 0 &&
+        (player.round - player.team.joinedRound) % 48 === 0) {
+      out.push('contract-up');
+    }
+    // 连败 3+ = 面临被踢
+    if ((player.consecutiveLosses ?? 0) >= 3) {
+      out.push('losing-streak');
+    }
+    // 更高档俱乐部挖角：检查是否有更高档且满足门槛的俱乐部
+    const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+    const currentIdx = tierOrder.indexOf(player.team.tier);
+    const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+    const playerIdx = stageOrder.indexOf(player.stage);
+    const hasPromote = CLUBS.some((c) => {
+      const reqIdx = stageOrder.indexOf(c.requiredStage);
+      if (playerIdx < reqIdx) return false;
+      if (c.requiredFame !== undefined && (player.fame ?? 0) < c.requiredFame) return false;
+      return tierOrder.indexOf(c.tier) > currentIdx;
+    });
+    if (hasPromote) out.push('promote-eligible');
   }
 
   return out;
