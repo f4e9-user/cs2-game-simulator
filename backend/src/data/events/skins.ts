@@ -1069,6 +1069,7 @@ export const SKIN_GRAY_EVENTS: EventDef[] = [
           narrative: '你没忍住参与了他们的「内部项目」，结果发现是变相赌博盘。钱进去了出不来。',
           feelDelta: -0.5,
           stressDelta: 2,
+          moneyDelta: -3,
           tagAdds: ['dirty-money'],
         },
       },
@@ -1286,26 +1287,24 @@ export const SKIN_EPIC_EVENTS: EventDef[] = [
           traitPenalties: { fragile: 2, volatile: 1 },
         },
         success: {
-          narrative: '你冷静地走完了申诉流程，改掉了所有关联密码。Valve 说可能会追回部分物品。心态没有崩。',
+          narrative: '你冷静地走完了申诉流程，改掉了所有关联密码。Valve 说可能会追回部分物品。心态没有崩，但账号里的皮肤损失了大半，需要时间恢复。',
           dailyGrowth: 'mentality',
           stressDelta: -2,
+          moneyDelta: -8,
+          injuryRestRounds: 2,
         },
         failure: {
           narrative: '你慌了。申诉流程填错了好几次。损失追不回来了。这件事好几天都过不去。',
           feelDelta: -1.0,
           tiltDelta: 1,
-          stressDelta: 8,
+          stressDelta: 4,
           fatigueDelta: 30,
           tagAdds: ['devastated'],
+          moneyDelta: -8,
+          injuryRestRounds: 2,
         },
-        // 不论成败：经济损失
-        // 成功时 moneyDelta 在 narrative 里体现但数值不变——损失就是损失
-        // After: 强制休养 2 回合（心理恢复）
       },
     ],
-    // NOTE: 此事件强制扣 moneyDelta=-8（无论选项结果），并自动触发 2 周休养
-    // 休养逻辑在 applyChoice 中通过 injuryRestRounds 实现
-    // 但由于这是我们的事件而不是引擎逻辑，我们通过 failure/success 都加 stress 来实现
   },
   {
     id: 'skin-epic-misprice',

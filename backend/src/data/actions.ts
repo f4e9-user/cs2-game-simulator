@@ -98,8 +98,8 @@ export const ACTIONS: ActionDef[] = [
     check: {
       primary: 'constitution',
       dc: 6,
-      traitBonuses: { tough: 2, grinder: 1 },
-      traitPenalties: { injury_prone: 2, streamer: 1 },
+      traitBonuses: { athletic: 2, grinder: 1 },
+      traitPenalties: { fragile: 2, streamer: 1 },
     },
     success: {
       narrative: '完成了一组高质量训练，肌肉结实了不少，体能明显提升。',
