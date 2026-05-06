@@ -146,6 +146,8 @@ export interface DynamicState {
   team: PlayerTeam | null;
   pendingApplication: PendingApplication | null;
   consecutiveLosses: number;         // 连续赛事失利计数
+  everHadTeam: boolean;               // 是否曾拥有过战队（用于结局判定）
+  contractRenewals: number;           // 续约次数（用于 loyal-veteran 结局）
 }
 
 export interface ActionResult {

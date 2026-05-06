@@ -134,6 +134,8 @@ export const ENDING_LABELS: Record<string, string> = {
   retired_on_top: '选择在巅峰退役',
   legend: '登上传奇榜，被写进电竞史',
   quiet_exit: '低调退役',
+  'free-agent-legend': '草根传奇——从未签约战队，凭一己之力登上世界之巅',
+  'loyal-veteran': '忠臣老将——数百回合始终如一，与战队共进退',
 };
 
 // ── RPG 描述性变化标签 ────────────────────────────────────────

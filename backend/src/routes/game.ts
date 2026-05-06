@@ -193,12 +193,24 @@ app.post('/game/:sessionId/choice', async (c) => {
       updated.player.team = null;
       updated.player.consecutiveLosses = 0;
     }
+    // 续约/谈判成功 → 累加续约次数
+    if (updated.currentEvent?.id === 'chain-contract-renewal' && result.success &&
+        (result.choiceId === 'renew-stay' || result.choiceId === 'negotiate-raise')) {
+      updated.player.contractRenewals = (updated.player.contractRenewals ?? 0) + 1;
+    }
     // 被踢出战队 → 清空 team
     if (updated.currentEvent?.id === 'chain-team-fired') {
       const fired = result.choiceId === 'accept-gracefully' || !result.success;
       if (fired) {
         updated.player.team = null;
         updated.player.consecutiveLosses = 0;
+      }
+    }
+    // 对手挖角接受 → 生成 rival club 的入队邀请
+    if (updated.currentEvent?.id === 'chain-rival-poach' && result.success && result.choiceId === 'hear-offer') {
+      const rivalClub = CLUBS.find((c) => c.isRival && c.requiredStage === updated.player.stage);
+      if (rivalClub) {
+        updated.player.pendingOffer = generateTeamOffer(rivalClub.id);
       }
     }
 

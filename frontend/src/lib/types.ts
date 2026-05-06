@@ -142,6 +142,8 @@ export interface DynamicState {
   team: PlayerTeam | null;
   pendingApplication: PendingApplication | null;
   consecutiveLosses: number;
+  everHadTeam: boolean;
+  contractRenewals: number;
 }
 
 export interface ActionResult {

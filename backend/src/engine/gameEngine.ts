@@ -204,6 +204,8 @@ export function initPlayer(input: InitInput): Player {
     pendingApplication: null,
     pendingOffer: null,
     consecutiveLosses: 0,
+    everHadTeam: false,
+    contractRenewals: 0,
     rivals: generateRivals(4),
     tournamentParticipations: 0,
     tournamentChampionships: 0,
@@ -226,7 +228,7 @@ export function weekToMonth(week: number): number {
 
 export function createSession(player: Player, rngSeed: number): GameSession {
   const rng = makeRng(rngSeed);
-  const firstEvent = pickEvent({ player, recentEventIds: [], rng });
+  const firstEvent = pickEvent({ player, recentEventIds: [], rng, leaderboard: buildLeaderboard(player) });
 
   const id = uuid();
   const ts = nowIso();
@@ -706,7 +708,7 @@ export function applyChoice(
       const t = getTournament(pm.tournamentId);
       if (t) return synthesizeMatchEvent(t, pm.stageIndex);
     }
-    return pickEvent({ player: nextPlayer, recentEventIds: recent, rng });
+    return pickEvent({ player: nextPlayer, recentEventIds: recent, rng, leaderboard });
   })();
 
   result.narrative = substituteRivals(result.narrative, nextPlayer.rivals);
@@ -737,6 +739,17 @@ function checkEnding(player: Player, endRun: boolean, endReason?: string): strin
     const semipro = ['second', 'pro', 'star', 'veteran'] as const;
     const isProPlus = proStages.includes(player.stage as typeof proStages[number]);
     const isSemiProPlus = semipro.includes(player.stage as typeof semipro[number]);
+    // 草根传奇：全程自由人 + 名气 + major 冠军
+    if (!player.everHadTeam && (player.fame ?? 0) >= 60 &&
+        player.tags.includes('major-champion')) {
+      return 'free-agent-legend';
+    }
+    // 忠臣老将：同队 200+ 回合 + 续约 3+ 次
+    if (player.team && player.team.joinedRound > 0 &&
+        player.round - player.team.joinedRound >= 200 &&
+        (player.contractRenewals ?? 0) >= 3) {
+      return 'loyal-veteran';
+    }
     if (isProPlus && (player.fame ?? 0) >= LEGEND_FAME_THRESHOLD) return 'legend';
     if (isSemiProPlus && player.tags.includes('major-champion')) return 'champion';
     return 'retired_on_top';
@@ -1031,6 +1044,7 @@ export function respondTeamOffer(
     return {
       ...player,
       team,
+      everHadTeam: true,
       pendingOffer: null,
       pendingApplication: null,
       tags: player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending'),
