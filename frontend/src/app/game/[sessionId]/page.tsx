@@ -138,7 +138,7 @@ export default function GamePage() {
   }
 
   const ended = status === 'ended';
-  const isCritical = (player.stressMaxRounds ?? 0) > 0;
+  const isCritical = (player.stress ?? 0) >= 100;
 
   return (
     <div className={`hud-root${isCritical ? ' stress-critical' : ''}${shaking ? ' stress-shaking' : ''}`}>
