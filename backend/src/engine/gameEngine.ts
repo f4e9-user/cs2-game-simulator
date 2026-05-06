@@ -739,9 +739,10 @@ function checkEnding(player: Player, endRun: boolean, endReason?: string): strin
     const semipro = ['second', 'pro', 'star', 'veteran'] as const;
     const isProPlus = proStages.includes(player.stage as typeof proStages[number]);
     const isSemiProPlus = semipro.includes(player.stage as typeof semipro[number]);
-    // 草根传奇：全程自由人 + 名气 + major 冠军
-    if (!player.everHadTeam && (player.fame ?? 0) >= 60 &&
-        player.tags.includes('major-champion')) {
+    // 草根传奇：全程自由人 + 高名气 + 赢过赛事冠军（开放赛打遍天下）
+    if (!player.everHadTeam && (player.fame ?? 0) >= 70 &&
+        player.tags.includes('tournament-winner') &&
+        isSemiProPlus) {
       return 'free-agent-legend';
     }
     // 忠臣老将：同队 200+ 回合 + 续约 3+ 次
