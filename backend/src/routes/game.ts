@@ -6,15 +6,19 @@ import {
   SHOP_ITEMS,
   applyAction,
   applyChoice,
+  applyClubRequest,
   applyShopPurchase,
   computeTraitMods,
   createSession,
   initPlayer,
+  generateTeamOffer,
+  respondTeamOffer,
   rollRandomTraits,
   validateAllocation,
 } from '../engine/gameEngine.js';
 import { checkTournamentPromotion } from '../engine/stages.js';
 import { getTrait } from '../data/traits.js';
+import { CLUBS, clubsForStage } from '../data/clubs.js';
 import {
   getTournament,
   tournamentsOpenForSignup,
@@ -22,7 +26,28 @@ import {
 import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
-import type { Env, Stats } from '../types.js';
+import type { ClubTier, Env, PlayerTeam, Stats } from '../types.js';
+
+// ── 赛事准入战队门槛映射 ──────────────────────────────────────────
+// null = 自由人可参加
+const TOURNAMENT_TEAM_REQUIREMENT: Record<string, ClubTier | null> = {
+  netcafe: null,
+  city: null,
+  platform: null,
+  'secondary-league': 'youth',
+  'development-league': 'semi-pro',
+  tier2: 'pro',
+  tier1: 'pro',
+  's-class': 'top',
+  major: 'top',
+};
+
+function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
+  if (!required) return true;
+  if (!playerTeam) return false;
+  const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+  return tierOrder.indexOf(playerTeam.tier) >= tierOrder.indexOf(required);
+}
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -145,6 +170,56 @@ app.post('/game/:sessionId/choice', async (c) => {
       result.createdAt,
     );
 
+    // 战后处理：面试成功 → 生成入队邀请
+    if (result.eventId === 'chain-club-interview' && result.success) {
+      const app = updated.player.pendingApplication;
+      if (app) {
+        updated.player.pendingOffer = generateTeamOffer(app.clubId);
+        updated.player.pendingApplication = null;
+        updated.player.tags = updated.player.tags.filter(
+          (t) => t !== 'interview-pending',
+        );
+      }
+    }
+    // 响应失败 → 清理申请并触发被拒叙事
+    if (result.eventId === 'chain-club-response' && !result.success) {
+      if (!updated.player.tags.includes('club-rejected-notify')) {
+        updated.player.tags = [...updated.player.tags, 'club-rejected-notify'];
+      }
+      updated.player.pendingApplication = null;
+    }
+    // 合同到期选择不续 → 清空 team
+    if (result.eventId === 'chain-contract-renewal' && result.choiceId === 'leave-team') {
+      updated.player.team = null;
+      updated.player.consecutiveLosses = 0;
+    }
+    // 续约/谈判成功 → 累加续约次数
+    if (result.eventId === 'chain-contract-renewal' && result.success &&
+        (result.choiceId === 'renew-stay' || result.choiceId === 'negotiate-raise')) {
+      updated.player.contractRenewals = (updated.player.contractRenewals ?? 0) + 1;
+    }
+    // 被踢出战队 → 清空 team
+    if (result.eventId === 'chain-team-fired') {
+      const fired = result.choiceId === 'accept-gracefully' || !result.success;
+      if (fired) {
+        updated.player.team = null;
+        updated.player.consecutiveLosses = 0;
+      }
+    }
+    // 对手挖角接受 → 生成更高档 rival club 的入队邀请
+    if (result.eventId === 'chain-rival-poach' && result.success && result.choiceId === 'hear-offer') {
+      const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+      const currentTierIdx = updated.player.team
+        ? tierOrder.indexOf(updated.player.team.tier)
+        : -1;
+      const rivalClub = CLUBS.find(
+        (c) => c.isRival && tierOrder.indexOf(c.tier) > currentTierIdx,
+      );
+      if (rivalClub) {
+        updated.player.pendingOffer = generateTeamOffer(rivalClub.id);
+      }
+    }
+
     return c.json({
       result,
       player: updated.player,
@@ -216,6 +291,23 @@ app.post('/game/:sessionId/signup', async (c) => {
   if (t.pointsRequired !== undefined && playerPoints < t.pointsRequired) {
     return c.json(
       { error: `战队积分不足，需要 ≥ ${t.pointsRequired}（当前 ${playerPoints}）` },
+      400,
+    );
+  }
+  // 战队门槛校验
+  const teamReq = TOURNAMENT_TEAM_REQUIREMENT[t.tier] ?? null;
+  if (teamReq !== null && !teamMeetsRequirement(session.player.team, teamReq)) {
+    if (!session.player.team) {
+      return c.json({ error: `该赛事需要签约战队才能参加` }, 400);
+    }
+    const tierLabels: Record<ClubTier, string> = {
+      youth: '青训',
+      'semi-pro': '半职业',
+      pro: '职业',
+      top: '顶级',
+    };
+    return c.json(
+      { error: `该赛事需要 ${tierLabels[teamReq]} 及以上战队（当前 ${tierLabels[session.player.team.tier]}）` },
       400,
     );
   }
@@ -335,5 +427,56 @@ app.post('/game/:sessionId/shop', async (c) => {
 // 获取行动和商品列表（前端初始化用）
 app.get('/game/meta/actions', (c) => c.json({ actions: ACTIONS }));
 app.get('/game/meta/shop', (c) => c.json({ items: SHOP_ITEMS }));
+app.get('/game/meta/clubs', (c) => c.json({ clubs: CLUBS }));
+
+// 申请战队
+app.post('/game/:sessionId/apply-club', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { clubId } = body ?? {};
+  if (typeof clubId !== 'string' || !clubId) {
+    return c.json({ error: 'clubId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const player = applyClubRequest(session, clubId);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+// 接受/拒绝入队邀请
+app.post('/game/:sessionId/team-response', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { accept } = body ?? {};
+  if (typeof accept !== 'boolean') {
+    return c.json({ error: 'accept 必填（布尔值）' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const player = respondTeamOffer(session, accept);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
 
 export default app;

@@ -46,6 +46,17 @@ export function HudTopBar({ player, leaderboard }: Props) {
       </div>
       <span className="hud-stage-tag">{STAGE_LABELS[player.stage]}</span>
 
+      {/* 战队信息 */}
+      {player.team ? (
+        <span className="hud-stage-tag" style={{ background: 'var(--bg-3)', color: 'var(--up)' }}>
+          [{player.team.tag}] +{player.team.weeklySalary * 10}K/w
+        </span>
+      ) : (
+        <span className="hud-stage-tag" style={{ background: 'var(--bg-3)', color: 'var(--fg-2)' }}>
+          自由人
+        </span>
+      )}
+
       {/* 派生属性（主要展示区）*/}
       <div className="hud-stats-row">
         {DERIVED_ORDER.map((k) => {

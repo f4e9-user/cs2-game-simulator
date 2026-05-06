@@ -343,6 +343,8 @@ Buff 是临时性成长加成，有使用次数限制。
 | `banned_for_match_fixing` | 博彩被发现 |
 | `banned_for_cheating` | 外挂被发现 |
 | `career_ended` | outcome.endRun 默认 |
+| `free-agent-legend` | 满 576 回合 + 全程无战队 + stage ≥ second + fame ≥ 70 + 持 `tournament-winner` |
+| `loyal-veteran` | 满 576 回合 + 同队 200+ 回合 + 续约 ≥ 3 次 |
 
 **关键 tag**：赢得 Major 决赛时自动打 `major-champion`；赢得任意决赛打 `tournament-winner`。
 

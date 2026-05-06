@@ -15,9 +15,11 @@ import { getEventById } from '../data/events/index.js';
 import { TRAITS, getTrait } from '../data/traits.js';
 import { ACTIONS, getAction } from '../data/actions.js';
 import { getShopItem, SHOP_ITEMS } from '../data/shop.js';
+import { CLUBS, getClub, clubsForStage, PRIZE_SPLIT } from '../data/clubs.js';
 import type {
   ActionResult,
   Buff,
+  Club,
   GameEventPublic,
   GameSession,
   MatchStats,
@@ -198,6 +200,12 @@ export function initPlayer(input: InitInput): Player {
     pendingMatch: null,
     actionPoints: 100,
     shopCooldowns: {},
+    team: null,
+    pendingApplication: null,
+    pendingOffer: null,
+    consecutiveLosses: 0,
+    everHadTeam: false,
+    contractRenewals: 0,
     rivals: generateRivals(4),
     tournamentParticipations: 0,
     tournamentChampionships: 0,
@@ -220,7 +228,7 @@ export function weekToMonth(week: number): number {
 
 export function createSession(player: Player, rngSeed: number): GameSession {
   const rng = makeRng(rngSeed);
-  const firstEvent = pickEvent({ player, recentEventIds: [], rng });
+  const firstEvent = pickEvent({ player, recentEventIds: [], rng, leaderboard: buildLeaderboard(player) });
 
   const id = uuid();
   const ts = nowIso();
@@ -265,6 +273,14 @@ function buildMatchResolveResult(
   const lossStressDelta = (r.stressDelta ?? 1) + 2;
 
   const statChanges: StatDelta = won ? winReward : lossReward;
+
+  // 奖金分成：签约战队后俱乐部从奖金抽成
+  const playerShare = player.team
+    ? (PRIZE_SPLIT[player.team.tier] ?? 1.0)
+    : 1.0;
+  if (player.team && playerShare < 1.0 && statChanges.money) {
+    statChanges.money = Math.round((statChanges.money as number) * playerShare);
+  }
 
   // Apply stat changes via translateStatDelta for consistency
   const legacy = translateStatDelta(statChanges);
@@ -507,6 +523,14 @@ export function applyChoice(
 
   const nextRound = session.player.round + 1;
 
+  // 连败追踪（基于本回合赛事结果）
+  let consecutiveLosses = session.player.consecutiveLosses ?? 0;
+  if (eventDef.id.startsWith('tournament-') && !outcome.success) {
+    consecutiveLosses += 1;
+  } else if (eventDef.id.startsWith('tournament-') && outcome.success) {
+    consecutiveLosses = 0;
+  }
+
   // ── 冷却 tag 处理 ──────────────────────────────────────────────
   // 1. 先剪掉已过期的冷却 tag
   const nextTagExpiry: Record<string, number> = { ...(session.player.tagExpiry ?? {}) };
@@ -566,7 +590,14 @@ export function applyChoice(
     week: nextWeek,
     actionPoints: nextActionPoints,
     shopCooldowns: nextShopCooldowns,
+    consecutiveLosses,
   };
+
+  // 周薪入账
+  if (nextPlayer.team) {
+    nextPlayer.stats.money = Math.min(20, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
+    passiveEffects.push(`周薪入账 +${nextPlayer.team.weeklySalary * 10}K`);
+  }
 
   const result: RoundResult = {
     round: nextPlayer.round,
@@ -677,7 +708,7 @@ export function applyChoice(
       const t = getTournament(pm.tournamentId);
       if (t) return synthesizeMatchEvent(t, pm.stageIndex);
     }
-    return pickEvent({ player: nextPlayer, recentEventIds: recent, rng });
+    return pickEvent({ player: nextPlayer, recentEventIds: recent, rng, leaderboard });
   })();
 
   result.narrative = substituteRivals(result.narrative, nextPlayer.rivals);
@@ -708,6 +739,18 @@ function checkEnding(player: Player, endRun: boolean, endReason?: string): strin
     const semipro = ['second', 'pro', 'star', 'veteran'] as const;
     const isProPlus = proStages.includes(player.stage as typeof proStages[number]);
     const isSemiProPlus = semipro.includes(player.stage as typeof semipro[number]);
+    // 草根传奇：全程自由人 + 高名气 + 赢过赛事冠军（开放赛打遍天下）
+    if (!player.everHadTeam && (player.fame ?? 0) >= 70 &&
+        player.tags.includes('tournament-winner') &&
+        isSemiProPlus) {
+      return 'free-agent-legend';
+    }
+    // 忠臣老将：同队 200+ 回合 + 续约 3+ 次
+    if (player.team && player.team.joinedRound > 0 &&
+        player.round - player.team.joinedRound >= 200 &&
+        (player.contractRenewals ?? 0) >= 3) {
+      return 'loyal-veteran';
+    }
     if (isProPlus && (player.fame ?? 0) >= LEGEND_FAME_THRESHOLD) return 'legend';
     if (isSemiProPlus && player.tags.includes('major-champion')) return 'champion';
     return 'retired_on_top';
@@ -935,6 +978,109 @@ export function applyShopPurchase(
   };
 
   return { player: nextPlayer, itemName: item.name };
+}
+
+// ── 战队申请 ──────────────────────────────────────────────────
+import type { PendingApplication, PlayerTeam, TeamOffer } from '../types.js';
+
+export function applyClubRequest(
+  session: GameSession,
+  clubId: string,
+): Player {
+  if (session.status !== 'active') throw new Error('session is not active');
+  const club = getClub(clubId);
+  if (!club) throw new Error('未知俱乐部');
+
+  const player = session.player;
+  if (player.team) throw new Error('你已经有战队了');
+  if (player.pendingApplication) throw new Error('已经有一个进行中的申请');
+
+  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+  if (stageOrder.indexOf(player.stage) < stageOrder.indexOf(club.requiredStage)) {
+    throw new Error('当前阶段不满足该俱乐部的门槛');
+  }
+  if (club.requiredFame !== undefined && (player.fame ?? 0) < club.requiredFame) {
+    throw new Error(`名气不足，需要 ≥ ${club.requiredFame}`);
+  }
+
+  const ap = player.actionPoints ?? 0;
+  if (ap < 25) throw new Error('行动力不足');
+
+  const responseDelay = 2 + Math.floor(Math.random() * 3); // 2-4 回合
+  const pending: PendingApplication = {
+    clubId,
+    clubName: club.name,
+    appliedRound: player.round,
+    responseRound: player.round + responseDelay,
+  };
+
+  return {
+    ...player,
+    actionPoints: ap - 25,
+    pendingApplication: pending,
+    tags: [...player.tags, 'applying'],
+  };
+}
+
+export function respondTeamOffer(
+  session: GameSession,
+  accept: boolean,
+): Player {
+  if (session.status !== 'active') throw new Error('session is not active');
+  const player = session.player;
+  const offer = player.pendingOffer;
+  if (!offer) throw new Error('没有待处理的入队邀请');
+
+  if (accept) {
+    const team: PlayerTeam = {
+      clubId: offer.clubId,
+      name: offer.clubName,
+      tag: offer.tag,
+      region: offer.region,
+      tier: offer.tier,
+      weeklySalary: offer.weeklySalary,
+      joinedRound: player.round,
+    };
+
+    return {
+      ...player,
+      team,
+      everHadTeam: true,
+      pendingOffer: null,
+      pendingApplication: null,
+      tags: player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending'),
+    };
+  } else {
+    // Add 10-round cooldown so the same poach event doesn't re-trigger immediately
+    const cooldownTag = 'poach-cd';
+    const nextTagExpiry = { ...(player.tagExpiry ?? {}), [cooldownTag]: player.round + 10 };
+    const cleanedTags = player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending');
+    const nextTags = cleanedTags.includes(cooldownTag) ? cleanedTags : [...cleanedTags, cooldownTag];
+    return {
+      ...player,
+      pendingOffer: null,
+      pendingApplication: null,
+      tags: nextTags,
+      tagExpiry: nextTagExpiry,
+    };
+  }
+}
+
+export function generateTeamOffer(clubId: string): TeamOffer {
+  const club = getClub(clubId);
+  if (!club) throw new Error('未知俱乐部');
+
+  const [min, max] = club.salaryRange;
+  const salary = min + Math.floor(Math.random() * (max - min + 1));
+
+  return {
+    clubId: club.id,
+    clubName: club.name,
+    tag: club.tag,
+    tier: club.tier,
+    region: club.region,
+    weeklySalary: salary,
+  };
 }
 
 // Expose ACTIONS and SHOP_ITEMS for routes

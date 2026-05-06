@@ -1,7 +1,8 @@
 import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
-import type { EventDef, Player, Rival, PendingMatch } from '../types.js';
+import { CLUBS } from '../data/clubs.js';
+import type { EventDef, Player, Rival, PendingMatch, ClubTier } from '../types.js';
 
 export interface EventContext {
   player: Player;
@@ -37,6 +38,55 @@ function dynamicTags(player: Player): string[] {
   const openMatchCount = (tp['city'] ?? 0) + (tp['platform'] ?? 0);
   if (openMatchCount > 1) out.push('has-open-match-exp');
 
+  // ── 战队申请系统 tag ─────────────────────────────────────────────
+  const app = player.pendingApplication;
+  if (app && player.round >= app.responseRound) {
+    out.push('application-response-ready');
+    // 检查是否有面试 tag（response 成功后写入）
+    if (player.tags.includes('interview-pending')) out.push('interview-ready');
+  }
+
+  // ── 新入队 tag（加入战队后首回合）─────────────────────────────────
+  if (player.team && player.team.joinedRound === player.round) {
+    out.push('just-joined-team');
+  }
+
+  // ── 在队生命周期 tag ──────────────────────────────────────────────
+  if (player.team) {
+    out.push('has-team');
+    // 合约到期（每 48 回合）
+    if ((player.round - player.team.joinedRound) > 0 &&
+        (player.round - player.team.joinedRound) % 48 === 0) {
+      out.push('contract-up');
+    }
+    // 连败 3+ = 面临被踢
+    if ((player.consecutiveLosses ?? 0) >= 3) {
+      out.push('losing-streak');
+    }
+    // 更高档俱乐部挖角：检查是否有更高档且满足门槛的俱乐部
+    const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+    const currentIdx = tierOrder.indexOf(player.team.tier);
+    const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+    const playerIdx = stageOrder.indexOf(player.stage);
+    const hasPromote = CLUBS.some((c) => {
+      const reqIdx = stageOrder.indexOf(c.requiredStage);
+      if (playerIdx < reqIdx) return false;
+      if (c.requiredFame !== undefined && (player.fame ?? 0) < c.requiredFame) return false;
+      return tierOrder.indexOf(c.tier) > currentIdx;
+    });
+    if (hasPromote) out.push('promote-eligible');
+  }
+
+  // ── 对手联动 tag ───────────────────────────────────────────────────
+  // rival-scout-eligible: 无战队 + 名气≥20 + 有公开赛经验 → 星探有机会发现你
+  if (!player.team && (player.fame ?? 0) >= 20 && openMatchCount > 1) {
+    out.push('rival-scout-eligible');
+  }
+  // rival-match-pressure: 有战队 + 有待打赛事 → 赛前对手战术互动
+  if (player.team && player.pendingMatch) {
+    out.push('rival-match-pressure');
+  }
+
   return out;
 }
 
@@ -56,6 +106,10 @@ function stateWeight(e: EventDef, player: Player): number {
     const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
     if (traitTags.includes('gambler')) w *= 2;
   }
+  // 自由人时 tryout 类事件权重提升（申请战队需求）
+  if (!player.team && e.type === 'tryout') w *= 1.5;
+  // 有战队时 team 类事件权重提升
+  if (player.team && e.type === 'team') w *= 1.6;
   return Math.max(0.05, w);
 }
 

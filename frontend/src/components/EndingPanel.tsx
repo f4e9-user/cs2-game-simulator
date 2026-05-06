@@ -138,6 +138,49 @@ export function EndingPanel({ player, traits, ending }: Props) {
         </div>
       </div>
 
+      {/* Team history */}
+      {player.team ? (
+        <div className="ending-section">
+          <div className="ending-section-title">战队历史</div>
+          <div className="ending-team-summary">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>
+                  {player.team.name} [{player.team.tag}]
+                </span>
+                <span className="badge success" style={{ fontSize: 10 }}>
+                  {player.team.tier.toUpperCase()}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--fg-2)' }}>
+                <span>{player.team.region}</span>
+                <span>加入于第 {player.team.joinedRound} 回合</span>
+                <span>效力 {player.round - player.team.joinedRound} 回合</span>
+              </div>
+              {(player.contractRenewals ?? 0) > 0 && (
+                <div style={{ fontSize: 11, color: 'var(--fg-2)', marginTop: 2 }}>
+                  续约 {player.contractRenewals} 次
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : player.everHadTeam ? (
+        <div className="ending-section">
+          <div className="ending-section-title">战队历史</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+            曾签约战队，退役时为自由人
+          </div>
+        </div>
+      ) : (
+        <div className="ending-section">
+          <div className="ending-section-title">战队历史</div>
+          <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+            全程自由人，从未签约任何战队
+          </div>
+        </div>
+      )}
+
       {/* Tournament history */}
       <div className="ending-section">
         <div className="ending-section-title">赛事生涯</div>
