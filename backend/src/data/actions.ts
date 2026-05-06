@@ -68,7 +68,7 @@ export const ACTIONS: ActionDef[] = [
   {
     id: 'action-rest-day',
     label: '休息一天',
-    description: '轻度放松，恢复体力和手感，缓解压力。',
+    description: '轻度放松，恢复体力缓解压力，但手感会稍有生疏。',
     apCost: 25,
     eventType: 'routine',
     check: {
@@ -78,14 +78,61 @@ export const ACTIONS: ActionDef[] = [
       traitPenalties: { grinder: 1, obsessed: 1 },
     },
     success: {
-      narrative: '好好睡了一觉，整个人状态好多了。',
-      feelDelta: 1,
+      narrative: '好好睡了一觉，疲劳缓解了不少，但手有点生。',
+      feelDelta: -0.5,
       fatigueDelta: -20,
       stressDelta: -1,
     },
     failure: {
       narrative: '睡不踏实，脑子里还是那几局的画面。',
+      feelDelta: -1,
       fatigueDelta: -10,
+    },
+  },
+  {
+    id: 'action-fitness',
+    label: '健身锻炼',
+    description: '力量和有氧训练，增强体能素质，训练后会有疲劳积累。',
+    apCost: 25,
+    eventType: 'routine',
+    check: {
+      primary: 'constitution',
+      dc: 6,
+      traitBonuses: { tough: 2, grinder: 1 },
+      traitPenalties: { injury_prone: 2, streamer: 1 },
+    },
+    success: {
+      narrative: '完成了一组高质量训练，肌肉结实了不少，体能明显提升。',
+      dailyGrowth: 'constitution' as StatKey,
+      fatigueDelta: 18,
+    },
+    failure: {
+      narrative: '训练过度，身体还没适应这个强度，有点吃不消。',
+      fatigueDelta: 14,
+    },
+  },
+  {
+    id: 'action-meditation',
+    label: '冥想静心',
+    description: '专注呼吸与正念练习，缓解紧张情绪，恢复精神。',
+    apCost: 25,
+    eventType: 'routine',
+    check: {
+      primary: 'mentality',
+      dc: 4,
+      traitBonuses: { steady: 3, igl: 1 },
+      traitPenalties: { solo: 1, obsessed: 1 },
+    },
+    success: {
+      narrative: '静坐了二十分钟，呼吸渐渐平稳，头脑也清晰了许多。',
+      dailyGrowth: 'mentality' as StatKey,
+      fatigueDelta: -8,
+      stressDelta: -2, // ×5 = -10 stress
+    },
+    failure: {
+      narrative: '思绪总是飘到训练赛上，静不下来，效果打了折扣。',
+      fatigueDelta: -4,
+      stressDelta: -1, // ×5 = -5 stress
     },
   },
   {
@@ -99,13 +146,14 @@ export const ACTIONS: ActionDef[] = [
       dc: 1,
     },
     success: {
-      narrative: '三天没碰键盘，身体完全放松下来。',
-      feelDelta: -1,
+      narrative: '三天没碰键盘，身体完全放松下来，但手生了不少。',
+      feelDelta: -2.5,
       fatigueDelta: -30,
       stressDelta: -10, // ×5 = -50 stress
     },
     failure: {
-      narrative: '强迫自己放松，但效果一般。',
+      narrative: '强迫自己放松，但效果一般，回来手更生了。',
+      feelDelta: -2,
       fatigueDelta: -20,
       stressDelta: -6, // ×5 = -30 stress
     },

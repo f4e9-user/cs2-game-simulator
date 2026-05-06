@@ -172,6 +172,8 @@ export const REST_EVENTS: EventDef[] = [
         check: {
           primary: 'mentality',
           dc: 4,
+          traitBonuses: { steady: 1 },
+          traitPenalties: { grinder: 1, obsessed: 1 },
         },
         success: {
           narrative: '你睡了三天好觉。回程路上你甚至开始期待下一场。',

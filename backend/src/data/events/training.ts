@@ -77,7 +77,7 @@ export const TRAINING_EVENTS: EventDef[] = [
     title: '复盘昨晚的比赛 demo',
     narrative:
       '教练把昨晚输掉的 demo 甩到群里：「每人抽一张图，写出三个错误决策。」',
-    stages: ['youth', 'second', 'pro'],
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
     difficulty: 2,
     choices: [
       {
@@ -125,6 +125,8 @@ export const TRAINING_EVENTS: EventDef[] = [
         check: {
           primary: 'mentality',
           dc: 6,
+          traitBonuses: { shy: 2 },
+          traitPenalties: { grinder: 2, obsessed: 1 },
         },
         success: {
           narrative: '你睡了个好觉，但工作群里教练的 @ 很显眼。',
