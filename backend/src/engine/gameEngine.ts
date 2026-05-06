@@ -1006,6 +1006,28 @@ export function applyClubRequest(
   const ap = player.actionPoints ?? 0;
   if (ap < 25) throw new Error('行动力不足');
 
+  // Rookie-specific eligibility: must have proven themselves before clubs will respond.
+  // Path A: 3+ open-match participations (netcafe/city/platform) AND 1+ championship.
+  // Path B: holds 枪法天才 (aimer trait tag); 天赋之子 reserved for future trait 'prodigy'.
+  let pathTag: 'application-path-open-match' | 'application-path-talent' | null = null;
+  if (player.stage === 'rookie') {
+    const tp = player.tierParticipations ?? {};
+    const tc = player.tierChampionships ?? {};
+    const openParticipations = (tp['netcafe'] ?? 0) + (tp['city'] ?? 0) + (tp['platform'] ?? 0);
+    const openChampionships = (tc['netcafe'] ?? 0) + (tc['city'] ?? 0) + (tc['platform'] ?? 0);
+    const hasOpenMatchPath = openParticipations >= 3 && openChampionships >= 1;
+
+    const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
+    const hasTalentPath = traitTags.includes('aimer'); // 'prodigy' reserved for 天赋之子
+
+    if (!hasOpenMatchPath && !hasTalentPath) {
+      throw new Error(
+        '需要先在公开赛积累经验（参赛 ≥ 3 场 + 夺冠 ≥ 1 次），或拥有枪法天才特质',
+      );
+    }
+    pathTag = hasOpenMatchPath ? 'application-path-open-match' : 'application-path-talent';
+  }
+
   const responseDelay = 2 + Math.floor(Math.random() * 3); // 2-4 回合
   const pending: PendingApplication = {
     clubId,
@@ -1014,11 +1036,14 @@ export function applyClubRequest(
     responseRound: player.round + responseDelay,
   };
 
+  const nextTags = [...player.tags, 'applying'];
+  if (pathTag) nextTags.push(pathTag);
+
   return {
     ...player,
     actionPoints: ap - 25,
     pendingApplication: pending,
-    tags: [...player.tags, 'applying'],
+    tags: nextTags,
   };
 }
 

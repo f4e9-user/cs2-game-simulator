@@ -11,6 +11,38 @@ const TIER_LABELS: Record<string, string> = {
   top: '顶级',
 };
 
+function rookieEligibility(player: Player): { eligible: boolean; path: 'open-match' | 'talent' | null; hint: string } {
+  const tp = player.tierParticipations ?? {};
+  const tc = player.tierChampionships ?? {};
+  const openParticipations = (tp['netcafe'] ?? 0) + (tp['city'] ?? 0) + (tp['platform'] ?? 0);
+  const openChampionships = (tc['netcafe'] ?? 0) + (tc['city'] ?? 0) + (tc['platform'] ?? 0);
+  const hasOpenMatch = openParticipations >= 3 && openChampionships >= 1;
+
+  const traitTags = player.traits.flatMap((id) => {
+    // traits array only has IDs — derive tags via known mapping
+    // aimer tag comes from 枪法天才 trait; check player.tags set by engine
+    return [];
+  });
+  // Talent path: player has 'elite-prospect' dynamic tag (injected when aimer/solo trait present)
+  // We check player.tags but dynamic tags aren't stored — use a workaround:
+  // the engine writes 'application-path-talent' only when aimer trait is present.
+  // For display we re-derive: if player already has the tag from a prior apply we show it.
+  // Best approximation: check if any trait name matches 枪法天才.
+  const hasTalentTrait = player.traits.some((id) => id === 'aim-god');
+
+  if (hasOpenMatch) return { eligible: true, path: 'open-match', hint: '✓ 赛事经历达标' };
+  if (hasTalentTrait) return { eligible: true, path: 'talent', hint: '✓ 枪法天才特质达标' };
+
+  const parts: string[] = [];
+  if (openParticipations < 3) parts.push(`公开赛参赛 ${openParticipations}/3 场`);
+  else if (openChampionships < 1) parts.push('公开赛夺冠 0/1 次');
+  return {
+    eligible: false,
+    path: null,
+    hint: `未达标：${parts.join('，')}（或持有枪法天才特质）`,
+  };
+}
+
 interface Props {
   sessionId: string;
   player: Player;
@@ -41,6 +73,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
   const hasTeam = player.team !== null;
   const hasPending = player.pendingApplication !== null;
   const ap = player.actionPoints ?? 0;
+  const rookieCheck = player.stage === 'rookie' ? rookieEligibility(player) : null;
 
   const apply = async (clubId: string) => {
     setLoading(true);
@@ -83,15 +116,30 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
           </div>
         ) : (
           <div>
+            {rookieCheck && (
+              <div style={{
+                fontSize: 11,
+                color: rookieCheck.eligible ? 'var(--up)' : 'var(--fg-3)',
+                marginBottom: 8,
+                padding: '4px 6px',
+                background: 'var(--bg-2)',
+                borderRadius: 4,
+              }}>
+                {rookieCheck.eligible
+                  ? `${rookieCheck.hint} — 可以投简历`
+                  : `入队门槛：${rookieCheck.hint}`}
+              </div>
+            )}
             <div className="stat-desc" style={{ marginBottom: 8 }}>
               可申请的俱乐部（消耗 25 AP / 次）
             </div>
-            <div className={`${eligibleClubs.length === 0 ? '' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {eligibleClubs.length === 0 && (
                 <div className="action-panel-hint">暂无可申请的俱乐部</div>
               )}
               {eligibleClubs.map((c) => {
-                const canApply = enabled && !hasPending && ap >= 25 && !loading;
+                const rookieBlock = rookieCheck !== null && !rookieCheck.eligible;
+                const canApply = enabled && !hasPending && ap >= 25 && !loading && !rookieBlock;
                 return (
                   <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: 'var(--bg-2)' }}>
                     <div>
@@ -109,7 +157,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                       onClick={() => apply(c.id)}
                       style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
                     >
-                      {ap < 25 ? 'AP 不足' : '发简历 -25 AP'}
+                      {rookieBlock ? '未达标' : ap < 25 ? 'AP 不足' : '发简历 -25 AP'}
                     </button>
                   </div>
                 );
