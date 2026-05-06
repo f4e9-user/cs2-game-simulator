@@ -68,7 +68,7 @@ export const ACTIONS: ActionDef[] = [
   {
     id: 'action-rest-day',
     label: '休息一天',
-    description: '轻度放松，恢复体力和手感，缓解压力。',
+    description: '轻度放松，恢复体力和压力，但不碰键盘会让手感略微生疏。',
     apCost: 25,
     eventType: 'routine',
     check: {
@@ -78,20 +78,21 @@ export const ACTIONS: ActionDef[] = [
       traitPenalties: { grinder: 1, obsessed: 1 },
     },
     success: {
-      narrative: '好好睡了一觉，整个人状态好多了。',
-      feelDelta: 1,
+      narrative: '好好睡了一觉，整个人状态好多了，就是手有点生。',
+      feelDelta: -0.5,
       fatigueDelta: -20,
       stressDelta: -1,
     },
     failure: {
-      narrative: '睡不踏实，脑子里还是那几局的画面。',
+      narrative: '睡不踏实，脑子里还是那几局的画面，准星感觉也跑偏了。',
+      feelDelta: -1,
       fatigueDelta: -10,
     },
   },
   {
     id: 'action-vacation',
     label: '度假断网',
-    description: '彻底离开电脑，大幅恢复疲劳和压力，手感会生疏。',
+    description: '彻底离开电脑，大幅恢复疲劳和压力，但手感会明显生疏。',
     apCost: 25,
     eventType: 'routine',
     check: {
@@ -99,15 +100,61 @@ export const ACTIONS: ActionDef[] = [
       dc: 1,
     },
     success: {
-      narrative: '三天没碰键盘，身体完全放松下来。',
-      feelDelta: -1,
+      narrative: '三天没碰键盘，身体完全放松下来，但准星感觉飘了不少。',
+      feelDelta: -2,
       fatigueDelta: -30,
       stressDelta: -10, // ×5 = -50 stress
     },
     failure: {
-      narrative: '强迫自己放松，但效果一般。',
+      narrative: '强迫自己放松，效果一般，回来之后手感也生疏了好一阵。',
+      feelDelta: -3,
       fatigueDelta: -20,
       stressDelta: -6, // ×5 = -30 stress
+    },
+  },
+  {
+    id: 'action-gym',
+    label: '健身',
+    description: '去健身房强化体能，增加体质成长，但会累积疲劳。',
+    apCost: 25,
+    eventType: 'routine',
+    check: {
+      primary: 'constitution',
+      dc: 6,
+      traitBonuses: { resilient: 2, grinder: 1 },
+      traitPenalties: { fragile: 2 },
+    },
+    success: {
+      narrative: '训练完汗流浃背，身体却比以前更有底气了。',
+      dailyGrowth: 'constitution' as StatKey,
+      fatigueDelta: 18,
+    },
+    failure: {
+      narrative: '今天状态差，练完感觉身体被掏空，也没什么收获。',
+      fatigueDelta: 12,
+    },
+  },
+  {
+    id: 'action-meditation',
+    label: '冥想',
+    description: '静坐调息，小幅缓解疲劳和压力，长期坚持可提升心态。',
+    apCost: 25,
+    eventType: 'routine',
+    check: {
+      primary: 'mentality',
+      dc: 5,
+      traitBonuses: { steady: 3, selfless: 1 },
+      traitPenalties: { ego: 1, grinder: 1 },
+    },
+    success: {
+      narrative: '专注于呼吸，脑子里的噪音慢慢散去，整个人平静多了。',
+      dailyGrowth: 'mentality' as StatKey,
+      fatigueDelta: -10,
+      stressDelta: -1, // ×5 = -5 stress
+    },
+    failure: {
+      narrative: '怎么也静不下来，思绪乱跑，勉强坐了二十分钟就放弃了。',
+      fatigueDelta: -5,
     },
   },
 ];
