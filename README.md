@@ -23,14 +23,15 @@ cs2-game-simulator/
 │       │   ├── constants.ts      属性/压力/赛季/晋级阈值
 │       │   ├── resolver.ts       d20 + primary*2 + secondary 检定 / 成长曲线
 │       │   ├── stages.ts         阶段锁（fame/tag 门槛）
-│       │   ├── events.ts         pickEvent + 状态权重 + 占位符替换
-│       │   └── gameEngine.ts     initPlayer / applyChoice / 时间推进 / 结局判定
+│       │   ├── events.ts         pickEvent + 状态权重 + 动态 tag 合成
+│       │   └── gameEngine.ts     initPlayer / applyChoice / 战队周薪 / 连败计数 / 结局判定
 │       ├── data/
 │       │   ├── traits.ts         22 条特质（含正/负/混合）
 │       │   ├── backgrounds.ts    起点身份（数据保留，UI 已隐藏）
 │       │   ├── tournaments.ts    9 个赛事 + 多阶段 bracket + 合成事件
 │   │   ├── actions.ts        6 个日常行动（+健身锻炼/冥想静心）
 │       │   ├── shop.ts           9 件商品（消耗品/服务/装备/社交四类）
+│       │   ├── clubs.ts          16 家俱乐部定义（youth/semi-pro/pro/top 四档）
 │       │   ├── rivals.ts         AI 对手战队名生成
 │       │   ├── leaderboard.ts    战队积分榜构建/tick/加分
 │       │   └── events/           分类事件池
@@ -73,7 +74,9 @@ cs2-game-simulator/
         │   ├── MatchPanel.tsx            赛事日历 + 报名/退赛（含弃赛惩罚确认） + 阶段进度
         │   ├── ActionPanel.tsx           行动力面板：AP条 + 6个日常行动 + 行动结果小卡
         │   ├── ShopPanel.tsx             购物面板：消耗品/服务/装备/社交四类商品
-        │   ├── EndingPanel.tsx           富结局面板：生涯轨迹/五维/赛事战绩/特质/标签
+        │   ├── EndingPanel.tsx           富结局面板：生涯轨迹/五维/赛事战绩/特质/标签/战队历史
+        │   ├── ClubPanel.tsx             战队面板：当前战队/申请等待/可申请俱乐部列表
+        │   ├── TeamOfferModal.tsx        入队邀请弹窗：合同详情 + 接受/拒绝
         │   └── Leaderboard.tsx           战队积分榜（玩家高亮）
         ├── lib/
         │   ├── api.ts                    自动路由（cs.* → cs-api.*）
@@ -171,6 +174,12 @@ Buff 是临时性成长加成，有使用次数限制。
 | `pendingMatch` | 可空 | 已报名的赛事 + 当前阶段 + 解析周 |
 | `year / week` | 1+ / 1-48 | 游戏内时间（48 周 / 年） |
 | `rivals` | 4 | 命名对手，事件中通过 `{rival0..3}` 引用 |
+| `team` | 可空 | 当前战队（clubId/name/tag/tier/weeklySalary/joinedRound） |
+| `pendingApplication` | 可空 | 待处理俱乐部申请（2 周后触发 chain-club-response） |
+| `pendingOffer` | 可空 | 待接受的入队邀请（`POST /team-response` 处理） |
+| `consecutiveLosses` | ≥0 | 连续赛事失利计数，≥ 3 → `losing-streak` 动态 tag |
+| `everHadTeam` | bool | 是否曾加入过战队（用于 free-agent-legend 结局判定） |
+| `contractRenewals` | ≥0 | 合同续约次数（用于 loyal-veteran 结局判定） |
 
 ### 数值公式
 
@@ -328,7 +337,26 @@ Buff 是临时性成长加成，有使用次数限制。
 - `major-broadcast`（周 24/48 + 未参赛）→ 广播事件 ×5
 - **gambler 特质** → 赌狗/上头类饰品事件权重 ×2
 
-**动态合成 tag**：玩家状态满足条件时自动注入到事件 `requireTags` 过滤集中（`stressed / famous / cash-strapped / frail / major-broadcast`）。
+**动态合成 tag**：玩家状态满足条件时自动注入到事件 `requireTags` 过滤集中，不需要手动添加到 `player.tags`，也无法通过 `tagRemoves` 移除（每回合重新计算）。
+
+| 动态 tag | 触发条件 |
+|---|---|
+| `stressed` | `stress ≥ 60` |
+| `famous` | `fame ≥ 15` |
+| `cash-strapped` | `money ≤ 1` |
+| `frail` | `constitution ≤ 2` |
+| `major-broadcast` | 第 24/48 周 + 未参加 Major |
+| `elite-prospect` | 持有 `aimer` 或 `solo` 特质 tag |
+| `has-open-match-exp` | city + platform 参赛合计 > 1 |
+| `application-response-ready` | `round ≥ pendingApplication.responseRound` |
+| `interview-ready` | `application-response-ready` + `interview-pending` |
+| `just-joined-team` | `team.joinedRound === player.round` |
+| `has-team` | `player.team` 非空 |
+| `contract-up` | `(round - joinedRound) % 48 === 0 && > 0` |
+| `losing-streak` | `consecutiveLosses ≥ 3` |
+| `promote-eligible` | 存在更高档且玩家满足入队门槛的俱乐部 |
+| `rival-scout-eligible` | 无战队 + fame ≥ 20 + openMatchCount > 1 |
+| `rival-match-pressure` | 有战队 + pendingMatch 非空 |
 
 ### 多结局
 
@@ -343,8 +371,8 @@ Buff 是临时性成长加成，有使用次数限制。
 | `banned_for_match_fixing` | 博彩被发现 |
 | `banned_for_cheating` | 外挂被发现 |
 | `career_ended` | outcome.endRun 默认 |
-| `free-agent-legend` | 满 576 回合 + 全程无战队 + stage ≥ second + fame ≥ 70 + 持 `tournament-winner` |
-| `loyal-veteran` | 满 576 回合 + 同队 200+ 回合 + 续约 ≥ 3 次 |
+| `free-agent-legend` | 满 576 回合 + 全程无战队（`!everHadTeam`）+ stage ≥ second + fame ≥ 70 + 持 `tournament-winner` |
+| `loyal-veteran` | 满 576 回合 + 同一战队连续 ≥ 200 回合 + `contractRenewals ≥ 3` |
 
 **关键 tag**：赢得 Major 决赛时自动打 `major-champion`；赢得任意决赛打 `tournament-winner`。
 
@@ -378,6 +406,9 @@ Buff 是临时性成长加成，有使用次数限制。
 | GET | `/api/game/meta/actions` | 返回 6 个日常行动定义 |
 | GET | `/api/game/meta/shop` | 返回全部商品定义 |
 | GET | `/api/game/meta/rules` | 公开常量（pointPool 等） |
+| GET | `/api/game/meta/clubs` | 返回全部 16 家俱乐部定义 |
+| POST | `/api/game/:sessionId/apply-club` | body: `{ clubId }` 提交俱乐部申请（写入 pendingApplication，2 周后回信） |
+| POST | `/api/game/:sessionId/team-response` | body: `{ accept: boolean }` 接受或拒绝入队邀请（接受则写入 team，拒绝写入 10 回合冷却） |
 
 `POST /api/game/start` 响应：`{ sessionId, player, currentEvent, leaderboard }`
 `POST /api/game/:sessionId/choice` 响应：`{ result, player, currentEvent, status, ending?, promotion, leaderboard }`
@@ -581,6 +612,94 @@ npx wrangler deploy
 **富结局面板**
 - `EndingPanel` 组件：结局标签（legend 金色光晕）、生涯轨迹（年/周/回合/阶段）、关键数值（人气/资金/压力）、五维属性条、赛事战绩（按 tier 分类的夺冠金色徽章）、开局特质（含描述）、生涯标签（过滤 `-cd` 冷却标签）
 - 底栏"← 新生涯"改为弹出确认框，框内嵌入完整 `EndingPanel`，防止误触丢失存档
+
+### Phase H（战队系统）
+
+**俱乐部数据**（`data/clubs.ts`，16 家俱乐部，4 档 × 4 家）
+
+| 档位 | ClubTier | 薪资范围/周 | 入队门槛 |
+|---|---|---|---|
+| 青年队 | `youth` | 10–20K | rookie/youth 阶段，无名气要求 |
+| 半职业 | `semi-pro` | 20–50K | youth 阶段起，无名气要求 |
+| 职业 | `pro` | 40–80K | second 阶段起，fame ≥ 10 |
+| 顶级 | `top` | 80–150K | pro 阶段起，fame ≥ 30 |
+
+每档 2 家常规俱乐部 + 1~2 家 `isRival` 对手俱乐部（用于挖角事件匹配）。
+
+**新增 Player 字段**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `team` | `PlayerTeam \| null` | 当前所在战队（含合同信息） |
+| `pendingApplication` | `PendingApplication \| null` | 待处理的俱乐部申请（2 周后回信） |
+| `pendingOffer` | `TeamOffer \| null` | 待接受/拒绝的入队邀请 |
+| `consecutiveLosses` | `number` | 连续赛事失利计数（≥ 3 触发 `losing-streak`） |
+| `everHadTeam` | `boolean` | 是否曾加入过战队（用于 free-agent-legend 结局） |
+| `contractRenewals` | `number` | 合同续约次数（用于 loyal-veteran 结局） |
+
+**周薪系统**：每回合推进时，有战队的玩家自动注入 `team.weeklySalary` 点金钱（`money = min(20, money + weeklySalary)`），并在被动效果列表显示"周薪入账 +XK"。
+
+**申请流程**：
+1. 玩家在 `ClubPanel` 选择目标俱乐部 → `POST /apply-club`
+2. 写入 `pendingApplication`，`responseRound = appliedRound + 2`
+3. 2 回合后，动态 tag `application-response-ready` 注入 → 触发 `chain-club-response` 事件
+4. 成功 → 触发 `chain-club-interview` → 通过后生成 `pendingOffer`
+5. 玩家在 `TeamOfferModal` 接受/拒绝 → `POST /team-response`；拒绝时写入 10 回合 `poach-cd` 冷却
+
+**新增动态 tag（`events.ts`）**
+
+| tag | 触发条件 |
+|---|---|
+| `elite-prospect` | 持有 `aimer` 或 `solo` 特质 tag |
+| `has-open-match-exp` | city + platform 参赛合计 > 1 |
+| `application-response-ready` | `round >= pendingApplication.responseRound` |
+| `interview-ready` | `application-response-ready` + `interview-pending` tag |
+| `just-joined-team` | `team.joinedRound === player.round`（加入后首回合） |
+| `has-team` | 持有战队 |
+| `contract-up` | `(round - joinedRound) % 48 === 0 && > 0`（每 48 回合合同到期） |
+| `losing-streak` | `consecutiveLosses ≥ 3` |
+| `promote-eligible` | 存在更高档且满足门槛的俱乐部 |
+| `rival-scout-eligible` | 无战队 + fame ≥ 20 + openMatchCount > 1 |
+| `rival-match-pressure` | 有战队 + 有 pendingMatch |
+
+**新增战队链式事件（`chains.ts`）**
+
+| 事件 ID | requireTags | 说明 |
+|---|---|---|
+| `chain-club-response` | `application-response-ready` | 申请回信（成功/婉拒/无消息） |
+| `chain-club-interview` | `interview-ready` | 面试（通过 → 生成 pendingOffer） |
+| `chain-club-rejected` | `club-rejected` | 被拒后心态调整 |
+| `chain-team-joined` | `just-joined-team` | 新入队首周融入叙事 |
+| `chain-contract-renewal` | `contract-up` | 合同到期（续约/离队/被挖角） |
+| `chain-team-conflict` | `has-team` | 队内矛盾处理 |
+| `chain-team-fired` | `losing-streak` | 连败 3+ 后被队伍劝退 |
+| `chain-team-promote-offer` | `promote-eligible` | 更高档俱乐部主动邀请 |
+| `chain-rival-scout` | `rival-scout-eligible` | 星探发现自由人玩家 |
+| `chain-rival-poach` | `promote-eligible` | 对手俱乐部挖角（`hear-offer` 触发签约流程） |
+| `chain-rival-match-trash` | `rival-match-pressure` | 赛前社交媒体心理战 |
+| `chain-rival-teammate-leave` | `has-team` | 队友离队传闻处理 |
+
+**新增结局**
+
+| ending | 触发条件 |
+|---|---|
+| `free-agent-legend` | 满 576 回合 + 全程无战队（`!everHadTeam`）+ stage ≥ second + fame ≥ 70 + 持 `tournament-winner` |
+| `loyal-veteran` | 满 576 回合 + 同一战队连续 ≥ 200 回合 + 续约 ≥ 3 次 |
+
+**新增 API 路由**
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/game/meta/clubs` | 返回全部 16 家俱乐部定义 |
+| POST | `/api/game/:sessionId/apply-club` | body: `{ clubId }` 提交俱乐部申请 |
+| POST | `/api/game/:sessionId/team-response` | body: `{ accept: boolean }` 接受/拒绝入队邀请 |
+
+**新增前端组件**
+
+- `ClubPanel.tsx`：显示当前战队信息（名称/档位/地区/周薪/加入回合）、申请等待状态、及可申请的俱乐部列表（按 stage/fame/已有战队过滤）
+- `TeamOfferModal.tsx`：收到入队邀请时弹出，展示合同详情（俱乐部/档位/周薪），支持接受/拒绝
+- `EndingPanel.tsx` 补充战队历史展示（含 `everHadTeam` 判断）
+- `HudTopBar.tsx` 战队 tag 显示
 
 ### Phase G（CS2 饰品事件系统 + 行动平衡 + 特质联动全面化）
 
