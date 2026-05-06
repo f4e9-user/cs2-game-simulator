@@ -50,7 +50,7 @@ export default function GamePage() {
   const [traits, setTraits] = useState<Trait[]>([]);
   const [shaking, setShaking] = useState(false);
   const [showNewGameModal, setShowNewGameModal] = useState(false);
-  const prevStressMaxRounds = useRef(0);
+  const prevStress = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,18 +68,18 @@ export default function GamePage() {
     };
   }, [sessionId, hydrateFromSession, setLoading, setError]);
 
-  // 压力临界时触发震动动画
+  // 压力首次达到 100 时触发震动动画
   useEffect(() => {
     if (!player) return;
-    const cur = player.stressMaxRounds ?? 0;
-    if (cur > 0 && cur > prevStressMaxRounds.current) {
+    const cur = player.stress ?? 0;
+    if (cur >= 100 && prevStress.current < 100) {
       setShaking(true);
       const t = setTimeout(() => setShaking(false), 700);
-      prevStressMaxRounds.current = cur;
+      prevStress.current = cur;
       return () => clearTimeout(t);
     }
-    prevStressMaxRounds.current = cur;
-  }, [player?.stressMaxRounds]);
+    prevStress.current = cur;
+  }, [player?.stress]);
 
   const pickChoice = async (choiceId: string) => {
     setLoading(true);
