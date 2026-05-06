@@ -1116,4 +1116,201 @@ export const CHAIN_EVENTS: EventDef[] = [
       },
     ],
   },
+
+  // ── 战队申请响应 ──────────────────────────────────────────────
+  {
+    id: 'chain-club-response',
+    type: 'tryout',
+    title: '邮箱里多了一封回信',
+    narrative:
+      '你打开邮箱——之前发的那封简历有回应了。标题是"关于您的入队申请"。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 2,
+    weight: 0,
+    requireTags: ['application-response-ready'],
+    choices: [
+      {
+        id: 'accept-interview',
+        label: '点开看全文',
+        description: '看看对方说了什么。',
+        check: {
+          primary: 'experience',
+          secondary: 'intelligence',
+          dc: 9,
+          traitBonuses: { steady: 2, tactical: 1 },
+          traitPenalties: { ego: 1 },
+        },
+        success: {
+          narrative: '他们邀请你去线下聊一次——这本质上是面试。你对镜整理了一下衣领。',
+          tagRemoves: ['application-response-ready'],
+          tagCooldowns: { 'interview-pending': 2 },
+          fameDelta: 1,
+        },
+        failure: {
+          narrative: '回信很客气但简短——"感谢您的申请，我们目前人员已满。"',
+          tagRemoves: ['application-response-ready'],
+          stressDelta: 1,
+        },
+      },
+    ],
+  },
+
+  // ── 面试事件 ──────────────────────────────────────────────────
+  {
+    id: 'chain-club-interview',
+    type: 'tryout',
+    title: '俱乐部面试',
+    narrative:
+      '你坐在俱乐部的会客室里。对面是教练和经理，桌上一张没有填完的合同。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 3,
+    weight: 0,
+    requireTags: ['interview-ready'],
+    choices: [
+      {
+        id: 'impress-coach',
+        label: '重点聊自己对比赛的理解',
+        description: '展示战术素养和个人能力。',
+        check: {
+          primary: 'intelligence',
+          secondary: 'experience',
+          dc: 10,
+          traitBonuses: { tactical: 3, igl: 2 },
+          traitPenalties: { ego: 1, shy: 1 },
+        },
+        success: {
+          narrative: '教练对你关于 meta 的理解印象深刻，转头对经理点了点头。',
+          tagRemoves: ['interview-pending', 'interview-ready'],
+          stressDelta: -1,
+          fameDelta: 1,
+        },
+        failure: {
+          narrative: '你说了半天对方没什么反应，面试匆匆结束了。',
+          tagRemoves: ['interview-pending', 'interview-ready'],
+          stressDelta: 2,
+        },
+      },
+      {
+        id: 'show-experience',
+        label: '用过去的比赛成绩说话',
+        description: '成绩是最硬的敲门砖。',
+        check: {
+          primary: 'experience',
+          secondary: 'mentality',
+          dc: 9,
+          traitBonuses: { steady: 2, selfless: 1 },
+          traitPenalties: { shy: 1 },
+        },
+        success: {
+          narrative: '经理翻了一下你的比赛记录，合上文件夹说"我们很感兴趣"。',
+          tagRemoves: ['interview-pending', 'interview-ready'],
+          stressDelta: -1,
+          fameDelta: 1,
+        },
+        failure: {
+          narrative: '对方觉得你还差点火候，说下次有机会再来。',
+          tagRemoves: ['interview-pending', 'interview-ready'],
+          stressDelta: 2,
+        },
+      },
+    ],
+  },
+
+  // ── 被拒收尾 ──────────────────────────────────────────────────
+  {
+    id: 'chain-club-rejected',
+    type: 'life',
+    title: '又一次被拒了',
+    narrative:
+      '这次申请最终没能通过。你看着邮箱里那封格式化回信，沉默了一会儿。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 0,
+    weight: 0,
+    requireTags: ['club-rejected-notify'],
+    choices: [
+      {
+        id: 'shake-it-off',
+        label: '继续训练',
+        description: '没什么好说的，实力是最好的回复。',
+        check: {
+          primary: 'mentality',
+          dc: 7,
+          traitBonuses: { steady: 2, grinder: 2 },
+          traitPenalties: { fragile: 1 },
+        },
+        success: {
+          narrative: '你关上电脑，打开训练图。拒绝信可以删，手感不能丢。',
+          tagRemoves: ['club-rejected-notify'],
+          dailyGrowth: 'mentality',
+          stressDelta: -1,
+        },
+        failure: {
+          narrative: '你坐在椅子上发了好一会儿呆。这封回信比预想的更难受。',
+          tagRemoves: ['club-rejected-notify'],
+          stressDelta: 2,
+          tiltDelta: 1,
+        },
+      },
+    ],
+  },
+
+  // ── 新入队欢迎 ────────────────────────────────────────────────
+  {
+    id: 'chain-team-joined',
+    type: 'team',
+    title: '新队的第一天',
+    narrative:
+      '你推开训练室的门，几张陌生的面孔转过来看你。IGL 招了招手："你就是那个新人？过来坐，今天先从沟通习惯开始。"',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 1,
+    weight: 0,
+    requireTags: ['just-joined-team'],
+    choices: [
+      {
+        id: 'introduce-self',
+        label: '大方自我介绍',
+        description: '第一印象很重要。',
+        check: {
+          primary: 'mentality',
+          dc: 7,
+          traitBonuses: { support: 2, selfless: 1, media: 1 },
+          traitPenalties: { shy: 2, ego: 1 },
+        },
+        success: {
+          narrative: '你简单介绍了自己的打法风格和擅长位置。IGL 点了点头，把你加进了战术讨论组。',
+          tagRemoves: ['just-joined-team'],
+          feelDelta: 1,
+          tagAdds: ['team-trust'],
+        },
+        failure: {
+          narrative: '你一紧张没说太多。教练拍了拍你的肩膀说"刚开始，不急。"',
+          tagRemoves: ['just-joined-team'],
+          feelDelta: -0.5,
+        },
+      },
+      {
+        id: 'show-skill',
+        label: '直接开一局，用实力说话',
+        description: '不说废话，用枪杆子证明自己。',
+        check: {
+          primary: 'agility',
+          dc: 8,
+          traitBonuses: { solo: 2, mechanical: 2 },
+          traitPenalties: { support: 1 },
+        },
+        success: {
+          narrative: '一局下来你拿了 25 杀。会议室里有人吹了个口哨，这次是佩服的那种。',
+          tagRemoves: ['just-joined-team'],
+          feelDelta: 1.5,
+          tagAdds: ['highlight-clip'],
+        },
+        failure: {
+          narrative: '你太想表现反而手抖了几波。有好几个该拿下的击杀都错过了。',
+          tagRemoves: ['just-joined-team'],
+          feelDelta: -1,
+          stressDelta: 1,
+        },
+      },
+    ],
+  },
 ];

@@ -15,9 +15,11 @@ import { getEventById } from '../data/events/index.js';
 import { TRAITS, getTrait } from '../data/traits.js';
 import { ACTIONS, getAction } from '../data/actions.js';
 import { getShopItem, SHOP_ITEMS } from '../data/shop.js';
+import { CLUBS, getClub, clubsForStage } from '../data/clubs.js';
 import type {
   ActionResult,
   Buff,
+  Club,
   GameEventPublic,
   GameSession,
   MatchStats,
@@ -198,6 +200,9 @@ export function initPlayer(input: InitInput): Player {
     pendingMatch: null,
     actionPoints: 100,
     shopCooldowns: {},
+    team: null,
+    pendingApplication: null,
+    pendingOffer: null,
     rivals: generateRivals(4),
     tournamentParticipations: 0,
     tournamentChampionships: 0,
@@ -568,6 +573,12 @@ export function applyChoice(
     shopCooldowns: nextShopCooldowns,
   };
 
+  // 周薪入账
+  if (nextPlayer.team) {
+    nextPlayer.stats.money = Math.min(20, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
+    passiveEffects.push(`周薪入账 +${nextPlayer.team.weeklySalary * 10}K`);
+  }
+
   const result: RoundResult = {
     round: nextPlayer.round,
     eventId: eventDef.id,
@@ -935,6 +946,102 @@ export function applyShopPurchase(
   };
 
   return { player: nextPlayer, itemName: item.name };
+}
+
+// ── 战队申请 ──────────────────────────────────────────────────
+import type { PendingApplication, PlayerTeam, TeamOffer } from '../types.js';
+
+export function applyClubRequest(
+  session: GameSession,
+  clubId: string,
+): Player {
+  if (session.status !== 'active') throw new Error('session is not active');
+  const club = getClub(clubId);
+  if (!club) throw new Error('未知俱乐部');
+
+  const player = session.player;
+  if (player.team) throw new Error('你已经有战队了');
+  if (player.pendingApplication) throw new Error('已经有一个进行中的申请');
+
+  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+  if (stageOrder.indexOf(player.stage) < stageOrder.indexOf(club.requiredStage)) {
+    throw new Error('当前阶段不满足该俱乐部的门槛');
+  }
+  if (club.requiredFame !== undefined && (player.fame ?? 0) < club.requiredFame) {
+    throw new Error(`名气不足，需要 ≥ ${club.requiredFame}`);
+  }
+
+  const ap = player.actionPoints ?? 0;
+  if (ap < 25) throw new Error('行动力不足');
+
+  const responseDelay = 2 + Math.floor(Math.random() * 3); // 2-4 回合
+  const pending: PendingApplication = {
+    clubId,
+    clubName: club.name,
+    appliedRound: player.round,
+    responseRound: player.round + responseDelay,
+  };
+
+  return {
+    ...player,
+    actionPoints: ap - 25,
+    pendingApplication: pending,
+    tags: [...player.tags, 'applying'],
+  };
+}
+
+export function respondTeamOffer(
+  session: GameSession,
+  accept: boolean,
+): Player {
+  if (session.status !== 'active') throw new Error('session is not active');
+  const player = session.player;
+  const offer = player.pendingOffer;
+  if (!offer) throw new Error('没有待处理的入队邀请');
+
+  if (accept) {
+    const team: PlayerTeam = {
+      clubId: offer.clubId,
+      name: offer.clubName,
+      tag: offer.tag,
+      region: offer.region,
+      tier: offer.tier,
+      weeklySalary: offer.weeklySalary,
+      joinedRound: player.round,
+    };
+
+    return {
+      ...player,
+      team,
+      pendingOffer: null,
+      pendingApplication: null,
+      tags: player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending'),
+    };
+  } else {
+    return {
+      ...player,
+      pendingOffer: null,
+      pendingApplication: null,
+      tags: player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending'),
+    };
+  }
+}
+
+export function generateTeamOffer(clubId: string): TeamOffer {
+  const club = getClub(clubId);
+  if (!club) throw new Error('未知俱乐部');
+
+  const [min, max] = club.salaryRange;
+  const salary = min + Math.floor(Math.random() * (max - min + 1));
+
+  return {
+    clubId: club.id,
+    clubName: club.name,
+    tag: club.tag,
+    tier: club.tier,
+    region: club.region,
+    weeklySalary: salary,
+  };
 }
 
 // Expose ACTIONS and SHOP_ITEMS for routes

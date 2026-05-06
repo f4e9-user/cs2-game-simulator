@@ -15,6 +15,8 @@ import { ShopPanel } from '@/components/ShopPanel';
 import { Leaderboard } from '@/components/Leaderboard';
 import { FeedPanel } from '@/components/FeedPanel';
 import { HudTopBar } from '@/components/HudTopBar';
+import { ClubPanel } from '@/components/ClubPanel';
+import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { useGameStore } from '@/store/gameStore';
 import type { Player, Trait } from '@/lib/types';
 
@@ -32,12 +34,14 @@ export default function GamePage() {
     promotion,
     leaderboard,
     actionsPhase,
+    pendingOffer,
     loading,
     error,
     hydrateFromSession,
     applyChoiceResponse,
     setPlayer,
     setActionsPhase,
+    clearOffer,
     setLoading,
     setError,
   } = useGameStore();
@@ -166,6 +170,12 @@ export default function GamePage() {
                 player={player}
                 onPlayerUpdate={(p: Player) => setPlayer(p)}
               />
+              <ClubPanel
+                sessionId={sessionId}
+                player={player}
+                enabled={actionsPhase}
+                onPlayerUpdate={(p: Player) => setPlayer(p)}
+              />
             </>
           )}
           <Leaderboard teams={leaderboard} />
@@ -238,6 +248,38 @@ export default function GamePage() {
           <FeedPanel history={history} />
         </aside>
       </div>
+
+      {/* Team offer modal */}
+      {pendingOffer && (
+        <TeamOfferModal
+          offer={pendingOffer}
+          onAccept={async () => {
+            setLoading(true);
+            try {
+              const res = await api.respondOffer(sessionId, true);
+              setPlayer(res.player);
+              clearOffer();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : String(e));
+            } finally {
+              setLoading(false);
+            }
+          }}
+          onDecline={async () => {
+            setLoading(true);
+            try {
+              const res = await api.respondOffer(sessionId, false);
+              setPlayer(res.player);
+              clearOffer();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : String(e));
+            } finally {
+              setLoading(false);
+            }
+          }}
+          loading={loading}
+        />
+      )}
 
       {/* New-game confirm modal */}
       {showNewGameModal && (

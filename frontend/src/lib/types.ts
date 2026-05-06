@@ -87,6 +87,48 @@ export interface LeaderboardTeam {
   isPlayer: boolean;
 }
 
+export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
+
+export interface Club {
+  id: string;
+  name: string;
+  tag: string;
+  region: string;
+  tier: ClubTier;
+  requiredStage: Stage;
+  requiredFame?: number;
+  baseSalary: number;
+  salaryRange: [number, number];
+  isRival?: boolean;
+  rivalIndex?: number;
+}
+
+export interface PlayerTeam {
+  clubId: string;
+  name: string;
+  tag: string;
+  region: string;
+  tier: ClubTier;
+  weeklySalary: number;
+  joinedRound: number;
+}
+
+export interface PendingApplication {
+  clubId: string;
+  clubName: string;
+  appliedRound: number;
+  responseRound: number;
+}
+
+export interface TeamOffer {
+  clubId: string;
+  clubName: string;
+  tag: string;
+  tier: ClubTier;
+  region: string;
+  weeklySalary: number;
+}
+
 export interface DynamicState {
   stress: number;
   fame: number;
@@ -97,6 +139,8 @@ export interface DynamicState {
   pendingMatch: PendingMatch | null;
   actionPoints: number;
   shopCooldowns: Record<string, number>;
+  team: PlayerTeam | null;
+  pendingApplication: PendingApplication | null;
 }
 
 export interface ActionResult {
@@ -147,6 +191,7 @@ export interface Player extends DynamicState {
   tierChampionships: Record<string, number>;
   promotionPending: Stage | null;
   promotionCooldown: number;
+  pendingOffer: TeamOffer | null;
 }
 
 export interface Choice {

@@ -7,6 +7,7 @@ import type {
   PromotionCheck,
   RoundResult,
   SessionStatus,
+  TeamOffer,
 } from '@/lib/types';
 
 interface GameState {
@@ -20,8 +21,8 @@ interface GameState {
   promotion: PromotionCheck | null;
   leaderboard: LeaderboardTeam[];
 
-  // 行动阶段：事件决策完成后解锁，进入下一回合时关闭
   actionsPhase: boolean;
+  pendingOffer: TeamOffer | null;
 
   loading: boolean;
   error: string | null;
@@ -43,6 +44,7 @@ interface GameState {
   }) => void;
   setPlayer: (player: Player) => void;
   setActionsPhase: (v: boolean) => void;
+  clearOffer: () => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
@@ -59,6 +61,7 @@ export const useGameStore = create<GameState>((set) => ({
   promotion: null,
   leaderboard: [],
   actionsPhase: false,
+  pendingOffer: null,
   loading: false,
   error: null,
 
@@ -73,6 +76,7 @@ export const useGameStore = create<GameState>((set) => ({
       lastResult: session.history[session.history.length - 1] ?? null,
       promotion: session.promotion ?? null,
       leaderboard: session.leaderboard ?? [],
+      pendingOffer: session.player.pendingOffer ?? null,
       error: null,
     }),
 
@@ -107,13 +111,14 @@ export const useGameStore = create<GameState>((set) => ({
       lastResult: result,
       promotion: promotion ?? state.promotion,
       leaderboard: leaderboard ?? state.leaderboard,
-      // 进入行动阶段（事件未结束时才开启）
       actionsPhase: status === 'active',
+      pendingOffer: player.pendingOffer ?? null,
       error: null,
     })),
 
-  setPlayer: (player) => set({ player }),
+  setPlayer: (player) => set({ player, pendingOffer: player.pendingOffer ?? null }),
   setActionsPhase: (v) => set({ actionsPhase: v }),
+  clearOffer: () => set({ pendingOffer: null }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
   reset: () =>

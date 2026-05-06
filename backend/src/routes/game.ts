@@ -6,15 +6,19 @@ import {
   SHOP_ITEMS,
   applyAction,
   applyChoice,
+  applyClubRequest,
   applyShopPurchase,
   computeTraitMods,
   createSession,
   initPlayer,
+  generateTeamOffer,
+  respondTeamOffer,
   rollRandomTraits,
   validateAllocation,
 } from '../engine/gameEngine.js';
 import { checkTournamentPromotion } from '../engine/stages.js';
 import { getTrait } from '../data/traits.js';
+import { CLUBS, clubsForStage } from '../data/clubs.js';
 import {
   getTournament,
   tournamentsOpenForSignup,
@@ -144,6 +148,25 @@ app.post('/game/:sessionId/choice', async (c) => {
       result,
       result.createdAt,
     );
+
+    // 战后处理：面试成功 → 生成入队邀请
+    if (updated.currentEvent?.id === 'chain-club-interview' && result.success) {
+      const app = updated.player.pendingApplication;
+      if (app) {
+        updated.player.pendingOffer = generateTeamOffer(app.clubId);
+        updated.player.pendingApplication = null;
+        updated.player.tags = updated.player.tags.filter(
+          (t) => t !== 'interview-pending',
+        );
+      }
+    }
+    // 响应失败 → 触发被拒叙事
+    if (updated.currentEvent?.id === 'chain-club-response' && !result.success) {
+      if (!updated.player.tags.includes('club-rejected-notify')) {
+        updated.player.tags = [...updated.player.tags, 'club-rejected-notify'];
+      }
+      updated.player.pendingApplication = null;
+    }
 
     return c.json({
       result,
@@ -335,5 +358,56 @@ app.post('/game/:sessionId/shop', async (c) => {
 // 获取行动和商品列表（前端初始化用）
 app.get('/game/meta/actions', (c) => c.json({ actions: ACTIONS }));
 app.get('/game/meta/shop', (c) => c.json({ items: SHOP_ITEMS }));
+app.get('/game/meta/clubs', (c) => c.json({ clubs: CLUBS }));
+
+// 申请战队
+app.post('/game/:sessionId/apply-club', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { clubId } = body ?? {};
+  if (typeof clubId !== 'string' || !clubId) {
+    return c.json({ error: 'clubId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const player = applyClubRequest(session, clubId);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+// 接受/拒绝入队邀请
+app.post('/game/:sessionId/team-response', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { accept } = body ?? {};
+  if (typeof accept !== 'boolean') {
+    return c.json({ error: 'accept 必填（布尔值）' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const player = respondTeamOffer(session, accept);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
 
 export default app;

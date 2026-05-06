@@ -2,6 +2,7 @@ import type {
   ActionResult,
   Background,
   ChoiceResponse,
+  Club,
   GameSession,
   Player,
   RollTraitsResponse,
@@ -121,4 +122,16 @@ export const api = {
     ),
   listShopItems: () =>
     request<{ items: ShopItem[] }>('/api/game/meta/shop'),
+  listClubs: () =>
+    request<{ clubs: Club[] }>('/api/game/meta/clubs'),
+  applyClub: (sessionId: string, clubId: string) =>
+    request<{ player: Player }>(
+      `/api/game/${sessionId}/apply-club`,
+      { method: 'POST', body: JSON.stringify({ clubId }) },
+    ),
+  respondOffer: (sessionId: string, accept: boolean) =>
+    request<{ player: Player }>(
+      `/api/game/${sessionId}/team-response`,
+      { method: 'POST', body: JSON.stringify({ accept }) },
+    ),
 };

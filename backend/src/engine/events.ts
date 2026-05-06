@@ -37,6 +37,19 @@ function dynamicTags(player: Player): string[] {
   const openMatchCount = (tp['city'] ?? 0) + (tp['platform'] ?? 0);
   if (openMatchCount > 1) out.push('has-open-match-exp');
 
+  // ── 战队申请系统 tag ─────────────────────────────────────────────
+  const app = player.pendingApplication;
+  if (app && player.round >= app.responseRound) {
+    out.push('application-response-ready');
+    // 检查是否有面试 tag（response 成功后写入）
+    if (player.tags.includes('interview-pending')) out.push('interview-ready');
+  }
+
+  // ── 新入队 tag（加入战队后首回合）─────────────────────────────────
+  if (player.team && player.team.joinedRound === player.round) {
+    out.push('just-joined-team');
+  }
+
   return out;
 }
 
@@ -56,6 +69,10 @@ function stateWeight(e: EventDef, player: Player): number {
     const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
     if (traitTags.includes('gambler')) w *= 2;
   }
+  // 自由人时 tryout 类事件权重提升（申请战队需求）
+  if (!player.team && e.type === 'tryout') w *= 1.5;
+  // 有战队时 team 类事件权重提升
+  if (player.team && e.type === 'team') w *= 1.6;
   return Math.max(0.05, w);
 }
 
