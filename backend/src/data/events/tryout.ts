@@ -313,7 +313,7 @@ export const TRYOUT_EVENTS: EventDef[] = [
     title: '二线队的试训邀约',
     narrative:
       '一支二线队的星探私信你：在城市赛里看过你的几场比赛，想让你去参加一次试训，三天吃住自付，第四天打训练赛定去留。',
-    stages: ['rookie', 'youth'],
+    stages: ['youth'],
     difficulty: 3,
     requireTags: ['elite-prospect', 'has-open-match-exp'],
     choices: [

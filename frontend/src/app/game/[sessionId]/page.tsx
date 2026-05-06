@@ -42,6 +42,7 @@ export default function GamePage() {
     setPlayer,
     setActionsPhase,
     clearOffer,
+    setLeaderboard,
     setLoading,
     setError,
   } = useGameStore();
@@ -178,7 +179,7 @@ export default function GamePage() {
               />
             </>
           )}
-          <Leaderboard teams={leaderboard} />
+          {player.stage !== 'rookie' && <Leaderboard teams={leaderboard} />}
         </aside>
 
         {/* Center: event narrative + choices */}
@@ -258,6 +259,7 @@ export default function GamePage() {
             try {
               const res = await api.respondOffer(sessionId, true);
               setPlayer(res.player);
+              if (res.leaderboard) setLeaderboard(res.leaderboard);
               clearOffer();
             } catch (e) {
               setError(e instanceof Error ? e.message : String(e));

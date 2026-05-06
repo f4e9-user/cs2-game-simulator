@@ -55,16 +55,6 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
     }
   };
 
-  // 路人阶段不显示
-  if (player.stage === 'rookie') {
-    return (
-      <div className="action-panel" style={{ marginTop: 10 }}>
-        <div className="action-panel-header">战队</div>
-        <div className="action-panel-hint">进入青训后解锁俱乐部签约</div>
-      </div>
-    );
-  }
-
   return (
     <div className="action-panel" style={{ marginTop: 10 }}>
       <div className="action-panel-header">

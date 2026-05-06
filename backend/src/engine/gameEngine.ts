@@ -1042,9 +1042,14 @@ export function respondTeamOffer(
       joinedRound: player.round,
     };
 
+    // Rookie joining any team advances to youth — the club system replaces
+    // the old tournament-gate path for this transition.
+    const nextStage = player.stage === 'rookie' ? 'youth' : player.stage;
+
     return {
       ...player,
       team,
+      stage: nextStage,
       everHadTeam: true,
       pendingOffer: null,
       pendingApplication: null,
