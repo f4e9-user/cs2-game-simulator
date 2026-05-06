@@ -171,7 +171,7 @@ app.post('/game/:sessionId/choice', async (c) => {
     );
 
     // 战后处理：面试成功 → 生成入队邀请
-    if (updated.currentEvent?.id === 'chain-club-interview' && result.success) {
+    if (result.eventId === 'chain-club-interview' && result.success) {
       const app = updated.player.pendingApplication;
       if (app) {
         updated.player.pendingOffer = generateTeamOffer(app.clubId);
@@ -181,34 +181,40 @@ app.post('/game/:sessionId/choice', async (c) => {
         );
       }
     }
-    // 响应失败 → 触发被拒叙事
-    if (updated.currentEvent?.id === 'chain-club-response' && !result.success) {
+    // 响应失败 → 清理申请并触发被拒叙事
+    if (result.eventId === 'chain-club-response' && !result.success) {
       if (!updated.player.tags.includes('club-rejected-notify')) {
         updated.player.tags = [...updated.player.tags, 'club-rejected-notify'];
       }
       updated.player.pendingApplication = null;
     }
     // 合同到期选择不续 → 清空 team
-    if (updated.currentEvent?.id === 'chain-contract-renewal' && result.choiceId === 'leave-team') {
+    if (result.eventId === 'chain-contract-renewal' && result.choiceId === 'leave-team') {
       updated.player.team = null;
       updated.player.consecutiveLosses = 0;
     }
     // 续约/谈判成功 → 累加续约次数
-    if (updated.currentEvent?.id === 'chain-contract-renewal' && result.success &&
+    if (result.eventId === 'chain-contract-renewal' && result.success &&
         (result.choiceId === 'renew-stay' || result.choiceId === 'negotiate-raise')) {
       updated.player.contractRenewals = (updated.player.contractRenewals ?? 0) + 1;
     }
     // 被踢出战队 → 清空 team
-    if (updated.currentEvent?.id === 'chain-team-fired') {
+    if (result.eventId === 'chain-team-fired') {
       const fired = result.choiceId === 'accept-gracefully' || !result.success;
       if (fired) {
         updated.player.team = null;
         updated.player.consecutiveLosses = 0;
       }
     }
-    // 对手挖角接受 → 生成 rival club 的入队邀请
-    if (updated.currentEvent?.id === 'chain-rival-poach' && result.success && result.choiceId === 'hear-offer') {
-      const rivalClub = CLUBS.find((c) => c.isRival && c.requiredStage === updated.player.stage);
+    // 对手挖角接受 → 生成更高档 rival club 的入队邀请
+    if (result.eventId === 'chain-rival-poach' && result.success && result.choiceId === 'hear-offer') {
+      const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+      const currentTierIdx = updated.player.team
+        ? tierOrder.indexOf(updated.player.team.tier)
+        : -1;
+      const rivalClub = CLUBS.find(
+        (c) => c.isRival && tierOrder.indexOf(c.tier) > currentTierIdx,
+      );
       if (rivalClub) {
         updated.player.pendingOffer = generateTeamOffer(rivalClub.id);
       }

@@ -1051,11 +1051,17 @@ export function respondTeamOffer(
       tags: player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending'),
     };
   } else {
+    // Add 10-round cooldown so the same poach event doesn't re-trigger immediately
+    const cooldownTag = 'poach-cd';
+    const nextTagExpiry = { ...(player.tagExpiry ?? {}), [cooldownTag]: player.round + 10 };
+    const cleanedTags = player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending');
+    const nextTags = cleanedTags.includes(cooldownTag) ? cleanedTags : [...cleanedTags, cooldownTag];
     return {
       ...player,
       pendingOffer: null,
       pendingApplication: null,
-      tags: player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending'),
+      tags: nextTags,
+      tagExpiry: nextTagExpiry,
     };
   }
 }

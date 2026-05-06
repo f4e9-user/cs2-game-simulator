@@ -1585,4 +1585,191 @@ export const CHAIN_EVENTS: EventDef[] = [
       },
     ],
   },
+
+  // ── 对手联动事件 ──────────────────────────────────────────────────────────
+
+  {
+    id: 'chain-rival-scout',
+    type: 'tryout',
+    title: '星探来访',
+    narrative: '一位来自半职业俱乐部的星探联系了你——你在公开赛的表现引起了他们的注意。',
+    stages: ['rookie', 'youth', 'second'],
+    difficulty: 2,
+    weight: 2,
+    requireTags: ['rival-scout-eligible'],
+    forbidTags: ['rival-scout-cd'],
+    choices: [
+      {
+        id: 'meet-scout',
+        label: '安排见面',
+        description: '抽时间和星探碰个面，听听对方的想法。',
+        check: { primary: 'mentality', dc: 6, traitBonuses: { steady: 1, tactical: 1 } },
+        success: {
+          narrative: '见面聊得不错，星探对你的状态和态度都很满意，表示会向俱乐部汇报。',
+          fameDelta: 2,
+          tagCooldowns: { 'rival-scout-cd': 12 },
+          tagsAdded: ['scouted'],
+        },
+        failure: {
+          narrative: '见面时你有点紧张，发挥不稳，星探礼貌地表示会继续观察。',
+          stressDelta: 1,
+          tagCooldowns: { 'rival-scout-cd': 8 },
+        },
+      },
+      {
+        id: 'decline-scout',
+        label: '婉拒，专注当前',
+        description: '时机还不成熟，先把当前的训练搞好。',
+        check: { primary: 'mentality', dc: 1 },
+        success: {
+          narrative: '你礼貌地表示现在还不想考虑转会，星探理解地点点头，说随时欢迎联系。',
+          tagCooldowns: { 'rival-scout-cd': 16 },
+        },
+        failure: {
+          narrative: '拒绝得有些生硬，对方脸色有点难看。希望没有烧掉这座桥。',
+          tagCooldowns: { 'rival-scout-cd': 20 },
+        },
+      },
+    ],
+  },
+
+  {
+    id: 'chain-rival-poach',
+    type: 'team',
+    title: '挖角邀约',
+    narrative: '一支更高级别的俱乐部主动找到你，对方表示对你的成绩印象深刻，希望你考虑加入他们。',
+    stages: ['youth', 'second', 'pro', 'star'],
+    difficulty: 2,
+    weight: 2,
+    requireTags: ['promote-eligible'],
+    forbidTags: ['poach-cd'],
+    choices: [
+      {
+        id: 'hear-offer',
+        label: '听听条件',
+        description: '不承诺什么，先了解一下对方的诚意。',
+        check: { primary: 'mentality', dc: 5, traitBonuses: { tactical: 1, igl: 1 } },
+        success: {
+          narrative: '对方开出了让你心动的条件——更高的薪资、更好的平台。你需要认真考虑。',
+          tagCooldowns: { 'poach-cd': 16 },
+        },
+        failure: {
+          narrative: '对方的条件有些含糊，薪资也没你预期的高。你礼貌地表示需要时间考虑。',
+          tagCooldowns: { 'poach-cd': 12 },
+        },
+      },
+      {
+        id: 'reject-poach',
+        label: '直接拒绝，忠于现队',
+        description: '你对现在的队伍有感情，不想轻易离开。',
+        check: { primary: 'mentality', dc: 1, traitBonuses: { selfless: 2, support: 1 } },
+        success: {
+          narrative: '你婉拒了对方，并告知了现任教练。教练拍了拍你的肩膀，团队凝聚力明显上升。',
+          feelDelta: 0.5,
+          tagCooldowns: { 'poach-cd': 24 },
+        },
+        failure: {
+          narrative: '你拒绝了，但内心还是有些纠结。毕竟那是一个更大的舞台。',
+          stressDelta: 1,
+          tagCooldowns: { 'poach-cd': 16 },
+        },
+      },
+    ],
+  },
+
+  {
+    id: 'chain-rival-match-trash',
+    type: 'team',
+    title: '赛前心理战',
+    narrative: '对手队伍在社交媒体上对你们发起了挑衅，声称这场比赛没有悬念。队友们群情激奋。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 2,
+    weight: 2,
+    requireTags: ['rival-match-pressure'],
+    forbidTags: ['trash-talk-cd'],
+    choices: [
+      {
+        id: 'stay-calm',
+        label: '保持冷静，用表现说话',
+        description: '激怒自己不是备战的方式，专注比赛才是正道。',
+        check: { primary: 'mentality', dc: 7, traitBonuses: { steady: 3, igl: 2 } },
+        success: {
+          narrative: '你劝住了躁动的队友，整个队伍以平稳的心态进入赛前准备。',
+          feelDelta: 0.5,
+          fatigueDelta: -5,
+          tagCooldowns: { 'trash-talk-cd': 8 },
+        },
+        failure: {
+          narrative: '话是这么说，但看到那些挑衅你还是有点上头，注意力开始分散。',
+          tiltDelta: 1,
+          stressDelta: 1,
+          tagCooldowns: { 'trash-talk-cd': 6 },
+        },
+      },
+      {
+        id: 'fire-back',
+        label: '回怼，激励队伍士气',
+        description: '用对方的挑衅来点燃队伍的斗志。',
+        check: { primary: 'mentality', dc: 6, traitBonuses: { ego: 1, solo: 1 }, traitPenalties: { steady: 1 } },
+        success: {
+          narrative: '一番犀利的回击让队伍士气大振，更衣室里笑声不断，大家摩拳擦掌等着开赛。',
+          feelDelta: 1,
+          tagCooldowns: { 'trash-talk-cd': 8 },
+        },
+        failure: {
+          narrative: '你的回击被对方截图断章取义，反而造成了舆论压力，赛前情绪有些复杂。',
+          stressDelta: 2,
+          fameDelta: -1,
+          tagCooldowns: { 'trash-talk-cd': 10 },
+        },
+      },
+    ],
+  },
+
+  {
+    id: 'chain-rival-teammate-leave',
+    type: 'team',
+    title: '队友离队传闻',
+    narrative: '有消息称你的一位队友正在和其他俱乐部接触，更衣室里的气氛变得有些微妙。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 2,
+    weight: 2,
+    requireTags: ['has-team'],
+    forbidTags: ['teammate-leave-cd'],
+    choices: [
+      {
+        id: 'talk-to-teammate',
+        label: '私下和队友谈谈',
+        description: '不管传闻是真是假，直接沟通总比胡思乱想强。',
+        check: { primary: 'mentality', dc: 6, traitBonuses: { support: 2, selfless: 2, igl: 1 } },
+        success: {
+          narrative: '队友坦言有些想法，但和你聊完之后决定暂时留下来。团队气氛有所缓和。',
+          feelDelta: 0.5,
+          tagCooldowns: { 'teammate-leave-cd': 12 },
+        },
+        failure: {
+          narrative: '谈话有点尴尬，队友态度含糊，你也不知道这段对话有没有起作用。',
+          stressDelta: 1,
+          tagCooldowns: { 'teammate-leave-cd': 8 },
+        },
+      },
+      {
+        id: 'focus-on-self',
+        label: '专注自身，别管闲事',
+        description: '队友的去留是他自己的决定，你能控制的只有自己的状态。',
+        check: { primary: 'mentality', dc: 4, traitBonuses: { solo: 1, steady: 1 } },
+        success: {
+          narrative: '你把注意力拉回到训练上，管好自己的状态是最重要的事。',
+          dailyGrowth: 'mentality',
+          tagCooldowns: { 'teammate-leave-cd': 10 },
+        },
+        failure: {
+          narrative: '嘴上说不在意，心里还是会想。这件事无形中消耗了你不少精力。',
+          fatigueDelta: 8,
+          stressDelta: 1,
+          tagCooldowns: { 'teammate-leave-cd': 8 },
+        },
+      },
+    ],
+  },
 ];

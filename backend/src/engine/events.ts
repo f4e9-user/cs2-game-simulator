@@ -77,6 +77,16 @@ function dynamicTags(player: Player): string[] {
     if (hasPromote) out.push('promote-eligible');
   }
 
+  // ── 对手联动 tag ───────────────────────────────────────────────────
+  // rival-scout-eligible: 无战队 + 名气≥20 + 有公开赛经验 → 星探有机会发现你
+  if (!player.team && (player.fame ?? 0) >= 20 && openMatchCount > 1) {
+    out.push('rival-scout-eligible');
+  }
+  // rival-match-pressure: 有战队 + 有待打赛事 → 赛前对手战术互动
+  if (player.team && player.pendingMatch) {
+    out.push('rival-match-pressure');
+  }
+
   return out;
 }
 
