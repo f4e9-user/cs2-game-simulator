@@ -20,8 +20,20 @@ const ACTIONS = [
   {
     id: 'action-rest-day',
     label: '休息一天',
-    description: '恢复疲劳与手感',
+    description: '恢复疲劳，手感微降',
     icon: '💤',
+  },
+  {
+    id: 'action-fitness',
+    label: '健身锻炼',
+    description: '增强体能，增加疲劳',
+    icon: '🏋️',
+  },
+  {
+    id: 'action-meditation',
+    label: '冥想静心',
+    description: '缓解压力，心态成长',
+    icon: '🧘',
   },
   {
     id: 'action-vacation',

@@ -21,7 +21,7 @@ export const DAILY_EVENTS: EventDef[] = [
         id: 'ranked-grind',
         label: '天梯：刷分上分',
         description: '多打路人局，靠实战磨手感和枪法直觉。',
-        check: { primary: 'agility', dc: 7, traitBonuses: { solo: 2, mechanical: 2, grinder: 1 } },
+        check: { primary: 'agility', dc: 7, traitBonuses: { solo: 2, mechanical: 2, grinder: 1, aimer: 1 } },
         success: {
           narrative:
             '今天状态不错，手感跟着了，几把连胜，准星像有自己的想法。',
@@ -43,7 +43,7 @@ export const DAILY_EVENTS: EventDef[] = [
         id: 'structured-training',
         label: '训练：体系化练习',
         description: '看视频、做笔记、对着 workshop 地图练战术，系统提升战术意识。',
-        check: { primary: 'intelligence', dc: 6, traitBonuses: { tactical: 2, igl: 2, grinder: 1 } },
+        check: { primary: 'intelligence', dc: 6, traitBonuses: { tactical: 2, igl: 2, grinder: 1, steady: 1 } },
         success: {
           narrative:
             '反复拆解了两个点位的交叉火力，豁然开朗，下次打一定不一样。',
@@ -65,7 +65,7 @@ export const DAILY_EVENTS: EventDef[] = [
         id: 'rest-day',
         label: '休息：充个电',
         description: '睡够、散步、少碰游戏。压力和疲劳都会有所恢复。',
-        check: { primary: 'mentality', dc: 5 },
+        check: { primary: 'mentality', dc: 5, traitBonuses: { steady: 1 }, traitPenalties: { grinder: 1, obsessed: 1 } },
         success: {
           narrative:
             '睡到自然醒，出门买了杯咖啡，感觉脑子清了不少，明天再冲。',
@@ -166,7 +166,7 @@ export const DAILY_EVENTS: EventDef[] = [
         id: 'rest-day',
         label: '休息：保存状态',
         description: '密集赛程中的战略性休息，防止过度消耗。',
-        check: { primary: 'mentality', dc: 6 },
+        check: { primary: 'mentality', dc: 6, traitBonuses: { steady: 1 }, traitPenalties: { grinder: 1, obsessed: 1 } },
         success: {
           narrative: '你抵住了"大家都在练，我也要练"的焦虑，好好睡了一觉。',
           stressDelta: -3,
@@ -261,7 +261,7 @@ export const DAILY_EVENTS: EventDef[] = [
         id: 'rest-day',
         label: '休息：跟着大家放松',
         description: '教练说了休息，就好好休息。',
-        check: { primary: 'mentality', dc: 3 },
+        check: { primary: 'mentality', dc: 3, traitBonuses: { steady: 1 }, traitPenalties: { grinder: 1, obsessed: 1 } },
         success: {
           narrative: '难得不内疚地休息，睡足、吃好，感觉整个人清爽多了。',
           stressDelta: -4,

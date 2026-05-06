@@ -36,6 +36,8 @@ export const LIFE_EVENTS: EventDef[] = [
         check: {
           primary: 'mentality',
           dc: 6,
+          traitBonuses: { ego: 1 },
+          traitPenalties: { support: 1 },
         },
         success: {
           narrative: '你先稳住当下的情绪，第二天早上才回电话。',
@@ -55,6 +57,8 @@ export const LIFE_EVENTS: EventDef[] = [
         check: {
           primary: 'money',
           dc: 8,
+          traitBonuses: { streamer: 1 },
+          traitPenalties: { shy: 1 },
         },
         success: {
           narrative: '钱到账的那一刻家里的态度明显软化，但你账户里只剩几个数字。',
@@ -73,7 +77,7 @@ export const LIFE_EVENTS: EventDef[] = [
     title: '手腕隐隐作痛',
     narrative:
       '连续训练三周后，你的手腕开始疼。你该怎么办？',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
     difficulty: 2,
     choices: [
       {
@@ -122,6 +126,8 @@ export const LIFE_EVENTS: EventDef[] = [
         check: {
           primary: 'money',
           dc: 10,
+          traitBonuses: { streamer: 1 },
+          traitPenalties: { lazy: 1 },
         },
         success: {
           narrative: '设备换了、康复师到位，你的状态迅速回升。',

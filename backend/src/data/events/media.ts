@@ -57,6 +57,8 @@ export const MEDIA_EVENTS: EventDef[] = [
         check: {
           primary: 'intelligence',
           dc: 6,
+          traitBonuses: { shy: 1 },
+          traitPenalties: { streamer: 1 },
         },
         success: {
           narrative: '你礼貌带过，粉丝觉得你谦逊务实。',

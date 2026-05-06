@@ -51,6 +51,11 @@ function stateWeight(e: EventDef, player: Player): number {
   if (player.stress >= 60 && e.requireTags?.includes('stressed')) w *= 2;
   // Force broadcast events to dominate when in Major aftermath.
   if (e.requireTags?.includes('major-broadcast')) w *= 5;
+  // 赌徒特质 → 赌狗/上头类饰品事件权重翻倍
+  if (e.id.startsWith('skin-gamble-')) {
+    const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
+    if (traitTags.includes('gambler')) w *= 2;
+  }
   return Math.max(0.05, w);
 }
 

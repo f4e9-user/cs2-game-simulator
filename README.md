@@ -29,7 +29,7 @@ cs2-game-simulator/
 │       │   ├── traits.ts         22 条特质（含正/负/混合）
 │       │   ├── backgrounds.ts    起点身份（数据保留，UI 已隐藏）
 │       │   ├── tournaments.ts    9 个赛事 + 多阶段 bracket + 合成事件
-│       │   ├── actions.ts        4 个日常行动（打天梯/系统训练/休息/度假）
+│   │   ├── actions.ts        6 个日常行动（+健身锻炼/冥想静心）
 │       │   ├── shop.ts           9 件商品（消耗品/服务/装备/社交四类）
 │       │   ├── rivals.ts         AI 对手战队名生成
 │       │   ├── leaderboard.ts    战队积分榜构建/tick/加分
@@ -42,8 +42,10 @@ cs2-game-simulator/
 │       │       ├── stress.ts     高压力专属事件
 │       │       ├── rival.ts      对手战队事件（用 {rival0}/{rival1} 占位）
 │       │       ├── broadcast.ts  Major 落幕广播（不参赛时触发）
-│       │       ├── daily.ts      每日行动（routine 类型，主成长途径）
-│       │       └── index.ts      汇总注册 + tournament-* ID 合成
+│   │       ├── daily.ts      每日行动（routine 类型，主成长途径）
+│   │       ├── skins.ts      37 个 CS2 饰品主题事件（7 分类）
+│   │       ├── chains.ts     tag 链式事件（矛盾/舆论/禁赛连锁）
+│   │       └── index.ts      汇总注册 + tournament-* ID 合成
 │       ├── storage/              D1 + KV 包装
 │       └── ai/
 │           ├── prompts.ts
@@ -69,7 +71,7 @@ cs2-game-simulator/
         │   ├── HistoryPanel.tsx
         │   ├── StageBadge.tsx
         │   ├── MatchPanel.tsx            赛事日历 + 报名/退赛（含弃赛惩罚确认） + 阶段进度
-        │   ├── ActionPanel.tsx           行动力面板：AP条 + 4个日常行动 + 行动结果小卡
+        │   ├── ActionPanel.tsx           行动力面板：AP条 + 6个日常行动 + 行动结果小卡
         │   ├── ShopPanel.tsx             购物面板：消耗品/服务/装备/社交四类商品
         │   ├── EndingPanel.tsx           富结局面板：生涯轨迹/五维/赛事战绩/特质/标签
         │   └── Leaderboard.tsx           战队积分榜（玩家高亮）
@@ -267,14 +269,16 @@ Buff 是临时性成长加成，有使用次数限制。
 | `actionPoints` | 每回合重置为 100；赛事周为 0（赛前准备期不允许日常行动） |
 | 每次行动消耗 | 25 AP（最多 4 次/回合） |
 
-**4 个日常行动**（定义于 `backend/src/data/actions.ts`）：
+**6 个日常行动**（定义于 `backend/src/data/actions.ts`）：
 
 | actionId | 名称 | 主属性 | 成功效果 | 失败效果 |
 |---|---|---|---|---|
 | `action-ranked-grind` | 打天梯 | agility | agility 成长 + feel+1 + fatigue+15 | fatigue+10 + tilt+1 |
 | `action-structured-training` | 系统训练 | intelligence | intelligence 成长 + fatigue+12 | fatigue+8 |
-| `action-rest-day` | 休息一天 | mentality | feel+1 + fatigue-20 + stress-5 | fatigue-10 |
-| `action-vacation` | 度假断网 | mentality（DC 1）| fatigue-30 + stress-50 + feel-1 | fatigue-20 + stress-30 |
+| `action-rest-day` | 休息一天 | mentality | feel-0.5 + fatigue-20 + stress-5 | feel-1 + fatigue-10 |
+| `action-fitness` | 健身锻炼 | constitution（DC 6）| constitution 成长 + fatigue+18 | fatigue+14 |
+| `action-meditation` | 冥想静心 | mentality（DC 4）| mentality 成长 + fatigue-8 + stress-10（×5）| fatigue-4 + stress-5（×5）|
+| `action-vacation` | 度假断网 | mentality（DC 1）| feel-2.5 + fatigue-30 + stress-50 | feel-2 + fatigue-20 + stress-30 |
 
 `applyAction()` 复用 `resolveChoice()` 的 d20 检定逻辑，不推进回合、不重置 AP。
 
@@ -301,11 +305,20 @@ Buff 是临时性成长加成，有使用次数限制。
 ### 事件分类与权重
 
 | EventType | 用途 |
-|---|---|
+|---|---|---|
 | `training / ranked / team / tryout / match / media / life` | 常规事件池 |
 | `betting / cheat` | 高风险纯概率分支（被抓 endRun） |
 | `rest` | 仅在 `restRounds > 0` 触发 |
 | `routine` | 每周行动选择，主成长途径 |
+
+**CS2 饰品事件**（`skins.ts`，37 个事件，7 分类）：
+- **诈骗/翻车**（7）：假试训、冒充好友、钓鱼链接、Discord 抽奖、假客服、交易卡单等
+- **赌狗/上头**（5）：连胜开箱、跟风、输比赛回血、半夜看市场、倒腾库存
+- **社交/人性**（5）：队友送饰品、老板赞助、中间人、炫富、被嘲讽穷鬼
+- **市场/投机**（5）：Major 贴纸、绝版传言、版本更新带涨、冷门放量、大户扫货
+- **灰色/边缘**（5）：低价急出、代练托管、余额套利、黑市截图、赚钱小圈子
+- **搞笑/奇葩**（5）：ID 变欧皇、贴纸玄学、巨丑搭配、皮肤分心、观众只看刀
+- **高戏剧性**（5）：被盗号、误挂低价、捡漏暴涨、皮肤闹翻、赞助商要求
 
 **state-aware weight**：
 - `fame ≥ 15` → media ×1.6
@@ -313,6 +326,7 @@ Buff 是临时性成长加成，有使用次数限制。
 - `constitution ≤ 2` → life ×1.4
 - `stress ≥ 60` → 带 `stressed` 标签的事件 ×2
 - `major-broadcast`（周 24/48 + 未参赛）→ 广播事件 ×5
+- **gambler 特质** → 赌狗/上头类饰品事件权重 ×2
 
 **动态合成 tag**：玩家状态满足条件时自动注入到事件 `requireTags` 过滤集中（`stressed / famous / cash-strapped / frail / major-broadcast`）。
 
@@ -359,7 +373,7 @@ Buff 是临时性成长加成，有使用次数限制。
 | POST | `/api/game/:sessionId/withdraw` | 弃赛（stress+25 / fame-10 / money-3 惩罚 + `forfeit-recent` tag） |
 | POST | `/api/game/:sessionId/action` | body: `{ actionId }` 执行日常行动（消耗 25 AP，不推进回合） |
 | POST | `/api/game/:sessionId/shop` | body: `{ itemId }` 购买商品（扣钱 + 应用效果 + 写冷却） |
-| GET | `/api/game/meta/actions` | 返回 4 个日常行动定义 |
+| GET | `/api/game/meta/actions` | 返回 6 个日常行动定义 |
 | GET | `/api/game/meta/shop` | 返回全部商品定义 |
 | GET | `/api/game/meta/rules` | 公开常量（pointPool 等） |
 
@@ -537,7 +551,7 @@ npx wrangler deploy
 - `DynamicState` 新增 `actionPoints`；每次 `applyChoice` 后重置为 100（赛事周为 0）
 - `applyAction()` 使用合成 EventDef 复用 `resolveChoice()` 逻辑，不推进回合
 - 前端状态机：`actionsPhase: boolean`（false=事件阶段，true=行动解锁期）；"进入下一回合"按钮切换
-- `ActionPanel` 组件：AP 格子条（4 段）+ 4 个行动按钮 + 每次行动后展示结果小卡（`key={player.round}` 每回合重置）
+- `ActionPanel` 组件：AP 格子条（4 段）+ 6 个行动按钮 + 每次行动后展示结果小卡（`key={player.round}` 每回合重置）
 
 **购物系统**
 - `DynamicState` 新增 `shopCooldowns: Record<string, number>`（itemId → 可购买轮次）
@@ -565,6 +579,28 @@ npx wrangler deploy
 **富结局面板**
 - `EndingPanel` 组件：结局标签（legend 金色光晕）、生涯轨迹（年/周/回合/阶段）、关键数值（人气/资金/压力）、五维属性条、赛事战绩（按 tier 分类的夺冠金色徽章）、开局特质（含描述）、生涯标签（过滤 `-cd` 冷却标签）
 - 底栏"← 新生涯"改为弹出确认框，框内嵌入完整 `EndingPanel`，防止误触丢失存档
+
+### Phase G（CS2 饰品事件系统 + 行动平衡 + 特质联动全面化）
+
+**饰品事件系统**（`skins.ts`）
+- 新增 37 个 CS2 饰品主题事件，7 分类：诈骗/赌狗/社交/市场/灰色/搞笑/高戏剧性
+- 所有事件使用新风格（`moneyDelta/fameDelta/stressDelta/feelDelta/tiltDelta/dailyGrowth`）
+- 叙事上下文驱动 stage 过滤：提到队友/赞助商 → TEAM/PRO；否则 ALL
+- 诈骗类以 `experience` 为主判定，失败带 `dailyGrowth: experience`（吃一堑长一智）
+- 判定多样化：experience（15）、mentality（12）、intelligence（6）、agility（3）、money（1）
+- 全套特质联动（`streetwise / gambler / steady / impulsive / ego` 等 15+ tags）
+- `gambler` 特质持有者赌狗类事件权重 ×2
+
+**日常行动平衡**
+- 休息一天：不再恢复手感（`feelDelta: 1 → -0.5`），避免"休息无代价"
+- 度假断网：手感生疏加重（`feelDelta: -1 → -2.5`），与疲劳/压力大幅恢复形成取舍
+- 新增「健身锻炼」：`dailyGrowth: constitution` + 疲劳积累，成长曲线走 constitution
+- 新增「冥想静心」：`dailyGrowth: mentality` + 疲劳/压力缓解
+
+**已有事件特质联动补全**
+- 6 个事件文件中 12 个 choice 补充缺失的 `traitBonuses`/`traitPenalties`
+- 3 处 stage 过滤修正（`life-wrist-pain → ALL`，`training-demo-review → TEAM`，`media-interview → 可包容`）
+- 5 处微调：daily 的 ranked/training 加 aimer/steady，media short-answer 加 shy/streamer
 
 ---
 

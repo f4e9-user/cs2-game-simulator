@@ -113,48 +113,49 @@ export const ACTIONS: ActionDef[] = [
     },
   },
   {
-    id: 'action-gym',
-    label: '健身',
-    description: '去健身房强化体能，增加体质成长，但会累积疲劳。',
+    id: 'action-fitness',
+    label: '健身锻炼',
+    description: '力量和有氧训练，增强体能素质，训练后会有疲劳积累。',
     apCost: 25,
     eventType: 'routine',
     check: {
       primary: 'constitution',
       dc: 6,
-      traitBonuses: { resilient: 2, grinder: 1 },
-      traitPenalties: { fragile: 2 },
+      traitBonuses: { athletic: 2, grinder: 1 },
+      traitPenalties: { fragile: 2, streamer: 1 },
     },
     success: {
-      narrative: '训练完汗流浃背，身体却比以前更有底气了。',
+      narrative: '完成了一组高质量训练，肌肉结实了不少，体能明显提升。',
       dailyGrowth: 'constitution' as StatKey,
       fatigueDelta: 18,
     },
     failure: {
-      narrative: '今天状态差，练完感觉身体被掏空，也没什么收获。',
-      fatigueDelta: 12,
+      narrative: '训练过度，身体还没适应这个强度，有点吃不消。',
+      fatigueDelta: 14,
     },
   },
   {
     id: 'action-meditation',
-    label: '冥想',
-    description: '静坐调息，小幅缓解疲劳和压力，长期坚持可提升心态。',
+    label: '冥想静心',
+    description: '专注呼吸与正念练习，缓解紧张情绪，恢复精神。',
     apCost: 25,
     eventType: 'routine',
     check: {
       primary: 'mentality',
-      dc: 5,
-      traitBonuses: { steady: 3, selfless: 1 },
-      traitPenalties: { ego: 1, grinder: 1 },
+      dc: 4,
+      traitBonuses: { steady: 3, igl: 1 },
+      traitPenalties: { solo: 1, obsessed: 1 },
     },
     success: {
-      narrative: '专注于呼吸，脑子里的噪音慢慢散去，整个人平静多了。',
+      narrative: '静坐了二十分钟，呼吸渐渐平稳，头脑也清晰了许多。',
       dailyGrowth: 'mentality' as StatKey,
-      fatigueDelta: -10,
-      stressDelta: -1, // ×5 = -5 stress
+      fatigueDelta: -8,
+      stressDelta: -2, // ×5 = -10 stress
     },
     failure: {
-      narrative: '怎么也静不下来，思绪乱跑，勉强坐了二十分钟就放弃了。',
-      fatigueDelta: -5,
+      narrative: '思绪总是飘到训练赛上，静不下来，效果打了折扣。',
+      fatigueDelta: -4,
+      stressDelta: -1, // ×5 = -5 stress
     },
   },
 ];

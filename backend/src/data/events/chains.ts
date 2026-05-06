@@ -70,6 +70,8 @@ export const CHAIN_EVENTS: EventDef[] = [
         check: {
           primary: 'mentality',
           dc: 6,
+          traitBonuses: { steady: 2, shy: 1 },
+          traitPenalties: { volatile: 2, ego: 1 },
         },
         success: {
           narrative: '几天后大家都在忙训练，矛盾暂时被搁置了。',
@@ -596,6 +598,8 @@ export const CHAIN_EVENTS: EventDef[] = [
         check: {
           primary: 'mentality',
           dc: 5,
+          traitBonuses: { ego: 1, lazy: 1 },
+          traitPenalties: { selfless: 1, support: 1 },
         },
         success: {
           narrative: '教练没有再追。但名单上你的上场时间少了一场。',
