@@ -171,7 +171,12 @@ app.post('/game/:sessionId/choice', async (c) => {
     );
 
     // 战后处理：面试成功 → 生成入队邀请
-    if (result.eventId === 'chain-club-interview' && result.success) {
+    const INTERVIEW_EVENT_IDS = new Set([
+      'chain-club-interview',
+      'chain-club-interview-open-match',
+      'chain-club-interview-talent',
+    ]);
+    if (INTERVIEW_EVENT_IDS.has(result.eventId) && result.success) {
       const app = updated.player.pendingApplication;
       if (app) {
         updated.player.pendingOffer = generateTeamOffer(app.clubId);
