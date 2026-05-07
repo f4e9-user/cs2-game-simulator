@@ -34,7 +34,7 @@ body {
   color: var(--fg);
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'PingFang SC',
     'Microsoft YaHei', sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.55;
 }
 
@@ -66,7 +66,7 @@ button {
 
 .panel-title {
   font-weight: 600;
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-2);
@@ -78,7 +78,7 @@ button {
 }
 
 .hero h1 {
-  font-size: 28px;
+  font-size: 30px;
   margin: 0 0 8px;
 }
 
@@ -107,7 +107,7 @@ button {
   }
 
   .hero h1 {
-    font-size: 22px;
+    font-size: 24px;
   }
 }
 
@@ -118,7 +118,7 @@ button {
   border-radius: 6px;
   padding: 9px 16px;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -135,7 +135,7 @@ button {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 7px 12px;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .ghost-button:hover {
@@ -149,7 +149,7 @@ input[type='text'] {
   border-radius: 6px;
   padding: 9px 12px;
   color: var(--fg);
-  font-size: 13px;
+  font-size: 15px;
   width: 100%;
 }
 
@@ -162,7 +162,7 @@ input[type='text']:focus {
   display: inline-block;
   padding: 3px 8px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.04em;
   background: var(--bg-2);
   color: var(--fg-2);
@@ -201,17 +201,17 @@ input[type='text']:focus {
 
 .stat-label {
   font-weight: 500;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .stat-desc {
   color: var(--fg-2);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .stat-value {
   font-variant-numeric: tabular-nums;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   min-width: 40px;
   text-align: right;
@@ -240,17 +240,17 @@ input[type='text']:focus {
 
 .choice-label {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 15px;
   margin-bottom: 3px;
 }
 
 .choice-desc {
   color: var(--fg-2);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .narrative {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.7;
   color: var(--fg);
   white-space: pre-wrap;
@@ -258,7 +258,7 @@ input[type='text']:focus {
 
 .error {
   color: var(--danger);
-  font-size: 12px;
+  font-size: 14px;
   margin-top: 6px;
 }
 
@@ -273,7 +273,7 @@ input[type='text']:focus {
 
 .history-meta {
   color: var(--fg-2);
-  font-size: 11px;
+  font-size: 13px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -287,7 +287,7 @@ input[type='text']:focus {
   border-radius: 4px;
   background: var(--bg-2);
   border: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -309,7 +309,7 @@ input[type='text']:focus {
   border-radius: 4px;
   background: var(--bg-2);
   border: 1px solid var(--border-strong);
-  font-size: 11px;
+  font-size: 13px;
   margin-right: 4px;
   margin-bottom: 4px;
 }
@@ -340,11 +340,11 @@ input[type='text']:focus {
 .selectable .title {
   font-weight: 600;
   margin-bottom: 4px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .selectable .desc {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--fg-2);
 }
 
@@ -394,7 +394,7 @@ input[type='text']:focus {
   width: 30px;
   height: 30px;
   padding: 0;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
   display: inline-flex;
   align-items: center;
@@ -414,7 +414,7 @@ input[type='text']:focus {
   min-width: 30px;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
 }
 
@@ -424,7 +424,7 @@ input[type='text']:focus {
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template-rows: 64px 1fr 44px;
+  grid-template-rows: 72px 1fr 44px;
   background: var(--bg);
   z-index: 10;
   overflow: hidden;
@@ -449,7 +449,7 @@ input[type='text']:focus {
 }
 
 .hud-player-name {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -458,14 +458,14 @@ input[type='text']:focus {
 }
 
 .hud-time {
-  font-size: 10px;
-  color: var(--fg-3);
+  font-size: 12px;
+  color: var(--fg-2);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.05em;
 }
 
 .hud-stage-tag {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -497,15 +497,15 @@ input[type='text']:focus {
 }
 
 .hud-stat-name {
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--fg-3);
+  color: var(--fg-2);
   line-height: 1;
 }
 
 .hud-stat-val {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -553,15 +553,15 @@ input[type='text']:focus {
 }
 
 .hud-gauge-label {
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--fg-3);
+  color: var(--fg-2);
   line-height: 1;
 }
 
 .hud-gauge-val {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -593,22 +593,22 @@ input[type='text']:focus {
 }
 
 .hud-rank-label {
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--fg-3);
+  color: var(--fg-2);
   line-height: 1;
 }
 
 .hud-rank-val {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
 .hud-rank-pts {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--fg-2);
   font-variant-numeric: tabular-nums;
 }
@@ -700,7 +700,7 @@ input[type='text']:focus {
   background: var(--bg-3);
   border: 1px solid var(--border-strong);
   border-radius: 3px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -718,12 +718,12 @@ input[type='text']:focus {
 
 .cs-choice-label {
   font-weight: 600;
-  font-size: 12px;
+  font-size: 14px;
   margin-bottom: 2px;
 }
 
 .cs-choice-desc {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--fg-2);
   line-height: 1.4;
 }
@@ -746,7 +746,7 @@ input[type='text']:focus {
 }
 
 .event-type-badge {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -818,7 +818,7 @@ input[type='text']:focus {
 
 .event-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 /* ── Result panel ────────────────────────────────────────────── */
@@ -851,7 +851,7 @@ input[type='text']:focus {
 }
 
 .result-badge {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -873,13 +873,13 @@ input[type='text']:focus {
 }
 
 .result-roll {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-2);
   font-variant-numeric: tabular-nums;
 }
 
 .result-narrative {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.65;
   color: var(--fg);
   white-space: pre-wrap;
@@ -899,7 +899,7 @@ input[type='text']:focus {
   gap: 2px;
   padding: 1px 6px;
   border-radius: 3px;
-  font-size: 11px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   border: 1px solid;
 }
@@ -948,7 +948,7 @@ input[type='text']:focus {
 
 .match-score-team,
 .match-score-enemy {
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 800;
   line-height: 1;
 }
@@ -964,7 +964,7 @@ input[type='text']:focus {
 }
 
 .match-score-sep {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 400;
   color: var(--fg-3);
 }
@@ -984,14 +984,14 @@ input[type='text']:focus {
 
 .match-stat-value {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--fg-1);
   line-height: 1.2;
 }
 
 .match-stat-label {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--fg-3);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1004,10 +1004,10 @@ input[type='text']:focus {
   display: flex;
   align-items: center;
   padding: 5px 8px;
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--fg-3);
+  color: var(--fg-2);
   border-bottom: 1px solid var(--border);
 }
 
@@ -1016,7 +1016,7 @@ input[type='text']:focus {
   align-items: center;
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 14px;
   transition: background 0.1s;
 }
 
@@ -1034,7 +1034,7 @@ input[type='text']:focus {
 
 .hltv-rank {
   width: 22px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-3);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
@@ -1050,7 +1050,7 @@ input[type='text']:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .hltv-row.is-player .hltv-name {
@@ -1059,7 +1059,7 @@ input[type='text']:focus {
 }
 
 .hltv-tag {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-3);
   margin-right: 6px;
   flex-shrink: 0;
@@ -1068,7 +1068,7 @@ input[type='text']:focus {
 .hltv-pts {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 14px;
   min-width: 36px;
   text-align: right;
   flex-shrink: 0;
@@ -1082,11 +1082,11 @@ input[type='text']:focus {
 
 .feed-section-title {
   padding: 8px 12px 6px;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--fg-3);
+  color: var(--fg-2);
   border-bottom: 1px solid var(--border);
 }
 
@@ -1107,14 +1107,14 @@ input[type='text']:focus {
 }
 
 .feed-round-tag {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--fg-3);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 
 .feed-title {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1123,7 +1123,7 @@ input[type='text']:focus {
 }
 
 .feed-choice {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-2);
   margin: 1px 0;
   white-space: nowrap;
@@ -1132,7 +1132,7 @@ input[type='text']:focus {
 }
 
 .feed-narrative {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-2);
   line-height: 1.45;
   margin: 3px 0;
@@ -1181,8 +1181,8 @@ input[type='text']:focus {
   padding: 4px 0;
   background: none;
   border: none;
-  color: var(--fg-3);
-  font-size: 9px;
+  color: var(--fg-2);
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   cursor: pointer;
@@ -1193,7 +1193,7 @@ input[type='text']:focus {
 }
 
 .roster-caret {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1;
 }
 
@@ -1206,7 +1206,7 @@ input[type='text']:focus {
   align-items: center;
   gap: 6px;
   padding: 3px 0;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-2);
   border-bottom: 1px solid var(--border);
 }
@@ -1216,8 +1216,8 @@ input[type='text']:focus {
 }
 
 .roster-role {
-  color: var(--fg-3);
-  font-size: 9px;
+  color: var(--fg-2);
+  font-size: 11px;
   min-width: 58px;
 }
 
@@ -1231,8 +1231,8 @@ input[type='text']:focus {
 }
 
 .roster-traits {
-  color: var(--fg-3);
-  font-size: 9px;
+  color: var(--fg-2);
+  font-size: 11px;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1241,7 +1241,7 @@ input[type='text']:focus {
 
 .roster-avg {
   color: var(--accent);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -1262,12 +1262,12 @@ input[type='text']:focus {
 
 .tourney-name {
   font-weight: 600;
-  font-size: 12px;
+  font-size: 14px;
   margin-bottom: 2px;
 }
 
 .tourney-meta {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-2);
   margin-bottom: 6px;
 }
@@ -1290,13 +1290,13 @@ input[type='text']:focus {
 
 .pending-match-name {
   font-weight: 700;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--accent);
   margin-bottom: 2px;
 }
 
 .pending-match-meta {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-2);
   margin-bottom: 6px;
 }
@@ -1312,7 +1312,7 @@ input[type='text']:focus {
 }
 
 .ending-title {
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--fg-3);
@@ -1320,7 +1320,7 @@ input[type='text']:focus {
 }
 
 .ending-result {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--accent);
   margin-bottom: 16px;
@@ -1346,7 +1346,7 @@ input[type='text']:focus {
 }
 
 .ending-rich-label {
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--fg-3);
@@ -1354,7 +1354,7 @@ input[type='text']:focus {
 }
 
 .ending-rich-result {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--accent);
   line-height: 1.3;
@@ -1379,7 +1379,7 @@ input[type='text']:focus {
 }
 
 .ending-section-title {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1407,14 +1407,14 @@ input[type='text']:focus {
 }
 
 .ending-tl-val {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
 
 .ending-tl-label {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-3);
   margin-top: 2px;
 }
@@ -1432,7 +1432,7 @@ input[type='text']:focus {
 }
 
 .ending-resource-val {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
@@ -1455,7 +1455,7 @@ input[type='text']:focus {
 }
 
 .ending-resource-label {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-3);
   margin-top: 2px;
 }
@@ -1474,7 +1474,7 @@ input[type='text']:focus {
 }
 
 .ending-stat-label {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--fg-2);
   width: 32px;
   flex-shrink: 0;
@@ -1510,7 +1510,7 @@ input[type='text']:focus {
 }
 
 .ending-stat-val {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--fg);
@@ -1525,7 +1525,7 @@ input[type='text']:focus {
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--fg-2);
 }
 
@@ -1551,7 +1551,7 @@ input[type='text']:focus {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   background: rgba(240, 192, 64, 0.1);
   border: 1px solid rgba(240, 192, 64, 0.35);
@@ -1573,14 +1573,14 @@ input[type='text']:focus {
 }
 
 .ending-trait-name {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--fg);
   margin-bottom: 2px;
 }
 
 .ending-trait-desc {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-2);
   line-height: 1.4;
 }
@@ -1596,7 +1596,7 @@ input[type='text']:focus {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 13px;
   background: var(--bg-2);
   border: 1px solid var(--border-strong);
   color: var(--fg-2);
@@ -1613,7 +1613,7 @@ input[type='text']:focus {
 /* ── Status alerts (rest / stress) ──────────────────────────── */
 
 .status-alert {
-  font-size: 11px;
+  font-size: 13px;
   padding: 4px 8px;
   border-radius: 4px;
   border: 1px solid;
@@ -1649,15 +1649,15 @@ input[type='text']:focus {
 }
 
 .hud-derived-icon {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1;
 }
 
 .hud-derived-name {
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--fg-3);
+  color: var(--fg-2);
   line-height: 1;
 }
 
@@ -1668,7 +1668,7 @@ input[type='text']:focus {
 }
 
 .hud-derived-val {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   min-width: 24px;
@@ -1745,11 +1745,11 @@ input[type='text']:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--fg-3);
+  color: var(--fg-2);
   padding: 0 0 6px;
 }
 
@@ -1773,14 +1773,14 @@ input[type='text']:focus {
 }
 
 .ap-label {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-2);
   font-variant-numeric: tabular-nums;
   margin-left: 4px;
 }
 
 .action-panel-hint {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-3);
   padding: 2px 0 6px;
   font-style: italic;
@@ -1833,20 +1833,20 @@ input[type='text']:focus {
 }
 
 .action-btn-label {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--fg);
   line-height: 1.3;
 }
 
 .action-btn-desc {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-2);
   line-height: 1.3;
 }
 
 .ap-cost-badge {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--accent-dim);
   white-space: nowrap;
@@ -1858,7 +1858,7 @@ input[type='text']:focus {
   border-left: 3px solid var(--border-strong);
   border-radius: 0 4px 4px 0;
   padding: 5px 8px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .action-result-mini.ok {
@@ -1880,14 +1880,14 @@ input[type='text']:focus {
 }
 
 .actions-phase-title {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--accent);
   margin-bottom: 6px;
 }
 
 .actions-phase-hint {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--fg-2);
   line-height: 1.5;
 }
@@ -1904,11 +1904,11 @@ input[type='text']:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--fg-3);
+  color: var(--fg-2);
   padding: 0 0 6px;
 }
 
@@ -1917,11 +1917,11 @@ input[type='text']:focus {
 }
 
 .shop-category-label {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--fg-3);
+  color: var(--fg-2);
   margin-bottom: 3px;
 }
 
@@ -1946,20 +1946,20 @@ input[type='text']:focus {
 }
 
 .shop-item-name {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--fg);
   line-height: 1.3;
 }
 
 .shop-item-desc {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fg-2);
   line-height: 1.3;
 }
 
 .shop-item-reason {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--warn);
   margin-top: 2px;
 }
@@ -1973,7 +1973,7 @@ input[type='text']:focus {
 }
 
 .shop-item-price {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--accent-dim);
   font-variant-numeric: tabular-nums;
@@ -1992,7 +1992,7 @@ input[type='text']:focus {
 
 .new-game-modal-warn {
   padding: 14px 18px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--warn);
   background: rgba(210, 153, 34, 0.08);
@@ -2025,7 +2025,7 @@ input[type='text']:focus {
 }
 
 .withdraw-warning {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--danger);
   margin-bottom: 4px;
