@@ -1192,8 +1192,8 @@ export function applyClubRequest(
     responseRound: player.round + responseDelay,
   };
 
-  const nextTags = [...player.tags, 'applying'];
-  if (pathTag) nextTags.push(pathTag);
+  const nextTags = dedupe([...player.tags, 'applying']);
+  if (pathTag && !nextTags.includes(pathTag)) nextTags.push(pathTag);
 
   return {
     ...player,

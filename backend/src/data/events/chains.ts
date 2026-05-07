@@ -1143,7 +1143,7 @@ export const CHAIN_EVENTS: EventDef[] = [
         success: {
           narrative: '他们邀请你去线下聊一次——这本质上是面试。你对镜整理了一下衣领。',
           tagRemoves: ['application-response-ready'],
-          tagCooldowns: { 'interview-pending': 2 },
+          tagCooldowns: { 'interview-pending': 8 },
           fameDelta: 1,
         },
         failure: {
