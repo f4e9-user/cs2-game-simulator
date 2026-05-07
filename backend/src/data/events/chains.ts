@@ -1585,4 +1585,237 @@ export const CHAIN_EVENTS: EventDef[] = [
       },
     ],
   },
+
+  // ── 对手星探 ────────────────────────────────────────────────
+  {
+    id: 'chain-rival-scout',
+    type: 'media',
+    title: '星探在观众席上',
+    narrative:
+      '今天比赛结束后有人拍到了几张照片——一个戴着帽子的男人在观众席上全程记着笔记。圈子里消息传得很快：那是某个顶级俱乐部的星探。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 2,
+    weight: 0,
+    requireTags: ['rival-scout-active'],
+    forbidTags: ['rival-scout-cd'],
+    choices: [
+      {
+        id: 'play-to-impress',
+        label: '接下来几场好好打',
+        description: '被看上了，就要证明自己。',
+        check: {
+          primary: 'mentality',
+          secondary: 'agility',
+          dc: 8,
+          traitBonuses: { ego: 1, clutch: 2, steady: 1 },
+          traitPenalties: { fragile: 2 },
+        },
+        success: {
+          narrative: '你知道有人在看，手反而更稳了。这种压力对你来说是燃料。',
+          feelDelta: 1,
+          fameDelta: 2,
+          stressDelta: -1,
+          tagCooldowns: { 'rival-scout-cd': 24 },
+        },
+        failure: {
+          narrative: '越想证明自己越紧张。你知道星探在看，也看得出你那场发挥得不太正常。',
+          feelDelta: -1,
+          stressDelta: 2,
+          tiltDelta: 1,
+          tagCooldowns: { 'rival-scout-cd': 16 },
+        },
+      },
+    ],
+  },
+
+  // ── 对手挖角 ────────────────────────────────────────────────
+  {
+    id: 'chain-rival-poach',
+    type: 'tryout',
+    title: '来自对面的橄榄枝',
+    narrative:
+      '一个陌生的 Discord 号发来消息：「我们队最近在重组，你的人选一直排在候选名单上。有空单独聊吗？」从资料来看，这是你认识的那个对手——积分榜上一直在你上面的那支。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 3,
+    weight: 0,
+    requireTags: ['rival-poach-possible'],
+    forbidTags: ['rival-poach-cd'],
+    choices: [
+      {
+        id: 'hear-offer',
+        label: '听听他们的条件',
+        description: '无论去不去，了解一下行情。',
+        check: {
+          primary: 'mentality',
+          secondary: 'experience',
+          dc: 9,
+          traitBonuses: { ego: 1, solo: 1 },
+          traitPenalties: { support: 2, selfless: 1 },
+        },
+        success: {
+          narrative: '对方开出了比你目前高不少的待遇。经纪人觉得应该认真考虑。',
+          fameDelta: 1,
+          stressDelta: -1,
+          tagCooldowns: { 'rival-poach-cd': 20 },
+        },
+        failure: {
+          narrative: '聊到一半你意识到对方只是想套你们的战术信息。你礼貌地退出了通话。',
+          feelDelta: -0.5,
+          stressDelta: 2,
+          tagCooldowns: { 'rival-poach-cd': 16 },
+        },
+      },
+      {
+        id: 'decline-poach',
+        label: '不是时候，婉拒',
+        description: '你对现在的队还有承诺。',
+        check: {
+          primary: 'mentality',
+          dc: 6,
+          traitBonuses: { support: 2, selfless: 2, steady: 1 },
+          traitPenalties: { ego: 1 },
+        },
+        success: {
+          narrative: '你简短地回了消息表示谢意。不做随风草这件事本身就很有意义。',
+          dailyGrowth: 'mentality',
+          tagCooldowns: { 'rival-poach-cd': 18 },
+        },
+        failure: {
+          narrative: '你拒绝了，但事后一直在想对方到底能开出什么价。训练也走神了。',
+          feelDelta: -0.5,
+          stressDelta: 1,
+          tagCooldowns: { 'rival-poach-cd': 14 },
+        },
+      },
+    ],
+  },
+
+  // ── 赛前口水战 ──────────────────────────────────────────────
+  {
+    id: 'chain-rival-match-trash',
+    type: 'media',
+    title: '赛前火药味',
+    narrative:
+      '下一场比赛的对手不太友善。他们的官号开始在社交媒体上发模棱两可的帖子——明显是冲着你来的。圈子里所有人都闻到了火药味。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 2,
+    weight: 0,
+    requireTags: ['rival-match-soon'],
+    forbidTags: ['rival-trash-cd'],
+    choices: [
+      {
+        id: 'clap-back',
+        label: '回怼：让他们看看什么叫态度',
+        description: '不能在这种时候示弱。',
+        check: {
+          primary: 'mentality',
+          dc: 9,
+          traitBonuses: { volatile: 2, streamer: 2, ego: 1 },
+          traitPenalties: { steady: 1, support: 1 },
+        },
+        success: {
+          narrative: '你回了一条推文，又辣又准。评论区炸了，粉丝给你刷了一波支持。',
+          fameDelta: 2,
+          feelDelta: 1,
+          tagCooldowns: { 'rival-trash-cd': 12 },
+        },
+        failure: {
+          narrative: '话说过了，被截图放大。节奏越带越大，比赛前夜你还在看评论区。',
+          fameDelta: -1,
+          tiltDelta: 1,
+          stressDelta: 3,
+          tagCooldowns: { 'rival-trash-cd': 10 },
+        },
+      },
+      {
+        id: 'ignore-noise',
+        label: '一句话都不回，专心备战',
+        description: '赛后用分数回击才是最好的回击。',
+        check: {
+          primary: 'mentality',
+          dc: 7,
+          traitBonuses: { steady: 3, grinder: 1 },
+          traitPenalties: { volatile: 2 },
+        },
+        success: {
+          narrative: '你关了所有社交软件，耳机一戴就是一天。等你出来时那条推文已经没人记得了。',
+          dailyGrowth: 'mentality',
+          stressDelta: -1,
+          tagCooldowns: { 'rival-trash-cd': 12 },
+        },
+        failure: {
+          narrative: '你告诉自己别看，但手指还是滑过去了。越看越烦，热身赛也打不进去。',
+          feelDelta: -0.5,
+          stressDelta: 2,
+          tiltDelta: 1,
+          tagCooldowns: { 'rival-trash-cd': 8 },
+        },
+      },
+    ],
+  },
+
+  // ── 队友被挖 ────────────────────────────────────────────────
+  {
+    id: 'chain-rival-teammate-leave',
+    type: 'team',
+    title: '队友收拾东西走了',
+    narrative:
+      '你走进训练室发现一个位置空了。IGL 咳嗽了一声说：「他去其他队了。对面给了一个他拒绝不了的条件。」',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 2,
+    weight: 0,
+    requireTags: ['has-team'],
+    forbidTags: ['teammate-leave-cd'],
+    choices: [
+      {
+        id: 'wish-well',
+        label: '发个消息祝他顺利',
+        description: '职业圈很小，人情留一线。',
+        check: {
+          primary: 'mentality',
+          dc: 6,
+          traitBonuses: { support: 2, selfless: 2 },
+          traitPenalties: { ego: 1 },
+        },
+        success: {
+          narrative: '他很快回了消息："谢了兄弟，下次见面就是对手了。"你笑了。',
+          feelDelta: 0.5,
+          stressDelta: -1,
+          tagCooldowns: { 'teammate-leave-cd': 48 },
+        },
+        failure: {
+          narrative: '你打了一行字又删掉。不知道该说什么。训练时那个空位格外刺眼。',
+          feelDelta: -0.5,
+          stressDelta: 1,
+          tagCooldowns: { 'teammate-leave-cd': 40 },
+        },
+      },
+      {
+        id: 'step-up',
+        label: '替补上阵，我来补这个坑',
+        description: '少了人，责任就落到你肩上。',
+        check: {
+          primary: 'agility',
+          secondary: 'mentality',
+          dc: 9,
+          traitBonuses: { solo: 2, clutch: 2, grinder: 1 },
+          traitPenalties: { support: 1 },
+        },
+        success: {
+          narrative: '你主动承担了队友的空位和节奏。这周的训练你打出了近期最好的状态。',
+          feelDelta: 1,
+          fameDelta: 1,
+          dailyGrowth: 'mentality',
+          tagCooldowns: { 'teammate-leave-cd': 48 },
+        },
+        failure: {
+          narrative: '你想撑着，但少了那个人的体系支撑，你自己也不太稳。',
+          feelDelta: -0.5,
+          tiltDelta: 1,
+          stressDelta: 2,
+          tagCooldowns: { 'teammate-leave-cd': 36 },
+        },
+      },
+    ],
+  },
 ];

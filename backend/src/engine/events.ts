@@ -2,15 +2,16 @@ import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
 import { CLUBS } from '../data/clubs.js';
-import type { EventDef, Player, Rival, PendingMatch, ClubTier } from '../types.js';
+import type { EventDef, LeaderboardTeam, Player, Rival, PendingMatch, ClubTier } from '../types.js';
 
 export interface EventContext {
   player: Player;
   recentEventIds: string[];
   rng: () => number;
+  leaderboard?: LeaderboardTeam[];
 }
 
-function dynamicTags(player: Player): string[] {
+function dynamicTags(player: Player, leaderboard?: LeaderboardTeam[]): string[] {
   const out: string[] = [];
   // Stress is now 0-100; 60+ counts as "stressed".
   if (player.stress >= 60) out.push('stressed');
@@ -75,6 +76,29 @@ function dynamicTags(player: Player): string[] {
       return tierOrder.indexOf(c.tier) > currentIdx;
     });
     if (hasPromote) out.push('promote-eligible');
+  }
+
+  // ── 对手联动 tag ──────────────────────────────────────────────
+  if (leaderboard && leaderboard.length > 0) {
+    const playerEntry = leaderboard.find((t) => t.isPlayer);
+    const playerPts = playerEntry?.points ?? 0;
+    // 对手星探：无战队 + 名气>=20 + 有对手在 leaderboard 前 3
+    if (!player.team && (player.fame ?? 0) >= 20) {
+      const top = [...leaderboard].sort((a, b) => b.points - a.points).slice(0, 3);
+      if (top.some((t) => !t.isPlayer)) out.push('rival-scout-active');
+    }
+    // 挖角可能：有战队 + 有对手积分高于玩家
+    if (player.team) {
+      const higherRival = leaderboard.some((t) => !t.isPlayer && t.points > playerPts + 5);
+      if (higherRival) out.push('rival-poach-possible');
+    }
+    // 赛前对手是 rival：pendingMatch 活跃 + 有对手排名靠前
+    if (player.pendingMatch) {
+      const topRivals = leaderboard.filter((t) => !t.isPlayer).sort((a, b) => b.points - a.points);
+      if (topRivals.length > 0 && topRivals[0]!.points > playerPts) {
+        out.push('rival-match-soon');
+      }
+    }
   }
 
   return out;
@@ -171,7 +195,7 @@ export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
 export function pickEvent(ctx: EventContext): EventDef | null {
   const { player, recentEventIds, rng } = ctx;
   const realTags = new Set(player.tags);
-  const synthTags = new Set([...player.tags, ...dynamicTags(player)]);
+  const synthTags = new Set([...player.tags, ...dynamicTags(player, ctx.leaderboard)]);
 
   if ((player.restRounds ?? 0) > 0) {
     const restPool = EVENT_POOL.filter((e) => e.type === 'rest');
