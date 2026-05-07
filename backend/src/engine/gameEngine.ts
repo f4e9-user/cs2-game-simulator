@@ -595,6 +595,10 @@ export function applyChoice(
     if (until > nextRound) nextShopCooldowns[itemId] = until;
   }
 
+  const nextTeam = outcome.teamTierSet && session.player.team
+    ? { ...session.player.team, tier: outcome.teamTierSet }
+    : session.player.team;
+
   const nextPlayer: Player = {
     ...session.player,
     stats: statsAfterGrowth,
@@ -602,6 +606,7 @@ export function applyChoice(
     buffs,
     growthSpent,
     stage: outcome.stageAfter,
+    team: nextTeam,
     round: nextRound,
     tags: nextTags,
     tagExpiry: nextTagExpiry,

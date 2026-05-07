@@ -310,6 +310,7 @@ export interface Outcome {
   tagRemoves?: string[];
   stageDelta?: number;
   stageSet?: Stage;
+  teamTierSet?: ClubTier;
   endRun?: boolean;
   endReason?: string;
   stressDelta?: number;
