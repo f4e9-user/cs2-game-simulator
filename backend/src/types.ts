@@ -122,6 +122,12 @@ export interface Teammate {
   retired: boolean;
 }
 
+export interface RoleTransition {
+  targetRole: TeammateRole;
+  startedRound: number;
+  resolveRound: number;
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -224,6 +230,7 @@ export interface Player extends DynamicState {
   activeRole: TeammateRole | null;
   roleCrystallized: boolean;
   activeRoleRounds: number;
+  roleTransition: RoleTransition | null;
   teamTrust: number;
 }
 

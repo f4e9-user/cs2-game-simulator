@@ -92,6 +92,12 @@ export interface TeammateStats {
   experience: number;
 }
 
+export interface RoleTransition {
+  targetRole: TeammateRole;
+  startedRound: number;
+  resolveRound: number;
+}
+
 export interface Teammate {
   id: string;
   name: string;

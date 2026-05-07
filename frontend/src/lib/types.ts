@@ -105,6 +105,12 @@ export interface TeammateStats {
   experience: number;
 }
 
+export interface RoleTransition {
+  targetRole: TeammateRole;
+  startedRound: number;
+  resolveRound: number;
+}
+
 export interface Teammate {
   id: string;
   name: string;
@@ -228,6 +234,7 @@ export interface Player extends DynamicState {
   activeRole: TeammateRole | null;
   roleCrystallized: boolean;
   activeRoleRounds: number;
+  roleTransition: RoleTransition | null;
   teamTrust: number;
 }
 

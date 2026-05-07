@@ -2,7 +2,7 @@ import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
 import { CLUBS } from '../data/clubs.js';
-import type { EventDef, Player, Rival, Teammate, PendingMatch, ClubTier } from '../types.js';
+import type { EventDef, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier } from '../types.js';
 
 export interface EventContext {
   player: Player;
@@ -87,7 +87,40 @@ function dynamicTags(player: Player): string[] {
     out.push('rival-match-pressure');
   }
 
+  // ── 角色转型 tag ──────────────────────────────────────────────────
+  if (player.preferredRole && !player.roleTransition) {
+    const allRoles: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
+    if (allRoles.some((r) => canTransitionTo(player, r))) {
+      out.push('role-transition-eligible');
+    }
+  }
+  if (player.roleTransition && player.round >= player.roleTransition.resolveRound) {
+    out.push('role-transition-resolve');
+  }
+
+  // ── 前队友联系 tag ────────────────────────────────────────────────
+  if (player.tags.includes('old-teammate-contact')) {
+    out.push('old-teammate-contact');
+  }
+
   return out;
+}
+
+const ROLE_STAT_REQUIREMENT: Record<TeammateRole, { stat: keyof Player['stats']; min: number }> = {
+  IGL: { stat: 'intelligence', min: 12 },
+  AWPer: { stat: 'agility', min: 12 },
+  Entry: { stat: 'agility', min: 10 },
+  Support: { stat: 'mentality', min: 10 },
+  Lurker: { stat: 'intelligence', min: 10 },
+};
+
+export { ROLE_STAT_REQUIREMENT };
+
+function canTransitionTo(player: Player, role: TeammateRole): boolean {
+  if (player.preferredRole === role) return false;
+  const req = ROLE_STAT_REQUIREMENT[role];
+  if (!req) return false;
+  return (player.stats[req.stat] ?? 0) >= req.min;
 }
 
 function stateWeight(e: EventDef, player: Player): number {

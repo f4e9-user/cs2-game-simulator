@@ -65,7 +65,7 @@ import {
   growthFactor,
   passiveStressFromMentality,
 } from './constants.js';
-import { buildTournamentPrepEvent, pickEvent, substituteRivals, substituteTeammates, toPublicEvent } from './events.js';
+import { buildTournamentPrepEvent, pickEvent, ROLE_STAT_REQUIREMENT, substituteRivals, substituteTeammates, toPublicEvent } from './events.js';
 import { checkTournamentPromotion } from './stages.js';
 import { applyDelta, applyGrowth, clampStats, makeRng, resolveChoice, translateStatDelta } from './resolver.js';
 import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
@@ -213,6 +213,7 @@ export function initPlayer(input: InitInput): Player {
     activeRole: null,
     roleCrystallized: false,
     activeRoleRounds: 0,
+    roleTransition: null,
     teamTrust: 50,
     consecutiveLosses: 0,
     everHadTeam: false,
@@ -656,11 +657,46 @@ export function applyChoice(
     }
   }
 
+  if (eventDef.id === 'chain-role-transition-start') {
+    if (choiceDef.id === 'commit-transition' && outcome.success) {
+      const allRoles: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
+      const eligible = allRoles.filter((r) => {
+        if (r === nextPlayer.preferredRole) return false;
+        const req = ROLE_STAT_REQUIREMENT[r];
+        return req && (nextPlayer.stats[req.stat] ?? 0) >= req.min;
+      });
+      if (eligible.length > 0) {
+        const target = eligible[Math.floor(rng() * eligible.length)]!;
+        const resolveRound = nextPlayer.round + 3 + Math.floor(rng() * 3);
+        nextPlayer.roleTransition = { targetRole: target, startedRound: nextPlayer.round, resolveRound };
+      }
+    } else {
+      nextPlayer.roleTransition = null;
+    }
+  }
+
+  if (eventDef.id === 'chain-role-transition-resolve') {
+    if (choiceDef.id === 'prove-transition' && outcome.success && nextPlayer.roleTransition) {
+      nextPlayer.preferredRole = nextPlayer.roleTransition.targetRole;
+      nextPlayer.roleCrystallized = true;
+      passiveEffects.push('角色转型成功：你已成为公认的 ' + nextPlayer.roleTransition.targetRole);
+    }
+    nextPlayer.roleTransition = null;
+  }
+
   if (
     chainEventIdsThatClearTeam.includes(eventDef.id) ||
     (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'))
   ) {
     if (!tagsAdded.includes('bad-blood')) tagsAdded.push('bad-blood');
+
+    if (nextPlayer.roster && nextPlayer.roster.length > 0 && rng() < 0.5) {
+      if (!tagsAdded.includes('old-teammate-contact')) {
+        tagsAdded.push('old-teammate-contact');
+        passiveEffects.push('留下了一位前队友的联系方式');
+      }
+    }
+
     nextPlayer.roster = null;
   }
 

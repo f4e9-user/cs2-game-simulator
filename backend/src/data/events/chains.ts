@@ -1940,4 +1940,185 @@ export const CHAIN_EVENTS: EventDef[] = [
       },
     ],
   },
+
+  // ── 角色主动转型 ──────────────────────────────────────────────
+  {
+    id: 'chain-role-transition-start',
+    type: 'team',
+    title: '转型的念头',
+    narrative:
+      '最近你开始系统研究另一种打法的录像和教学。训练室里有人注意到了——"你在看不是自己位置的复盘？"',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 1,
+    weight: 2,
+    requireTags: ['role-transition-eligible'],
+    forbidTags: ['role-transition-cd'],
+    choices: [
+      {
+        id: 'commit-transition',
+        label: '投入转型训练',
+        description: '认真对待，给自己一个机会。',
+        check: {
+          primary: 'mentality',
+          dc: 8,
+          traitBonuses: { grinder: 2, steady: 1 },
+          traitPenalties: { lazy: 2 },
+        },
+        success: {
+          narrative: '你制定了详细的训练计划。教练看了你一眼，没说话——但你知道他注意到了。',
+          stressDelta: -1,
+          feelDelta: 0.5,
+          tagAdds: ['role-transition-active'],
+          tagCooldowns: { 'role-transition-cd': 24 },
+        },
+        failure: {
+          narrative: '计划列出来了，但每次到了训练时间总会有别的事。进度比自己想的慢。',
+          stressDelta: 1,
+          tagCooldowns: { 'role-transition-cd': 12 },
+        },
+      },
+      {
+        id: 'abandon-transition',
+        label: '算了，还是专注本行',
+        description: '现在的位置已经够好了。',
+        check: {
+          primary: 'mentality',
+          dc: 4,
+          traitBonuses: { steady: 2 },
+        },
+        success: {
+          narrative: '你关掉了录像。自己的位置还有太多可以精进的地方。',
+          feelDelta: 0.5,
+          tagCooldowns: { 'role-transition-cd': 20 },
+        },
+        failure: {
+          narrative: '虽然嘴上说算了，但那个念头还在脑子里转。或许以后还会有机会。',
+          stressDelta: 1,
+          tagCooldowns: { 'role-transition-cd': 8 },
+        },
+      },
+    ],
+  },
+
+  {
+    id: 'chain-role-transition-resolve',
+    type: 'team',
+    title: '转型试炼',
+    narrative:
+      '教练安排了一场内部训练赛，让你试试新的位置。队友们都在看你——能不能行，就看这一把了。',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 3,
+    weight: 0,
+    requireTags: ['role-transition-resolve'],
+    choices: [
+      {
+        id: 'prove-transition',
+        label: '全力以赴证明自己',
+        description: '这可能是改变你职业生涯走向的一场比赛。',
+        check: {
+          primary: 'agility',
+          secondary: 'intelligence',
+          dc: 12,
+          traitBonuses: { mechanical: 2, clutch: 1, steady: 1 },
+          traitPenalties: { lazy: 2 },
+        },
+        success: {
+          narrative: '你在新位置上打出了统治级的表现。赛后教练拍了拍你的肩膀："看来你是认真的。"',
+          dailyGrowth: 'experience',
+          feelDelta: 1.5,
+          tagRemoves: ['role-transition-active'],
+          tagCooldowns: { 'role-transition-cd': 36 },
+        },
+        failure: {
+          narrative: '新位置比你想象的更难。几个关键回合的处理都差点意思。但教练说你"有潜力"。',
+          feelDelta: -1,
+          stressDelta: 2,
+          dailyGrowth: 'experience',
+          tagRemoves: ['role-transition-active'],
+          tagCooldowns: { 'role-transition-cd': 24 },
+        },
+      },
+      {
+        id: 'cancel-transition',
+        label: '算了，回到原位',
+        description: '有些东西还是更适合留在舒适区。',
+        check: {
+          primary: 'mentality',
+          dc: 5,
+          traitBonuses: { steady: 2 },
+        },
+        success: {
+          narrative: '训练赛前你把位置换回去了。队友们没说什么，但你知道他们松了口气。',
+          feelDelta: 0.5,
+          tagRemoves: ['role-transition-active'],
+          tagCooldowns: { 'role-transition-cd': 16 },
+        },
+        failure: {
+          narrative: '回到原位后反而打得更差了——脑子里全是新角色的思路。教练皱眉看了你好几秒。',
+          feelDelta: -1,
+          tiltDelta: 1,
+          tagRemoves: ['role-transition-active'],
+          tagCooldowns: { 'role-transition-cd': 12 },
+        },
+      },
+    ],
+  },
+
+  // ── 前队友联系 ────────────────────────────────────────────────
+  {
+    id: 'chain-old-teammate-contact',
+    type: 'life',
+    title: '老朋友的问候',
+    narrative: '手机亮了一下。是 {teammate0}——你之前的队友，好久没联系了。消息只有一行："最近还好吗？看到你的比赛了。"',
+    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    difficulty: 1,
+    weight: 2,
+    requireTags: ['old-teammate-contact'],
+    forbidTags: ['old-friend-cd'],
+    choices: [
+      {
+        id: 'catch-up',
+        label: '好好聊聊',
+        description: '叙叙旧，说不定还能了解圈内的动向。',
+        check: {
+          primary: 'mentality',
+          dc: 5,
+          traitBonuses: { support: 2, selfless: 1 },
+        },
+        success: {
+          narrative: '你们聊了一个多小时。{teammate0} 现在也还不错，还说有些队伍在打听你的近况。',
+          stressDelta: -2,
+          fameDelta: 1,
+          tagCooldowns: { 'old-friend-cd': 24 },
+        },
+        failure: {
+          narrative: '聊着聊着有点尴尬。太久没联系，彼此的生活轨迹已经完全不一样了。',
+          stressDelta: 1,
+          tagCooldowns: { 'old-friend-cd': 16 },
+        },
+      },
+      {
+        id: 'ignore-message',
+        label: '已读不回',
+        description: '过去的就让它过去吧。',
+        check: {
+          primary: 'mentality',
+          dc: 3,
+          traitBonuses: { solo: 1, ego: 1 },
+          traitPenalties: { support: 1, selfless: 1 },
+        },
+        success: {
+          narrative: '你滑掉了通知。专注眼前才是最重要的。',
+          feelDelta: 0.5,
+          tagCooldowns: { 'old-friend-cd': 20 },
+        },
+        failure: {
+          narrative: '你又看了那条消息好几遍才关掉。有些东西没那么容易放下。',
+          stressDelta: 1,
+          fatigueDelta: 5,
+          tagCooldowns: { 'old-friend-cd': 12 },
+        },
+      },
+    ],
+  },
 ];
