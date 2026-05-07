@@ -615,6 +615,17 @@ export function applyChoice(
     consecutiveLosses,
   };
 
+  // chain-club-response 触发后清空 pendingApplication，防止 application-response-ready 持续再生
+  const CLUB_RESPONSE_IDS = new Set([
+    'chain-club-response',
+    'chain-club-interview',
+    'chain-club-interview-open-match',
+    'chain-club-interview-talent',
+  ]);
+  if (CLUB_RESPONSE_IDS.has(eventDef.id)) {
+    nextPlayer.pendingApplication = null;
+  }
+
   // 周薪入账
   if (nextPlayer.team) {
     nextPlayer.stats.money = Math.min(20, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
