@@ -220,7 +220,16 @@ app.post('/game/:sessionId/choice', async (c) => {
         (c) => c.isRival && tierOrder.indexOf(c.tier) > currentTierIdx,
       );
       if (rivalClub) {
-        updated.player.pendingOffer = generateTeamOffer(rivalClub.id);
+        const offer = generateTeamOffer(rivalClub.id);
+        const rival = typeof rivalClub.rivalIndex === 'number'
+          ? updated.player.rivals[rivalClub.rivalIndex]
+          : undefined;
+        if (rival) {
+          offer.clubName = rival.name;
+          offer.tag = rival.tag;
+          offer.region = rival.region;
+        }
+        updated.player.pendingOffer = offer;
       }
     }
 

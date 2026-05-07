@@ -67,7 +67,7 @@ import {
 } from './constants.js';
 import { buildTournamentPrepEvent, pickEvent, ROLE_STAT_REQUIREMENT, substituteRivals, substituteTeammates, toPublicEvent } from './events.js';
 import { checkTournamentPromotion } from './stages.js';
-import { applyDelta, applyGrowth, clampStats, makeRng, resolveChoice, translateStatDelta } from './resolver.js';
+import { applyDelta, applyGrowth, clampStats, makeRng, resolveChoice, stageIndex, translateStatDelta } from './resolver.js';
 import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
 
 export interface InitInput {
@@ -1140,7 +1140,7 @@ export function applyShopPurchase(
 }
 
 // ── 战队申请 ──────────────────────────────────────────────────
-import type { PendingApplication, PlayerTeam, TeamOffer } from '../types.js';
+import type { ClubTier, PendingApplication, PlayerTeam, Stage, TeamOffer } from '../types.js';
 
 export function applyClubRequest(
   session: GameSession,
@@ -1228,9 +1228,15 @@ export function respondTeamOffer(
       joinedRound: player.round,
     };
 
-    // Rookie joining any team advances to youth — the club system replaces
-    // the old tournament-gate path for this transition.
-    const nextStage = player.stage === 'rookie' ? 'youth' : player.stage;
+    // Advance stage to match the minimum required by the new team's tier.
+    const TIER_MIN_STAGE: Record<ClubTier, Stage> = {
+      youth: 'youth',
+      'semi-pro': 'second',
+      pro: 'pro',
+      top: 'star',
+    };
+    const minStage = TIER_MIN_STAGE[offer.tier];
+    const nextStage = stageIndex(minStage) > stageIndex(player.stage) ? minStage : player.stage;
 
     const rosterRng = makeRng(hashString(session.id) ^ (player.round * 7919));
     const roster = generateRoster(offer.tier, rosterRng);
