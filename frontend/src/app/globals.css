@@ -621,7 +621,7 @@ input[type='text']:focus {
 }
 
 .hud-left {
-  width: 264px;
+  width: 290px;
   flex-shrink: 0;
   overflow-y: auto;
   border-right: 1px solid var(--border);
