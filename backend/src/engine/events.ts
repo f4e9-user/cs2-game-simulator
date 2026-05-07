@@ -2,12 +2,13 @@ import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
 import { CLUBS } from '../data/clubs.js';
-import type { EventDef, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier } from '../types.js';
+import type { EventDef, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier, LeaderboardTeam } from '../types.js';
 
 export interface EventContext {
   player: Player;
   recentEventIds: string[];
   rng: () => number;
+  leaderboard?: LeaderboardTeam[];
 }
 
 function dynamicTags(player: Player): string[] {

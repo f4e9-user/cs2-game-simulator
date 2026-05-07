@@ -1776,7 +1776,7 @@ export const CHAIN_EVENTS: EventDef[] = [
           narrative: '见面聊得不错，星探对你的状态和态度都很满意，表示会向俱乐部汇报。',
           fameDelta: 2,
           tagCooldowns: { 'rival-scout-cd': 12 },
-          tagsAdded: ['scouted'],
+          tagAdds: ['scouted'],
         },
         failure: {
           narrative: '见面时你有点紧张，发挥不稳，星探礼貌地表示会继续观察。',
