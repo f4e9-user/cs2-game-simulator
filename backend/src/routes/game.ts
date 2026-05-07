@@ -161,7 +161,6 @@ app.post('/game/:sessionId/choice', async (c) => {
       };
     }
 
-    await storage.sessions.save(updated);
     await storage.sessions.appendRound(
       updated.id,
       result.round,
@@ -224,6 +223,8 @@ app.post('/game/:sessionId/choice', async (c) => {
         updated.player.pendingOffer = generateTeamOffer(rivalClub.id);
       }
     }
+
+    await storage.sessions.save(updated);
 
     return c.json({
       result,
