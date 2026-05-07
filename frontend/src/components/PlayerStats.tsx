@@ -1,4 +1,7 @@
-import type { Player, PromotionCheck, Trait } from '@/lib/types';
+'use client';
+
+import { useState } from 'react';
+import type { Player, PromotionCheck, Teammate, Trait } from '@/lib/types';
 import { STAGE_LABELS } from '@/lib/format';
 
 interface Props {
@@ -7,10 +10,19 @@ interface Props {
   promotion?: PromotionCheck | null;
 }
 
+function statAvg(tm: Teammate): number {
+  const s = tm.stats;
+  const raw = (s.agility + s.intelligence + s.mentality + s.experience) / 4;
+  return Math.round(raw * 10) / 10;
+}
+
 export function PlayerStats({ player, traits, promotion }: Props) {
+  const [rosterOpen, setRosterOpen] = useState(false);
   const playerTraits = player.traits
     .map((id) => traits.find((t) => t.id === id))
     .filter((t): t is Trait => Boolean(t));
+
+  const roster = player.roster;
 
   return (
     <div className="player-card">
@@ -105,6 +117,34 @@ export function PlayerStats({ player, traits, promotion }: Props) {
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Roster section */}
+      {roster && roster.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="roster-toggle"
+            onClick={() => setRosterOpen((v) => !v)}
+          >
+            <span className="roster-caret">{rosterOpen ? '▾' : '▸'}</span>
+            阵容
+          </button>
+          {rosterOpen && (
+            <div className="roster-list">
+              {roster.map((tm) => (
+                <div key={tm.id} className="roster-row">
+                  <span className="roster-role">[{tm.role}]</span>
+                  <span className="roster-name">{tm.name}</span>
+                  <span className="roster-traits">
+                    {tm.traits.join(' / ')}
+                  </span>
+                  <span className="roster-avg">均值 {statAvg(tm)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

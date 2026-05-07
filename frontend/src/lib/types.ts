@@ -89,6 +89,40 @@ export interface LeaderboardTeam {
 
 export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
 
+export type TeammateRole = 'IGL' | 'AWPer' | 'Entry' | 'Support' | 'Lurker';
+
+export type PersonalityTag =
+  | 'strict'
+  | 'supportive'
+  | 'star'
+  | 'grinder'
+  | 'drama';
+
+export interface TeammateStats {
+  agility: number;
+  intelligence: number;
+  mentality: number;
+  experience: number;
+}
+
+export interface RoleTransition {
+  targetRole: TeammateRole;
+  startedRound: number;
+  resolveRound: number;
+}
+
+export interface Teammate {
+  id: string;
+  name: string;
+  role: TeammateRole;
+  personality: PersonalityTag;
+  traits: string[];
+  stats: TeammateStats;
+  growthSpent: number;
+  injuryRisk: number;
+  retired: boolean;
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -195,6 +229,13 @@ export interface Player extends DynamicState {
   promotionPending: Stage | null;
   promotionCooldown: number;
   pendingOffer: TeamOffer | null;
+  roster: Teammate[] | null;
+  preferredRole: TeammateRole | null;
+  activeRole: TeammateRole | null;
+  roleCrystallized: boolean;
+  activeRoleRounds: number;
+  roleTransition: RoleTransition | null;
+  teamTrust: number;
 }
 
 export interface Choice {

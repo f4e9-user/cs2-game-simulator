@@ -1171,6 +1171,81 @@ input[type='text']:focus {
   margin-bottom: 6px;
 }
 
+/* ── Roster section ─────────────────────────────────────────── */
+
+.roster-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  color: var(--fg-3);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.roster-toggle:hover {
+  color: var(--fg-1);
+}
+
+.roster-caret {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.roster-list {
+  margin-top: 4px;
+}
+
+.roster-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 10px;
+  color: var(--fg-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.roster-row:last-child {
+  border-bottom: none;
+}
+
+.roster-role {
+  color: var(--fg-3);
+  font-size: 9px;
+  min-width: 58px;
+}
+
+.roster-name {
+  color: var(--fg-1);
+  font-weight: 500;
+  min-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-traits {
+  color: var(--fg-3);
+  font-size: 9px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-avg {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 /* ── Tournament card (left panel) ───────────────────────────── */
 
 .tourney-card {

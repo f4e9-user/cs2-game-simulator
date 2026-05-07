@@ -93,6 +93,39 @@ export interface LeaderboardTeam {
 
 export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
 
+// ── 队友阵容系统 ────────────────────────────────────────────────
+export type TeammateRole = 'IGL' | 'AWPer' | 'Entry' | 'Support' | 'Lurker';
+
+export type PersonalityTag =
+  | 'strict'      // 严格型：teamTrust 建立慢但上限高
+  | 'supportive'  // 支持型：teamTrust 建立快，冲突少
+  | 'star'        // 明星型：自我意识强，冲突频率高
+  | 'grinder'     // 苦练型：稳定，低方差
+  | 'drama';      // 戏精型：事件方差大
+
+export interface TeammateStats {
+  agility: number;
+  intelligence: number;
+  mentality: number;
+  experience: number;
+}
+
+export interface Teammate {
+  id: string;
+  name: string;
+  role: TeammateRole;
+  personality: PersonalityTag;
+  traits: string[];
+  stats: TeammateStats;
+  growthSpent: number;
+}
+
+export interface RoleTransition {
+  targetRole: TeammateRole;
+  startedRound: number;
+  resolveRound: number;
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -190,6 +223,13 @@ export interface Player extends DynamicState {
   promotionPending: Stage | null;
   promotionCooldown: number;
   pendingOffer: TeamOffer | null;
+  roster: Teammate[] | null;
+  preferredRole: TeammateRole | null;
+  activeRole: TeammateRole | null;
+  roleCrystallized: boolean;
+  activeRoleRounds: number;
+  roleTransition: RoleTransition | null;
+  teamTrust: number;
 }
 
 export interface ChoicePublic {
