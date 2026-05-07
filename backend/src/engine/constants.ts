@@ -65,6 +65,9 @@ export const STAT_MAX = 20;
 // 生涯总成长上限（money 不计入）
 export const GROWTH_CAP = 30;
 
+// 队友成长上限（低于玩家的 30，队友成长空间略小）
+export const TEAMMATE_GROWTH_CAP = 20;
+
 // 成长曲线：属性越高，成长越慢
 export function growthFactor(level: number): number {
   if (level < 5) return 1.0;

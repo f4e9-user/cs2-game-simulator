@@ -2,7 +2,7 @@ import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
 import { CLUBS } from '../data/clubs.js';
-import type { EventDef, Player, Rival, PendingMatch, ClubTier } from '../types.js';
+import type { EventDef, Player, Rival, Teammate, PendingMatch, ClubTier } from '../types.js';
 
 export interface EventContext {
   player: Player;
@@ -110,6 +110,14 @@ function stateWeight(e: EventDef, player: Player): number {
   if (!player.team && e.type === 'tryout') w *= 1.5;
   // 有战队时 team 类事件权重提升
   if (player.team && e.type === 'team') w *= 1.6;
+  // star 性格队友 + 连败：队内冲突触发概率翻倍
+  if (
+    e.id === 'chain-team-conflict' &&
+    (player.consecutiveLosses ?? 0) >= 2 &&
+    (player.roster ?? []).some((tm) => tm.personality === 'star')
+  ) {
+    w *= 2;
+  }
   return Math.max(0.05, w);
 }
 
@@ -247,17 +255,27 @@ export function substituteRivals(text: string, rivals: Rival[]): string {
   });
 }
 
-export function toPublicEvent(e: EventDef, rivals: Rival[] = []) {
+// Replace {teammate0}/{teammate1}/... placeholders with actual teammate names.
+// Falls back to "某队友" when index is out of range or roster is empty.
+export function substituteTeammates(text: string, teammates: Teammate[]): string {
+  return text.replace(/\{teammate(\d+)\}/g, (_, i) => {
+    const idx = Number(i);
+    return teammates[idx]?.name ?? '某队友';
+  });
+}
+
+export function toPublicEvent(e: EventDef, rivals: Rival[] = [], teammates: Teammate[] = []) {
   const sub = (s: string) => substituteRivals(s, rivals);
+  const subAll = (s: string) => substituteTeammates(sub(s), teammates);
   return {
     id: e.id,
     type: e.type,
-    title: sub(e.title),
-    narrative: sub(e.narrative),
+    title: subAll(e.title),
+    narrative: subAll(e.narrative),
     choices: e.choices.map((c) => ({
       id: c.id,
-      label: sub(c.label),
-      description: sub(c.description),
+      label: subAll(c.label),
+      description: subAll(c.description),
     })),
   };
 }

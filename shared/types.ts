@@ -76,6 +76,34 @@ export interface Rival {
   region: string;
 }
 
+export type TeammateRole = 'IGL' | 'AWPer' | 'Entry' | 'Support' | 'Lurker';
+
+export type PersonalityTag =
+  | 'strict'
+  | 'supportive'
+  | 'star'
+  | 'grinder'
+  | 'drama';
+
+export interface TeammateStats {
+  agility: number;
+  intelligence: number;
+  mentality: number;
+  experience: number;
+}
+
+export interface Teammate {
+  id: string;
+  name: string;
+  role: TeammateRole;
+  personality: PersonalityTag;
+  traits: string[];
+  stats: TeammateStats;
+  growthSpent: number;
+  injuryRisk: number;
+  retired: boolean;
+}
+
 // Leaderboard entry for the global ranking. Player's team has isPlayer=true.
 export interface LeaderboardTeam {
   name: string;

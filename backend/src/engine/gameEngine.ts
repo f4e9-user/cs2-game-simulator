@@ -6,6 +6,7 @@ import {
   synthesizeMatchEvent,
 } from '../data/tournaments.js';
 import { generateRivals } from '../data/rivals.js';
+import { generateRoster } from '../data/roster.js';
 import {
   addPlayerPoints,
   buildLeaderboard,
@@ -29,6 +30,8 @@ import type {
   StatDelta,
   StatKey,
   Stats,
+  Teammate,
+  TeammateRole,
   Trait,
   VolatileState,
 } from '../types.js';
@@ -56,11 +59,13 @@ import {
   STRESS_MAX,
   STRESS_MIN,
   STRESS_SCALE,
+  TEAMMATE_GROWTH_CAP,
   TILT_MAX,
   TILT_MIN,
+  growthFactor,
   passiveStressFromMentality,
 } from './constants.js';
-import { buildTournamentPrepEvent, pickEvent, substituteRivals, toPublicEvent } from './events.js';
+import { buildTournamentPrepEvent, pickEvent, substituteRivals, substituteTeammates, toPublicEvent } from './events.js';
 import { checkTournamentPromotion } from './stages.js';
 import { applyDelta, applyGrowth, clampStats, makeRng, resolveChoice, translateStatDelta } from './resolver.js';
 import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
@@ -203,6 +208,12 @@ export function initPlayer(input: InitInput): Player {
     team: null,
     pendingApplication: null,
     pendingOffer: null,
+    roster: null,
+    preferredRole: deriveRoleFromTraits(traits),
+    activeRole: null,
+    roleCrystallized: false,
+    activeRoleRounds: 0,
+    teamTrust: 50,
     consecutiveLosses: 0,
     everHadTeam: false,
     contractRenewals: 0,
@@ -236,7 +247,7 @@ export function createSession(player: Player, rngSeed: number): GameSession {
   return {
     id,
     player,
-    currentEvent: firstEvent ? toPublicEvent(firstEvent, player.rivals) : null,
+    currentEvent: firstEvent ? toPublicEvent(firstEvent, player.rivals, player.roster ?? []) : null,
     history: [],
     status: 'active',
     createdAt: ts,
@@ -441,6 +452,15 @@ export function applyChoice(
 
   const volatile = session.player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
 
+  if ((session.player.roster ?? []).some((tm) => tm.personality === 'drama')) {
+    outcome.feelDelta *= 1.2;
+    outcome.tiltDelta *= 1.2;
+    outcome.fatigueDelta *= 1.2;
+    if (outcome.chosenOutcome.stressDelta != null) outcome.chosenOutcome.stressDelta *= 1.2;
+    if (outcome.chosenOutcome.fameDelta != null) outcome.chosenOutcome.fameDelta *= 1.2;
+    if (outcome.chosenOutcome.moneyDelta != null) outcome.chosenOutcome.moneyDelta *= 1.2;
+  }
+
   // 疲劳放大系数（高疲劳时压力增益更强）
   const fatigueFactor =
     volatile.fatigue >= FATIGUE_STRESS_THRESHOLD ? FATIGUE_STRESS_MULTIPLIER : 1;
@@ -599,6 +619,72 @@ export function applyChoice(
     passiveEffects.push(`周薪入账 +${nextPlayer.team.weeklySalary * 10}K`);
   }
 
+  if (!nextPlayer.team && nextPlayer.roster) {
+    nextPlayer.roster = null;
+  }
+
+  if (!nextPlayer.team) {
+    nextPlayer.activeRole = null;
+    nextPlayer.teamTrust = 50;
+  }
+
+  if (eventDef.id === 'chain-team-joined' && outcome.success) {
+    if (choiceDef.id === 'accept-role' && nextPlayer.roster) {
+      const filledRoles = new Set(nextPlayer.roster.map((tm) => tm.role));
+      const allRoles: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
+      const openRoles = allRoles.filter((r) => !filledRoles.has(r));
+      const assigned = openRoles.length > 0
+        ? openRoles[Math.floor(rng() * openRoles.length)]!
+        : (nextPlayer.preferredRole ?? 'Entry');
+      nextPlayer.activeRole = assigned;
+      nextPlayer.activeRoleRounds = 0;
+    } else if (choiceDef.id === 'stay-flexible') {
+      nextPlayer.activeRole = null;
+      nextPlayer.activeRoleRounds = 0;
+    }
+  }
+
+  if (nextPlayer.activeRole) {
+    nextPlayer.activeRoleRounds = (nextPlayer.activeRoleRounds ?? 0) + 1;
+    if (
+      nextPlayer.activeRoleRounds >= 24 &&
+      !nextPlayer.roleCrystallized
+    ) {
+      nextPlayer.preferredRole = nextPlayer.activeRole;
+      nextPlayer.roleCrystallized = true;
+      passiveEffects.push('角色结晶：你已成为公认的 ' + nextPlayer.activeRole);
+    }
+  }
+
+  if (
+    chainEventIdsThatClearTeam.includes(eventDef.id) ||
+    (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'))
+  ) {
+    if (!tagsAdded.includes('bad-blood')) tagsAdded.push('bad-blood');
+    nextPlayer.roster = null;
+  }
+
+  // 队友后台成长
+  if (nextPlayer.roster) {
+    const growthRng = makeRng(
+      hashString(session.id) ^ (nextRound * 1299709),
+    );
+    nextPlayer.roster = nextPlayer.roster.map((tm) => {
+      if (tm.growthSpent >= TEAMMATE_GROWTH_CAP) return tm;
+      const statKeys: (keyof typeof tm.stats)[] = ['agility', 'intelligence', 'mentality', 'experience'];
+      const key = statKeys[Math.floor(growthRng() * statKeys.length)]!;
+      const rawGain = 0.08 + growthRng() * 0.10;
+      const applied = rawGain * growthFactor(tm.stats[key]);
+      const newGrowth = tm.growthSpent + applied;
+      if (newGrowth > TEAMMATE_GROWTH_CAP) return tm;
+      return {
+        ...tm,
+        stats: { ...tm.stats, [key]: tm.stats[key] + applied },
+        growthSpent: newGrowth,
+      };
+    });
+  }
+
   const result: RoundResult = {
     round: nextPlayer.round,
     eventId: eventDef.id,
@@ -687,6 +773,19 @@ export function applyChoice(
         if (cooldownOk) nextPlayer.promotionPending = promoCheck.to;
       }
     }
+
+    // 赛事结果驱动 teamTrust 变动（人格影响速率）
+    if (nextPlayer.roster) {
+      const trustBase = outcome.success ? 2 : -3;
+      const personalityMult = calcTrustRateMultiplier(nextPlayer.roster, rng);
+      const trustDelta = Math.round(trustBase * personalityMult);
+      nextPlayer.teamTrust = clampTeamTrust(
+        (nextPlayer.teamTrust ?? 50) + trustDelta,
+      );
+      passiveEffects.push(
+        outcome.success ? '队伍信任上升' : '队伍信任下降',
+      );
+    }
   }
 
   if (eventDef.id.startsWith('promotion-')) {
@@ -712,12 +811,14 @@ export function applyChoice(
   })();
 
   result.narrative = substituteRivals(result.narrative, nextPlayer.rivals);
+  result.narrative = substituteTeammates(result.narrative, nextPlayer.roster ?? []);
   result.eventTitle = substituteRivals(result.eventTitle, nextPlayer.rivals);
+  result.eventTitle = substituteTeammates(result.eventTitle, nextPlayer.roster ?? []);
 
   const updated: GameSession = {
     ...session,
     player: nextPlayer,
-    currentEvent: nextEventDef ? toPublicEvent(nextEventDef, nextPlayer.rivals) : null,
+    currentEvent: nextEventDef ? toPublicEvent(nextEventDef, nextPlayer.rivals, nextPlayer.roster ?? []) : null,
     history: [...session.history, result],
     status: ending ? 'ended' : 'active',
     ending: ending ?? session.ending,
@@ -1071,6 +1172,8 @@ export function respondTeamOffer(
     // the old tournament-gate path for this transition.
     const nextStage = player.stage === 'rookie' ? 'youth' : player.stage;
 
+    const roster = generateRoster(offer.tier);
+
     return {
       ...player,
       team,
@@ -1078,6 +1181,7 @@ export function respondTeamOffer(
       everHadTeam: true,
       pendingOffer: null,
       pendingApplication: null,
+      roster,
       tags: player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending'),
     };
   } else {
@@ -1130,3 +1234,35 @@ function hashString(s: string): number {
 }
 
 export { TRAITS };
+
+function deriveRoleFromTraits(traits: Trait[]): TeammateRole | null {
+  const tags = new Set(traits.flatMap((t) => t.tags));
+  if (tags.has('igl')) return 'IGL';
+  if (tags.has('aimer')) return 'AWPer';
+  if (tags.has('mechanical')) return 'Entry';
+  if (tags.has('support') || tags.has('selfless')) return 'Support';
+  if (tags.has('tactical') && tags.has('solo')) return 'Lurker';
+  return null;
+}
+
+function clampTeamTrust(v: number): number {
+  return Math.max(0, Math.min(100, Math.round(v)));
+}
+
+function calcTrustRateMultiplier(roster: Teammate[], rng: () => number): number {
+  const counts: Record<string, number> = {};
+  for (const tm of roster) {
+    counts[tm.personality] = (counts[tm.personality] ?? 0) + 1;
+  }
+  let mult = 1;
+  if (counts.strict) mult *= 0.7;
+  if (counts.supportive) mult *= 1.3;
+  if (counts.star) mult *= 0.85;
+  if (counts.drama) mult *= (0.7 + rng() * 0.6);
+  return mult;
+}
+
+const chainEventIdsThatClearTeam = [
+  'chain-team-fired',
+  'chain-contract-renewal',
+];
