@@ -453,29 +453,30 @@ export function applyChoice(
 
   const volatile = session.player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
 
-  if ((session.player.roster ?? []).some((tm) => tm.personality === 'drama')) {
-    outcome.feelDelta *= 1.2;
-    outcome.tiltDelta *= 1.2;
-    outcome.fatigueDelta *= 1.2;
-    if (outcome.chosenOutcome.stressDelta != null) outcome.chosenOutcome.stressDelta *= 1.2;
-    if (outcome.chosenOutcome.fameDelta != null) outcome.chosenOutcome.fameDelta *= 1.2;
-    if (outcome.chosenOutcome.moneyDelta != null) outcome.chosenOutcome.moneyDelta *= 1.2;
-  }
+  const dramaAmplify = (session.player.roster ?? []).some((tm) => tm.personality === 'drama');
+  const feelDeltaRaw = dramaAmplify ? outcome.feelDelta * 1.2 : outcome.feelDelta;
+  const tiltDeltaRaw = dramaAmplify ? outcome.tiltDelta * 1.2 : outcome.tiltDelta;
+  const fatigueDeltaRaw = dramaAmplify ? outcome.fatigueDelta * 1.2 : outcome.fatigueDelta;
+  const stressDeltaRaw = dramaAmplify && outcome.chosenOutcome.stressDelta != null
+    ? outcome.chosenOutcome.stressDelta * 1.2
+    : outcome.chosenOutcome.stressDelta;
+  const fameDeltaRaw = dramaAmplify && outcome.chosenOutcome.fameDelta != null
+    ? outcome.chosenOutcome.fameDelta * 1.2
+    : outcome.chosenOutcome.fameDelta;
 
   // 疲劳放大系数（高疲劳时压力增益更强）
   const fatigueFactor =
     volatile.fatigue >= FATIGUE_STRESS_THRESHOLD ? FATIGUE_STRESS_MULTIPLIER : 1;
 
-  const explicitStress = outcome.chosenOutcome.stressDelta;
-  if (typeof explicitStress === 'number' && explicitStress !== 0) {
-    const raw = explicitStress * STRESS_SCALE;
+  if (typeof stressDeltaRaw === 'number' && stressDeltaRaw !== 0) {
+    const raw = stressDeltaRaw * STRESS_SCALE;
     stress = clampStress(stress + (raw > 0 ? raw * fatigueFactor : raw));
   } else if (!outcome.success) {
     stress = clampStress(stress + IMPLICIT_FAILURE_STRESS * fatigueFactor);
     passiveEffects.push('stress-from-failure');
   }
-  if (outcome.chosenOutcome.fameDelta) {
-    fame = clampFame(fame + outcome.chosenOutcome.fameDelta);
+  if (fameDeltaRaw) {
+    fame = clampFame(fame + fameDeltaRaw);
   }
 
   // 心态被动压力（基于 mentality 核心属性）
@@ -490,9 +491,9 @@ export function applyChoice(
   }
 
   // ── 状态系统更新（feel / tilt / fatigue）──
-  let feel = clampFeel(volatile.feel + outcome.feelDelta);
-  let tilt = clampTilt(volatile.tilt + outcome.tiltDelta);
-  let fatigue = clampFatigue(volatile.fatigue + outcome.fatigueDelta);
+  let feel = clampFeel(volatile.feel + feelDeltaRaw);
+  let tilt = clampTilt(volatile.tilt + tiltDeltaRaw);
+  let fatigue = clampFatigue(volatile.fatigue + fatigueDeltaRaw);
 
   // Tilt 影响手感：tilt >= 2 → 手感上限降低
   if (tilt >= 2 && feel > 1) feel = clampFeel(feel - 0.5);
@@ -684,11 +685,15 @@ export function applyChoice(
     nextPlayer.roleTransition = null;
   }
 
-  if (
-    chainEventIdsThatClearTeam.includes(eventDef.id) ||
-    (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'))
-  ) {
-    if (!tagsAdded.includes('bad-blood')) tagsAdded.push('bad-blood');
+  const isConflictDeparture =
+    eventDef.id === 'chain-team-fired' ||
+    (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'));
+  const isTeamDeparture =
+    isConflictDeparture || eventDef.id === 'chain-contract-renewal';
+
+  if (isTeamDeparture) {
+    // bad-blood 仅在冲突性离队时添加，合约到期正常分手不加
+    if (isConflictDeparture && !tagsAdded.includes('bad-blood')) tagsAdded.push('bad-blood');
 
     if (nextPlayer.roster && nextPlayer.roster.length > 0 && rng() < 0.5) {
       if (!tagsAdded.includes('old-teammate-contact')) {
@@ -711,12 +716,13 @@ export function applyChoice(
       const key = statKeys[Math.floor(growthRng() * statKeys.length)]!;
       const rawGain = 0.08 + growthRng() * 0.10;
       const applied = rawGain * growthFactor(tm.stats[key]);
-      const newGrowth = tm.growthSpent + applied;
-      if (newGrowth > TEAMMATE_GROWTH_CAP) return tm;
+      const remainingCap = TEAMMATE_GROWTH_CAP - tm.growthSpent;
+      if (remainingCap <= 0) return tm;
+      const capped = Math.min(applied, remainingCap);
       return {
         ...tm,
-        stats: { ...tm.stats, [key]: tm.stats[key] + applied },
-        growthSpent: newGrowth,
+        stats: { ...tm.stats, [key]: tm.stats[key] + capped },
+        growthSpent: tm.growthSpent + capped,
       };
     });
   }
@@ -1208,7 +1214,8 @@ export function respondTeamOffer(
     // the old tournament-gate path for this transition.
     const nextStage = player.stage === 'rookie' ? 'youth' : player.stage;
 
-    const roster = generateRoster(offer.tier);
+    const rosterRng = makeRng(hashString(session.id) ^ (player.round * 7919));
+    const roster = generateRoster(offer.tier, rosterRng);
 
     return {
       ...player,
@@ -1298,7 +1305,3 @@ function calcTrustRateMultiplier(roster: Teammate[], rng: () => number): number 
   return mult;
 }
 
-const chainEventIdsThatClearTeam = [
-  'chain-team-fired',
-  'chain-contract-renewal',
-];

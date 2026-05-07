@@ -62,9 +62,17 @@ function randomStats(tier: ClubTier, rng: () => number): TeammateStats {
   };
 }
 
+function fisherYates<T>(arr: T[], rng: () => number): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
+}
+
 function pickTraits(pool: string[], desired: number, rng: () => number): string[] {
-  const shuffled = [...pool].sort(() => rng() - 0.5);
-  return shuffled.slice(0, Math.min(desired, shuffled.length));
+  return fisherYates(pool, rng).slice(0, Math.min(desired, pool.length));
 }
 
 // ── 主生成函数 ────────────────────────────────────────────────────
@@ -72,13 +80,9 @@ export function generateRoster(
   clubTier: ClubTier,
   rng: () => number = Math.random,
 ): Teammate[] {
-  // 洗牌角色列表以保证每次生成顺序不同
-  const roles = [...ROLES].sort(() => rng() - 0.5);
+  const roles = fisherYates(ROLES, rng);
 
-  // 取 4 个角色生成 4 名队友（slot-1 ~ slot-4）
-  const picks = roles.slice(0, 4);
-
-  return picks.map((role, i): Teammate => {
+  return roles.slice(0, 4).map((role, i): Teammate => {
     const traitCount = 2 + Math.floor(rng() * 2); // 2–3 个
     return {
       id: `slot-${i + 1}`,
@@ -88,8 +92,6 @@ export function generateRoster(
       traits: pickTraits(ROLE_TRAIT_POOL[role], traitCount, rng),
       stats: randomStats(clubTier, rng),
       growthSpent: 0,
-      injuryRisk: 0,
-      retired: false,
     };
   });
 }

@@ -118,8 +118,6 @@ export interface Teammate {
   traits: string[];
   stats: TeammateStats;
   growthSpent: number;
-  injuryRisk: number;
-  retired: boolean;
 }
 
 export interface RoleTransition {
