@@ -137,8 +137,8 @@ export const ACTIONS: ActionDef[] = [
   {
     id: 'action-meditation',
     label: '冥想静心',
-    description: '专注呼吸与正念练习，缓解紧张情绪，恢复精神。',
-    apCost: 25,
+    description: '专注呼吸与正念练习，快速缓解疲劳和压力，不消耗成长预算。',
+    apCost: 15,
     eventType: 'routine',
     check: {
       primary: 'mentality',
@@ -148,7 +148,6 @@ export const ACTIONS: ActionDef[] = [
     },
     success: {
       narrative: '静坐了二十分钟，呼吸渐渐平稳，头脑也清晰了许多。',
-      dailyGrowth: 'mentality' as StatKey,
       fatigueDelta: -8,
       stressDelta: -2, // ×5 = -10 stress
     },
@@ -156,6 +155,30 @@ export const ACTIONS: ActionDef[] = [
       narrative: '思绪总是飘到训练赛上，静不下来，效果打了折扣。',
       fatigueDelta: -4,
       stressDelta: -1, // ×5 = -5 stress
+    },
+  },
+  {
+    id: 'action-mental-training',
+    label: '心理训练',
+    description: '专项心理强化训练，提升抗压能力与心态成长，但强度较高会积累疲劳。',
+    apCost: 25,
+    eventType: 'training',
+    check: {
+      primary: 'mentality',
+      dc: 7,
+      traitBonuses: { steady: 2, igl: 2, grinder: 1 },
+      traitPenalties: { solo: 1, obsessed: 2 },
+    },
+    success: {
+      narrative: '高强度的压力模拟训练结束，脑子绷了一整天，但确实感觉抗压能力提升了。',
+      dailyGrowth: 'mentality' as StatKey,
+      fatigueDelta: 10,
+      stressDelta: 1, // ×5 = +5 stress，训练本身有压力
+    },
+    failure: {
+      narrative: '心理素质还不足以撑过这个强度的模拟，训练中途崩了，有点挫败感。',
+      fatigueDelta: 8,
+      stressDelta: 2, // ×5 = +10 stress
     },
   },
 ];
