@@ -248,6 +248,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   }
 
   // 面试优先：interview-ready 时直接注入对应面试事件，不参与随机池竞争
+  // 即使找不到匹配事件也返回 null，确保面试期间不插入任何随机事件
   if (synthTags.has('interview-ready')) {
     const interviewEvent = EVENT_POOL.find(
       (e) =>
@@ -255,7 +256,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
         e.stages.includes(player.stage) &&
         !e.requireTags?.some((t) => !synthTags.has(t)),
     );
-    if (interviewEvent) return interviewEvent;
+    return interviewEvent ?? null;
   }
 
   const eligible = EVENT_POOL.filter((e) => {
