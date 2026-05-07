@@ -261,7 +261,7 @@ app.get('/game/:sessionId/tournaments', async (c) => {
   });
 });
 
-// Sign up for a tournament — schedules its first stage for the *next* week.
+// Sign up for a tournament — schedules its first stage 2 weeks out (prep event in week+1, match in week+2).
 app.post('/game/:sessionId/signup', async (c) => {
   const id = c.req.param('sessionId');
   const body = await c.req.json().catch(() => ({}));
@@ -322,7 +322,14 @@ app.post('/game/:sessionId/signup', async (c) => {
   }
 
   const year = session.player.year ?? 1;
-  const next = week >= 48 ? { year: year + 1, week: 1 } : { year, week: week + 1 };
+  // Schedule the match 2 weeks out so the player gets a full action phase
+  // in the round after signup (week+1 shows the prep event with AP=100),
+  // and AP is only locked on the actual match week (week+2).
+  const adv1 = week >= 48 ? { year: year + 1, week: 1 } : { year, week: week + 1 };
+  const next =
+    adv1.week >= 48
+      ? { year: adv1.year + 1, week: 1 }
+      : { year: adv1.year, week: adv1.week + 1 };
 
   session.player.pendingMatch = {
     tournamentId: t.id,

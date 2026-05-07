@@ -10,40 +10,52 @@ const ACTIONS = [
     label: '打天梯',
     description: '实战磨练枪法，敏捷成长',
     icon: '🎯',
+    apCost: 25,
   },
   {
     id: 'action-structured-training',
     label: '系统训练',
     description: '战术训练，智力成长',
     icon: '📋',
+    apCost: 25,
   },
   {
     id: 'action-rest-day',
     label: '休息一天',
     description: '恢复疲劳，手感微降',
     icon: '💤',
+    apCost: 25,
   },
   {
     id: 'action-fitness',
     label: '健身锻炼',
     description: '增强体能，增加疲劳',
     icon: '🏋️',
+    apCost: 25,
   },
   {
     id: 'action-meditation',
     label: '冥想静心',
-    description: '缓解压力，心态成长',
+    description: '快速缓解疲劳与压力，不消耗成长预算',
     icon: '🧘',
+    apCost: 15,
+  },
+  {
+    id: 'action-mental-training',
+    label: '心理训练',
+    description: '专项心理强化，心态成长，但会积累压力',
+    icon: '🧠',
+    apCost: 25,
   },
   {
     id: 'action-vacation',
     label: '度假断网',
     description: '大幅恢复，手感生疏',
     icon: '🏖',
+    apCost: 25,
   },
-] as const;
+];
 
-const AP_COST = 25;
 const AP_MAX = 100;
 
 interface Props {
@@ -53,11 +65,13 @@ interface Props {
   onPlayerUpdate: (p: Player) => void;
 }
 
+const AP_SEGMENT = 25; // bar displays segments of 25 AP
+
 function ApBar({ ap }: { ap: number }) {
-  const filled = Math.round(ap / AP_COST);
+  const filled = Math.round(ap / AP_SEGMENT);
   return (
     <div className="ap-bar">
-      {Array.from({ length: AP_MAX / AP_COST }).map((_, i) => (
+      {Array.from({ length: AP_MAX / AP_SEGMENT }).map((_, i) => (
         <div
           key={i}
           className={`ap-segment ${i < filled ? 'filled' : 'empty'}`}
@@ -152,7 +166,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
 
       <div className={`action-list ${panelDisabledReason ? 'panel-disabled' : ''}`}>
         {ACTIONS.map((a) => {
-          const canDo = enabled && !panelDisabledReason && ap >= AP_COST && busyId === null;
+          const canDo = enabled && !panelDisabledReason && ap >= a.apCost && busyId === null;
           const result = results[a.id];
           return (
             <div key={a.id} className="action-item">
@@ -166,7 +180,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
                   <div className="action-btn-label">{a.label}</div>
                   <div className="action-btn-desc">{a.description}</div>
                 </div>
-                <span className="ap-cost-badge">-{AP_COST} AP</span>
+                <span className="ap-cost-badge">-{a.apCost} AP</span>
               </button>
               {result && <ActionResultCard result={result} />}
             </div>
