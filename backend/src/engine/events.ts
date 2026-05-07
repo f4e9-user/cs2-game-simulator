@@ -41,7 +41,8 @@ function dynamicTags(player: Player): string[] {
 
   // ── 战队申请系统 tag ─────────────────────────────────────────────
   const app = player.pendingApplication;
-  if (app && player.round >= app.responseRound) {
+  // interview-pending 存在时说明已收到回复并等待面试，不再重复合成 application-response-ready
+  if (app && player.round >= app.responseRound && !player.tags.includes('interview-pending')) {
     out.push('application-response-ready');
   }
   // interview-pending 由 chain-club-response 成功后写入，独立于 pendingApplication
