@@ -138,6 +138,9 @@ app.post('/game/:sessionId/choice', async (c) => {
   if (!session) return c.json({ error: 'session not found' }, 404);
 
   try {
+    // 面试 post-handler 需要 clubId，但 applyChoice 内部会清空 pendingApplication
+    // 提前保存，供下方生成入队邀请时使用
+    const preChoicePendingApplication = session.player.pendingApplication;
     const { session: updated, result } = applyChoice(session, choiceId);
 
     const ai = makeAiService(c.env);
@@ -177,13 +180,10 @@ app.post('/game/:sessionId/choice', async (c) => {
       'chain-club-interview-talent',
     ]);
     if (INTERVIEW_EVENT_IDS.has(result.eventId) && result.success) {
-      const app = updated.player.pendingApplication;
+      const app = preChoicePendingApplication;
       if (app) {
         updated.player.pendingOffer = generateTeamOffer(app.clubId);
         updated.player.pendingApplication = null;
-        updated.player.tags = updated.player.tags.filter(
-          (t) => t !== 'interview-pending',
-        );
       }
     }
     // 响应失败 → 清理申请并触发被拒叙事
