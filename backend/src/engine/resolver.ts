@@ -1,6 +1,7 @@
 import type {
   Buff,
   ChoiceDef,
+  ClubTier,
   EventDef,
   Outcome,
   Player,
@@ -193,6 +194,7 @@ export interface ResolveResult {
   chosenOutcome: Outcome;
   nextStats: Stats;
   stageAfter: Stage;
+  teamTierSet?: ClubTier;
   tagsAdded: string[];
   tagsRemoved: string[];
   endRun: boolean;
@@ -323,6 +325,7 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
     chosenOutcome,
     nextStats,
     stageAfter,
+    teamTierSet: chosenOutcome.teamTierSet,
     tagsAdded,
     tagsRemoved,
     endRun: Boolean(chosenOutcome.endRun),
