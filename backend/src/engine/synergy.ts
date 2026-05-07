@@ -32,7 +32,7 @@ export function calcSynergyBonus(player: Player, roster: Teammate[]): number {
   if (playerTags.includes('igl') && (traitCounts.support ?? 0) >= 1) bonus += 1;
 
   // ── 负面协同 ──
-  // ego tag: reserved for future trait; no current trait carries it
+  if ((traitCounts.ego ?? 0) >= 2) bonus -= 2;
   if ((traitCounts.solo ?? 0) >= 3) bonus -= 1;
 
   return bonus;

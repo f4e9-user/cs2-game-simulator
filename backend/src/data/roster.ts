@@ -30,8 +30,8 @@ function randomName(rng: () => number): string {
 // ── 角色 ↔ 候选特质 tag 映射（取自设计文档）─────────────────────
 const ROLE_TRAIT_POOL: Record<TeammateRole, string[]> = {
   IGL: ['igl', 'tactical', 'steady', 'support', 'selfless'],
-  AWPer: ['aimer', 'mechanical', 'clutch', 'solo'],
-  Entry: ['mechanical', 'clutch', 'grinder', 'solo'],
+  AWPer: ['aimer', 'mechanical', 'clutch', 'solo', 'ego'],
+  Entry: ['mechanical', 'clutch', 'grinder', 'solo', 'ego'],
   Support: ['support', 'selfless', 'steady', 'igl'],
   Lurker: ['tactical', 'solo', 'steady', 'clutch'],
 };

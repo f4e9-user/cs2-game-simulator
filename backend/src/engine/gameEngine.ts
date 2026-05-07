@@ -214,7 +214,7 @@ export function initPlayer(input: InitInput): Player {
     roleCrystallized: false,
     activeRoleRounds: 0,
     roleTransition: null,
-    teamTrust: 50,
+    teamTrust: 0,
     consecutiveLosses: 0,
     everHadTeam: false,
     contractRenewals: 0,
@@ -627,7 +627,7 @@ export function applyChoice(
 
   if (!nextPlayer.team) {
     nextPlayer.activeRole = null;
-    nextPlayer.teamTrust = 50;
+    nextPlayer.teamTrust = 0;
   }
 
   if (eventDef.id === 'chain-team-joined' && outcome.success) {
@@ -1225,6 +1225,7 @@ export function respondTeamOffer(
       pendingOffer: null,
       pendingApplication: null,
       roster,
+      teamTrust: 40,
       tags: player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending'),
     };
   } else {
@@ -1300,7 +1301,6 @@ function calcTrustRateMultiplier(roster: Teammate[], rng: () => number): number 
   let mult = 1;
   if (counts.strict) mult *= 0.7;
   if (counts.supportive) mult *= 1.3;
-  if (counts.star) mult *= 0.85;
   if (counts.drama) mult *= (0.7 + rng() * 0.6);
   return mult;
 }
