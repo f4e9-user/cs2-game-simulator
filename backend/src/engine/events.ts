@@ -241,6 +241,17 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     }
   }
 
+  // 面试优先：interview-ready 时直接注入对应面试事件，不参与随机池竞争
+  if (synthTags.has('interview-ready')) {
+    const interviewEvent = EVENT_POOL.find(
+      (e) =>
+        e.requireTags?.includes('interview-ready') &&
+        e.stages.includes(player.stage) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)),
+    );
+    if (interviewEvent) return interviewEvent;
+  }
+
   // 赛事隔离：报名赛事期间只出现赛前准备事件
   if (player.pendingMatch) {
     return buildTournamentPrepEvent(player.pendingMatch);
