@@ -615,14 +615,13 @@ export function applyChoice(
     consecutiveLosses,
   };
 
-  // chain-club-response 触发后清空 pendingApplication，防止 application-response-ready 持续再生
-  const CLUB_RESPONSE_IDS = new Set([
-    'chain-club-response',
+  // 面试事件完成后清空 pendingApplication（response 阶段保留，供面试 post-handler 读取 clubId）
+  const CLUB_INTERVIEW_IDS = new Set([
     'chain-club-interview',
     'chain-club-interview-open-match',
     'chain-club-interview-talent',
   ]);
-  if (CLUB_RESPONSE_IDS.has(eventDef.id)) {
+  if (CLUB_INTERVIEW_IDS.has(eventDef.id)) {
     nextPlayer.pendingApplication = null;
   }
 
