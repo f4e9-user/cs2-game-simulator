@@ -43,8 +43,10 @@ function dynamicTags(player: Player): string[] {
   const app = player.pendingApplication;
   if (app && player.round >= app.responseRound) {
     out.push('application-response-ready');
-    // 检查是否有面试 tag（response 成功后写入）
-    if (player.tags.includes('interview-pending')) out.push('interview-ready');
+  }
+  // interview-pending 由 chain-club-response 成功后写入，独立于 pendingApplication
+  if (player.tags.includes('interview-pending')) {
+    out.push('interview-ready');
   }
 
   // ── 新入队 tag（加入战队后首回合）─────────────────────────────────

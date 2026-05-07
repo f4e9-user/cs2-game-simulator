@@ -1126,7 +1126,7 @@ export const CHAIN_EVENTS: EventDef[] = [
       '你打开邮箱——之前发的那封简历有回应了。标题是"关于您的入队申请"。',
     stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
     difficulty: 2,
-    weight: 0,
+    weight: 10,
     requireTags: ['application-response-ready'],
     choices: [
       {
@@ -1164,7 +1164,7 @@ export const CHAIN_EVENTS: EventDef[] = [
       '你坐在俱乐部的会客室里。对面是教练和经理，桌上一张没有填完的合同。',
     stages: ['youth', 'second', 'pro', 'star', 'veteran'],
     difficulty: 3,
-    weight: 0,
+    weight: 10,
     requireTags: ['interview-ready'],
     choices: [
       {
@@ -1225,7 +1225,7 @@ export const CHAIN_EVENTS: EventDef[] = [
       '你坐在俱乐部的会客室里。教练把你的公开赛记录铺在桌上，从头翻到尾，然后抬头看你："说说你打这几场的心路历程。"',
     stages: ['rookie'],
     difficulty: 3,
-    weight: 0,
+    weight: 10,
     requireTags: ['interview-ready', 'application-path-open-match'],
     choices: [
       {
@@ -1287,7 +1287,7 @@ export const CHAIN_EVENTS: EventDef[] = [
       '星探把你带进会客室，顺手把一套外设推到你面前："我们不看简历，先打一局看看。"教练在旁边默默盯着你的手。',
     stages: ['rookie'],
     difficulty: 3,
-    weight: 0,
+    weight: 10,
     requireTags: ['interview-ready', 'application-path-talent'],
     choices: [
       {
