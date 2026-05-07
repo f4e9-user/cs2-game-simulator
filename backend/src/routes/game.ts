@@ -470,9 +470,17 @@ app.post('/game/:sessionId/team-response', async (c) => {
   try {
     const player = respondTeamOffer(session, accept);
     session.player = player;
+    // When accepting, update the player's leaderboard entry to reflect the real team name/tag/region.
+    if (accept && player.team && session.leaderboard) {
+      session.leaderboard = session.leaderboard.map((t) =>
+        t.isPlayer
+          ? { ...t, name: player.team!.name, tag: player.team!.tag, region: player.team!.region }
+          : t,
+      );
+    }
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
-    return c.json({ player });
+    return c.json({ player, leaderboard: session.leaderboard });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);

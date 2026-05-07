@@ -4,6 +4,7 @@ import type {
   ChoiceResponse,
   Club,
   GameSession,
+  LeaderboardTeam,
   Player,
   RollTraitsResponse,
   ShopItem,
@@ -130,7 +131,7 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ clubId }) },
     ),
   respondOffer: (sessionId: string, accept: boolean) =>
-    request<{ player: Player }>(
+    request<{ player: Player; leaderboard?: LeaderboardTeam[] }>(
       `/api/game/${sessionId}/team-response`,
       { method: 'POST', body: JSON.stringify({ accept }) },
     ),

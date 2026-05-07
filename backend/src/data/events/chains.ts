@@ -1124,7 +1124,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '邮箱里多了一封回信',
     narrative:
       '你打开邮箱——之前发的那封简历有回应了。标题是"关于您的入队申请"。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
     difficulty: 2,
     weight: 0,
     requireTags: ['application-response-ready'],
@@ -1148,7 +1148,7 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '回信很客气但简短——"感谢您的申请，我们目前人员已满。"',
-          tagRemoves: ['application-response-ready'],
+          tagRemoves: ['application-response-ready', 'application-path-open-match', 'application-path-talent'],
           stressDelta: 1,
         },
       },
@@ -1216,6 +1216,131 @@ export const CHAIN_EVENTS: EventDef[] = [
     ],
   },
 
+  // ── 新人面试（赛事积累路线）─────────────────────────────────────
+  {
+    id: 'chain-club-interview-open-match',
+    type: 'tryout',
+    title: '俱乐部面试 — 战绩说话',
+    narrative:
+      '你坐在俱乐部的会客室里。教练把你的公开赛记录铺在桌上，从头翻到尾，然后抬头看你："说说你打这几场的心路历程。"',
+    stages: ['rookie'],
+    difficulty: 3,
+    weight: 0,
+    requireTags: ['interview-ready', 'application-path-open-match'],
+    choices: [
+      {
+        id: 'talk-match-results',
+        label: '详细复盘每场比赛',
+        description: '数据和结果是最有力的说明。',
+        check: {
+          primary: 'experience',
+          secondary: 'intelligence',
+          dc: 10,
+          traitBonuses: { steady: 2, tactical: 2, grinder: 1 },
+          traitPenalties: { ego: 1, shy: 1 },
+        },
+        success: {
+          narrative: '教练盯着你复盘那场决赛，眼神变了——"你在高压下还能做出这个判断，不错。"他盖上文件夹，伸出手。',
+          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-open-match'],
+          fameDelta: 2,
+          stressDelta: -1,
+        },
+        failure: {
+          narrative: '你说了很多，但对方听完后沉默了一会儿："成绩有，但我们需要的不只这些。"面试结束。',
+          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-open-match'],
+          stressDelta: 2,
+        },
+      },
+      {
+        id: 'show-aim-highlights',
+        label: '放出几段关键局的精彩回放',
+        description: '用实际画面证明自己的枪法上限。',
+        check: {
+          primary: 'agility',
+          secondary: 'experience',
+          dc: 11,
+          traitBonuses: { mechanical: 3, solo: 2, clutch: 1 },
+          traitPenalties: { support: 1 },
+        },
+        success: {
+          narrative: '屏幕上那个 4K 的瞬间让整个会客室安静了一秒。教练转头对经理说："这个可以。"',
+          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-open-match'],
+          fameDelta: 2,
+          feelDelta: 0.5,
+          stressDelta: -1,
+        },
+        failure: {
+          narrative: '那几段回放里你的枪法没打出最好的状态。对方礼貌地说会再联系。',
+          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-open-match'],
+          stressDelta: 2,
+        },
+      },
+    ],
+  },
+
+  // ── 新人面试（天赋路线）──────────────────────────────────────────
+  {
+    id: 'chain-club-interview-talent',
+    type: 'tryout',
+    title: '俱乐部面试 — 天赋说话',
+    narrative:
+      '星探把你带进会客室，顺手把一套外设推到你面前："我们不看简历，先打一局看看。"教练在旁边默默盯着你的手。',
+    stages: ['rookie'],
+    difficulty: 3,
+    weight: 0,
+    requireTags: ['interview-ready', 'application-path-talent'],
+    choices: [
+      {
+        id: 'raw-aim-showcase',
+        label: '全力发挥，枪法压制对手',
+        description: '你的优势就是准星，把它拉到极限。',
+        check: {
+          primary: 'agility',
+          dc: 9,
+          traitBonuses: { mechanical: 3, solo: 2, aimer: 3, clutch: 2 },
+          traitPenalties: { support: 1 },
+        },
+        success: {
+          narrative: '十五分钟内你打出了教练从没在同龄人身上见过的准星控制。他把键盘推回来："行了，条件我们来谈。"',
+          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-talent'],
+          fameDelta: 3,
+          feelDelta: 1,
+          stressDelta: -2,
+        },
+        failure: {
+          narrative: '有几球你打出了不错的东西，但整体不够稳定。教练皱了皱眉："天赋能看到，但现在还差点火候。"',
+          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-talent'],
+          stressDelta: 2,
+          feelDelta: -0.5,
+        },
+      },
+      {
+        id: 'talk-potential',
+        label: '聊自己的成长空间和学习能力',
+        description: '天赋是起点，可塑性才是俱乐部最想要的。',
+        check: {
+          primary: 'intelligence',
+          secondary: 'mentality',
+          dc: 10,
+          traitBonuses: { tactical: 2, steady: 2, igl: 1 },
+          traitPenalties: { ego: 2, shy: 1 },
+        },
+        success: {
+          narrative: '你坦诚自己经验不多，但清楚自己的短板在哪。教练听完点头："知道自己缺什么的人，教起来最省心。"',
+          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-talent'],
+          fameDelta: 1,
+          dailyGrowth: 'intelligence',
+          stressDelta: -1,
+        },
+        failure: {
+          narrative: '你讲了不少，但对方显然更想看实力而不是听故事。面试气氛有点尴尬地结束了。',
+          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-talent'],
+          stressDelta: 2,
+        },
+      },
+    ],
+  },
+
   // ── 被拒收尾 ──────────────────────────────────────────────────
   {
     id: 'chain-club-rejected',
@@ -1223,7 +1348,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '又一次被拒了',
     narrative:
       '这次申请最终没能通过。你看着邮箱里那封格式化回信，沉默了一会儿。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
     difficulty: 0,
     weight: 0,
     requireTags: ['club-rejected-notify'],
@@ -1240,13 +1365,13 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你关上电脑，打开训练图。拒绝信可以删，手感不能丢。',
-          tagRemoves: ['club-rejected-notify'],
+          tagRemoves: ['club-rejected-notify', 'application-path-open-match', 'application-path-talent'],
           dailyGrowth: 'mentality',
           stressDelta: -1,
         },
         failure: {
           narrative: '你坐在椅子上发了好一会儿呆。这封回信比预想的更难受。',
-          tagRemoves: ['club-rejected-notify'],
+          tagRemoves: ['club-rejected-notify', 'application-path-open-match', 'application-path-talent'],
           stressDelta: 2,
           tiltDelta: 1,
         },
@@ -1261,7 +1386,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '新队的第一天',
     narrative:
       '你推开训练室的门，几张陌生的面孔转过来看你。IGL 招了招手："你就是那个新人？过来坐，今天先从沟通习惯开始。"',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
     difficulty: 1,
     weight: 0,
     requireTags: ['just-joined-team'],

@@ -17,15 +17,8 @@ export interface TournamentGate {
 }
 
 export const TOURNAMENT_GATES: TournamentGate[] = [
-  {
-    from: 'rookie',
-    to: 'youth',
-    tiers: ['netcafe', 'city', 'platform'],
-    minParticipations: 5,
-    champTiers: ['netcafe', 'city', 'platform'],
-    minChampionships: 2,
-    promotionEventId: 'promotion-rookie-to-youth',
-  },
+  // rookie → youth is NOT a tournament gate; it requires joining a team
+  // via the club application system (respondTeamOffer handles the stage advance).
   {
     from: 'youth',
     to: 'second',

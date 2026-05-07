@@ -100,7 +100,7 @@ cs2-game-simulator/
 |---|---|---|
 | `intelligence` | 智力 | 战术、应变、残局决策；驱动"决策"派生属性 |
 | `agility` | 敏捷 | 枪法、反应、对枪；驱动"枪法"派生属性 |
-| `experience` | 经验 | 比赛经验（修正项，权重 0.3）；驱动晋升阈值 |
+| `experience` | 经验 | 比赛经验（修正项，权重 0.3）；d20 检定修正项 |
 | `money` | 金钱 | 训练资源、生活、康复（豁免成长曲线） |
 | `mentality` | 心态 | 高压发挥；驱动"稳定性"派生属性；调节压力增减 |
 | `constitution` | 体质 | 手腕颈椎；驱动"续航"派生属性 |
@@ -165,7 +165,7 @@ Buff 是临时性成长加成，有使用次数限制。
 | 字段 | 范围 | 说明 |
 |---|---|---|
 | `stress` | 0–100 | 压力值，**100 → 立即结束（生涯压力崩盘）** |
-| `fame` | 0–100 | 名气，决定阶段晋升和媒体事件权重 |
+| `fame` | 0–100 | 名气，影响俱乐部申请门槛、媒体事件权重、购物条件（粉丝见面会） |
 | `volatile` | 见上节 | 手感/心态波动/疲劳，每回合高频变化 |
 | `buffs` | 数组 | 当前生效的临时成长加成 |
 | `growthSpent` | ≥0 | 生涯已用成长量（上限 30） |
@@ -200,16 +200,25 @@ Buff 是临时性成长加成，有使用次数限制。
 
 阶段顺序：`rookie → youth → second → pro → star → veteran → retired`
 
-每级晋升需要满足：经验 ≥ 阈值 AND（fame ≥ 阈值 OR 持有任一快捷 tag）
+**rookie → youth**：不通过赛事门槛，必须通过俱乐部申请系统加入战队。
 
-| 从 → 到 | exp | fame | 快捷 tag |
-|---|---|---|---|
-| rookie → youth | 6 | ≥ 2 | `signed-second-team / tournament-winner / fan-favorite` |
-| youth → second | 10 | ≥ 5 | `signed-second-team / tournament-winner` |
-| second → pro | 14 | ≥ 10 | `tournament-winner / highlight-clip` |
-| pro → star | 18 | ≥ 20 | `tournament-winner` |
+申请前提条件（满足任一）：
+- **赛事路线**：netcafe / city / platform 参赛合计 ≥ 3 场 **且** 夺冠 ≥ 1 次
+- **天赋路线**：持有「枪法天才」特质（aim-god）
 
-`Outcome.stageSet / stageDelta` 可绕过 gate（剧情驱动）。
+满足条件后可在 `ClubPanel` 向青训俱乐部投简历（消耗 25 AP），2–4 回合后触发 `chain-club-response` 事件，成功进入对应路线面试（`chain-club-interview-open-match` 或 `chain-club-interview-talent`），面试通过生成 `pendingOffer`，接受邀约后直接晋升 youth。
+
+**youth 及以上**：基于赛事参与/夺冠数量自动触发晋升叙事事件（`checkTournamentPromotion`），满足门槛后下一回合注入 `promotionPending`，触发晋升叙事事件，叙事事件决策中设置 `stageSet`。
+
+| 从 → 到 | 计入赛事 | 最低参赛 | 最低夺冠 | 晋升叙事事件 |
+|---|---|---|---|---|
+| youth → second | 次级联赛、发展联赛 | ≥ 3 场 | ≥ 1 次 | `promotion-youth-to-second` |
+| second → pro | 发展联赛、Tier2 邀请赛 | ≥ 3 场 | ≥ 1 次 | `promotion-second-to-pro` |
+| pro → star | Tier1 邀请赛、S 级、Major | ≥ 2 场 | ≥ 1 次 | `promotion-pro-to-star` |
+| star → veteran | — | — | — | 剧情驱动 |
+| veteran → retired | — | — | — | 剧情驱动 |
+
+`Outcome.stageSet / stageDelta` 可在任意事件中绕过 gate 直接推进阶段（剧情驱动）。
 
 ### 特质系统
 
@@ -287,7 +296,7 @@ Buff 是临时性成长加成，有使用次数限制。
 | `action-rest-day` | 休息一天 | mentality | feel-0.5 + fatigue-20 + stress-5 | feel-1 + fatigue-10 |
 | `action-fitness` | 健身锻炼 | constitution（DC 6）| constitution 成长 + fatigue+18 | fatigue+14 |
 | `action-meditation` | 冥想静心 | mentality（DC 4）| mentality 成长 + fatigue-8 + stress-10（×5）| fatigue-4 + stress-5（×5）|
-| `action-vacation` | 度假断网 | mentality（DC 1）| feel-2.5 + fatigue-30 + stress-50 | feel-2 + fatigue-20 + stress-30 |
+| `action-vacation` | 度假断网 | mentality（DC 1）| feel-2 + fatigue-30 + stress-50 | feel-3 + fatigue-20 + stress-30 |
 
 `applyAction()` 复用 `resolveChoice()` 的 d20 检定逻辑，不推进回合、不重置 AP。
 
@@ -523,7 +532,7 @@ npx wrangler deploy
 - 前端 API 自动路由（`cs.*` → `cs-api.*`）
 
 ### Phase B（阶段锁 + 比赛深化）
-- `STAGE_GATES`：fame + tag 门槛
+- 阶段锁雏形（后续迭代已改为赛事参与门槛）
 - 4 个比赛事件（minor / major / league）
 - 高压事件（stress ≥ 触发线启用 `requireTags: stressed`）
 - 状态权重（media / betting / cheat 按状态加权）
