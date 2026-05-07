@@ -241,6 +241,11 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     }
   }
 
+  // 赛事隔离：报名赛事期间只出现赛前准备事件
+  if (player.pendingMatch) {
+    return buildTournamentPrepEvent(player.pendingMatch);
+  }
+
   // 面试优先：interview-ready 时直接注入对应面试事件，不参与随机池竞争
   if (synthTags.has('interview-ready')) {
     const interviewEvent = EVENT_POOL.find(
@@ -250,11 +255,6 @@ export function pickEvent(ctx: EventContext): EventDef | null {
         !e.requireTags?.some((t) => !synthTags.has(t)),
     );
     if (interviewEvent) return interviewEvent;
-  }
-
-  // 赛事隔离：报名赛事期间只出现赛前准备事件
-  if (player.pendingMatch) {
-    return buildTournamentPrepEvent(player.pendingMatch);
   }
 
   const eligible = EVENT_POOL.filter((e) => {
