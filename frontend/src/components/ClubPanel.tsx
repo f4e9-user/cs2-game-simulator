@@ -61,11 +61,15 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
 
   const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
   const playerStageIdx = stageOrder.indexOf(player.stage);
+  const rookieCheck = player.stage === 'rookie' ? rookieEligibility(player) : null;
 
   const eligibleClubs = clubs.filter((c) => {
     if (c.isRival) return false; // 对手映射隐藏
     const requiredIdx = stageOrder.indexOf(c.requiredStage);
-    if (playerStageIdx < requiredIdx) return false;
+    // Rookie 满足资格时允许看到 youth 档俱乐部（后端仍有 Rookie 专属校验）
+    const rookieCanApplyToYouth =
+      player.stage === 'rookie' && c.requiredStage === 'youth' && rookieCheck?.eligible === true;
+    if (!rookieCanApplyToYouth && playerStageIdx < requiredIdx) return false;
     if (c.requiredFame !== undefined && (player.fame ?? 0) < c.requiredFame) return false;
     return true;
   });
@@ -73,7 +77,6 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
   const hasTeam = player.team !== null;
   const hasPending = player.pendingApplication !== null;
   const ap = player.actionPoints ?? 0;
-  const rookieCheck = player.stage === 'rookie' ? rookieEligibility(player) : null;
 
   const apply = async (clubId: string) => {
     setLoading(true);

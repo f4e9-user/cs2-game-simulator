@@ -1139,7 +1139,9 @@ export function applyClubRequest(
   if (player.pendingApplication) throw new Error('已经有一个进行中的申请');
 
   const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
-  if (stageOrder.indexOf(player.stage) < stageOrder.indexOf(club.requiredStage)) {
+  // Rookie 申请 youth 档俱乐部时跳过阶段门槛，后续的 Rookie 专属资格检查会接管
+  const isRookieApplyingToYouth = player.stage === 'rookie' && club.requiredStage === 'youth';
+  if (!isRookieApplyingToYouth && stageOrder.indexOf(player.stage) < stageOrder.indexOf(club.requiredStage)) {
     throw new Error('当前阶段不满足该俱乐部的门槛');
   }
   if (club.requiredFame !== undefined && (player.fame ?? 0) < club.requiredFame) {
