@@ -233,6 +233,11 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     if (restPool.length > 0) return weightedPick(restPool, rng, () => 1);
   }
 
+  // 赛事隔离：进行中的赛事优先级最高，阻断晋级事件和随机事件
+  if (player.pendingMatch) {
+    return buildTournamentPrepEvent(player.pendingMatch);
+  }
+
   // Promotion pending: inject the stage-specific narrative event.
   if (player.promotionPending) {
     const gate = getGate(player.stage);
@@ -240,11 +245,6 @@ export function pickEvent(ctx: EventContext): EventDef | null {
       const ev = PROMOTION_EVENTS.find((e) => e.id === gate.promotionEventId);
       if (ev) return ev;
     }
-  }
-
-  // 赛事隔离：报名赛事期间只出现赛前准备事件
-  if (player.pendingMatch) {
-    return buildTournamentPrepEvent(player.pendingMatch);
   }
 
   // 面试优先：interview-ready 时直接注入对应面试事件，不参与随机池竞争
