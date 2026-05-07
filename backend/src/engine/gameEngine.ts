@@ -586,7 +586,7 @@ export function applyChoice(
     pm !== undefined &&
     pm.resolveYear === nextYear &&
     pm.resolveWeek === nextWeek;
-  const isInterviewPhase = nextPlayer.tags.includes('interview-pending');
+  const isInterviewPhase = nextTags.includes('interview-pending');
   const nextActionPoints = isMatchWeek ? 0 : isInterviewPhase ? 50 : 100;
 
   // ── 商店冷却修剪（过期 round 已过）──────────────────────────────
