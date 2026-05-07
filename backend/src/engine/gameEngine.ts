@@ -579,14 +579,15 @@ export function applyChoice(
     session.player.week ?? 1,
   );
 
-  // ── 行动力重置（赛事比赛周冻结为 0）──────────────────────────────
+  // ── 行动力重置（赛事比赛周冻结为 0，面试期间减半）────────────────
   const pm = session.player.pendingMatch;
   const isMatchWeek =
     pm !== null &&
     pm !== undefined &&
     pm.resolveYear === nextYear &&
     pm.resolveWeek === nextWeek;
-  const nextActionPoints = isMatchWeek ? 0 : 100;
+  const isInterviewPhase = nextPlayer.tags.includes('interview-pending');
+  const nextActionPoints = isMatchWeek ? 0 : isInterviewPhase ? 50 : 100;
 
   // ── 商店冷却修剪（过期 round 已过）──────────────────────────────
   const nextShopCooldowns: Record<string, number> = {};
