@@ -50,6 +50,7 @@ export default function GamePage() {
   const [traits, setTraits] = useState<Trait[]>([]);
   const [shaking, setShaking] = useState(false);
   const [showNewGameModal, setShowNewGameModal] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'left' | 'center' | 'right'>('center');
   const prevStress = useRef(0);
 
   useEffect(() => {
@@ -149,7 +150,7 @@ export default function GamePage() {
       <HudTopBar player={player} leaderboard={leaderboard} />
 
       {/* Main body */}
-      <div className="hud-body">
+      <div className="hud-body" data-tab={mobileTab}>
         {/* Left: tournaments + actions + shop + leaderboard */}
         <aside className="hud-left">
           {!ended && (
@@ -195,8 +196,16 @@ export default function GamePage() {
                 <div className="actions-phase-banner">
                   <div className="actions-phase-title">行动阶段</div>
                   <div className="actions-phase-hint">
-                    在左侧面板执行日常行动（最多 4 次），或直接进入下一回合。
+                    在「行动」面板执行日常行动（最多 4 次），或直接进入下一回合。
                   </div>
+                  <button
+                    type="button"
+                    className="ghost-button mob-only"
+                    style={{ marginTop: 10 }}
+                    onClick={() => setMobileTab('left')}
+                  >
+                    → 前往行动面板
+                  </button>
                   <button
                     type="button"
                     className="primary-button"
@@ -249,6 +258,37 @@ export default function GamePage() {
           <FeedPanel history={history} />
         </aside>
       </div>
+
+      {/* Mobile tab navigation */}
+      <nav className="mob-nav">
+        <button
+          type="button"
+          className={`mob-tab${mobileTab === 'left' ? ' active' : ''}`}
+          onClick={() => setMobileTab('left')}
+        >
+          {actionsPhase && mobileTab !== 'left' && (
+            <span className="mob-tab-badge" />
+          )}
+          <span className="mob-tab-icon">⚔</span>
+          <span className="mob-tab-label">行动</span>
+        </button>
+        <button
+          type="button"
+          className={`mob-tab${mobileTab === 'center' ? ' active' : ''}`}
+          onClick={() => setMobileTab('center')}
+        >
+          <span className="mob-tab-icon">📋</span>
+          <span className="mob-tab-label">事件</span>
+        </button>
+        <button
+          type="button"
+          className={`mob-tab${mobileTab === 'right' ? ' active' : ''}`}
+          onClick={() => setMobileTab('right')}
+        >
+          <span className="mob-tab-icon">👤</span>
+          <span className="mob-tab-label">选手</span>
+        </button>
+      </nav>
 
       {/* Team offer modal */}
       {pendingOffer && (

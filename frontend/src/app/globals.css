@@ -2036,3 +2036,217 @@ input[type='text']:focus {
   gap: 4px;
   flex-wrap: wrap;
 }
+
+/* ── Mobile navigation bar (hidden on desktop) ───────────────── */
+
+.mob-nav {
+  display: none;
+}
+
+.mob-only {
+  display: none;
+}
+
+/* ── Mobile responsive ≤ 768px ───────────────────────────────── */
+
+@media (max-width: 768px) {
+  /* Home page */
+  .layout {
+    padding: 12px 14px 80px;
+  }
+
+  .hero {
+    padding: 18px 0 10px;
+  }
+
+  /* Larger touch targets */
+  .primary-button {
+    min-height: 42px;
+    padding: 10px 18px;
+  }
+
+  .ghost-button {
+    min-height: 40px;
+    padding: 8px 14px;
+  }
+
+  /* Modal fits full width */
+  .modal {
+    padding: 16px;
+  }
+
+  /* Stepper buttons bigger for touch */
+  .stepper-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  /* ── HUD: add 4th row for mobile tab bar */
+  .hud-root {
+    grid-template-rows: auto 1fr 44px 52px;
+  }
+
+  /* Top bar: allow two rows, make stats/gauges scrollable */
+  .hud-top {
+    height: auto;
+    min-height: 52px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: 4px;
+    padding: 6px 10px;
+  }
+
+  /* Derived stats row: scrollable horizontally */
+  .hud-stats-row {
+    order: 10;
+    width: 100%;
+    flex: none;
+    overflow-x: auto;
+    padding-bottom: 3px;
+    scrollbar-width: none;
+    gap: 14px;
+  }
+  .hud-stats-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Gauges: scrollable horizontally */
+  .hud-gauges {
+    order: 5;
+    overflow-x: auto;
+    flex: none;
+    max-width: 100%;
+    gap: 12px;
+    scrollbar-width: none;
+  }
+  .hud-gauges::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Body: single column, panels toggled by data-tab */
+  .hud-body {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hud-left,
+  .hud-center,
+  .hud-right {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    display: none;
+    border: none !important;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px;
+  }
+
+  .hud-body[data-tab="left"] .hud-left   { display: block; }
+  .hud-body[data-tab="center"] .hud-center { display: block; }
+  .hud-body[data-tab="right"] .hud-right  { display: block; }
+
+  /* Bottom bar: compact */
+  .hud-bottom {
+    padding: 0 10px;
+    gap: 6px;
+    font-size: 10px;
+    overflow: hidden;
+  }
+
+  /* Mobile tab bar visible */
+  .mob-nav {
+    grid-row: 4;
+    display: flex;
+    background: var(--bg-1);
+    border-top: 1px solid var(--border);
+    z-index: 20;
+  }
+
+  .mob-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-top: 2px solid transparent;
+    color: var(--fg-2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 0;
+    cursor: pointer;
+    font-family: inherit;
+    touch-action: manipulation;
+    position: relative;
+  }
+
+  .mob-tab.active {
+    color: var(--accent);
+    border-top-color: var(--accent);
+  }
+
+  .mob-tab-icon {
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .mob-tab-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+
+  /* Dot badge on tab when action phase is active */
+  .mob-tab-badge {
+    position: absolute;
+    top: 4px;
+    right: calc(50% - 14px);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* Mobile-only helper elements */
+  .mob-only {
+    display: block;
+  }
+
+  /* Shrink choice cards for mobile */
+  .cs-choice {
+    padding: 10px 12px 10px 40px;
+  }
+
+  /* Larger feed items on mobile */
+  .feed-item {
+    padding: 10px 12px;
+  }
+
+  /* Player card padding */
+  .player-card {
+    padding: 12px;
+  }
+}
+
+/* ── Extra-small phones ≤ 390px ──────────────────────────────── */
+
+@media (max-width: 390px) {
+  .hud-top {
+    padding: 5px 8px;
+  }
+
+  .hud-stat-bar {
+    width: 32px;
+  }
+
+  .hud-derived-bar {
+    width: 36px;
+  }
+
+  .hud-gauge-val,
+  .hud-stat-val {
+    font-size: 12px;
+  }
+}
