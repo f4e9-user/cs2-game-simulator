@@ -18,7 +18,12 @@ import { HudTopBar } from '@/components/HudTopBar';
 import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { useGameStore } from '@/store/gameStore';
-import type { Player, Trait } from '@/lib/types';
+import type { Player, Teammate, Trait } from '@/lib/types';
+
+function statAvg(tm: Teammate): number {
+  const s = tm.stats;
+  return Math.round(((s.agility + s.intelligence + s.mentality + s.experience) / 4) * 10) / 10;
+}
 
 export default function GamePage() {
   const params = useParams<{ sessionId: string }>();
@@ -258,12 +263,31 @@ export default function GamePage() {
                 )}
 
                 {centerTab === 'team' && (
-                  <ClubPanel
-                    sessionId={sessionId}
-                    player={player}
-                    enabled={actionsPhase}
-                    onPlayerUpdate={(p: Player) => setPlayer(p)}
-                  />
+                  <>
+                    {player.roster && player.roster.length > 0 && (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', marginBottom: 6 }}>
+                          阵容
+                        </div>
+                        <div className="roster-list">
+                          {player.roster.map((tm) => (
+                            <div key={tm.id} className="roster-row">
+                              <span className="roster-role">[{tm.role}]</span>
+                              <span className="roster-name">{tm.name}</span>
+                              <span className="roster-traits">{tm.traits.join(' / ')}</span>
+                              <span className="roster-avg">均值 {statAvg(tm)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <ClubPanel
+                      sessionId={sessionId}
+                      player={player}
+                      enabled={actionsPhase}
+                      onPlayerUpdate={(p: Player) => setPlayer(p)}
+                    />
+                  </>
                 )}
 
                 {centerTab === 'leaderboard' && (
