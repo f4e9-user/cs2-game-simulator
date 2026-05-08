@@ -23,24 +23,16 @@ import {
   getTournament,
   tournamentsOpenForSignup,
 } from '../data/tournaments.js';
+import {
+  clearTeamQualifications,
+  qualificationFallbackSlots,
+  qualificationSlotLabel,
+  qualificationSlotOwner,
+} from '../engine/qualification.js';
 import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
 import type { ClubTier, Env, PlayerTeam, Stats } from '../types.js';
-
-// ── 赛事准入战队门槛映射 ──────────────────────────────────────────
-// null = 自由人可参加
-const TOURNAMENT_TEAM_REQUIREMENT: Record<string, ClubTier | null> = {
-  netcafe: null,
-  city: null,
-  platform: null,
-  'secondary-league': 'youth',
-  'development-league': 'youth',
-  tier2: 'semi-pro',
-  tier1: 'pro',
-  's-class': 'pro',
-  major: 'top',
-};
 
 function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
   if (!required) return true;
@@ -48,6 +40,7 @@ function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier 
   const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
   return tierOrder.indexOf(playerTeam.tier) >= tierOrder.indexOf(required);
 }
+
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -161,17 +154,6 @@ app.post('/game/:sessionId/choice', async (c) => {
       };
     }
 
-    await storage.sessions.appendRound(
-      updated.id,
-      result.round,
-      result.eventId,
-      result.eventType,
-      result.choiceId,
-      result.success,
-      result,
-      result.createdAt,
-    );
-
     // 战后处理：面试成功 → 生成入队邀请
     const INTERVIEW_EVENT_IDS = new Set([
       'chain-club-interview',
@@ -194,6 +176,7 @@ app.post('/game/:sessionId/choice', async (c) => {
     }
     // 合同到期选择不续 → 清空 team
     if (result.eventId === 'chain-contract-renewal' && result.choiceId === 'leave-team') {
+      updated.player = clearTeamQualifications(updated.player, result.qualificationChanges);
       updated.player.team = null;
       updated.player.consecutiveLosses = 0;
     }
@@ -206,6 +189,7 @@ app.post('/game/:sessionId/choice', async (c) => {
     if (result.eventId === 'chain-team-fired') {
       const fired = result.choiceId === 'accept-gracefully' || !result.success;
       if (fired) {
+        updated.player = clearTeamQualifications(updated.player, result.qualificationChanges);
         updated.player.team = null;
         updated.player.consecutiveLosses = 0;
       }
@@ -232,6 +216,25 @@ app.post('/game/:sessionId/choice', async (c) => {
         updated.player.pendingOffer = offer;
       }
     }
+
+    const lastIdxAfter = updated.history.length - 1;
+    if (lastIdxAfter >= 0) {
+      updated.history[lastIdxAfter] = {
+        ...updated.history[lastIdxAfter]!,
+        qualificationChanges: result.qualificationChanges,
+      };
+    }
+
+    await storage.sessions.appendRound(
+      updated.id,
+      result.round,
+      result.eventId,
+      result.eventType,
+      result.choiceId,
+      result.success,
+      result,
+      result.createdAt,
+    );
 
     await storage.sessions.save(updated);
 
@@ -269,6 +272,11 @@ app.get('/game/:sessionId/tournaments', async (c) => {
     session.player.fame ?? 0,
     playerPoints,
     session.player.week ?? 1,
+    session.player.year ?? 1,
+    {
+      ...(session.player.qualificationSlots ?? {}),
+      ...(session.player.teamQualificationSlots ?? {}),
+    },
   );
   return c.json({
     open,
@@ -310,7 +318,7 @@ app.post('/game/:sessionId/signup', async (c) => {
     );
   }
   // 战队门槛校验
-  const teamReq = TOURNAMENT_TEAM_REQUIREMENT[t.tier] ?? null;
+  const teamReq = t.teamRequirement ?? null;
   if (teamReq !== null && !teamMeetsRequirement(session.player.team, teamReq)) {
     if (!session.player.team) {
       return c.json({ error: `该赛事需要签约战队才能参加` }, 400);
@@ -335,6 +343,35 @@ app.post('/game/:sessionId/signup', async (c) => {
   if (session.player.pendingMatch) {
     return c.json({ error: '已经报名了一项赛事，先打完再说' }, 400);
   }
+  let usedQualificationSlot: string | undefined;
+  let usedQualificationSlotOwner: 'player' | 'team' | undefined;
+  if (t.qualificationTargets?.length) {
+    const usedSlot = t.qualificationTargets
+      .flatMap((slot) => qualificationFallbackSlots(slot))
+      .find((slot) => {
+        const owner = qualificationSlotOwner(slot);
+        const pool = owner === 'team'
+          ? (session.player.teamQualificationSlots ?? {})
+          : (session.player.qualificationSlots ?? {});
+        return (pool[slot] ?? 0) > 0;
+      });
+    if (!usedSlot) {
+      return c.json({ error: '缺少对应资格门票' }, 400);
+    }
+    usedQualificationSlot = usedSlot;
+    usedQualificationSlotOwner = qualificationSlotOwner(usedSlot);
+    if (usedQualificationSlotOwner === 'team') {
+      session.player.teamQualificationSlots = {
+        ...(session.player.teamQualificationSlots ?? {}),
+        [usedSlot]: Math.max(0, (session.player.teamQualificationSlots?.[usedSlot] ?? 0) - 1),
+      };
+    } else {
+      session.player.qualificationSlots = {
+        ...(session.player.qualificationSlots ?? {}),
+        [usedSlot]: Math.max(0, (session.player.qualificationSlots?.[usedSlot] ?? 0) - 1),
+      };
+    }
+  }
 
   const year = session.player.year ?? 1;
   // Schedule the match 2 weeks out so the player gets a full action phase
@@ -350,6 +387,11 @@ app.post('/game/:sessionId/signup', async (c) => {
     tournamentId: t.id,
     tier: t.tier,
     name: t.name,
+    displayName: t.displayName,
+    progressionTier: t.progressionTier,
+    entryType: t.entryType,
+    qualificationSlotUsed: usedQualificationSlot,
+    qualificationSlotOwner: usedQualificationSlotOwner,
     resolveYear: next.year,
     resolveWeek: next.week,
     stageIndex: 0,
@@ -371,6 +413,30 @@ app.post('/game/:sessionId/withdraw', async (c) => {
   if (!session.player.pendingMatch) return c.json({ error: '当前没有报名中的赛事' }, 400);
 
   const penalties: string[] = [];
+
+  if (session.player.pendingMatch.qualificationSlotUsed) {
+    const slot = session.player.pendingMatch.qualificationSlotUsed;
+    const tm = getTournament(session.player.pendingMatch.tournamentId);
+    // Only refund if the tournament's qualificationTargets still covers this slot,
+    // guarding against stale pendingMatch data from a tournament definition change.
+    const slotIsValid = tm?.qualificationTargets?.some((target) =>
+      qualificationFallbackSlots(target).includes(slot),
+    ) ?? false;
+    if (slotIsValid) {
+      if (session.player.pendingMatch.qualificationSlotOwner === 'team') {
+        session.player.teamQualificationSlots = {
+          ...(session.player.teamQualificationSlots ?? {}),
+          [slot]: (session.player.teamQualificationSlots?.[slot] ?? 0) + 1,
+        };
+      } else {
+        session.player.qualificationSlots = {
+          ...(session.player.qualificationSlots ?? {}),
+          [slot]: (session.player.qualificationSlots?.[slot] ?? 0) + 1,
+        };
+      }
+      penalties.push(`退还资格：${qualificationSlotLabel(slot)}`);
+    }
+  }
 
   // 弃赛惩罚
   session.player.stress = Math.min(100, (session.player.stress ?? 0) + 25);
@@ -519,6 +585,7 @@ app.post('/game/:sessionId/leave-team', async (c) => {
   if (!session.player.team) return c.json({ error: '当前没有战队' }, 400);
   if (session.player.pendingMatch) return c.json({ error: '赛事进行中，不能离队' }, 400);
 
+  Object.assign(session.player, clearTeamQualifications(session.player));
   session.player.team = null;
   session.player.consecutiveLosses = 0;
   session.player.fame = Math.max(0, (session.player.fame ?? 0) - 5);

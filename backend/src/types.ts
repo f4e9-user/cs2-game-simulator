@@ -70,6 +70,11 @@ export interface PendingMatch {
   tournamentId: string;
   tier: string;
   name: string;
+  displayName?: string;
+  progressionTier?: string;
+  entryType?: string;
+  qualificationSlotUsed?: string;
+  qualificationSlotOwner?: 'player' | 'team';
   resolveYear: number;
   resolveWeek: number;
   stageIndex: number;
@@ -185,6 +190,8 @@ export interface DynamicState {
   shopCooldowns: Record<string, number>;
   team: PlayerTeam | null;
   pendingApplication: PendingApplication | null;
+  qualificationSlots: Record<string, number>;
+  teamQualificationSlots: Record<string, number>;
   consecutiveLosses: number;         // 连续赛事失利计数
   everHadTeam: boolean;               // 是否曾拥有过战队（用于结局判定）
   contractRenewals: number;           // 续约次数（用于 loyal-veteran 结局）
@@ -287,6 +294,7 @@ export interface RoundResult {
   stageAfter: Stage;
   tagsAdded: string[];
   passiveEffects: string[];
+  qualificationChanges: string[];
   stressChange: number;
   fameChange: number;
   // ── 新增：状态变化（主要展示项）──

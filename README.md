@@ -265,6 +265,30 @@ Buff 是临时性成长加成，有使用次数限制。
 
 合成事件 ID 格式：`tournament-{tournamentId}--{stageIndex}`
 
+**年度品牌资格链（当前实现）**：
+- `B级`：`Academy League` / `City Masters` / `Open Cup` 夺冠产出 `a-open`
+- `A级`：`A Open Qualifier` 消耗 `a-open` 并产出 `a-main`，部分 `A级正赛` 消耗 `a-main`
+- `IEM`：A级四强/冠军产出 `iem-open` → `IEM Open Qualifier` 消耗 `iem-open` 并产出 `iem-main` → `IEM` / `IEM Major` 消耗 `iem-main`
+- `BLAST`：A级四强/冠军产出 `blast-closed` → `BLAST Open Closed Qualifier` 消耗 `blast-closed` 并产出 `blast-main` → `BLAST Open` / `BLAST Rivals` 消耗 `blast-main`
+- `PGL`：A级四强产出 `pgl-open` → `PGL Open Qualifier` 消耗 `pgl-open` 并产出 `pgl-closed` → `PGL Closed Qualifier` 消耗 `pgl-closed` 并产出 `pgl-main` → `PGL Major` 消耗 `pgl-main`
+- 预选票属于选手个人；主赛资格属于战队，离队或转会时清空战队资格
+- 门票保存在 `player.qualificationSlots`
+- 战队资格保存在 `player.teamQualificationSlots`
+- 资格门票跨年清空，不保留到下一赛季
+
+**赛事对象新增字段**：
+- `displayName`：给前端展示的真实赛事名
+- `brand` / `subtype`：品牌与赛事类型
+- `progressionTier`：`b | a | s-qualifier | s-main | major`
+- `entryType`：`invite | open_qualifier | closed_qualifier | direct_signup`
+- `teamRequirement`：战队门槛
+- `qualificationTargets`：报名所需门票 key
+- `qualificationMilestones`：阶段节点奖励（如四强 / 决赛）
+- `qualificationRewards`：夺冠额外奖励
+
+**RoundResult 新增字段**：
+- `qualificationChanges`：本回合资格变化文案（获得门票 / 赛季过期等）
+
 ### 排行榜（积分榜）
 
 - Session 创建时构建：玩家队 + 4 个 rivals + 10 个填充队 = ~15 队

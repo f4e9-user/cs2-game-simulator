@@ -83,6 +83,11 @@ import { buildTournamentPrepEvent, pickEvent, ROLE_STAT_REQUIREMENT, substituteR
 import { checkTournamentPromotion } from './stages.js';
 import { applyDelta, applyGrowth, clampStats, makeRng, resolveChoice, stageIndex, translateStatDelta } from './resolver.js';
 import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
+import {
+  addQualificationRewardsByOwner,
+  clearTeamQualifications,
+  formatQualificationRewards,
+} from './qualification.js';
 
 export interface InitInput {
   name: string;
@@ -98,6 +103,7 @@ function uuid(): string {
 function nowIso(): string {
   return new Date().toISOString();
 }
+
 
 function clampStress(v: number): number {
   return Math.max(STRESS_MIN, Math.min(STRESS_MAX, Math.round(v)));
@@ -223,6 +229,8 @@ export function initPlayer(input: InitInput): Player {
     shopCooldowns: {},
     team: null,
     pendingApplication: null,
+    qualificationSlots: {},
+    teamQualificationSlots: {},
     pendingOffer: null,
     roster: null,
     preferredRole: deriveRoleFromTraits(traits),
@@ -429,6 +437,7 @@ export function applyChoice(
   // ── 核心属性（resolver 已应用成长）──
   let statsAfterGrowth = outcome.nextStats;
   const passiveEffects: string[] = [];
+  const qualificationChanges: string[] = [];
   const tagsAdded = [...outcome.tagsAdded];
   const tagsRemoved = [...outcome.tagsRemoved];
 
@@ -617,6 +626,22 @@ export function applyChoice(
     session.player.week ?? 1,
   );
 
+  let nextQualificationSlots = { ...(session.player.qualificationSlots ?? {}) };
+  let nextTeamQualificationSlots = { ...(session.player.teamQualificationSlots ?? {}) };
+  // ORDERING: expiry must run here, before tournament rewards are written below (~line 955).
+  // Year-end final-match wins earn tickets AFTER this clear, so the new tickets survive.
+  // Do not move this block past the tournament resolution block.
+  if (nextYear > (session.player.year ?? 1)) {
+    const expiredQualificationCount =
+      Object.values(nextQualificationSlots).reduce((sum, count) => sum + count, 0) +
+      Object.values(nextTeamQualificationSlots).reduce((sum, count) => sum + count, 0);
+    if (expiredQualificationCount > 0) {
+      qualificationChanges.push(`赛季资格过期：清空 ${expiredQualificationCount} 张资格门票`);
+    }
+    nextQualificationSlots = {};
+    nextTeamQualificationSlots = {};
+  }
+
   // ── 行动力重置（赛事比赛周冻结为 0，面试期间减半）────────────────
   const pm = session.player.pendingMatch;
   const isMatchWeek =
@@ -656,6 +681,8 @@ export function applyChoice(
     week: nextWeek,
     actionPoints: nextActionPoints,
     shopCooldowns: nextShopCooldowns,
+    qualificationSlots: nextQualificationSlots,
+    teamQualificationSlots: nextTeamQualificationSlots,
     consecutiveLosses,
   };
 
@@ -792,6 +819,7 @@ export function applyChoice(
     }
 
     nextPlayer.roster = null;
+    Object.assign(nextPlayer, clearTeamQualifications(nextPlayer, qualificationChanges));
   }
 
   // 队友后台成长
@@ -833,6 +861,7 @@ export function applyChoice(
     stageAfter: outcome.stageAfter,
     tagsAdded,
     passiveEffects,
+    qualificationChanges,
     stressChange: stress - stressBefore,
     fameChange: fame - fameBefore,
     feelChange,
@@ -874,21 +903,51 @@ export function applyChoice(
       if (idx === 0) {
         const tierPart = { ...(nextPlayer.tierParticipations ?? {}) };
         tierPart[t.tier] = (tierPart[t.tier] ?? 0) + 1;
+        tierPart[t.progressionTier] = (tierPart[t.progressionTier] ?? 0) + 1;
         nextPlayer.tierParticipations = tierPart;
         nextPlayer.tournamentParticipations = (nextPlayer.tournamentParticipations ?? 0) + 1;
+      }
+      if (outcome.success && t.qualificationMilestones?.length) {
+        const matchedMilestones = t.qualificationMilestones.filter(
+          (milestone) => milestone.stageIndex === idx && (milestone.requireWin ?? true),
+        );
+        const milestoneRewards = matchedMilestones.flatMap((milestone) => milestone.rewards);
+        if (milestoneRewards.length > 0) {
+          const rewardsByOwner = addQualificationRewardsByOwner(
+            nextPlayer.qualificationSlots ?? {},
+            nextPlayer.teamQualificationSlots ?? {},
+            milestoneRewards,
+          );
+          nextPlayer.qualificationSlots = rewardsByOwner.playerSlots;
+          nextPlayer.teamQualificationSlots = rewardsByOwner.teamSlots;
+          for (const milestone of matchedMilestones) {
+            qualificationChanges.push(`获得资格：${milestone.label}，${formatQualificationRewards(milestone.rewards)}`);
+          }
+        }
       }
       if (isFinal && outcome.success) {
         const tierChamp = { ...(nextPlayer.tierChampionships ?? {}) };
         tierChamp[t.tier] = (tierChamp[t.tier] ?? 0) + 1;
+        tierChamp[t.progressionTier] = (tierChamp[t.progressionTier] ?? 0) + 1;
         nextPlayer.tierChampionships = tierChamp;
         nextPlayer.tournamentChampionships = (nextPlayer.tournamentChampionships ?? 0) + 1;
+        if (t.qualificationRewards?.length) {
+          const rewardsByOwner = addQualificationRewardsByOwner(
+            nextPlayer.qualificationSlots ?? {},
+            nextPlayer.teamQualificationSlots ?? {},
+            t.qualificationRewards,
+          );
+          nextPlayer.qualificationSlots = rewardsByOwner.playerSlots;
+          nextPlayer.teamQualificationSlots = rewardsByOwner.teamSlots;
+          qualificationChanges.push(`获得资格：${formatQualificationRewards(t.qualificationRewards)}`);
+        }
 
-        // 明星选手判定：Major ≥1 / S级 ≥3 / Tier1 ≥10
+        // 明星选手判定：Major ≥1 / S级正赛 ≥3
+        // 新赛制只产生 s-main / major 冠军记录；s-class / tier1 为旧存档兼容，新游戏不会触发
         const tc = nextPlayer.tierChampionships;
         const isStar =
           (tc['major'] ?? 0) >= 1 ||
-          (tc['s-class'] ?? 0) >= 3 ||
-          (tc['tier1'] ?? 0) >= 10;
+          (tc['s-main'] ?? tc['s-class'] ?? 0) >= 3;
         if (isStar && !nextPlayer.tags.includes('star-player')) {
           nextPlayer.tags = dedupe([...nextPlayer.tags, 'star-player']);
           nextPlayer.stats = { ...nextPlayer.stats, experience: nextPlayer.stats.experience + 1 };
@@ -1444,6 +1503,7 @@ export function respondTeamOffer(
       player.stress = Math.min(100, (player.stress ?? 0) + 25);
       const expiryRound = player.round + 12;
       player.tagExpiry = { ...(player.tagExpiry ?? {}), 'contract-dispute': expiryRound };
+      Object.assign(player, clearTeamQualifications(player));
     }
 
     const team: PlayerTeam = {

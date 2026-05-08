@@ -11,24 +11,72 @@ import {
   describeTournamentStress,
 } from '@/lib/format';
 
-const TOURNAMENT_TEAM_REQ: Record<string, ClubTier | null> = {
-  netcafe: null,
-  city: null,
-  platform: null,
-  'secondary-league': 'youth',
-  'development-league': 'semi-pro',
-  tier2: 'pro',
-  tier1: 'pro',
-  's-class': 'top',
-  major: 'top',
-};
-
 const TIER_LABELS: Record<ClubTier, string> = {
   youth: '青训',
   'semi-pro': '半职业',
   pro: '职业',
   top: '顶级',
 };
+
+const PROGRESSION_LABELS: Record<string, string> = {
+  b: 'B级',
+  a: 'A级',
+  's-qualifier': 'S级预选',
+  's-main': 'S级正赛',
+  major: 'Major',
+};
+
+const ENTRY_LABELS: Record<string, string> = {
+  invite: '直邀',
+  open_qualifier: '公开预选',
+  closed_qualifier: '封闭预选',
+  direct_signup: '公开报名',
+};
+
+function slotLabel(slot: string): string {
+  const match = /^(iem|blast|pgl)-(open|closed|main)$/.exec(slot);
+  if (match) {
+    const brand = match[1].toUpperCase();
+    const phase = match[2] === 'open'
+      ? '公开预选门票'
+      : match[2] === 'closed'
+        ? '封闭预选门票'
+        : '正赛资格';
+    return `${brand}${phase}`;
+  }
+  switch (slot) {
+    case 'a-open':
+      return 'A级公开预选门票';
+    case 'a-main':
+      return 'A级正赛资格';
+    case 's-open':
+      return 'S公开预选门票';
+    case 's-closed':
+      return 'S封闭预选门票';
+    case 's-main':
+      return 'S正赛资格';
+    default:
+      return slot;
+  }
+}
+
+function formatSlots(slots: Record<string, number>): string[] {
+  return Object.entries(slots)
+    .filter(([, count]) => count > 0)
+    .map(([slot, count]) => `${slotLabel(slot)} x${count}`);
+}
+
+// Keep in sync with qualificationRewards / qualificationMilestones in tournaments.ts
+const QUALIFICATION_OVERVIEW = [
+  'B赛：夺冠可拿 A级公开预选门票，打通青训到二线入口',
+  'A级：A公开预选 -> A正赛 -> 品牌S赛资格',
+  'IEM：A赛 -> IEM公开预选 -> IEM正赛 / IEM Major',
+  'BLAST：A赛 -> BLAST封闭预选 -> BLAST正赛',
+  'PGL：A赛 -> PGL公开预选 -> PGL封闭预选 -> PGL Major',
+  'EPL / EWC / FISSURE / StarSeries / CAC：当前仍以直邀和积分为主',
+  '预选票跟人走；主赛资格跟队走，离队会失去战队资格',
+  '资格门票跨年失效，需在当赛季内使用',
+];
 
 function teamReqMet(team: Player['team'], req: ClubTier | null): boolean {
   if (!req) return true;
@@ -63,7 +111,7 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, player.week, player.stage, player.fame]);
+  }, [sessionId, player.week, player.year, player.stage, player.fame]);
 
   const signup = async (tournamentId: string) => {
     setBusyId(tournamentId);
@@ -108,6 +156,21 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
         }}
       >
         赛事日历
+        {formatSlots(player.qualificationSlots ?? {}).length > 0 && (
+          <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--fg-2)' }}>
+            个人资格：{formatSlots(player.qualificationSlots ?? {}).join(' · ')}
+          </span>
+        )}
+        {formatSlots(player.teamQualificationSlots ?? {}).length > 0 && (
+          <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--accent-dim)' }}>
+            战队资格：{formatSlots(player.teamQualificationSlots ?? {}).join(' · ')}
+          </span>
+        )}
+      </div>
+      <div style={{ padding: '0 2px 6px', fontSize: 10, color: 'var(--fg-3)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {QUALIFICATION_OVERVIEW.map((line) => (
+          <div key={line}>{line}</div>
+        ))}
       </div>
 
       {player.pendingMatch ? (
@@ -166,9 +229,9 @@ function PendingMatchCard({
   const hasContract = ['second', 'pro'].includes(stage);
   return (
     <div className="pending-match-card">
-      <div className="pending-match-name">{pm.name}</div>
+      <div className="pending-match-name">{pm.displayName ?? pm.name}</div>
       <div className="pending-match-meta">
-        Y{pm.resolveYear} W{pm.resolveWeek} · 阶段 {pm.stageIndex + 1}
+        Y{pm.resolveYear} W{pm.resolveWeek} · {PROGRESSION_LABELS[pm.progressionTier ?? ''] ?? pm.tier} · {ENTRY_LABELS[pm.entryType ?? ''] ?? '正赛'} · 阶段 {pm.stageIndex + 1}
       </div>
       {confirmWithdraw ? (
         <div className="withdraw-confirm">
@@ -226,12 +289,12 @@ function TournamentCard({
   busy: boolean;
 }) {
   const r = t.reward;
-  const teamReq = TOURNAMENT_TEAM_REQ[t.tier] ?? null;
+  const teamReq = t.teamRequirement ?? null;
   const canEnter = teamReqMet(team, teamReq);
   return (
     <div className="tourney-card">
       <div className="tourney-name">
-        {t.name}
+        {t.displayName}
         <span
           style={{
             marginLeft: 6,
@@ -242,13 +305,31 @@ function TournamentCard({
             color: 'var(--accent-dim)',
           }}
         >
-          {t.tier}
+          {PROGRESSION_LABELS[t.progressionTier] ?? t.tier}
         </span>
       </div>
       <div className="tourney-meta">{t.description}</div>
+      <div style={{ fontSize: 10, color: 'var(--fg-3)', marginBottom: 4 }}>
+        {t.brand} · {ENTRY_LABELS[t.entryType] ?? t.entryType}
+      </div>
       {teamReq && (
         <div style={{ fontSize: 10, color: canEnter ? 'var(--up)' : 'var(--danger)', marginBottom: 4 }}>
-          {canEnter ? '🔓' : '🔒'} 需要 {TIER_LABELS[teamReq]}+ 战队
+          {canEnter ? '可参加' : '需战队'} · 需要 {TIER_LABELS[teamReq]}+ 战队
+        </div>
+      )}
+      {t.qualificationTargets && t.qualificationTargets.length > 0 && (
+        <div style={{ fontSize: 10, color: 'var(--fg-2)', marginBottom: 4 }}>
+          资格要求 · {t.qualificationTargets.map((slot) => slotLabel(slot)).join(' / ')}
+        </div>
+      )}
+      {t.qualificationMilestones && t.qualificationMilestones.length > 0 && (
+        <div style={{ fontSize: 10, color: 'var(--accent-dim)', marginBottom: 4 }}>
+          节点奖励 · {t.qualificationMilestones.map((milestone) => `${milestone.label}：${milestone.rewards.map((reward) => `${slotLabel(reward.slot)} x${reward.count}`).join(' + ')}`).join(' · ')}
+        </div>
+      )}
+      {(!t.qualificationMilestones || t.qualificationMilestones.length === 0) && t.qualificationRewards && t.qualificationRewards.length > 0 && (
+        <div style={{ fontSize: 10, color: 'var(--accent-dim)', marginBottom: 4 }}>
+          夺冠奖励 · {t.qualificationRewards.map((reward) => `${slotLabel(reward.slot)} x${reward.count}`).join(' · ')}
         </div>
       )}
       <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginBottom: 6 }}>

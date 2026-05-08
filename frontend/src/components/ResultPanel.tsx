@@ -15,6 +15,7 @@ export function ResultPanel({ result }: { result: RoundResult }) {
   const deltas = Object.entries(result.statChanges) as [StatKey, number][];
   const stageChanged = result.stageBefore !== result.stageAfter;
   const passives = result.passiveEffects ?? [];
+  const qualificationChanges = result.qualificationChanges ?? [];
   const buffsAdded = result.buffsAdded ?? [];
   const stressChange = result.stressChange ?? 0;
   const fameChange = result.fameChange ?? 0;
@@ -77,6 +78,10 @@ export function ResultPanel({ result }: { result: RoundResult }) {
         </div>
       )}
 
+      {qualificationChanges.length > 0 && (
+        <QualificationResultCard changes={qualificationChanges} />
+      )}
+
       {hasChips && (
         <div className="chips-row">
           {stageChanged && (
@@ -121,6 +126,24 @@ export function ResultPanel({ result }: { result: RoundResult }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function QualificationResultCard({ changes }: { changes: string[] }) {
+  const title = changes.length > 1 ? '资格变动' : '资格获得';
+
+  return (
+    <div className="qualification-result-card">
+      <div className="qualification-result-tag">资格更新</div>
+      <div className="qualification-result-title">{title}</div>
+      <div className="qualification-result-list">
+        {changes.map((change) => (
+          <div key={change} className="qualification-result-line">
+            {change}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
