@@ -48,7 +48,8 @@ export function buildLeaderboard(player: Player): LeaderboardTeam[] {
   return sortBoard(all);
 }
 
-// Each round, non-player teams gain 0-3 points; small chance of larger jump.
+// Each round, non-player teams gain points at a pace matching real tournament
+// schedules: small chance of a tournament win, modest chance of a stage finish.
 // The player team is updated explicitly when they complete tournament stages
 // (stageRewardDelta), not here.
 export function tickLeaderboard(
@@ -59,8 +60,8 @@ export function tickLeaderboard(
     if (t.isPlayer) return t;
     const r = rng();
     let delta = 0;
-    if (r < 0.15) delta = 5; // breakout week
-    else if (r < 0.6) delta = Math.floor(rng() * 3) + 1;
+    if (r < 0.05) delta = 3;       // tournament win (~once every 20 rounds)
+    else if (r < 0.25) delta = 1;  // stage finish
     return { ...t, points: t.points + delta };
   });
   return sortBoard(updated);
