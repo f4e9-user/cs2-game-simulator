@@ -1353,9 +1353,13 @@ export function respondTeamOffer(
   if (!offer) throw new Error('没有待处理的入队邀请');
 
   if (accept) {
-    // 骑驴找马：接受新 offer 时若仍在旧队，视为主动违约离队，名气 -5
+    // 骑驴找马违约：名气 -15、压力 +25，contract-dispute 标签持续 12 回合
+    // 现实中这类操作会引发舆论争议，"不忠诚"标签会背一段时间
     if (player.team) {
-      player.fame = Math.max(0, (player.fame ?? 0) - 5);
+      player.fame = Math.max(0, (player.fame ?? 0) - 15);
+      player.stress = Math.min(100, (player.stress ?? 0) + 25);
+      const expiryRound = player.round + 12;
+      player.tagExpiry = { ...(player.tagExpiry ?? {}), 'contract-dispute': expiryRound };
     }
 
     const team: PlayerTeam = {
@@ -1381,6 +1385,10 @@ export function respondTeamOffer(
     const rosterRng = makeRng(hashString(session.id) ^ (player.round * 7919));
     const roster = generateRoster(offer.tier, rosterRng);
 
+    const hadTeam = player.team !== null;
+    const cleanTags = player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending');
+    const nextTags = hadTeam ? dedupe([...cleanTags, 'contract-dispute']) : cleanTags;
+
     return {
       ...player,
       team,
@@ -1389,8 +1397,9 @@ export function respondTeamOffer(
       pendingOffer: null,
       pendingApplication: null,
       roster,
-      teamTrust: 40,
-      tags: player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending'),
+      teamTrust: hadTeam ? 25 : 40, // 跳槽违约，新队对你观感也打折
+      tags: nextTags,
+      tagExpiry: player.tagExpiry,
     };
   } else {
     // Add 10-round cooldown so the same poach event doesn't re-trigger immediately
