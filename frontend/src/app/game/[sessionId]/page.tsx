@@ -70,9 +70,10 @@ export default function GamePage() {
   const [displayEvent, setDisplayEvent] = useState<typeof currentEvent>(null);
 
   // currentEvent 变化时立刻更新 displayEvent，同时后台请求个性化
+  // actionsPhase 期间事件不展示给玩家，跳过个性化请求
   useEffect(() => {
     setDisplayEvent(currentEvent);
-    if (!currentEvent) return;
+    if (!currentEvent || actionsPhase) return;
     let cancelled = false;
     api.personalizeEvent(sessionId).then((res) => {
       if (cancelled || !res.personalized) return;
@@ -90,7 +91,7 @@ export default function GamePage() {
       });
     }).catch(() => { /* 静默降级，保持原文 */ });
     return () => { cancelled = true; };
-  }, [currentEvent?.id, sessionId]);
+  }, [currentEvent?.id, sessionId, actionsPhase]);
 
   useEffect(() => {
     let cancelled = false;

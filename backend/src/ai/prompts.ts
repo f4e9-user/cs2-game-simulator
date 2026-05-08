@@ -12,7 +12,6 @@ export interface NarrativePromptInput {
 export function buildNarrativePrompt(input: NarrativePromptInput): string {
   const { player, baseNarrative, eventTitle, choiceLabel, success } = input;
   return [
-    '你是一个 CS2 电竞小说的叙事引擎。',
     '请基于下面的事实，把 "原始描述" 润色成 1-2 句更有画面感、更冷静的中文叙事。',
     '禁止改变成败、属性、阶段、任何数值或剧情走向。只改文字风格。',
     `选手：${player.name}，阶段：${STAGE_LABELS[player.stage] ?? player.stage}`,
@@ -20,7 +19,6 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
     `选择：${choiceLabel}`,
     `结果：${success ? '成功' : '失败'}`,
     `原始描述：${baseNarrative}`,
-    '只输出润色后的正文，不要解释，不要加引号。',
   ].join('\n');
 }
 
@@ -58,21 +56,21 @@ export function buildPersonalizePrompt(
   const feelLabel = feel >= 2 ? '手感火热' : feel <= -2 ? '手感冰冷' : '手感正常';
   const stressLabel = player.stress >= 80 ? '压力极大' : player.stress >= 50 ? '压力偏高' : '压力正常';
 
-  const choicesJson = event.choices
-    .map((c) => `{"id":"${c.id}","label":"${c.label}","description":"${c.description}"}`)
-    .join(',\n');
+  const choicesJson = JSON.stringify(
+    event.choices.map((c) => ({ id: c.id, label: c.label, description: c.description })),
+    null,
+    2,
+  );
 
   return [
-    '你是 CS2 电竞小说的叙事引擎。',
     '根据选手当前状态，把下面事件的 narrative 和每个选项的 description 改得更有个人色彩。',
     '规则：禁止改变选项数量、选项 id、选项 label、事件类型或任何游戏机制含义。只改措辞和细节。',
     `选手：${player.name}，阶段：${STAGE_LABELS[player.stage] ?? player.stage}`,
     `特质：${traitNames || '无'}`,
     `当前状态：${stressLabel}，名气 ${player.fame}，${feelLabel}`,
-    `事件 narrative：${event.narrative}`,
-    `选项：\n[${choicesJson}]`,
+    `事件 narrative：${JSON.stringify(event.narrative)}`,
+    `选项：\n${choicesJson}`,
     '严格输出 JSON，格式：{"narrative":"...","choices":[{"id":"...","description":"..."}]}',
-    '不要输出任何其他内容。',
   ].join('\n');
 }
 

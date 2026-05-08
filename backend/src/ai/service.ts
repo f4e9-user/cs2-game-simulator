@@ -26,6 +26,9 @@ const NARRATIVE_SYSTEM_PROMPT =
 const SUMMARY_SYSTEM_PROMPT =
   '你是一个 CS2 电竞生涯传记作者。只输出小结正文，不要标题，不要解释。';
 
+const INTRO_SYSTEM_PROMPT =
+  INTRO_SYSTEM_PROMPT;
+
 const PERSONALIZE_SYSTEM_PROMPT =
   '你是 CS2 电竞小说的叙事引擎。严格按要求输出 JSON，不要输出任何其他内容。';
 
@@ -70,7 +73,7 @@ class TemplateNarrator implements AiService {
     return `${player.name}，${background.description}这条路，没有人能替你走。`;
   }
 
-  async personalizeEvent(): Promise<PersonalizedEvent | null> {
+  async personalizeEvent(_player: Player, _traits: Trait[], _event: GameEventPublic): Promise<PersonalizedEvent | null> {
     return null;
   }
 }
@@ -116,7 +119,7 @@ class AnthropicNarrator implements AiService {
 
   async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
     return (await this.anthropicChat(
-      '你是一部 CS2 电竞生涯小说的开篇叙事者。只输出故事正文，不要标题，不要引号。',
+      INTRO_SYSTEM_PROMPT,
       buildIntroPrompt(player, traits, background),
       300,
     )) ?? '';
@@ -185,7 +188,7 @@ class OpenAINarrator implements AiService {
 
   async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
     return (await this.chat(
-      '你是一部 CS2 电竞生涯小说的开篇叙事者。只输出故事正文，不要标题，不要引号。',
+      INTRO_SYSTEM_PROMPT,
       buildIntroPrompt(player, traits, background),
       300,
     )) ?? '';
