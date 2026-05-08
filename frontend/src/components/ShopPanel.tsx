@@ -53,6 +53,8 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
   const round = player.round;
   const cooldowns = player.shopCooldowns ?? {};
 
+  const TOURNAMENT_LOCKED_ITEMS = new Set(['team-dinner', 'fan-meetup', 'short-trip']);
+
   const canBuy = (item: ShopItem): { ok: boolean; reason?: string } => {
     if (player.stats.money < item.priceMoney) {
       return { ok: false, reason: `资金不足（需 ${item.priceMoney * 10}K）` };
@@ -66,6 +68,9 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
     }
     if (item.requireStage && !item.requireStage.includes(player.stage)) {
       return { ok: false, reason: '当前阶段不可用' };
+    }
+    if (player.pendingMatch && TOURNAMENT_LOCKED_ITEMS.has(item.id)) {
+      return { ok: false, reason: '赛事进行中，无法执行此行动' };
     }
     return { ok: true };
   };

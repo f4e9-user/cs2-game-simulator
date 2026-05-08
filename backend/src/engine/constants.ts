@@ -123,6 +123,30 @@ export const STRESS_SCALE = 5;
 // 破产时心态减损
 export const BROKE_MENTALITY_DRAIN = 1;
 
+// 体能对疲劳增量的梯度乘数（仅作用于正值）
+export function fatigueMult(constitution: number): number {
+  if (constitution >= 15) return 0.30;
+  if (constitution >= 11) return 0.55;
+  if (constitution >= 7)  return 0.85;
+  if (constitution >= 4)  return 1.35;
+  return 1.60;
+}
+// 正向疲劳增量下限
+export const FATIGUE_DELTA_FLOOR_ROUTINE = 5; // 日常行动
+export const FATIGUE_DELTA_FLOOR_EVENT   = 2; // 随机事件
+
+// 心态对压力增量的梯度乘数（仅作用于正值）
+export function stressMult(mentality: number): number {
+  if (mentality >= 16) return 0.30;
+  if (mentality >= 13) return 0.55;
+  if (mentality >= 9)  return 0.85;
+  if (mentality >= 5)  return 1.25;
+  return 1.60;
+}
+// 正向压力增量下限
+export const STRESS_DELTA_FLOOR_ROUTINE = 3; // 日常行动
+export const STRESS_DELTA_FLOOR_EVENT   = 1; // 随机事件
+
 // 体能崩溃（constitution ≤ 这个值 → 强制休养）
 export const CONSTITUTION_COLLAPSE = -2;
 export const INJURY_REST_ROUNDS = 2;

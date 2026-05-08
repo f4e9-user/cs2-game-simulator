@@ -64,6 +64,12 @@ import {
   TILT_MIN,
   growthFactor,
   passiveStressFromMentality,
+  fatigueMult,
+  stressMult,
+  FATIGUE_DELTA_FLOOR_ROUTINE,
+  FATIGUE_DELTA_FLOOR_EVENT,
+  STRESS_DELTA_FLOOR_ROUTINE,
+  STRESS_DELTA_FLOOR_EVENT,
 } from './constants.js';
 import { buildTournamentPrepEvent, pickEvent, ROLE_STAT_REQUIREMENT, substituteRivals, substituteTeammates, toPublicEvent } from './events.js';
 import { checkTournamentPromotion } from './stages.js';
@@ -456,7 +462,6 @@ export function applyChoice(
   const dramaAmplify = (session.player.roster ?? []).some((tm) => tm.personality === 'drama');
   const feelDeltaRaw = dramaAmplify ? outcome.feelDelta * 1.2 : outcome.feelDelta;
   const tiltDeltaRaw = dramaAmplify ? outcome.tiltDelta * 1.2 : outcome.tiltDelta;
-  const fatigueDeltaRaw = dramaAmplify ? outcome.fatigueDelta * 1.2 : outcome.fatigueDelta;
   const stressDeltaRaw = dramaAmplify && outcome.chosenOutcome.stressDelta != null
     ? outcome.chosenOutcome.stressDelta * 1.2
     : outcome.chosenOutcome.stressDelta;
@@ -464,15 +469,37 @@ export function applyChoice(
     ? outcome.chosenOutcome.fameDelta * 1.2
     : outcome.chosenOutcome.fameDelta;
 
+  // 体能梯度：高体能减少疲劳增量，仅作用于正值，设下限
+  const isRoutine = eventDef.type === 'routine';
+  const fatigueDeltaBase = dramaAmplify ? outcome.fatigueDelta * 1.2 : outcome.fatigueDelta;
+  let fatigueDeltaRaw = fatigueDeltaBase;
+  if (fatigueDeltaBase > 0) {
+    const floor = isRoutine ? FATIGUE_DELTA_FLOOR_ROUTINE : FATIGUE_DELTA_FLOOR_EVENT;
+    fatigueDeltaRaw = Math.max(
+      Math.round(fatigueDeltaBase * fatigueMult(statsAfterGrowth.constitution)),
+      floor,
+    );
+  }
+
   // 疲劳放大系数（高疲劳时压力增益更强）
   const fatigueFactor =
     volatile.fatigue >= FATIGUE_STRESS_THRESHOLD ? FATIGUE_STRESS_MULTIPLIER : 1;
 
+  // 心态梯度：高心态减少压力增量，仅作用于正值，设下限
+  const mentalityFactor = stressMult(statsAfterGrowth.mentality);
+  const stressFloor = isRoutine ? STRESS_DELTA_FLOOR_ROUTINE : STRESS_DELTA_FLOOR_EVENT;
+
   if (typeof stressDeltaRaw === 'number' && stressDeltaRaw !== 0) {
     const raw = stressDeltaRaw * STRESS_SCALE;
-    stress = clampStress(stress + (raw > 0 ? raw * fatigueFactor : raw));
+    if (raw > 0) {
+      stress = clampStress(stress + Math.max(raw * mentalityFactor * fatigueFactor, stressFloor));
+    } else {
+      stress = clampStress(stress + raw);
+    }
   } else if (!outcome.success) {
-    stress = clampStress(stress + IMPLICIT_FAILURE_STRESS * fatigueFactor);
+    stress = clampStress(
+      stress + Math.max(IMPLICIT_FAILURE_STRESS * mentalityFactor * fatigueFactor, stressFloor),
+    );
     passiveEffects.push('stress-from-failure');
   }
   if (fameDeltaRaw) {
