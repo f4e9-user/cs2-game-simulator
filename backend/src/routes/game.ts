@@ -35,10 +35,10 @@ const TOURNAMENT_TEAM_REQUIREMENT: Record<string, ClubTier | null> = {
   city: null,
   platform: null,
   'secondary-league': 'youth',
-  'development-league': 'semi-pro',
+  'development-league': 'youth',
   tier2: 'semi-pro',
   tier1: 'pro',
-  's-class': 'top',
+  's-class': 'pro',
   major: 'top',
 };
 

@@ -40,9 +40,9 @@ export const TOURNAMENT_GATES: TournamentGate[] = [
   {
     from: 'pro',
     to: 'star',
-    tiers: ['tier1', 's-class', 'major'],
+    tiers: ['tier1', 's-class'],
     minParticipations: 2,
-    champTiers: ['tier1', 's-class', 'major'],
+    champTiers: ['tier1', 's-class'],
     minChampionships: 1,
     promotionEventId: 'promotion-pro-to-star',
   },
