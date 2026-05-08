@@ -6,7 +6,7 @@ import {
   synthesizeMatchEvent,
 } from '../data/tournaments.js';
 import { generateRivals } from '../data/rivals.js';
-import { generateRoster } from '../data/roster.js';
+import { generateRoster, generateSingleTeammate } from '../data/roster.js';
 import {
   addPlayerPoints,
   buildLeaderboard,
@@ -25,6 +25,7 @@ import type {
   GameSession,
   MatchStats,
   Outcome,
+  PendingDeparture,
   Player,
   RoundResult,
   StatDelta,
@@ -754,6 +755,25 @@ export function applyChoice(
     nextPlayer.roleTransition = null;
   }
 
+  // ── 队友转会预警：更新 pendingDeparture 状态 ─────────────────────
+  if (eventDef.id === 'chain-teammate-transfer-rumor' && nextPlayer.pendingDeparture) {
+    nextPlayer.pendingDeparture = { ...nextPlayer.pendingDeparture, rumorShown: true };
+  }
+
+  if (eventDef.id === 'chain-teammate-transfer-reveal' && nextPlayer.pendingDeparture) {
+    nextPlayer.pendingDeparture = { ...nextPlayer.pendingDeparture, revealed: true };
+    const isEarlyAction =
+      (choiceDef.id === 'contact-coach' && outcome.success) ||
+      (choiceDef.id === 'confront-teammate' && outcome.success);
+    if (isEarlyAction) {
+      nextPlayer.pendingDeparture = { ...nextPlayer.pendingDeparture, earlyRecruit: true };
+    }
+    // 质询成功：队友承认，信任小幅下滑
+    if (choiceDef.id === 'confront-teammate' && outcome.success && nextPlayer.roster) {
+      nextPlayer.teamTrust = clampTeamTrust((nextPlayer.teamTrust ?? 50) - 5);
+    }
+  }
+
   const isConflictDeparture =
     eventDef.id === 'chain-team-fired' ||
     (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'));
@@ -922,6 +942,60 @@ export function applyChoice(
 
   leaderboard = tickLeaderboard(leaderboard);
 
+  // ── 队友转会到期：执行替换 + 重新调度 ────────────────────────────
+  if (
+    nextPlayer.pendingDeparture &&
+    nextPlayer.round >= nextPlayer.pendingDeparture.departureRound &&
+    nextPlayer.roster &&
+    nextPlayer.team &&
+    !nextPlayer.pendingMatch // 赛事进行中延后处理
+  ) {
+    const { slotId, earlyRecruit, destTeamName } = nextPlayer.pendingDeparture;
+    const departingIdx = nextPlayer.roster.findIndex((tm) => tm.id === slotId);
+    if (departingIdx !== -1) {
+      const departingTm = nextPlayer.roster[departingIdx]!;
+      const replaceRng = makeRng(hashString(session.id) ^ (nextPlayer.round * 31337));
+      const newTm = generateSingleTeammate(
+        nextPlayer.team.tier,
+        replaceRng,
+        earlyRecruit ? 'good' : 'poor',
+        slotId,
+      );
+      const newRoster = [...nextPlayer.roster];
+      newRoster[departingIdx] = newTm;
+      nextPlayer.roster = newRoster;
+      const trustDrop = earlyRecruit ? -10 : -20;
+      nextPlayer.teamTrust = clampTeamTrust((nextPlayer.teamTrust ?? 50) + trustDrop);
+      passiveEffects.push(
+        `${departingTm.name} 正式转会至 ${destTeamName}，` +
+        `${earlyRecruit ? '提前招募的新秀' : '临时从青训提拔的'} ${newTm.name} 补位（默契 ${trustDrop}）`,
+      );
+    }
+    // 调度下一次转会（赛季内持续发生）
+    const nextOffset = 20 + Math.floor(rng() * 21);
+    const nextRoster = nextPlayer.roster ?? [];
+    if (nextRoster.length > 0) {
+      const nextSlot = nextRoster[Math.floor(rng() * nextRoster.length)]!.id;
+      const rivals = nextPlayer.rivals.length > 0 ? nextPlayer.rivals : [{ name: '某支战队', tag: '???', region: '' }];
+      const nextDest = rivals[Math.floor(rng() * rivals.length)]!.name;
+      nextPlayer.pendingDeparture = {
+        slotId: nextSlot,
+        departureRound: nextPlayer.round + nextOffset,
+        rumorShown: false,
+        revealed: false,
+        destTeamName: nextDest,
+        earlyRecruit: false,
+      };
+    } else {
+      nextPlayer.pendingDeparture = undefined;
+    }
+  }
+
+  // 离队后清除 pendingDeparture（玩家自己离队）
+  if (!nextPlayer.team) {
+    nextPlayer.pendingDeparture = undefined;
+  }
+
   const recent = [...session.history.slice(-2).map((r) => r.eventId), eventDef.id];
   const nextEventDef = (() => {
     if (ending) return null;
@@ -938,10 +1012,14 @@ export function applyChoice(
   result.eventTitle = substituteRivals(result.eventTitle, nextPlayer.rivals);
   result.eventTitle = substituteTeammates(result.eventTitle, nextPlayer.roster ?? []);
 
+  const transferTarget = nextPlayer.pendingDeparture
+    ? (nextPlayer.roster ?? []).find((tm) => tm.id === nextPlayer.pendingDeparture!.slotId)?.name
+    : undefined;
+
   const updated: GameSession = {
     ...session,
     player: nextPlayer,
-    currentEvent: nextEventDef ? toPublicEvent(nextEventDef, nextPlayer.rivals, nextPlayer.roster ?? []) : null,
+    currentEvent: nextEventDef ? toPublicEvent(nextEventDef, nextPlayer.rivals, nextPlayer.roster ?? [], transferTarget) : null,
     history: [...session.history, result],
     status: ending ? 'ended' : 'active',
     ending: ending ?? session.ending,
@@ -1395,6 +1473,20 @@ export function respondTeamOffer(
     const cleanTags = player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending');
     const nextTags = hadTeam ? dedupe([...cleanTags, 'contract-dispute']) : cleanTags;
 
+    // 初始化队友转会计划
+    const deptOffset = 20 + Math.floor(rosterRng() * 21); // 20-40 回合后首次转会
+    const deptSlot = roster[Math.floor(rosterRng() * roster.length)]!.id;
+    const deptRivals = player.rivals.length > 0 ? player.rivals : [{ name: '某支战队', tag: '???', region: '' }];
+    const deptDestTeam = deptRivals[Math.floor(rosterRng() * deptRivals.length)]!.name;
+    const initialPendingDeparture: PendingDeparture = {
+      slotId: deptSlot,
+      departureRound: player.round + deptOffset,
+      rumorShown: false,
+      revealed: false,
+      destTeamName: deptDestTeam,
+      earlyRecruit: false,
+    };
+
     return {
       ...player,
       team,
@@ -1406,6 +1498,7 @@ export function respondTeamOffer(
       teamTrust: hadTeam ? 25 : 40, // 跳槽违约，新队对你观感也打折
       tags: nextTags,
       tagExpiry: player.tagExpiry,
+      pendingDeparture: initialPendingDeparture,
     };
   } else {
     // Add 10-round cooldown so the same poach event doesn't re-trigger immediately

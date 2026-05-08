@@ -164,6 +164,15 @@ export interface TeamOffer {
   weeklySalary: number;
 }
 
+export interface PendingDeparture {
+  slotId: string;           // 即将离队的队友 id（'slot-1' … 'slot-4'）
+  departureRound: number;   // 实际离队回合
+  rumorShown: boolean;      // 匿名预警事件（-7 回合）已触发
+  revealed: boolean;        // 具名预警事件（-4 回合）已触发
+  destTeamName: string;     // 目标俱乐部名称（来自 rivals）
+  earlyRecruit: boolean;    // 玩家提前行动，新人质量更好
+}
+
 export interface DynamicState {
   stress: number;
   fame: number;
@@ -232,6 +241,7 @@ export interface Player extends DynamicState {
   activeRoleRounds: number;
   roleTransition: RoleTransition | null;
   teamTrust: number;
+  pendingDeparture?: PendingDeparture;
 }
 
 export interface ChoicePublic {
