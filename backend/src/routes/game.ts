@@ -23,6 +23,12 @@ import {
   getTournament,
   tournamentsOpenForSignup,
 } from '../data/tournaments.js';
+import {
+  clearTeamQualifications,
+  qualificationFallbackSlots,
+  qualificationSlotLabel,
+  qualificationSlotOwner,
+} from '../engine/qualification.js';
 import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
@@ -35,67 +41,6 @@ function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier 
   return tierOrder.indexOf(playerTeam.tier) >= tierOrder.indexOf(required);
 }
 
-function qualificationSlotLabel(slot: string): string {
-  const match = /^(iem|blast|pgl)-(open|closed|main)$/.exec(slot);
-  if (match) {
-    const brand = match[1].toUpperCase();
-    const phase = match[2] === 'open'
-      ? '公开预选门票'
-      : match[2] === 'closed'
-        ? '封闭预选门票'
-        : '正赛资格';
-    return `${brand}${phase}`;
-  }
-  switch (slot) {
-    case 'a-open':
-      return 'A级公开预选门票';
-    case 'a-main':
-      return 'A级正赛资格';
-    case 's-open':
-      return 'S公开预选门票';
-    case 's-closed':
-      return 'S封闭预选门票';
-    case 's-main':
-      return 'S正赛资格';
-    default:
-      return slot;
-  }
-}
-
-// Brand-specific slots (e.g. iem-open) also accept the generic equivalent (s-open).
-// This lets a player use a generic S-class ticket for any brand's open qualifier.
-// Precedence: brand-specific first, then generic fallback.
-function qualificationFallbackSlots(slot: string): string[] {
-  if (slot === 'a-open' || slot === 'a-main') return [slot];
-  const match = /^(iem|blast|pgl)-(open|closed|main)$/.exec(slot);
-  if (!match) return [slot];
-  const generic = `s-${match[2]}`;
-  return [slot, generic];
-}
-
-function qualificationSlotOwner(slot: string): 'player' | 'team' {
-  if (slot === 'a-main' || slot === 's-main') return 'team';
-  if (slot.endsWith('-main')) return 'team';
-  return 'player';
-}
-
-function clearTeamQualifications(player: { teamQualificationSlots?: Record<string, number>; pendingMatch?: { qualificationSlotOwner?: 'player' | 'team' } | null; team?: PlayerTeam | null }) {
-  return {
-    ...player,
-    teamQualificationSlots: {},
-    pendingMatch: player.pendingMatch?.qualificationSlotOwner === 'team' ? null : player.pendingMatch,
-  };
-}
-
-function teamQualificationLossMessages(player: { teamQualificationSlots?: Record<string, number>; pendingMatch?: { qualificationSlotOwner?: 'player' | 'team'; displayName?: string; name?: string } | null }): string[] {
-  const messages: string[] = [];
-  const total = Object.values(player.teamQualificationSlots ?? {}).reduce((sum, count) => sum + count, 0);
-  if (total > 0) messages.push(`离开战队：失去 ${total} 张战队资格门票`);
-  if (player.pendingMatch?.qualificationSlotOwner === 'team') {
-    messages.push(`离开战队：失去 ${player.pendingMatch.displayName ?? player.pendingMatch.name} 的参赛资格`);
-  }
-  return messages;
-}
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -231,8 +176,7 @@ app.post('/game/:sessionId/choice', async (c) => {
     }
     // 合同到期选择不续 → 清空 team
     if (result.eventId === 'chain-contract-renewal' && result.choiceId === 'leave-team') {
-      result.qualificationChanges.push(...teamQualificationLossMessages(updated.player));
-      updated.player = clearTeamQualifications(updated.player);
+      updated.player = clearTeamQualifications(updated.player, result.qualificationChanges);
       updated.player.team = null;
       updated.player.consecutiveLosses = 0;
     }
@@ -245,8 +189,7 @@ app.post('/game/:sessionId/choice', async (c) => {
     if (result.eventId === 'chain-team-fired') {
       const fired = result.choiceId === 'accept-gracefully' || !result.success;
       if (fired) {
-        result.qualificationChanges.push(...teamQualificationLossMessages(updated.player));
-        updated.player = clearTeamQualifications(updated.player);
+        updated.player = clearTeamQualifications(updated.player, result.qualificationChanges);
         updated.player.team = null;
         updated.player.consecutiveLosses = 0;
       }

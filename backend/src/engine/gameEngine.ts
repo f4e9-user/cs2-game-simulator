@@ -82,6 +82,11 @@ import { buildTournamentPrepEvent, pickEvent, ROLE_STAT_REQUIREMENT, substituteR
 import { checkTournamentPromotion } from './stages.js';
 import { applyDelta, applyGrowth, clampStats, makeRng, resolveChoice, stageIndex, translateStatDelta } from './resolver.js';
 import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
+import {
+  addQualificationRewardsByOwner,
+  clearTeamQualifications,
+  formatQualificationRewards,
+} from './qualification.js';
 
 export interface InitInput {
   name: string;
@@ -98,86 +103,6 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function addQualificationRewards(
-  current: Record<string, number>,
-  rewards: { slot: string; count: number }[],
-): Record<string, number> {
-  const next = { ...current };
-  for (const reward of rewards) {
-    next[reward.slot] = (next[reward.slot] ?? 0) + reward.count;
-  }
-  return next;
-}
-
-function qualificationSlotLabel(slot: string): string {
-  const match = /^(iem|blast|pgl)-(open|closed|main)$/.exec(slot);
-  if (match) {
-    const brand = match[1].toUpperCase();
-    const phase = match[2] === 'open'
-      ? '公开预选门票'
-      : match[2] === 'closed'
-        ? '封闭预选门票'
-        : '正赛资格';
-    return `${brand}${phase}`;
-  }
-  switch (slot) {
-    case 'a-open':
-      return 'A级公开预选门票';
-    case 'a-main':
-      return 'A级正赛资格';
-    case 's-open':
-      return 'S公开预选门票';
-    case 's-closed':
-      return 'S封闭预选门票';
-    case 's-main':
-      return 'S正赛资格';
-    default:
-      return slot;
-  }
-}
-
-function formatQualificationRewards(rewards: { slot: string; count: number }[]): string {
-  return rewards
-    .map((reward) => `${qualificationSlotLabel(reward.slot)} x${reward.count}`)
-    .join('、');
-}
-
-function qualificationSlotOwner(slot: string): 'player' | 'team' {
-  if (slot === 'a-main' || slot === 's-main') return 'team';
-  if (slot.endsWith('-main')) return 'team';
-  return 'player';
-}
-
-function addQualificationRewardsByOwner(
-  playerSlots: Record<string, number>,
-  teamSlots: Record<string, number>,
-  rewards: { slot: string; count: number }[],
-): { playerSlots: Record<string, number>; teamSlots: Record<string, number> } {
-  const nextPlayerSlots = { ...playerSlots };
-  const nextTeamSlots = { ...teamSlots };
-  for (const reward of rewards) {
-    if (qualificationSlotOwner(reward.slot) === 'team') {
-      nextTeamSlots[reward.slot] = (nextTeamSlots[reward.slot] ?? 0) + reward.count;
-    } else {
-      nextPlayerSlots[reward.slot] = (nextPlayerSlots[reward.slot] ?? 0) + reward.count;
-    }
-  }
-  return { playerSlots: nextPlayerSlots, teamSlots: nextTeamSlots };
-}
-
-function clearTeamQualifications(player: Player, qualificationChanges: string[]): Player {
-  const total = Object.values(player.teamQualificationSlots ?? {}).reduce((sum, count) => sum + count, 0);
-  if (total > 0) qualificationChanges.push(`离开战队：失去 ${total} 张战队资格门票`);
-  const pendingMatch = player.pendingMatch?.qualificationSlotOwner === 'team' ? null : player.pendingMatch;
-  if (player.pendingMatch?.qualificationSlotOwner === 'team') {
-    qualificationChanges.push(`离开战队：失去 ${player.pendingMatch.displayName ?? player.pendingMatch.name} 的参赛资格`);
-  }
-  return {
-    ...player,
-    teamQualificationSlots: {},
-    pendingMatch,
-  };
-}
 
 function clampStress(v: number): number {
   return Math.max(STRESS_MIN, Math.min(STRESS_MAX, Math.round(v)));
@@ -997,12 +922,12 @@ export function applyChoice(
           qualificationChanges.push(`获得资格：${formatQualificationRewards(t.qualificationRewards)}`);
         }
 
-        // 明星选手判定：Major ≥1 / S级 ≥3 / Tier1 ≥10
+        // 明星选手判定：Major ≥1 / S级正赛 ≥3
+        // 新赛制只产生 s-main / major 冠军记录；s-class / tier1 为旧存档兼容，新游戏不会触发
         const tc = nextPlayer.tierChampionships;
         const isStar =
           (tc['major'] ?? 0) >= 1 ||
-          (tc['s-main'] ?? tc['s-class'] ?? 0) >= 3 ||
-          (tc['tier1'] ?? 0) >= 10;
+          (tc['s-main'] ?? tc['s-class'] ?? 0) >= 3;
         if (isStar && !nextPlayer.tags.includes('star-player')) {
           nextPlayer.tags = dedupe([...nextPlayer.tags, 'star-player']);
           nextPlayer.stats = { ...nextPlayer.stats, experience: nextPlayer.stats.experience + 1 };
@@ -1500,7 +1425,7 @@ export function respondTeamOffer(
       player.stress = Math.min(100, (player.stress ?? 0) + 25);
       const expiryRound = player.round + 12;
       player.tagExpiry = { ...(player.tagExpiry ?? {}), 'contract-dispute': expiryRound };
-      Object.assign(player, clearTeamQualifications(player, []));
+      Object.assign(player, clearTeamQualifications(player));
     }
 
     const team: PlayerTeam = {
