@@ -117,7 +117,7 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ actionId }) },
     ),
   buyShopItem: (sessionId: string, itemId: string) =>
-    request<{ player: Player; itemName: string }>(
+    request<{ player: Player; itemName: string; shopNarrative?: string; shopNarrativePositive?: boolean }>(
       `/api/game/${sessionId}/shop`,
       { method: 'POST', body: JSON.stringify({ itemId }) },
     ),
@@ -135,6 +135,8 @@ export const api = {
       `/api/game/${sessionId}/team-response`,
       { method: 'POST', body: JSON.stringify({ accept }) },
     ),
+  leaveTeam: (sessionId: string) =>
+    request<{ player: Player }>(`/api/game/${sessionId}/leave-team`, { method: 'POST' }),
   personalizeEvent: (sessionId: string) =>
     request<{ personalized: { narrative: string; choices: Array<{ id: string; description: string }> } | null }>(
       `/api/game/${sessionId}/personalize-event`,

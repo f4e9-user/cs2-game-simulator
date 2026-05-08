@@ -33,8 +33,6 @@ export type Stage =
   | 'youth'
   | 'second'
   | 'pro'
-  | 'star'
-  | 'veteran'
   | 'retired';
 
 export type EventType =
@@ -72,6 +70,11 @@ export interface PendingMatch {
   tournamentId: string;
   tier: string;
   name: string;
+  displayName?: string;
+  progressionTier?: string;
+  entryType?: string;
+  qualificationSlotUsed?: string;
+  qualificationSlotOwner?: 'player' | 'team';
   resolveYear: number;
   resolveWeek: number;
   stageIndex: number;
@@ -166,6 +169,15 @@ export interface TeamOffer {
   weeklySalary: number;
 }
 
+export interface PendingDeparture {
+  slotId: string;           // 即将离队的队友 id（'slot-1' … 'slot-4'）
+  departureRound: number;   // 实际离队回合
+  rumorShown: boolean;      // 匿名预警事件（-7 回合）已触发
+  revealed: boolean;        // 具名预警事件（-4 回合）已触发
+  destTeamName: string;     // 目标俱乐部名称（来自 rivals）
+  earlyRecruit: boolean;    // 玩家提前行动，新人质量更好
+}
+
 export interface DynamicState {
   stress: number;
   fame: number;
@@ -178,6 +190,8 @@ export interface DynamicState {
   shopCooldowns: Record<string, number>;
   team: PlayerTeam | null;
   pendingApplication: PendingApplication | null;
+  qualificationSlots: Record<string, number>;
+  teamQualificationSlots: Record<string, number>;
   consecutiveLosses: number;         // 连续赛事失利计数
   everHadTeam: boolean;               // 是否曾拥有过战队（用于结局判定）
   contractRenewals: number;           // 续约次数（用于 loyal-veteran 结局）
@@ -204,6 +218,10 @@ export interface Player extends DynamicState {
   stats: Stats;
   // ── 状态系统 ──
   volatile: VolatileState;
+  // ── 手感上限（外设升级可提升，默认 3，范围 2.5~5）──
+  feelCap: number;
+  // ── 外设等级（0~4，决定下次购买价格）──
+  peripheralTier: number;
   // ── Buff 系统 ──
   buffs: Buff[];
   // ── 成长上限追踪（生涯累计成长点数，上限 30）──
@@ -230,6 +248,7 @@ export interface Player extends DynamicState {
   activeRoleRounds: number;
   roleTransition: RoleTransition | null;
   teamTrust: number;
+  pendingDeparture?: PendingDeparture;
 }
 
 export interface ChoicePublic {
@@ -275,6 +294,7 @@ export interface RoundResult {
   stageAfter: Stage;
   tagsAdded: string[];
   passiveEffects: string[];
+  qualificationChanges: string[];
   stressChange: number;
   fameChange: number;
   // ── 新增：状态变化（主要展示项）──

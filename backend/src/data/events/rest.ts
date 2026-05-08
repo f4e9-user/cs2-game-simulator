@@ -68,7 +68,7 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '观众不多，但礼物够你下周点几顿外卖。',
-          statChanges: { money: 2, constitution: 1 },
+          statChanges: { money: 20, constitution: 1 },
           stressDelta: 1,
         },
         failure: {
@@ -87,7 +87,7 @@ export const REST_EVENTS: EventDef[] = [
     title: '被队医按在床上',
     narrative:
       '俱乐部队医看了 MRI 单子，把键盘从你手里抽走：「你这周就躺着。」',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 1,
     weight: 1,
     choices: [
@@ -144,7 +144,7 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '观众不多，但礼物够你下周点几顿外卖。',
-          statChanges: { money: 2, constitution: 1 },
+          statChanges: { money: 20, constitution: 1 },
           stressDelta: 1,
         },
         failure: {
@@ -161,7 +161,7 @@ export const REST_EVENTS: EventDef[] = [
     title: '回家一趟',
     narrative:
       '强制休养期间，家人让你回去住几天。桌上有你高中时候的照片。',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 1,
     weight: 0.7,
     choices: [
@@ -199,7 +199,7 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你们第一次完整地聊这件事，最后妈妈帮你熬了一锅汤。',
-          statChanges: { constitution: 2, mentality: 3, money: 1 },
+          statChanges: { constitution: 2, mentality: 3, money: 10 },
           stressDelta: -4,
           tagAdds: ['family-support'],
         },

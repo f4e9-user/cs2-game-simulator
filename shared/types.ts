@@ -13,8 +13,6 @@ export type Stage =
   | 'youth'
   | 'second'
   | 'pro'
-  | 'star'
-  | 'veteran'
   | 'retired';
 
 export type EventType =
@@ -56,6 +54,8 @@ export interface DynamicState {
   year: number;                // 1-indexed in-game year
   week: number;                // 1-48 (4 weeks per month, 12 months)
   pendingMatch: PendingMatch | null;
+  qualificationSlots: Record<string, number>;
+  teamQualificationSlots: Record<string, number>;
 }
 
 // A tournament the player has signed up for. Resolves when (year, month) match.
@@ -63,6 +63,11 @@ export interface PendingMatch {
   tournamentId: string;
   tier: string;
   name: string;
+  displayName?: string;
+  progressionTier?: string;
+  entryType?: string;
+  qualificationSlotUsed?: string;
+  qualificationSlotOwner?: 'player' | 'team';
   resolveYear: number;
   resolveWeek: number;
   // For multi-stage tournaments: the current stage index within Tournament.stages.
@@ -163,6 +168,7 @@ export interface RoundResult {
   stageAfter: Stage;
   tagsAdded: string[];
   passiveEffects: string[];
+  qualificationChanges: string[];
   stressChange: number;
   fameChange: number;
   createdAt: string;

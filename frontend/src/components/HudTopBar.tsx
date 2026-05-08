@@ -1,4 +1,4 @@
-import type { DerivedStats, LeaderboardTeam, Player } from '@/lib/types';
+import type { Buff, DerivedStats, LeaderboardTeam, Player } from '@/lib/types';
 import {
   DERIVED_ICONS,
   DERIVED_LABELS,
@@ -10,6 +10,30 @@ import {
   scoreBar,
   tiltLabel,
 } from '@/lib/format';
+
+const BUFF_ICONS: Record<string, string> = {
+  'pro-gear':      '🖱️',
+  'ergo-recovery': '🪑',
+  'psych-calm':    '🧠',
+};
+
+function buffDetail(buff: Buff): { effect: string; scope: string } {
+  const pct = Math.round(Math.abs(buff.multiplier - 1) * 100);
+  const dir = buff.multiplier >= 1 ? '+' : '-';
+  let effect = '';
+  if (buff.growthKey) {
+    const keyLabel: Record<string, string> = {
+      agility: '敏捷', intelligence: '智力', experience: '经验',
+      mentality: '心态', constitution: '体能',
+    };
+    effect = `${keyLabel[buff.growthKey] ?? buff.growthKey} 成长效率 ${dir}${pct}%`;
+  } else if (buff.multiplier !== 1) {
+    effect = `效率 ${dir}${pct}%`;
+  }
+  const scopeLabel: Record<string, string> = { all: '所有行动', ranked: '天梯', training: '训练' };
+  const scope = scopeLabel[buff.actionTag] ?? buff.actionTag;
+  return { effect, scope };
+}
 
 interface Props {
   player: Player;
@@ -49,7 +73,7 @@ export function HudTopBar({ player, leaderboard }: Props) {
       {/* 战队信息 */}
       {player.team ? (
         <span className="hud-stage-tag" style={{ background: 'var(--bg-3)', color: 'var(--up)' }}>
-          [{player.team.tag}] +{player.team.weeklySalary * 10}K/w
+          [{player.team.tag}] +{player.team.weeklySalary}K/w
         </span>
       ) : (
         <span className="hud-stage-tag" style={{ background: 'var(--bg-3)', color: 'var(--fg-2)' }}>
@@ -88,6 +112,7 @@ export function HudTopBar({ player, leaderboard }: Props) {
           <span className="hud-gauge-label">手感</span>
           <span className="hud-gauge-val">
             {vol.feel > 0 ? `+${vol.feel}` : vol.feel}
+            <span className="hud-feel-cap">/{player.feelCap ?? 3}</span>
           </span>
         </div>
 
@@ -124,6 +149,26 @@ export function HudTopBar({ player, leaderboard }: Props) {
           </div>
         )}
       </div>
+
+      {/* Buff 图标区 */}
+      {player.buffs && player.buffs.length > 0 && (
+        <div className="hud-buffs">
+          {player.buffs.map((buff) => {
+            const { effect, scope } = buffDetail(buff);
+            return (
+              <div key={buff.id} className="hud-buff-icon">
+                {BUFF_ICONS[buff.id] ?? '⭐'}
+                <div className="hud-buff-tooltip">
+                  <div className="hud-buff-tooltip-name">{buff.label}</div>
+                  {effect && <div className="hud-buff-tooltip-row">{effect}</div>}
+                  <div className="hud-buff-tooltip-row">范围：{scope}</div>
+                  <div className="hud-buff-tooltip-uses">剩余 {buff.remainingUses} 次</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </header>
   );
 }

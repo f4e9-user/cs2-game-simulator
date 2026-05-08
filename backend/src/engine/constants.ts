@@ -32,8 +32,6 @@ export const STAGE_ORDER: Stage[] = [
   'youth',
   'second',
   'pro',
-  'star',
-  'veteran',
   'retired',
 ];
 
@@ -42,8 +40,6 @@ export const STAGE_LABELS: Record<Stage, string> = {
   youth: '青训',
   second: '二线队',
   pro: '职业队',
-  star: '明星选手',
-  veteran: '老将',
   retired: '退役',
 };
 
@@ -60,6 +56,7 @@ export const POINT_POOL = 12;
 export const PER_STAT_MAX = 12;
 export const STAT_MIN = 0;
 export const STAT_MAX = 20;
+export const MONEY_MAX = 999;
 
 // ── 成长系统 ──────────────────────────────────────────────────
 // 生涯总成长上限（money 不计入）
@@ -85,7 +82,17 @@ export const EVENT_EXP_GROWTH_PER_DELTA = 0.04;
 
 // ── 状态系统 ──────────────────────────────────────────────────
 export const FEEL_MIN = -3;
-export const FEEL_MAX = 3;
+export const FEEL_MAX = 3; // 手感下限/默认上限（clampFeel 的兜底值）
+
+// ── 手感上限系统（外设升级）─────────────────────────────────────
+export const FEEL_CAP_DEFAULT = 3;   // 初始上限
+export const FEEL_CAP_MIN     = 2.5; // 被骗后最低能跌到的上限
+export const FEEL_CAP_MAX     = 5;   // 最高等级上限
+
+// 外设四档价格（单位：money 点数，×10 = K）: 50K / 80K / 120K / 200K
+export const PERIPHERAL_PRICES = [50, 80, 120, 200] as const;
+// 外设升级成功概率
+export const PERIPHERAL_SUCCESS_CHANCE = 0.70;
 export const TILT_MIN = 0;
 export const TILT_MAX = 3;
 export const FATIGUE_MIN = 0;
@@ -123,6 +130,30 @@ export const STRESS_SCALE = 5;
 // 破产时心态减损
 export const BROKE_MENTALITY_DRAIN = 1;
 
+// 体能对疲劳增量的梯度乘数（仅作用于正值）
+export function fatigueMult(constitution: number): number {
+  if (constitution >= 15) return 0.30;
+  if (constitution >= 11) return 0.55;
+  if (constitution >= 7)  return 0.85;
+  if (constitution >= 4)  return 1.35;
+  return 1.60;
+}
+// 正向疲劳增量下限
+export const FATIGUE_DELTA_FLOOR_ROUTINE = 5; // 日常行动
+export const FATIGUE_DELTA_FLOOR_EVENT   = 2; // 随机事件
+
+// 心态对压力增量的梯度乘数（仅作用于正值）
+export function stressMult(mentality: number): number {
+  if (mentality >= 16) return 0.30;
+  if (mentality >= 13) return 0.55;
+  if (mentality >= 9)  return 0.85;
+  if (mentality >= 5)  return 1.25;
+  return 1.60;
+}
+// 正向压力增量下限
+export const STRESS_DELTA_FLOOR_ROUTINE = 3; // 日常行动
+export const STRESS_DELTA_FLOOR_EVENT   = 1; // 随机事件
+
 // 体能崩溃（constitution ≤ 这个值 → 强制休养）
 export const CONSTITUTION_COLLAPSE = -2;
 export const INJURY_REST_ROUNDS = 2;
@@ -144,7 +175,5 @@ export const STAGE_PROMOTION_EXPERIENCE: Record<Stage, number> = {
   youth: 10,
   second: 14,
   pro: 18,
-  star: 20,
-  veteran: 20,
   retired: 999,
 };

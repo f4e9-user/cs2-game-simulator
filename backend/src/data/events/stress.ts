@@ -9,7 +9,7 @@ export const STRESS_EVENTS: EventDef[] = [
     title: '又一次失眠',
     narrative:
       '凌晨三点你还盯着天花板，脑子里全是上一场最后那把残局。',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 1,
     weight: 0.5,
     requireTags: ['stressed'],
@@ -44,12 +44,12 @@ export const STRESS_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你睡了 8 小时，第二天人是飘的，但脑子总算停了。',
-          statChanges: { money: -1, mentality: 1 },
+          statChanges: { money: -10, mentality: 1 },
           stressDelta: -3,
         },
         failure: {
           narrative: '药吃了反应不对，醒来比没睡还累。',
-          statChanges: { money: -1, mentality: -2, constitution: -1 },
+          statChanges: { money: -10, mentality: -2, constitution: -1 },
           stressDelta: 2,
         },
       },
@@ -70,7 +70,7 @@ export const STRESS_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '通宵越练越烦，最后键盘都被你砸了一下。',
-          statChanges: { mentality: -2, money: -2 },
+          statChanges: { mentality: -2, money: -20 },
           stressDelta: 4,
         },
       },
@@ -82,7 +82,7 @@ export const STRESS_EVENTS: EventDef[] = [
     title: '复盘会上没忍住',
     narrative:
       '复盘会进行到一半，教练第三次问你那把架点为什么不交。你的火气一下窜上来。',
-    stages: ['second', 'pro', 'star'],
+    stages: ['second', 'pro'],
     difficulty: 2,
     weight: 0.6,
     requireTags: ['stressed'],
@@ -149,7 +149,7 @@ export const STRESS_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '你直接收拾东西走人。第二天经纪人电话不停。',
-          statChanges: { mentality: -3, money: -2 },
+          statChanges: { mentality: -3, money: -20 },
           fameDelta: -3,
           stressDelta: 6,
           tagAdds: ['locker-tension'],

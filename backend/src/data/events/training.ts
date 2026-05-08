@@ -60,7 +60,7 @@ export const TRAINING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '今天观众不少，礼物飘得欢。手感这周没动——但你暂时不想想这件事。',
-          statChanges: { money: 2, mentality: 1, experience: -1 },
+          statChanges: { money: 20, mentality: 1, experience: -1 },
           tagAdds: ['missed-practice'],
         },
         failure: {
@@ -77,7 +77,7 @@ export const TRAINING_EVENTS: EventDef[] = [
     title: '复盘昨晚的比赛 demo',
     narrative:
       '教练把昨晚输掉的 demo 甩到群里：「每人抽一张图，写出三个错误决策。」',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     choices: [
       {

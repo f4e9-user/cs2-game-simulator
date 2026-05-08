@@ -86,7 +86,7 @@ export const RANKED_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '三人先后被你一枪爆头，集锦自动保存。',
-          statChanges: { agility: 2, experience: 2, mentality: 2, money: 1 },
+          statChanges: { agility: 2, experience: 2, mentality: 2, money: 10 },
           tagAdds: ['highlight-clip'],
         },
         failure: {

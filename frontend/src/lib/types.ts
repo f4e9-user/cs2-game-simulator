@@ -30,8 +30,6 @@ export type Stage =
   | 'youth'
   | 'second'
   | 'pro'
-  | 'star'
-  | 'veteran'
   | 'retired';
 
 export type EventType =
@@ -68,9 +66,39 @@ export interface PendingMatch {
   tournamentId: string;
   tier: string;
   name: string;
+  displayName?: string;
+  progressionTier?: string;
+  entryType?: string;
+  qualificationSlotUsed?: string;
+  qualificationSlotOwner?: 'player' | 'team';
   resolveYear: number;
   resolveWeek: number;
   stageIndex: number;
+}
+
+export type TournamentEntryType =
+  | 'invite'
+  | 'open_qualifier'
+  | 'closed_qualifier'
+  | 'direct_signup';
+
+export type TournamentProgressionTier =
+  | 'b'
+  | 'a'
+  | 's-qualifier'
+  | 's-main'
+  | 'major';
+
+export interface QualificationReward {
+  slot: string;
+  count: number;
+}
+
+export interface QualificationMilestone {
+  stageIndex: number;
+  requireWin?: boolean;
+  label: string;
+  rewards: QualificationReward[];
 }
 
 export interface Rival {
@@ -163,6 +191,15 @@ export interface TeamOffer {
   weeklySalary: number;
 }
 
+export interface PendingDeparture {
+  slotId: string;
+  departureRound: number;
+  rumorShown: boolean;
+  revealed: boolean;
+  destTeamName: string;
+  earlyRecruit: boolean;
+}
+
 export interface DynamicState {
   stress: number;
   fame: number;
@@ -175,6 +212,8 @@ export interface DynamicState {
   shopCooldowns: Record<string, number>;
   team: PlayerTeam | null;
   pendingApplication: PendingApplication | null;
+  qualificationSlots: Record<string, number>;
+  teamQualificationSlots: Record<string, number>;
   consecutiveLosses: number;
   everHadTeam: boolean;
   contractRenewals: number;
@@ -213,6 +252,8 @@ export interface Player extends DynamicState {
   name: string;
   stats: Stats;
   volatile: VolatileState;
+  feelCap: number;
+  peripheralTier: number;
   buffs: Buff[];
   growthSpent: number;
   traits: string[];
@@ -236,6 +277,7 @@ export interface Player extends DynamicState {
   activeRoleRounds: number;
   roleTransition: RoleTransition | null;
   teamTrust: number;
+  pendingDeparture?: PendingDeparture;
 }
 
 export interface Choice {
@@ -279,6 +321,7 @@ export interface RoundResult {
   stageAfter: Stage;
   tagsAdded: string[];
   passiveEffects: string[];
+  qualificationChanges: string[];
   stressChange: number;
   fameChange: number;
   feelChange: number;
@@ -325,10 +368,23 @@ export interface Tournament {
   id: string;
   tier: string;
   name: string;
+  displayName: string;
   description: string;
   stages: Stage[];
+  progressionTier: TournamentProgressionTier;
+  entryType: TournamentEntryType;
+  brand: string;
+  subtype: string;
+  year: number;
+  seasonIndex?: number;
+  city?: string;
+  region?: string;
+  teamRequirement?: ClubTier | null;
+  qualificationTargets?: string[];
+  qualificationRewards?: QualificationReward[];
+  qualificationMilestones?: QualificationMilestone[];
   fameRequired?: number;
-  signupMonths: number[] | 'monthly';
+  signupWeeks: number[] | 'always';
   reward: { money: number; experience: number; fame: number; stressDelta?: number };
   difficulty: number;
 }

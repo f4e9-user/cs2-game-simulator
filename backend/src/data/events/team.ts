@@ -7,7 +7,7 @@ export const TEAM_EVENTS: EventDef[] = [
     title: '主 AWP 位之争',
     narrative:
       '新赛季队内调整：你和队友都想拿主 AWP 位。教练让你们自己先沟通一下。',
-    stages: ['youth', 'second', 'pro', 'star'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     choices: [
       {

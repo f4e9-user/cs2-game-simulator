@@ -62,11 +62,11 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '钱到账的那一刻家里的态度明显软化，但你账户里只剩几个数字。',
-          statChanges: { money: -3, mentality: 2 },
+          statChanges: { money: -30, mentality: 2 },
         },
         failure: {
           narrative: '你没那么多钱，硬转让自己更焦虑。',
-          statChanges: { money: -2, mentality: -2 },
+          statChanges: { money: -20, mentality: -2 },
         },
       },
     ],
@@ -77,7 +77,7 @@ export const LIFE_EVENTS: EventDef[] = [
     title: '手腕隐隐作痛',
     narrative:
       '连续训练三周后，你的手腕开始疼。你该怎么办？',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 2,
     choices: [
       {
@@ -91,7 +91,7 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '医生让你下周停训。休养后你感觉连点击鼠标都轻松了。',
-          statChanges: { agility: 1, mentality: 1, money: -1, experience: -1 },
+          statChanges: { agility: 1, mentality: 1, money: -10, experience: -1 },
         },
         failure: {
           narrative: '你听医生嘱咐但忍不住还是偷偷练了，效果打折。',
@@ -115,7 +115,7 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '你的手腕彻底撑不住，需要停训一个月。',
-          statChanges: { agility: -3, mentality: -2, money: -2 },
+          statChanges: { agility: -3, mentality: -2, money: -20 },
           tagAdds: ['injured'],
         },
       },
@@ -131,11 +131,11 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '设备换了、康复师到位，你的状态迅速回升。',
-          statChanges: { agility: 1, mentality: 1, money: -3 },
+          statChanges: { agility: 1, mentality: 1, money: -30 },
         },
         failure: {
           narrative: '你买了贵设备，但没坚持康复训练，效果不理想。',
-          statChanges: { money: -3, mentality: -1 },
+          statChanges: { money: -30, mentality: -1 },
         },
       },
     ],

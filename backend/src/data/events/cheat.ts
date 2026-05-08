@@ -23,7 +23,7 @@ const DETECT_LIGHT = {
 const BANNED = {
   narrative:
     'VAC 邮件在训练赛中途弹出，队内账号被拉黑。你的名字被所有赛事主办方拉入禁赛名单。',
-  statChanges: { money: -5, mentality: -5 },
+  statChanges: { money: -50, mentality: -5 },
   endRun: true,
   endReason: 'banned_for_cheating',
   tagAdds: ['banned'],
@@ -38,7 +38,7 @@ export const CHEAT_EVENTS: EventDef[] = [
     title: '群里推销的"秒压压枪宏"',
     narrative:
       '老队友偷偷发来一条链接：「这个宏不被反作弊识别，上分利器。」',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 3,
     weight: 0.3,
     choices: [
@@ -106,7 +106,7 @@ export const CHEAT_EVENTS: EventDef[] = [
     title: '硬件黑客的主动联系',
     narrative:
       '一个陌生人加上你，开门见山：「我能给你一套 VAC 过检套件，封号也能快速回号，只要你分我比赛奖金。」',
-    stages: ['second', 'pro', 'star'],
+    stages: ['second', 'pro'],
     difficulty: 4,
     weight: 0.15,
     choices: [
@@ -121,7 +121,7 @@ export const CHEAT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '账号起飞，你在平台被称为"天才少年"，顺手进账 40K。你开始忘了自己真实段位是什么。',
-          statChanges: { agility: 3, experience: 2, money: 4 },
+          statChanges: { agility: 3, experience: 2, money: 40 },
           stressDelta: 5,
           tagAdds: ['cheater', 'dirty-money'],
         },

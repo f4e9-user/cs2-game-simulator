@@ -27,7 +27,7 @@ const SUMMARY_SYSTEM_PROMPT =
   '你是一个 CS2 电竞生涯传记作者。只输出小结正文，不要标题，不要解释。';
 
 const INTRO_SYSTEM_PROMPT =
-  INTRO_SYSTEM_PROMPT;
+  '你是一个 CS2 电竞小说的开篇作者。只输出开篇正文，不要标题，不要解释。';
 
 const PERSONALIZE_SYSTEM_PROMPT =
   '你是 CS2 电竞小说的叙事引擎。严格按要求输出 JSON，不要输出任何其他内容。';

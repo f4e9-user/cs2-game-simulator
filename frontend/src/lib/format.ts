@@ -89,8 +89,6 @@ export const STAGE_LABELS: Record<Stage, string> = {
   youth: '青训',
   second: '二线队',
   pro: '职业队',
-  star: '明星选手',
-  veteran: '老将',
   retired: '退役',
 };
 
@@ -205,12 +203,12 @@ const STAT_GROWTH_NAMES: Record<StatKey, string> = {
 };
 
 export function formatMoney(points: number): string {
-  return `${Math.round(points) * 10}K`;
+  return `${Math.round(points)}K`;
 }
 
 export function describeStatChange(key: StatKey, delta: number): string {
   if (key === 'money') {
-    const k = Math.round(Math.abs(delta)) * 10;
+    const k = Math.round(Math.abs(delta));
     return delta > 0 ? `获得 ${k}K` : `花费 ${k}K`;
   }
   const name = STAT_GROWTH_NAMES[key];
@@ -225,7 +223,7 @@ export function describeStatChange(key: StatKey, delta: number): string {
 // ── 赛事奖励描述（报名前展示，量纲不同）────────────────────────
 
 export function describeTournamentMoney(v: number): string {
-  return `奖金 ${v * 10}K`;
+  return `奖金 ${v}K`;
 }
 
 export function describeTournamentExp(v: number): string {

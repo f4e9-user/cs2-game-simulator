@@ -3,6 +3,10 @@ import type { Player, Trait } from '@/lib/types';
 import { ENDING_LABELS, STAGE_LABELS, STAT_LABELS } from '@/lib/format';
 
 const TIER_LABELS: Record<string, string> = {
+  b: 'B 级赛事',
+  a: 'A 级赛事',
+  's-qualifier': 'S 级预选',
+  's-main': 'S 级正赛',
   netcafe: '网吧杯',
   city: '城市赛',
   platform: '平台赛',
@@ -16,6 +20,9 @@ const TIER_LABELS: Record<string, string> = {
 
 const TIER_ORDER = [
   'major',
+  's-main',
+  'a',
+  'b',
   's-class',
   'tier1',
   'tier2',
@@ -99,7 +106,7 @@ export function EndingPanel({ player, traits, ending }: Props) {
           </div>
           <div className="ending-resource-cell">
             <div className="ending-resource-val money">
-              {Math.round(player.stats.money) * 10}K
+              {Math.round(player.stats.money)}K
             </div>
             <div className="ending-resource-label">资金</div>
           </div>

@@ -24,7 +24,7 @@ const DETECT_SMALL = {
 const BANNED = {
   narrative:
     '调查邮件在凌晨发到俱乐部。你的名字上了禁赛名单，所有账号冻结，生涯戛然而止。',
-  statChanges: { money: -5, mentality: -5 },
+  statChanges: { money: -50, mentality: -5 },
   endRun: true,
   endReason: 'banned_for_match_fixing',
   tagAdds: ['banned'],
@@ -37,7 +37,7 @@ export const BETTING_EVENTS: EventDef[] = [
     title: '老朋友的私信',
     narrative:
       '一个老朋友在 Discord 上发来消息：「你们队明天那把，随便打打就行。赔率很漂亮。」',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 2,
     weight: 0.4,
     choices: [
@@ -52,7 +52,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '没人查到你头上。账户悄悄进账 60K，你装作什么都没发生。',
-          statChanges: { money: 6, mentality: -1 },
+          statChanges: { money: 60, mentality: -1 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -68,7 +68,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '账面进账 20K，安全下庄。',
-          statChanges: { money: 2, mentality: -1 },
+          statChanges: { money: 20, mentality: -1 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -101,7 +101,7 @@ export const BETTING_EVENTS: EventDef[] = [
     title: '训练赛的"中间人"',
     narrative:
       '训练赛的对方教练单独加了你，聊着聊着问："下一把你们第二图让一下，有人愿意付你现金。"',
-    stages: ['second', 'pro', 'star'],
+    stages: ['second', 'pro'],
     difficulty: 3,
     weight: 0.3,
     choices: [
@@ -116,7 +116,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '对方赢了图，加密钱包进账 50K。没人追问。',
-          statChanges: { money: 5, mentality: -2 },
+          statChanges: { money: 50, mentality: -2 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -132,7 +132,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你只在两把关键局放水。30K 到账，大部分队友没察觉。',
-          statChanges: { money: 3, mentality: -2 },
+          statChanges: { money: 30, mentality: -2 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -166,7 +166,7 @@ export const BETTING_EVENTS: EventDef[] = [
     title: '赞助商的暗示',
     narrative:
       '晚宴结束前，那个大金主拍拍你肩膀：「兄弟，下一场小组赛你们肯定是黑马吧？有空我们详细聊。」他的眼神比话直接。',
-    stages: ['pro', 'star', 'veteran'],
+    stages: ['pro'],
     difficulty: 4,
     weight: 0.2,
     choices: [
@@ -181,7 +181,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '账户进账 80K——几年不用愁的数字。没人找上门，但梦里开始出现审讯室。',
-          statChanges: { money: 8, mentality: -3 },
+          statChanges: { money: 80, mentality: -3 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -197,7 +197,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你给了他几个含糊的判断。他转来了 30K"咨询费"。',
-          statChanges: { money: 3, mentality: -1 },
+          statChanges: { money: 30, mentality: -1 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
