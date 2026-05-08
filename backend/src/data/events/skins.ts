@@ -4,14 +4,14 @@ import type { EventDef } from '../../types.js';
 // ALL：叙事不涉及队友/战队/赞助商，任何阶段都可出现
 // TEAM：叙事涉及队友/队内关系 → 需要 second+（有队）
 // PRO：叙事涉及赞助商/观众 → 需要 pro+（有商业价值）
-const ALL: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'] = [
-  'rookie', 'youth', 'second', 'pro', 'star', 'veteran',
+const ALL: ['rookie', 'youth', 'second', 'pro'] = [
+  'rookie', 'youth', 'second', 'pro',
 ];
-const TEAM: ['second', 'pro', 'star', 'veteran'] = [
-  'second', 'pro', 'star', 'veteran',
+const TEAM: ['second', 'pro'] = [
+  'second', 'pro',
 ];
-const PRO: ['pro', 'star', 'veteran'] = [
-  'pro', 'star', 'veteran',
+const PRO: ['pro'] = [
+  'pro',
 ];
 
 // ================================================================

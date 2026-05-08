@@ -70,7 +70,7 @@ function dynamicTags(player: Player): string[] {
     // 更高档俱乐部挖角：检查是否有更高档且满足门槛的俱乐部
     const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
     const currentIdx = tierOrder.indexOf(player.team.tier);
-    const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+    const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
     const playerIdx = stageOrder.indexOf(player.stage);
     const hasPromote = CLUBS.some((c) => {
       const reqIdx = stageOrder.indexOf(c.requiredStage);
@@ -165,7 +165,7 @@ export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
     type: 'match',
     title: `赛前准备 — ${pm.name}`,
     narrative: `距离 ${pm.name} 第 ${pm.stageIndex + 1} 阶段比赛还有几天，你需要做好准备。`,
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 1,
     choices: [
       {

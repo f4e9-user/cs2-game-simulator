@@ -9,7 +9,7 @@ export const RIVAL_EVENTS: EventDef[] = [
     title: '{rival0} 雇了水军',
     narrative:
       '社交媒体首页突然涌出大量贴文，质疑你最近一次比赛的发挥。圈内人指给你看：水军IP指向 {rival0} 战队的运营公司。',
-    stages: ['youth', 'second', 'pro', 'star'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     weight: 0.4,
     choices: [
@@ -94,7 +94,7 @@ export const RIVAL_EVENTS: EventDef[] = [
     title: '{rival1} 疑似搞了网络',
     narrative:
       '训练赛进行到第三图，全队 ping 突然飙升。运维查到攻击源 IP 段挂在 {rival1} 一个赞助商旗下。',
-    stages: ['youth', 'second', 'pro', 'star'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 3,
     weight: 0.3,
     choices: [

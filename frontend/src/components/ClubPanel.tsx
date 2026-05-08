@@ -59,7 +59,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
     api.listClubs().then((res) => setClubs(res.clubs)).catch(() => {});
   }, []);
 
-  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
   const playerStageIdx = stageOrder.indexOf(player.stage);
   const rookieCheck = player.stage === 'rookie' ? rookieEligibility(player) : null;
 

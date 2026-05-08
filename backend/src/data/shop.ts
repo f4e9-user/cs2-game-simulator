@@ -134,7 +134,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     category: 'social',
     priceMoney: 20, // 20K
     cooldownRounds: 3,
-    requireStage: ['youth', 'second', 'pro', 'star', 'veteran'],
+    requireStage: ['youth', 'second', 'pro'],
     effect: {
       stressDelta: -10,
       tagRemove: 'locker-tension',

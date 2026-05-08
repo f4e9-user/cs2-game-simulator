@@ -135,7 +135,7 @@ export const CLUBS: Club[] = [
     tag: 'TTN',
     region: '欧洲',
     tier: 'top',
-    requiredStage: 'star',
+    requiredStage: 'pro',
     requiredFame: 30,
     baseSalary: 100,
     salaryRange: [80, 140],
@@ -146,7 +146,7 @@ export const CLUBS: Club[] = [
     tag: 'NDY',
     region: '亚太',
     tier: 'top',
-    requiredStage: 'star',
+    requiredStage: 'pro',
     requiredFame: 30,
     baseSalary: 90,
     salaryRange: [70, 120],
@@ -157,7 +157,7 @@ export const CLUBS: Club[] = [
     tag: 'SVR',
     region: '北美',
     tier: 'top',
-    requiredStage: 'star',
+    requiredStage: 'pro',
     requiredFame: 30,
     baseSalary: 110,
     salaryRange: [90, 150],
@@ -168,7 +168,7 @@ export const CLUBS: Club[] = [
     tag: '???',
     region: '???',
     tier: 'top',
-    requiredStage: 'star',
+    requiredStage: 'pro',
     requiredFame: 30,
     baseSalary: 100,
     salaryRange: [80, 130],
@@ -190,7 +190,7 @@ export function getClub(id: string): Club | undefined {
 
 export function clubsForStage(stage: import('../types.js').Stage): Club[] {
   return CLUBS.filter((c) => {
-    const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+    const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
     return stageOrder.indexOf(stage) >= stageOrder.indexOf(c.requiredStage);
   });
 }

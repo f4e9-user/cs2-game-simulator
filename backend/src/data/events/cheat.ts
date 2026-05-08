@@ -38,7 +38,7 @@ export const CHEAT_EVENTS: EventDef[] = [
     title: '群里推销的"秒压压枪宏"',
     narrative:
       '老队友偷偷发来一条链接：「这个宏不被反作弊识别，上分利器。」',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 3,
     weight: 0.3,
     choices: [
@@ -106,7 +106,7 @@ export const CHEAT_EVENTS: EventDef[] = [
     title: '硬件黑客的主动联系',
     narrative:
       '一个陌生人加上你，开门见山：「我能给你一套 VAC 过检套件，封号也能快速回号，只要你分我比赛奖金。」',
-    stages: ['second', 'pro', 'star'],
+    stages: ['second', 'pro'],
     difficulty: 4,
     weight: 0.15,
     choices: [

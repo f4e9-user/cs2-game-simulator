@@ -33,8 +33,6 @@ export type Stage =
   | 'youth'
   | 'second'
   | 'pro'
-  | 'star'
-  | 'veteran'
   | 'retired';
 
 export type EventType =

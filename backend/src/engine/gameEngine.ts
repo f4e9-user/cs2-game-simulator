@@ -333,6 +333,7 @@ function buildMatchResolveResult(
 
   const tagAdds = won && isFinal ? ['tournament-winner'] : [];
   if (won && isFinal && t.tier === 'major') tagAdds.push('major-champion');
+  if (won && isFinal && ['tier1', 's-class', 'major'].includes(t.tier)) tagAdds.push('star-player');
 
   const chosenOutcome: Outcome = {
     narrative: sim.summary,
@@ -658,6 +659,27 @@ export function applyChoice(
     consecutiveLosses,
   };
 
+  // ── 明星/老将 tag 检查与首次获得奖励 ─────────────────────────────
+  // veteran tag：顶级赛事（tier1/s-class/major）累计参加 4 场即可获得
+  const topParticipations =
+    (nextPlayer.tierParticipations?.['tier1'] ?? 0) +
+    (nextPlayer.tierParticipations?.['s-class'] ?? 0) +
+    (nextPlayer.tierParticipations?.['major'] ?? 0);
+  if (topParticipations >= 4 && !nextTags.includes('veteran')) {
+    nextTags.push('veteran');
+    tagsAdded.push('veteran');
+  }
+  // 首次获得 star-player tag：+10 名气 +1 经验
+  if (tagsAdded.includes('star-player') && !session.player.tags.includes('star-player')) {
+    nextPlayer.stats = { ...nextPlayer.stats, experience: nextPlayer.stats.experience + 1 };
+    nextPlayer.fame = (nextPlayer.fame ?? 0) + 10;
+  }
+  // 首次获得 veteran tag：+2 心态 -15 压力
+  if (tagsAdded.includes('veteran') && !session.player.tags.includes('veteran')) {
+    nextPlayer.stats = { ...nextPlayer.stats, mentality: nextPlayer.stats.mentality + 2 };
+    nextPlayer.stress = Math.max(0, (nextPlayer.stress ?? 0) - 15);
+  }
+
   // 面试事件完成后清空 pendingApplication（response 阶段保留，供面试 post-handler 读取 clubId）
   const CLUB_INTERVIEW_IDS = new Set([
     'chain-club-interview',
@@ -931,10 +953,8 @@ function checkEnding(player: Player, endRun: boolean, endReason?: string): strin
     return 'injury_ended_career';
   }
   if (player.round >= MAX_ROUNDS) {
-    const proStages = ['pro', 'star', 'veteran'] as const;
-    const semipro = ['second', 'pro', 'star', 'veteran'] as const;
-    const isProPlus = proStages.includes(player.stage as typeof proStages[number]);
-    const isSemiProPlus = semipro.includes(player.stage as typeof semipro[number]);
+    const isProPlus = player.stage === 'pro';
+    const isSemiProPlus = ['second', 'pro'].includes(player.stage);
     // 草根传奇：全程自由人 + 高名气 + 赢过赛事冠军（开放赛打遍天下）
     if (!player.everHadTeam && (player.fame ?? 0) >= 70 &&
         player.tags.includes('tournament-winner') &&
@@ -1269,7 +1289,7 @@ export function applyClubRequest(
   if (player.team) throw new Error('你已经有战队了');
   if (player.pendingApplication) throw new Error('已经有一个进行中的申请');
 
-  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
   // Rookie 申请 youth 档俱乐部时跳过阶段门槛，后续的 Rookie 专属资格检查会接管
   const isRookieApplyingToYouth = player.stage === 'rookie' && club.requiredStage === 'youth';
   if (!isRookieApplyingToYouth && stageOrder.indexOf(player.stage) < stageOrder.indexOf(club.requiredStage)) {
@@ -1348,7 +1368,7 @@ export function respondTeamOffer(
       youth: 'youth',
       'semi-pro': 'second',
       pro: 'pro',
-      top: 'star',
+      top: 'pro',
     };
     const minStage = TIER_MIN_STAGE[offer.tier];
     const nextStage = stageIndex(minStage) > stageIndex(player.stage) ? minStage : player.stage;

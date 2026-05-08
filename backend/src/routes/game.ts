@@ -380,7 +380,7 @@ app.post('/game/:sessionId/withdraw', async (c) => {
   penalties.push('名气 -10');
 
   // 30K 罚款（3 money points）—— 仅在二线及以上有合约的阶段
-  const stageHasContract = ['second', 'pro', 'star', 'veteran'].includes(session.player.stage);
+  const stageHasContract = ['second', 'pro'].includes(session.player.stage);
   if (stageHasContract) {
     session.player.stats.money = Math.max(0, session.player.stats.money - 3);
     penalties.push('资金 -30K');

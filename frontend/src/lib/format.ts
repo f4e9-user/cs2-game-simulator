@@ -89,8 +89,6 @@ export const STAGE_LABELS: Record<Stage, string> = {
   youth: '青训',
   second: '二线队',
   pro: '职业队',
-  star: '明星选手',
-  veteran: '老将',
   retired: '退役',
 };
 

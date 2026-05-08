@@ -77,7 +77,7 @@ export const LIFE_EVENTS: EventDef[] = [
     title: '手腕隐隐作痛',
     narrative:
       '连续训练三周后，你的手腕开始疼。你该怎么办？',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 2,
     choices: [
       {
