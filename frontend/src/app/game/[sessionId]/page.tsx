@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { WelcomeCard } from '@/components/WelcomeCard';
 import { EventCard } from '@/components/EventCard';
 import { ChoiceList } from '@/components/ChoiceList';
 import { PlayerStats } from '@/components/PlayerStats';
@@ -59,16 +60,65 @@ export default function GamePage() {
   const [centerTab, setCenterTab] = useState<'event' | 'shop' | 'team' | 'leaderboard'>('event');
   const prevStress = useRef(0);
 
+  const storageKey = `intro-seen-${sessionId}`;
+  const [welcomeDismissed, setWelcomeDismissed] = useState(() =>
+    typeof window !== 'undefined' && sessionStorage.getItem(storageKey) === '1'
+  );
+  const [preloadedIntro, setPreloadedIntro] = useState<string | null>(null);
+  const [introLoading, setIntroLoading] = useState(!welcomeDismissed);
+
+  const dismissWelcome = () => {
+    sessionStorage.setItem(storageKey, '1');
+    setWelcomeDismissed(true);
+  };
+
+  // 当前展示用的事件（原文即时显示，个性化版本到了再替换）
+  const [displayEvent, setDisplayEvent] = useState<typeof currentEvent>(null);
+
+  // currentEvent 变化时立刻更新 displayEvent，同时后台请求个性化
+  // actionsPhase 期间事件不展示给玩家，跳过个性化请求
+  useEffect(() => {
+    setDisplayEvent(currentEvent);
+    if (!currentEvent || actionsPhase) return;
+    let cancelled = false;
+    api.personalizeEvent(sessionId).then((res) => {
+      if (cancelled || !res.personalized) return;
+      const { narrative, choices: pChoices } = res.personalized;
+      setDisplayEvent((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          narrative,
+          choices: prev.choices.map((c) => {
+            const match = pChoices.find((p) => p.id === c.id);
+            return match ? { ...c, description: match.description } : c;
+          }),
+        };
+      });
+    }).catch(() => { /* 静默降级，保持原文 */ });
+    return () => { cancelled = true; };
+  }, [currentEvent?.id, sessionId, actionsPhase]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([api.getSession(sessionId), api.listTraits()])
-      .then(([session, t]) => {
+    const fetchIntro = welcomeDismissed
+      ? Promise.resolve(null)
+      : api.getIntro(sessionId).catch(() => null);
+    Promise.all([api.getSession(sessionId), api.listTraits(), fetchIntro])
+      .then(([session, t, introRes]) => {
         if (cancelled) return;
         hydrateFromSession(session);
         setTraits(t.traits);
+        if (introRes) setPreloadedIntro(introRes.intro);
+        setIntroLoading(false);
       })
-      .catch((e) => !cancelled && setError(String(e.message ?? e)))
+      .catch((e) => {
+        if (!cancelled) {
+          setError(String(e.message ?? e));
+          setIntroLoading(false);
+        }
+      })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -188,6 +238,14 @@ export default function GamePage() {
             <div className="center-tab-pane">
               <EndingPanel player={player} traits={traits} ending={ending ?? undefined} />
             </div>
+          ) : !welcomeDismissed && history.length === 0 && !loading ? (
+            <WelcomeCard
+              player={player}
+              traits={traits}
+              intro={preloadedIntro}
+              introLoading={introLoading}
+              onDismiss={dismissWelcome}
+            />
           ) : (
             <>
               {/* 标签栏 */}
@@ -239,13 +297,13 @@ export default function GamePage() {
                           进入下一回合 →
                         </button>
                       </div>
-                    ) : currentEvent ? (
+                    ) : displayEvent ? (
                       <>
-                        <EventCard event={currentEvent} />
+                        <EventCard event={displayEvent} />
                         <div style={{ marginTop: 8, marginBottom: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
                           选择行动
                         </div>
-                        <ChoiceList choices={currentEvent.choices} disabled={loading} onPick={pickChoice} />
+                        <ChoiceList choices={displayEvent.choices} disabled={loading} onPick={pickChoice} />
                       </>
                     ) : (
                       <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>等待下一回合…</div>
