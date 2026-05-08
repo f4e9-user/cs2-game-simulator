@@ -22,8 +22,9 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
   const [items, setItems] = useState<ShopItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [lastBought, setLastBought] = useState<string | null>(null);
-  const [shopNarrative, setShopNarrative] = useState<string | null>(null);
+  const [lastBoughtId, setLastBoughtId] = useState<string | null>(null);
+  const [lastNarrative, setLastNarrative] = useState<string | null>(null);
+  const [lastNarrativePositive, setLastNarrativePositive] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,13 +42,17 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
   const buy = async (itemId: string) => {
     setBusyId(itemId);
     setError(null);
-    setLastBought(null);
-    setShopNarrative(null);
+    setLastBoughtId(null);
+    setLastNarrative(null);
+    setLastNarrativePositive(null);
     try {
       const res = await api.buyShopItem(sessionId, itemId);
       onPlayerUpdate(res.player);
-      setLastBought(res.itemName);
-      if (res.shopNarrative) setShopNarrative(res.shopNarrative);
+      setLastBoughtId(itemId);
+      if (res.shopNarrative) {
+        setLastNarrative(res.shopNarrative);
+        setLastNarrativePositive(res.shopNarrativePositive ?? false);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -116,17 +121,6 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
         </span>
       </div>
 
-      {lastBought && (
-        <div style={{ fontSize: 11, color: 'var(--success)', marginBottom: 2 }}>
-          ✓ 已购买：{lastBought}
-        </div>
-      )}
-      {shopNarrative && (
-        <div style={{ fontSize: 11, color: 'var(--warn)', marginBottom: 6, lineHeight: 1.4 }}>
-          ⚠ {shopNarrative}
-        </div>
-      )}
-
       {categories.map((cat) => {
         const catItems = items.filter((i) => i.category === cat);
         if (catItems.length === 0) return null;
@@ -135,31 +129,50 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
             <div className="shop-category-label">{CATEGORY_LABELS[cat]}</div>
             {catItems.map((item) => {
               const { ok, reason } = canBuy(item);
+              const justBought = lastBoughtId === item.id;
               return (
                 <div key={item.id} className={`shop-item ${!ok ? 'disabled' : ''}`}>
-                  <div className="shop-item-info">
-                    <div className="shop-item-name">{item.name}</div>
-                    <div className="shop-item-desc">{item.description}</div>
-                    {!ok && reason && (
-                      <div className="shop-item-reason">{reason}</div>
-                    )}
-                  </div>
-                  <div className="shop-item-right">
-                    <div className="shop-item-price">
-                      {item.id === 'pro-peripherals' && (player.peripheralTier ?? 0) >= PERIPHERAL_PRICES.length
-                        ? '满级'
-                        : `${getDisplayPrice(item)}K`}
+                  <div className="shop-item-main">
+                    <div className="shop-item-info">
+                      <div className="shop-item-name">{item.name}</div>
+                      <div className="shop-item-desc">{item.description}</div>
+                      {!ok && reason && (
+                        <div className="shop-item-reason">{reason}</div>
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      disabled={!ok || busyId !== null}
-                      onClick={() => buy(item.id)}
-                      style={{ fontSize: 10, padding: '2px 8px' }}
-                    >
-                      {busyId === item.id ? '…' : '购买'}
-                    </button>
+                    <div className="shop-item-right">
+                      <div className="shop-item-price">
+                        {item.id === 'pro-peripherals' && (player.peripheralTier ?? 0) >= PERIPHERAL_PRICES.length
+                          ? '满级'
+                          : `${getDisplayPrice(item)}K`}
+                      </div>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        disabled={!ok || busyId !== null}
+                        onClick={() => buy(item.id)}
+                        style={{ fontSize: 10, padding: '2px 8px' }}
+                      >
+                        {busyId === item.id ? '…' : '购买'}
+                      </button>
+                    </div>
                   </div>
+                  {justBought && (
+                    <div className="shop-item-result">
+                      {lastNarrative ? (
+                        <>
+                          <span className="shop-item-result-ok">✓ 已购买</span>
+                          <span
+                            className={`shop-item-result-narrative ${lastNarrativePositive ? 'positive' : 'negative'}`}
+                          >
+                            {lastNarrative}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="shop-item-result-ok">✓ 购买成功</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -1081,7 +1081,8 @@ export function applyAction(
 export interface ApplyShopResult {
   player: Player;
   itemName: string;
-  shopNarrative?: string; // 外设升级结果 或 负面事件文字
+  shopNarrative?: string;          // 外设升级结果 或 负面事件文字
+  shopNarrativePositive?: boolean; // true=好结果(绿色) false=负面(橙色/红色)
 }
 
 export function applyShopPurchase(
@@ -1170,7 +1171,7 @@ export function applyShopPurchase(
       peripheralTier: newTier,
       buffs: newBuffs,
     };
-    return { player: nextPlayer, itemName: item.name, shopNarrative };
+    return { player: nextPlayer, itemName: item.name, shopNarrative, shopNarrativePositive: success };
   }
 
   // ── 普通商品流程 ────────────────────────────────────────────
@@ -1244,7 +1245,12 @@ export function applyShopPurchase(
     shopCooldowns: nextShopCooldowns,
   };
 
-  return { player: nextPlayer, itemName: item.name, shopNarrative };
+  return {
+    player: nextPlayer,
+    itemName: item.name,
+    shopNarrative,
+    shopNarrativePositive: shopNarrative ? false : undefined,
+  };
 }
 
 // ── 战队申请 ──────────────────────────────────────────────────

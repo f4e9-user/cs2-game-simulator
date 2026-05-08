@@ -141,12 +141,12 @@ export const SHOP_ITEMS: ShopItem[] = [
     },
     negativeEvents: [
       {
-        chance: 0.18,
+        chance: 0.30,
         effect: { stressDelta: 15, tagAdd: 'locker-tension' },
         narrative: '饭桌上队友当场起了争执，气氛比之前更糟，衣柜里的阴云又回来了。',
       },
       {
-        chance: 0.12,
+        chance: 0.20,
         effect: { stressDelta: 8 },
         narrative: '结账时账单比预想贵了不少，这顿饭吃得有些肉痛。',
       },
@@ -166,12 +166,12 @@ export const SHOP_ITEMS: ShopItem[] = [
     },
     negativeEvents: [
       {
-        chance: 0.20,
+        chance: 0.30,
         effect: { stressDelta: 20, fatigueDelta: 15 },
         narrative: '现场失控，粉丝蜂拥而上，保安手忙脚乱——你筋疲力尽地回到酒店。',
       },
       {
-        chance: 0.15,
+        chance: 0.20,
         effect: { fameDelta: -5, stressDelta: 10 },
         narrative: '某媒体断章取义，把你的一句话炒成了负面新闻，名气反而受损。',
       },

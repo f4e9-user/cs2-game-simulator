@@ -1997,13 +1997,43 @@ input[type='text']:focus {
 
 .shop-item {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  flex-direction: column;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 5px;
   padding: 5px 8px;
   margin-bottom: 3px;
+  gap: 0;
+}
+
+.shop-item-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.shop-item-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.shop-item-result-ok {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.shop-item-result-narrative.positive {
+  color: var(--success);
+}
+
+.shop-item-result-narrative.negative {
+  color: var(--warn);
 }
 
 .shop-item.disabled {

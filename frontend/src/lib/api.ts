@@ -117,7 +117,7 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ actionId }) },
     ),
   buyShopItem: (sessionId: string, itemId: string) =>
-    request<{ player: Player; itemName: string; shopNarrative?: string }>(
+    request<{ player: Player; itemName: string; shopNarrative?: string; shopNarrativePositive?: boolean }>(
       `/api/game/${sessionId}/shop`,
       { method: 'POST', body: JSON.stringify({ itemId }) },
     ),
