@@ -1997,43 +1997,42 @@ input[type='text']:focus {
 
 .shop-item {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 5px;
   padding: 5px 8px;
   margin-bottom: 3px;
-  gap: 0;
 }
 
-.shop-item-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
+/* ── Shop result modal ───────────────────────────────────────── */
+.shop-result-modal {
+  max-width: 340px;
 }
 
-.shop-item-result {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-top: 5px;
-  border-top: 1px solid var(--border);
-  margin-top: 5px;
+.shop-result-modal-tag {
   font-size: 11px;
-  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
 }
 
-.shop-item-result-ok {
-  color: var(--success);
-  font-weight: 600;
+.shop-result-modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--fg);
+  margin-bottom: 12px;
 }
 
-.shop-item-result-narrative.positive {
-  color: var(--success);
-}
-
-.shop-item-result-narrative.negative {
-  color: var(--warn);
+.shop-result-modal-narrative {
+  font-size: 14px;
+  line-height: 1.6;
+  background: var(--bg-2);
+  border-radius: 6px;
+  padding: 12px 14px;
 }
 
 .shop-item.disabled {
