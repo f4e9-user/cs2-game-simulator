@@ -23,6 +23,7 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
   const [loadingItems, setLoadingItems] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [lastBought, setLastBought] = useState<string | null>(null);
+  const [shopNarrative, setShopNarrative] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,14 +36,18 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
     return () => { cancelled = true; };
   }, []);
 
+  const PERIPHERAL_PRICES = [50, 80, 120, 200]; // K 单位，与后端 ×10 对应
+
   const buy = async (itemId: string) => {
     setBusyId(itemId);
     setError(null);
     setLastBought(null);
+    setShopNarrative(null);
     try {
       const res = await api.buyShopItem(sessionId, itemId);
       onPlayerUpdate(res.player);
       setLastBought(res.itemName);
+      if (res.shopNarrative) setShopNarrative(res.shopNarrative);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -55,7 +60,22 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
 
   const TOURNAMENT_LOCKED_ITEMS = new Set(['team-dinner', 'fan-meetup', 'short-trip']);
 
+  const getDisplayPrice = (item: ShopItem): number => {
+    if (item.id === 'pro-peripherals') {
+      const tier = player.peripheralTier ?? 0;
+      return PERIPHERAL_PRICES[tier] ?? 0;
+    }
+    return item.priceMoney * 10;
+  };
+
   const canBuy = (item: ShopItem): { ok: boolean; reason?: string } => {
+    if (item.id === 'pro-peripherals') {
+      const tier = player.peripheralTier ?? 0;
+      if (tier >= PERIPHERAL_PRICES.length) return { ok: false, reason: '外设已满级' };
+      const price = (PERIPHERAL_PRICES[tier] ?? 0) / 10;
+      if (player.stats.money < price) return { ok: false, reason: `资金不足（需 ${PERIPHERAL_PRICES[tier]}K）` };
+      return { ok: true };
+    }
     if (player.stats.money < item.priceMoney) {
       return { ok: false, reason: `资金不足（需 ${item.priceMoney * 10}K）` };
     }
@@ -97,8 +117,13 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
       </div>
 
       {lastBought && (
-        <div style={{ fontSize: 11, color: 'var(--success)', marginBottom: 6 }}>
+        <div style={{ fontSize: 11, color: 'var(--success)', marginBottom: 2 }}>
           ✓ 已购买：{lastBought}
+        </div>
+      )}
+      {shopNarrative && (
+        <div style={{ fontSize: 11, color: 'var(--warn)', marginBottom: 6, lineHeight: 1.4 }}>
+          ⚠ {shopNarrative}
         </div>
       )}
 
@@ -120,7 +145,11 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
                     )}
                   </div>
                   <div className="shop-item-right">
-                    <div className="shop-item-price">{item.priceMoney * 10}K</div>
+                    <div className="shop-item-price">
+                      {item.id === 'pro-peripherals' && (player.peripheralTier ?? 0) >= PERIPHERAL_PRICES.length
+                        ? '满级'
+                        : `${getDisplayPrice(item)}K`}
+                    </div>
                     <button
                       type="button"
                       className="ghost-button"

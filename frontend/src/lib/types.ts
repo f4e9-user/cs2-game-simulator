@@ -213,6 +213,8 @@ export interface Player extends DynamicState {
   name: string;
   stats: Stats;
   volatile: VolatileState;
+  feelCap: number;
+  peripheralTier: number;
   buffs: Buff[];
   growthSpent: number;
   traits: string[];

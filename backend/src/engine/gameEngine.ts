@@ -45,6 +45,9 @@ import {
   FATIGUE_MIN,
   FATIGUE_STRESS_MULTIPLIER,
   FATIGUE_STRESS_THRESHOLD,
+  FEEL_CAP_DEFAULT,
+  FEEL_CAP_MAX,
+  FEEL_CAP_MIN,
   FEEL_MAX,
   FEEL_MIN,
   GROWTH_CAP,
@@ -52,6 +55,8 @@ import {
   INJURY_REST_ROUNDS,
   LEGEND_FAME_THRESHOLD,
   MAX_ROUNDS,
+  PERIPHERAL_PRICES,
+  PERIPHERAL_SUCCESS_CHANCE,
   POINT_POOL,
   STAGE_ORDER,
   STAT_KEYS,
@@ -99,8 +104,8 @@ function clampFame(v: number): number {
   return Math.max(FAME_MIN, Math.min(FAME_MAX, Math.round(v)));
 }
 
-function clampFeel(v: number): number {
-  return Math.max(FEEL_MIN, Math.min(FEEL_MAX, Math.round(v * 2) / 2)); // 0.5 步进
+function clampFeel(v: number, feelMax = FEEL_MAX): number {
+  return Math.max(FEEL_MIN, Math.min(feelMax, Math.round(v * 2) / 2)); // 0.5 步进
 }
 
 function clampTilt(v: number): number {
@@ -194,6 +199,8 @@ export function initPlayer(input: InitInput): Player {
     name: input.name.trim() || 'nameless',
     stats: clampStats(finalStats),
     volatile: { feel: 0, tilt: 0, fatigue: 0 },
+    feelCap: FEEL_CAP_DEFAULT,
+    peripheralTier: 0,
     buffs: [],
     growthSpent: 0,
     traits: traits.map((t) => t.id),
@@ -518,14 +525,15 @@ export function applyChoice(
   }
 
   // ── 状态系统更新（feel / tilt / fatigue）──
-  let feel = clampFeel(volatile.feel + feelDeltaRaw);
+  const feelCap = session.player.feelCap ?? FEEL_CAP_DEFAULT;
+  let feel = clampFeel(volatile.feel + feelDeltaRaw, feelCap);
   let tilt = clampTilt(volatile.tilt + tiltDeltaRaw);
   let fatigue = clampFatigue(volatile.fatigue + fatigueDeltaRaw);
 
   // Tilt 影响手感：tilt >= 2 → 手感上限降低
-  if (tilt >= 2 && feel > 1) feel = clampFeel(feel - 0.5);
+  if (tilt >= 2 && feel > 1) feel = clampFeel(feel - 0.5, feelCap);
   // 手感很热但疲劳极高 → 自然衰减
-  if (fatigue >= 85 && feel > 0) feel = clampFeel(feel - 1);
+  if (fatigue >= 85 && feel > 0) feel = clampFeel(feel - 1, feelCap);
 
   const feelChange = feel - volatile.feel;
   const tiltChange = tilt - volatile.tilt;
@@ -1009,7 +1017,8 @@ export function applyAction(
   });
 
   const volatile = session.player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
-  const feel = clampFeel(volatile.feel + outcome.feelDelta);
+  const actionFeelCap = session.player.feelCap ?? FEEL_CAP_DEFAULT;
+  const feel = clampFeel(volatile.feel + outcome.feelDelta, actionFeelCap);
   const tilt = clampTilt(volatile.tilt + outcome.tiltDelta);
   const fatigue = clampFatigue(volatile.fatigue + outcome.fatigueDelta);
 
@@ -1072,6 +1081,7 @@ export function applyAction(
 export interface ApplyShopResult {
   player: Player;
   itemName: string;
+  shopNarrative?: string; // 外设升级结果 或 负面事件文字
 }
 
 export function applyShopPurchase(
@@ -1107,6 +1117,63 @@ export function applyShopPurchase(
     throw new Error(`资金不足，需要 ${item.priceMoney * 10}K`);
   }
 
+  // ── 外设升级：特殊分支处理 ──────────────────────────────────
+  if (itemId === 'pro-peripherals') {
+    const tier = player.peripheralTier ?? 0;
+    if (tier >= PERIPHERAL_PRICES.length) {
+      throw new Error('外设已满级，无法继续升级');
+    }
+    const price = PERIPHERAL_PRICES[tier]!;
+    if (player.stats.money < price) {
+      throw new Error(`资金不足，需要 ${price * 10}K`);
+    }
+
+    const currentCap = player.feelCap ?? FEEL_CAP_DEFAULT;
+    const rng = Math.random();
+    const success = rng < PERIPHERAL_SUCCESS_CHANCE;
+
+    let newFeelCap: number;
+    let newTier: number;
+    let shopNarrative: string;
+    let newBuffs = [...(player.buffs ?? [])];
+
+    if (success) {
+      newFeelCap = Math.min(currentCap + 0.5, FEEL_CAP_MAX);
+      newTier = tier + 1;
+      shopNarrative = `外设升级成功！手感上限提升至 ${newFeelCap}`;
+      if (newTier >= PERIPHERAL_PRICES.length) {
+        // 最高级：授予固定 buff
+        newBuffs = newBuffs.filter((b) => b.id !== 'pro-gear');
+        newBuffs.push({
+          id: 'pro-gear',
+          label: '顶级外设',
+          actionTag: 'ranked',
+          growthKey: 'agility',
+          multiplier: 1.2,
+          remainingUses: 9999,
+        });
+        shopNarrative += '，外设已达满级，获得固定增益：天梯敏捷成长 +20%';
+      }
+    } else {
+      newFeelCap = Math.max(currentCap - 0.5, FEEL_CAP_MIN);
+      newTier = tier; // 被骗，等级不变，价格不变
+      shopNarrative = `买到了山寨货，手感上限反而下降至 ${newFeelCap}`;
+    }
+
+    const newStats = { ...player.stats };
+    newStats.money = Math.max(0, newStats.money - price);
+
+    const nextPlayer: Player = {
+      ...player,
+      stats: clampStats(newStats),
+      feelCap: newFeelCap,
+      peripheralTier: newTier,
+      buffs: newBuffs,
+    };
+    return { player: nextPlayer, itemName: item.name, shopNarrative };
+  }
+
+  // ── 普通商品流程 ────────────────────────────────────────────
   const { effect } = item;
 
   // Apply money cost
@@ -1126,7 +1193,7 @@ export function applyShopPurchase(
   let fatigue = volatile.fatigue;
 
   if (effect.fatigueDelta) fatigue = clampFatigue(fatigue + effect.fatigueDelta);
-  if (effect.feelReset) feel = clampFeel(0);
+  if (effect.feelReset) feel = clampFeel(0, player.feelCap ?? FEEL_CAP_DEFAULT);
 
   let stress = player.stress ?? 0;
   let fame = player.fame ?? 0;
@@ -1135,21 +1202,35 @@ export function applyShopPurchase(
 
   let buffs = [...(player.buffs ?? [])];
   if (effect.buffAdd) {
-    // Remove existing buff with same id before adding
     buffs = buffs.filter((b) => b.id !== effect.buffAdd!.id);
     buffs.push(effect.buffAdd);
   }
 
-  // Tag removal
+  // Tag removal / addition
   let tags = [...player.tags];
-  if (effect.tagRemove) {
-    tags = tags.filter((t) => t !== effect.tagRemove);
-  }
+  if (effect.tagRemove) tags = tags.filter((t) => t !== effect.tagRemove);
+  if (effect.tagAdd && !tags.includes(effect.tagAdd)) tags.push(effect.tagAdd);
 
   // Record cooldown
   const nextShopCooldowns = { ...(player.shopCooldowns ?? {}) };
   if (item.cooldownRounds > 0) {
     nextShopCooldowns[itemId] = round + item.cooldownRounds;
+  }
+
+  // ── 负面事件随机触发（功能1：team-dinner / fan-meetup）──
+  let shopNarrative: string | undefined;
+  if (item.negativeEvents) {
+    for (const neg of item.negativeEvents) {
+      if (Math.random() < neg.chance) {
+        if (neg.effect.stressDelta) stress = clampStress(stress + neg.effect.stressDelta);
+        if (neg.effect.fatigueDelta) fatigue = clampFatigue(fatigue + neg.effect.fatigueDelta);
+        if (neg.effect.fameDelta) fame = clampFame(fame + neg.effect.fameDelta);
+        if (neg.effect.tagAdd && !tags.includes(neg.effect.tagAdd)) tags.push(neg.effect.tagAdd);
+        if (neg.effect.tagRemove) tags = tags.filter((t) => t !== neg.effect.tagRemove);
+        shopNarrative = neg.narrative;
+        break; // 每次最多触发一个负面事件
+      }
+    }
   }
 
   const nextPlayer: Player = {
@@ -1163,7 +1244,7 @@ export function applyShopPurchase(
     shopCooldowns: nextShopCooldowns,
   };
 
-  return { player: nextPlayer, itemName: item.name };
+  return { player: nextPlayer, itemName: item.name, shopNarrative };
 }
 
 // ── 战队申请 ──────────────────────────────────────────────────

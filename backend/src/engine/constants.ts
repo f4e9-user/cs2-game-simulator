@@ -85,7 +85,17 @@ export const EVENT_EXP_GROWTH_PER_DELTA = 0.04;
 
 // ── 状态系统 ──────────────────────────────────────────────────
 export const FEEL_MIN = -3;
-export const FEEL_MAX = 3;
+export const FEEL_MAX = 3; // 手感下限/默认上限（clampFeel 的兜底值）
+
+// ── 手感上限系统（外设升级）─────────────────────────────────────
+export const FEEL_CAP_DEFAULT = 3;   // 初始上限
+export const FEEL_CAP_MIN     = 2.5; // 被骗后最低能跌到的上限
+export const FEEL_CAP_MAX     = 5;   // 最高等级上限
+
+// 外设四档价格（单位：money 点数，×10 = K）: 50K / 80K / 120K / 200K
+export const PERIPHERAL_PRICES = [5, 8, 12, 20] as const;
+// 外设升级成功概率
+export const PERIPHERAL_SUCCESS_CHANCE = 0.70;
 export const TILT_MIN = 0;
 export const TILT_MAX = 3;
 export const FATIGUE_MIN = 0;

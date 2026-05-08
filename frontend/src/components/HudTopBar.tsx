@@ -112,6 +112,7 @@ export function HudTopBar({ player, leaderboard }: Props) {
           <span className="hud-gauge-label">手感</span>
           <span className="hud-gauge-val">
             {vol.feel > 0 ? `+${vol.feel}` : vol.feel}
+            <span className="hud-feel-cap">/{player.feelCap ?? 3}</span>
           </span>
         </div>
 
