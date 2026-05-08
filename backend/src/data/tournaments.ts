@@ -488,7 +488,7 @@ function buildYearTournaments(year: number): Tournament[] {
       id: `y${year}-a-open-02`, tier: 'a', progressionTier: 'a', entryType: 'open_qualifier', brand: 'Regional Masters', subtype: 'open_qualifier',
       displayName: `Regional Masters ${pickFrom(REGIONS, year + 4)} ${yyyy} Open Qualifier`,
       description: '下半年 A 级公开预选，给二线和强青训一个冲正赛的入口。',
-      stages: ['second', 'pro'], teamRequirement: 'pro', fameRequired: 10, pointsRequired: 5, signupWeeks: [21], reward: { money: 24, experience: 3, fame: 3, points: 3 }, baseDifficulty: 3, bracket: FOUR_STAGE, region: pickFrom(REGIONS, year + 4), qualificationTargets: ['a-open'], qualificationMilestones: [milestone(2, '晋级决赛', reward('a-main'))],
+      stages: ['second', 'pro'], teamRequirement: 'semi-pro', fameRequired: 10, pointsRequired: 5, signupWeeks: [21], reward: { money: 24, experience: 3, fame: 3, points: 3 }, baseDifficulty: 3, bracket: FOUR_STAGE, region: pickFrom(REGIONS, year + 4), qualificationTargets: ['a-open'], qualificationMilestones: [milestone(2, '晋级决赛', reward('a-main'))],
     },
     {
       id: `y${year}-a-09`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'Galaxy Battle', subtype: 'galaxy_battle',
@@ -500,7 +500,7 @@ function buildYearTournaments(year: number): Tournament[] {
       id: `y${year}-a-open-03`, tier: 'a', progressionTier: 'a', entryType: 'open_qualifier', brand: 'Champion of Champions Tour', subtype: 'open_qualifier',
       displayName: `Champion of Champions Tour ${pickFrom(REGIONS, year + 7)} Open Qualifier`,
       description: '赛季后段的 A 公开预选，给冲刺队伍最后一次爬升机会。',
-      stages: ['second', 'pro'], teamRequirement: 'pro', fameRequired: 11, pointsRequired: 5, signupWeeks: [34], reward: { money: 24, experience: 3, fame: 3, points: 3 }, baseDifficulty: 3, bracket: FOUR_STAGE, region: pickFrom(REGIONS, year + 7), qualificationTargets: ['a-open'], qualificationMilestones: [milestone(2, '晋级决赛', reward('a-main'))],
+      stages: ['second', 'pro'], teamRequirement: 'semi-pro', fameRequired: 11, pointsRequired: 5, signupWeeks: [34], reward: { money: 24, experience: 3, fame: 3, points: 3 }, baseDifficulty: 3, bracket: FOUR_STAGE, region: pickFrom(REGIONS, year + 7), qualificationTargets: ['a-open'], qualificationMilestones: [milestone(2, '晋级决赛', reward('a-main'))],
     },
     {
       id: `y${year}-a-10`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'YaLLa Compass', subtype: 'yalla_compass',
