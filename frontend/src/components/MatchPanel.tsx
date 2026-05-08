@@ -163,7 +163,7 @@ function PendingMatchCard({
   setConfirmWithdraw: (v: boolean) => void;
   stage: string;
 }) {
-  const hasContract = ['second', 'pro', 'star', 'veteran'].includes(stage);
+  const hasContract = ['second', 'pro'].includes(stage);
   return (
     <div className="pending-match-card">
       <div className="pending-match-name">{pm.name}</div>

@@ -87,7 +87,7 @@ export const REST_EVENTS: EventDef[] = [
     title: '被队医按在床上',
     narrative:
       '俱乐部队医看了 MRI 单子，把键盘从你手里抽走：「你这周就躺着。」',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 1,
     weight: 1,
     choices: [
@@ -161,7 +161,7 @@ export const REST_EVENTS: EventDef[] = [
     title: '回家一趟',
     narrative:
       '强制休养期间，家人让你回去住几天。桌上有你高中时候的照片。',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 1,
     weight: 0.7,
     choices: [

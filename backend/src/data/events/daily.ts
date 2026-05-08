@@ -13,7 +13,7 @@ export const DAILY_EVENTS: EventDef[] = [
     title: '这周怎么安排？',
     narrative:
       '赛程空了一段，没有硬性任务。你望着日历，想着这几天该怎么过。',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 0,
     weight: 4,
     choices: [
@@ -110,7 +110,7 @@ export const DAILY_EVENTS: EventDef[] = [
     title: '赛季冲刺期',
     narrative:
       '赛历密集，周围的队伍都在加班加点准备。你感受到了一种集体焦虑，也要做决定了。',
-    stages: ['youth', 'second', 'pro', 'star'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 1,
     weight: 2,
     choices: [
@@ -208,7 +208,7 @@ export const DAILY_EVENTS: EventDef[] = [
     title: '轻训周',
     narrative:
       '教练宣布这周放松，没有强制训练任务。大家各自安排，氛围轻松。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 0,
     weight: 2,
     choices: [

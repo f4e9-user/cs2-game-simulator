@@ -10,7 +10,7 @@ export const BROADCAST_EVENTS: EventDef[] = [
     title: '本届 Major 落幕：{rival0} 捧杯',
     narrative:
       '你刷推特时看到本届 Major 决赛结果——{rival0} 让二追三横扫 {rival1} 拿下冠军。圈子热闹了一周。',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 1,
     weight: 1.5,
     requireTags: ['major-broadcast'],

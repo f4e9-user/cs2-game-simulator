@@ -77,7 +77,7 @@ export const TRAINING_EVENTS: EventDef[] = [
     title: '复盘昨晚的比赛 demo',
     narrative:
       '教练把昨晚输掉的 demo 甩到群里：「每人抽一张图，写出三个错误决策。」',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     choices: [
       {

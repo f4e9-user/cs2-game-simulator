@@ -37,7 +37,7 @@ export const BETTING_EVENTS: EventDef[] = [
     title: '老朋友的私信',
     narrative:
       '一个老朋友在 Discord 上发来消息：「你们队明天那把，随便打打就行。赔率很漂亮。」',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 2,
     weight: 0.4,
     choices: [
@@ -101,7 +101,7 @@ export const BETTING_EVENTS: EventDef[] = [
     title: '训练赛的"中间人"',
     narrative:
       '训练赛的对方教练单独加了你，聊着聊着问："下一把你们第二图让一下，有人愿意付你现金。"',
-    stages: ['second', 'pro', 'star'],
+    stages: ['second', 'pro'],
     difficulty: 3,
     weight: 0.3,
     choices: [
@@ -166,7 +166,7 @@ export const BETTING_EVENTS: EventDef[] = [
     title: '赞助商的暗示',
     narrative:
       '晚宴结束前，那个大金主拍拍你肩膀：「兄弟，下一场小组赛你们肯定是黑马吧？有空我们详细聊。」他的眼神比话直接。',
-    stages: ['pro', 'star', 'veteran'],
+    stages: ['pro'],
     difficulty: 4,
     weight: 0.2,
     choices: [

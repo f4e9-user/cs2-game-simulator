@@ -7,7 +7,7 @@ export const MEDIA_EVENTS: EventDef[] = [
     title: '赛后采访',
     narrative:
       '你摘下耳机，采访的话筒已经伸过来：「这把最后那波是怎么想的？」',
-    stages: ['second', 'pro', 'star'],
+    stages: ['second', 'pro'],
     difficulty: 1,
     choices: [
       {

@@ -32,8 +32,6 @@ export const STAGE_ORDER: Stage[] = [
   'youth',
   'second',
   'pro',
-  'star',
-  'veteran',
   'retired',
 ];
 
@@ -42,8 +40,6 @@ export const STAGE_LABELS: Record<Stage, string> = {
   youth: '青训',
   second: '二线队',
   pro: '职业队',
-  star: '明星选手',
-  veteran: '老将',
   retired: '退役',
 };
 
@@ -179,7 +175,5 @@ export const STAGE_PROMOTION_EXPERIENCE: Record<Stage, number> = {
   youth: 10,
   second: 14,
   pro: 18,
-  star: 20,
-  veteran: 20,
   retired: 999,
 };

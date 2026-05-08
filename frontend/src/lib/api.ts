@@ -135,4 +135,6 @@ export const api = {
       `/api/game/${sessionId}/team-response`,
       { method: 'POST', body: JSON.stringify({ accept }) },
     ),
+  leaveTeam: (sessionId: string) =>
+    request<{ player: Player }>(`/api/game/${sessionId}/leave-team`, { method: 'POST' }),
 };

@@ -37,15 +37,6 @@ export const TOURNAMENT_GATES: TournamentGate[] = [
     minChampionships: 1,
     promotionEventId: 'promotion-second-to-pro',
   },
-  {
-    from: 'pro',
-    to: 'star',
-    tiers: ['tier1', 's-class', 'major'],
-    minParticipations: 2,
-    champTiers: ['tier1', 's-class', 'major'],
-    minChampionships: 1,
-    promotionEventId: 'promotion-pro-to-star',
-  },
 ];
 
 export function getGate(from: Stage): TournamentGate | undefined {

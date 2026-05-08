@@ -8,7 +8,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '更衣室里的爆发点',
     narrative:
       '训练结束后队内气氛降到冰点。队长发来消息要求今晚开个"内部会"，积压的矛盾已经藏不住了。',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 3,
     weight: 1.0,
     requireTags: ['locker-tension'],
@@ -97,7 +97,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '憋了太久的那口气',
     narrative:
       '赛后复盘时一个细节触发了你。话没憋住，声音大得让整个休息室安静下来。',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 3,
     weight: 1.0,
     requireTags: ['suppressed-anger'],
@@ -185,7 +185,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '账单查进来了',
     narrative:
       '俱乐部合规部门发来内部邮件，说例行财务审计发现一笔来源不明的转账，要求你在 48 小时内说明。',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 4,
     weight: 1.0,
     requireTags: ['dirty-money'],
@@ -283,7 +283,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '那个剪辑火了',
     narrative:
       '上次比赛的一个连杀片段被剪成 30 秒短视频，昨晚播放量破了百万。媒体开始联系你。',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 2,
     weight: 1.0,
     requireTags: ['highlight-clip'],
@@ -369,7 +369,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '大赞助商找上门',
     narrative:
       '一个知名外设品牌的市场总监发来合作邀请，合同金额远比你想象的高。经纪人说要你亲自拍板。',
-    stages: ['pro', 'star', 'veteran'],
+    stages: ['pro'],
     difficulty: 3,
     weight: 1.0,
     requireTags: ['fan-favorite'],
@@ -454,7 +454,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '那场决赛的阴影',
     narrative:
       '教练在周会上再次播放了决赛末局的录像。那场失误被截图在论坛热传。你知道这件事还没结束。',
-    stages: ['pro', 'star', 'veteran'],
+    stages: ['pro'],
     difficulty: 3,
     weight: 1.0,
     requireTags: ['grand-final-loss'],
@@ -541,7 +541,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '教练叫你去谈',
     narrative:
       '教练发消息让你饭后留一下。你知道是为了上周那次无故缺席训练的事。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     weight: 1.0,
     requireTags: ['missed-practice'],
@@ -626,7 +626,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '主狙的专项训练',
     narrative:
       '教练说你有成为主狙的潜力，安排了一个专项训练日：定点狙位练习 + 角度记忆 + 快狙节奏训练。',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 3,
     weight: 0.18,
     requireTags: ['main-awper'],
@@ -688,7 +688,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '指挥席空出来了',
     narrative:
       '现任 IGL 宣布本赛季末退役。队长私下问你：「你愿意接手指挥吗？大家都觉得你有那个读图能力。」',
-    stages: ['pro', 'star', 'veteran'],
+    stages: ['pro'],
     difficulty: 4,
     weight: 0.18,
     requireTags: ['natural-igl'],
@@ -775,7 +775,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '舆论还在发酵',
     narrative:
       '已经第三天了，那篇针对你的帖子还在各大论坛流传。俱乐部公关部门今天打来电话，说你需要做点什么。',
-    stages: ['pro', 'star', 'veteran'],
+    stages: ['pro'],
     difficulty: 3,
     weight: 1.0,
     requireTags: ['media-backlash'],
@@ -865,7 +865,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '新队的第一场正式赛',
     narrative:
       '转会手续一个月前完成，今天终于上场了。新队友和观众都在打量你，看你能不能配得上那份合同。',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 3,
     weight: 1.0,
     requireTags: ['signed-second-team'],
@@ -952,7 +952,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '家里打来了电话',
     narrative:
       '妈妈发消息说有空打个视频，言辞里藏着担心。你知道这次逃不掉了。',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 2,
     weight: 1.0,
     requireTags: ['family-strain'],
@@ -1034,7 +1034,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '弃赛的代价',
     narrative:
       '弃赛的消息在圈子里传开了。队友发来消息，俱乐部也约谈了你。你必须面对这件事。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     weight: 1.2,
     requireTags: ['forfeit-recent'],
@@ -1124,7 +1124,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '邮箱里多了一封回信',
     narrative:
       '你打开邮箱——之前发的那封简历有回应了。标题是"关于您的入队申请"。',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 2,
     weight: 10,
     requireTags: ['application-response-ready'],
@@ -1162,7 +1162,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '俱乐部面试',
     narrative:
       '你坐在俱乐部的会客室里。对面是教练和经理，桌上一张没有填完的合同。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 3,
     weight: 10,
     requireTags: ['interview-ready'],
@@ -1348,7 +1348,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '又一次被拒了',
     narrative:
       '这次申请最终没能通过。你看着邮箱里那封格式化回信，沉默了一会儿。',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 0,
     weight: 0,
     requireTags: ['club-rejected-notify'],
@@ -1386,7 +1386,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '新队的第一天',
     narrative:
       '你推开训练室的门，几张陌生的面孔转过来看你。教练翻着战术板："欢迎加入，我们需要确认一下你在队里的定位。"',
-    stages: ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 1,
     weight: 0,
     requireTags: ['just-joined-team'],
@@ -1489,7 +1489,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '又到谈合同的时候了',
     narrative:
       '经纪人发来消息：你的合同周期到了。俱乐部那边已经准备好了一份新合同，需要你点头。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     weight: 0,
     requireTags: ['contract-up'],
@@ -1573,7 +1573,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '更衣室里的低气压',
     narrative:
       '最近的气氛有点奇怪。{teammate0} 在训练赛里越来越沉默，有人开始互相甩锅。你知道这样下去不行。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     weight: 0,
     requireTags: ['stressed', 'has-team'],
@@ -1639,7 +1639,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '经理约你在会议室见',
     narrative:
       '经理的名字出现在日程表上。不是训练复盘，不是战术调整——你大概猜到是什么了。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 3,
     weight: 0,
     requireTags: ['losing-streak'],
@@ -1699,7 +1699,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '有一封未署名的邮件',
     narrative:
       '邮件里没有太多内容——"我们有兴趣。"落款是那支你一直在看榜单的、比你当前俱乐部高一档的战队。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 3,
     weight: 0,
     requireTags: ['promote-eligible'],
@@ -1806,7 +1806,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     type: 'team',
     title: '挖角邀约',
     narrative: '一支更高级别的俱乐部主动找到你，对方表示对你的成绩印象深刻，希望你考虑加入他们。',
-    stages: ['youth', 'second', 'pro', 'star'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     weight: 2,
     requireTags: ['promote-eligible'],
@@ -1850,7 +1850,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     type: 'team',
     title: '赛前心理战',
     narrative: '对手队伍在社交媒体上对你们发起了挑衅，声称这场比赛没有悬念。队友们群情激奋。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     weight: 2,
     requireTags: ['rival-match-pressure'],
@@ -1899,7 +1899,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     type: 'team',
     title: '队友离队传闻',
     narrative: '有消息称 {teammate0} 正在和其他俱乐部接触，更衣室里的气氛变得有些微妙。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 2,
     weight: 2,
     requireTags: ['has-team'],
@@ -1948,7 +1948,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '转型的念头',
     narrative:
       '最近你开始系统研究另一种打法的录像和教学。训练室里有人注意到了——"你在看不是自己位置的复盘？"',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 1,
     weight: 2,
     requireTags: ['role-transition-eligible'],
@@ -2006,7 +2006,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     title: '转型试炼',
     narrative:
       '教练安排了一场内部训练赛，让你试试新的位置。队友们都在看你——能不能行，就看这一把了。',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 3,
     weight: 0,
     requireTags: ['role-transition-resolve'],
@@ -2070,7 +2070,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     type: 'life',
     title: '老朋友的问候',
     narrative: '手机亮了一下。是 {teammate0}——你之前的队友，好久没联系了。消息只有一行："最近还好吗？看到你的比赛了。"',
-    stages: ['youth', 'second', 'pro', 'star', 'veteran'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 1,
     weight: 2,
     requireTags: ['old-teammate-contact'],

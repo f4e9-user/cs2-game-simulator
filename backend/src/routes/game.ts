@@ -35,10 +35,10 @@ const TOURNAMENT_TEAM_REQUIREMENT: Record<string, ClubTier | null> = {
   city: null,
   platform: null,
   'secondary-league': 'youth',
-  'development-league': 'semi-pro',
-  tier2: 'pro',
+  'development-league': 'youth',
+  tier2: 'semi-pro',
   tier1: 'pro',
-  's-class': 'top',
+  's-class': 'pro',
   major: 'top',
 };
 
@@ -380,7 +380,7 @@ app.post('/game/:sessionId/withdraw', async (c) => {
   penalties.push('名气 -10');
 
   // 30K 罚款（3 money points）—— 仅在二线及以上有合约的阶段
-  const stageHasContract = ['second', 'pro', 'star', 'veteran'].includes(session.player.stage);
+  const stageHasContract = ['second', 'pro'].includes(session.player.stage);
   if (stageHasContract) {
     session.player.stats.money = Math.max(0, session.player.stats.money - 3);
     penalties.push('资金 -30K');
@@ -507,6 +507,24 @@ app.post('/game/:sessionId/team-response', async (c) => {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
   }
+});
+
+// 主动离队
+app.post('/game/:sessionId/leave-team', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  if (!session.player.team) return c.json({ error: '当前没有战队' }, 400);
+  if (session.player.pendingMatch) return c.json({ error: '赛事进行中，不能离队' }, 400);
+
+  session.player.team = null;
+  session.player.consecutiveLosses = 0;
+  session.player.fame = Math.max(0, (session.player.fame ?? 0) - 5);
+  session.updatedAt = new Date().toISOString();
+  await storage.sessions.save(session);
+  return c.json({ player: session.player });
 });
 
 export default app;

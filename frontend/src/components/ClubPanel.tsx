@@ -54,19 +54,20 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
   const [clubs, setClubs] = useState<Club[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
 
   useEffect(() => {
     api.listClubs().then((res) => setClubs(res.clubs)).catch(() => {});
   }, []);
 
-  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
   const playerStageIdx = stageOrder.indexOf(player.stage);
   const rookieCheck = player.stage === 'rookie' ? rookieEligibility(player) : null;
 
   const eligibleClubs = clubs.filter((c) => {
-    if (c.isRival) return false; // 对手映射隐藏
+    if (c.isRival) return false;
+    if (player.team && c.id === player.team.clubId) return false; // 隐藏当前战队
     const requiredIdx = stageOrder.indexOf(c.requiredStage);
-    // Rookie 满足资格时允许看到 youth 档俱乐部（后端仍有 Rookie 专属校验）
     const rookieCanApplyToYouth =
       player.stage === 'rookie' && c.requiredStage === 'youth' && rookieCheck?.eligible === true;
     if (!rookieCanApplyToYouth && playerStageIdx < requiredIdx) return false;
@@ -77,6 +78,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
   const hasTeam = player.team !== null;
   const hasPending = player.pendingApplication !== null;
   const ap = player.actionPoints ?? 0;
+  const inMatch = player.pendingMatch !== null && player.pendingMatch !== undefined;
 
   const apply = async (clubId: string) => {
     setLoading(true);
@@ -91,6 +93,58 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
     }
   };
 
+  const leaveTeam = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.leaveTeam(sessionId);
+      setConfirmLeave(false);
+      onPlayerUpdate(res.player);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clubListSection = (
+    <div style={{ marginTop: 10 }}>
+      <div className="stat-desc" style={{ marginBottom: 6 }}>
+        可申请的俱乐部（消耗 25 AP / 次）
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {eligibleClubs.length === 0 && (
+          <div className="action-panel-hint">暂无可申请的俱乐部</div>
+        )}
+        {eligibleClubs.map((c) => {
+          const rookieBlock = rookieCheck !== null && !rookieCheck.eligible;
+          const canApply = enabled && !hasPending && ap >= 25 && !loading && !rookieBlock;
+          return (
+            <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: 'var(--bg-2)' }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)' }}>
+                  {c.name} [{c.tag}]
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--fg-2)' }}>
+                  {TIER_LABELS[c.tier] ?? c.tier} · {c.region} · {c.salaryRange[0]}–{c.salaryRange[1]}K/周
+                </div>
+              </div>
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={!canApply}
+                onClick={() => apply(c.id)}
+                style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
+              >
+                {rookieBlock ? '未达标' : ap < 25 ? 'AP 不足' : '发简历 -25 AP'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <div className="action-panel" style={{ marginTop: 10 }}>
       <div className="action-panel-header">
@@ -104,14 +158,56 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
 
       <div style={{ padding: '8px 0' }}>
         {hasTeam ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
-              {player.team!.name} [{player.team!.tag}]
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+                {player.team!.name} [{player.team!.tag}]
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--fg-2)', marginTop: 2 }}>
+                {TIER_LABELS[player.team!.tier] ?? player.team!.tier} · {player.team!.region}
+                · 加入于第 {player.team!.joinedRound} 回合
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--fg-2)' }}>
-              {TIER_LABELS[player.team!.tier] ?? player.team!.tier} · {player.team!.region}
-              · 加入于 第{player.team!.joinedRound}回合
-            </div>
+
+            {confirmLeave ? (
+              <div style={{ padding: '8px', background: 'var(--bg-2)', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: 11, color: 'var(--fg-2)' }}>
+                  确认离队？名气 -5，赛事进行中无法离队。
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={leaveTeam}
+                    disabled={loading || inMatch}
+                    style={{ fontSize: 11, padding: '4px 10px', color: 'var(--danger)' }}
+                  >
+                    确认离队
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => setConfirmLeave(false)}
+                    disabled={loading}
+                    style={{ fontSize: 11, padding: '4px 10px' }}
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setConfirmLeave(true)}
+                disabled={!enabled || inMatch}
+                style={{ fontSize: 11, padding: '4px 10px', alignSelf: 'flex-start', color: 'var(--fg-2)' }}
+              >
+                {inMatch ? '赛事中无法离队' : '申请离队'}
+              </button>
+            )}
+
+            {clubListSection}
           </div>
         ) : hasPending ? (
           <div style={{ fontSize: 12, color: 'var(--fg-2)', padding: 8, textAlign: 'center' }}>
@@ -133,39 +229,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                   : `入队门槛：${rookieCheck.hint}`}
               </div>
             )}
-            <div className="stat-desc" style={{ marginBottom: 8 }}>
-              可申请的俱乐部（消耗 25 AP / 次）
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {eligibleClubs.length === 0 && (
-                <div className="action-panel-hint">暂无可申请的俱乐部</div>
-              )}
-              {eligibleClubs.map((c) => {
-                const rookieBlock = rookieCheck !== null && !rookieCheck.eligible;
-                const canApply = enabled && !hasPending && ap >= 25 && !loading && !rookieBlock;
-                return (
-                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: 'var(--bg-2)' }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)' }}>
-                        {c.name} [{c.tag}]
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--fg-2)' }}>
-                        {TIER_LABELS[c.tier] ?? c.tier} · {c.region} · {c.salaryRange[0]}–{c.salaryRange[1]}K/周
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="ghost-button"
-                      disabled={!canApply}
-                      onClick={() => apply(c.id)}
-                      style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
-                    >
-                      {rookieBlock ? '未达标' : ap < 25 ? 'AP 不足' : '发简历 -25 AP'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+            {clubListSection}
           </div>
         )}
       </div>

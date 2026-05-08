@@ -658,6 +658,22 @@ export function applyChoice(
     consecutiveLosses,
   };
 
+  // ── 明星/老将 tag 检查与首次获得奖励 ─────────────────────────────
+  // veteran tag：顶级赛事（tier1/s-class/major）累计参加 4 场即可获得
+  const topParticipations =
+    (nextPlayer.tierParticipations?.['tier1'] ?? 0) +
+    (nextPlayer.tierParticipations?.['s-class'] ?? 0) +
+    (nextPlayer.tierParticipations?.['major'] ?? 0);
+  if (topParticipations >= 4 && !nextTags.includes('veteran')) {
+    nextTags.push('veteran');
+    tagsAdded.push('veteran');
+  }
+  // 首次获得 veteran tag：+2 心态 -15 压力
+  if (tagsAdded.includes('veteran') && !session.player.tags.includes('veteran')) {
+    nextPlayer.stats = { ...nextPlayer.stats, mentality: nextPlayer.stats.mentality + 2 };
+    nextPlayer.stress = Math.max(0, (nextPlayer.stress ?? 0) - 15);
+  }
+
   // 面试事件完成后清空 pendingApplication（response 阶段保留，供面试 post-handler 读取 clubId）
   const CLUB_INTERVIEW_IDS = new Set([
     'chain-club-interview',
@@ -846,6 +862,18 @@ export function applyChoice(
         tierChamp[t.tier] = (tierChamp[t.tier] ?? 0) + 1;
         nextPlayer.tierChampionships = tierChamp;
         nextPlayer.tournamentChampionships = (nextPlayer.tournamentChampionships ?? 0) + 1;
+
+        // 明星选手判定：Major ≥1 / S级 ≥3 / Tier1 ≥10
+        const tc = nextPlayer.tierChampionships;
+        const isStar =
+          (tc['major'] ?? 0) >= 1 ||
+          (tc['s-class'] ?? 0) >= 3 ||
+          (tc['tier1'] ?? 0) >= 10;
+        if (isStar && !nextPlayer.tags.includes('star-player')) {
+          nextPlayer.tags = dedupe([...nextPlayer.tags, 'star-player']);
+          nextPlayer.stats = { ...nextPlayer.stats, experience: nextPlayer.stats.experience + 1 };
+          nextPlayer.fame = (nextPlayer.fame ?? 0) + 10;
+        }
       }
     }
 
@@ -931,10 +959,8 @@ function checkEnding(player: Player, endRun: boolean, endReason?: string): strin
     return 'injury_ended_career';
   }
   if (player.round >= MAX_ROUNDS) {
-    const proStages = ['pro', 'star', 'veteran'] as const;
-    const semipro = ['second', 'pro', 'star', 'veteran'] as const;
-    const isProPlus = proStages.includes(player.stage as typeof proStages[number]);
-    const isSemiProPlus = semipro.includes(player.stage as typeof semipro[number]);
+    const isProPlus = player.stage === 'pro';
+    const isSemiProPlus = ['second', 'pro'].includes(player.stage);
     // 草根传奇：全程自由人 + 高名气 + 赢过赛事冠军（开放赛打遍天下）
     if (!player.everHadTeam && (player.fame ?? 0) >= 70 &&
         player.tags.includes('tournament-winner') &&
@@ -1266,10 +1292,10 @@ export function applyClubRequest(
   if (!club) throw new Error('未知俱乐部');
 
   const player = session.player;
-  if (player.team) throw new Error('你已经有战队了');
+  if (player.team && clubId === player.team.clubId) throw new Error('已经在这支战队了');
   if (player.pendingApplication) throw new Error('已经有一个进行中的申请');
 
-  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
   // Rookie 申请 youth 档俱乐部时跳过阶段门槛，后续的 Rookie 专属资格检查会接管
   const isRookieApplyingToYouth = player.stage === 'rookie' && club.requiredStage === 'youth';
   if (!isRookieApplyingToYouth && stageOrder.indexOf(player.stage) < stageOrder.indexOf(club.requiredStage)) {
@@ -1333,6 +1359,15 @@ export function respondTeamOffer(
   if (!offer) throw new Error('没有待处理的入队邀请');
 
   if (accept) {
+    // 骑驴找马违约：名气 -15、压力 +25，contract-dispute 标签持续 12 回合
+    // 现实中这类操作会引发舆论争议，"不忠诚"标签会背一段时间
+    if (player.team) {
+      player.fame = Math.max(0, (player.fame ?? 0) - 15);
+      player.stress = Math.min(100, (player.stress ?? 0) + 25);
+      const expiryRound = player.round + 12;
+      player.tagExpiry = { ...(player.tagExpiry ?? {}), 'contract-dispute': expiryRound };
+    }
+
     const team: PlayerTeam = {
       clubId: offer.clubId,
       name: offer.clubName,
@@ -1348,13 +1383,17 @@ export function respondTeamOffer(
       youth: 'youth',
       'semi-pro': 'second',
       pro: 'pro',
-      top: 'star',
+      top: 'pro',
     };
     const minStage = TIER_MIN_STAGE[offer.tier];
     const nextStage = stageIndex(minStage) > stageIndex(player.stage) ? minStage : player.stage;
 
     const rosterRng = makeRng(hashString(session.id) ^ (player.round * 7919));
     const roster = generateRoster(offer.tier, rosterRng);
+
+    const hadTeam = player.team !== null;
+    const cleanTags = player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending');
+    const nextTags = hadTeam ? dedupe([...cleanTags, 'contract-dispute']) : cleanTags;
 
     return {
       ...player,
@@ -1364,8 +1403,9 @@ export function respondTeamOffer(
       pendingOffer: null,
       pendingApplication: null,
       roster,
-      teamTrust: 40,
-      tags: player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending'),
+      teamTrust: hadTeam ? 25 : 40, // 跳槽违约，新队对你观感也打折
+      tags: nextTags,
+      tagExpiry: player.tagExpiry,
     };
   } else {
     // Add 10-round cooldown so the same poach event doesn't re-trigger immediately
