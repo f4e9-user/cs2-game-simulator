@@ -51,20 +51,41 @@ export default function GamePage() {
   const [traits, setTraits] = useState<Trait[]>([]);
   const [shaking, setShaking] = useState(false);
   const [showNewGameModal, setShowNewGameModal] = useState(false);
-  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [mobileTab, setMobileTab] = useState<'left' | 'center' | 'right'>('center');
   const prevStress = useRef(0);
+
+  const storageKey = `intro-seen-${sessionId}`;
+  const [welcomeDismissed, setWelcomeDismissed] = useState(() =>
+    typeof window !== 'undefined' && sessionStorage.getItem(storageKey) === '1'
+  );
+  const [preloadedIntro, setPreloadedIntro] = useState<string | null>(null);
+  const [introLoading, setIntroLoading] = useState(!welcomeDismissed);
+
+  const dismissWelcome = () => {
+    sessionStorage.setItem(storageKey, '1');
+    setWelcomeDismissed(true);
+  };
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([api.getSession(sessionId), api.listTraits()])
-      .then(([session, t]) => {
+    const fetchIntro = welcomeDismissed
+      ? Promise.resolve(null)
+      : api.getIntro(sessionId).catch(() => null);
+    Promise.all([api.getSession(sessionId), api.listTraits(), fetchIntro])
+      .then(([session, t, introRes]) => {
         if (cancelled) return;
         hydrateFromSession(session);
         setTraits(t.traits);
+        if (introRes) setPreloadedIntro(introRes.intro);
+        setIntroLoading(false);
       })
-      .catch((e) => !cancelled && setError(String(e.message ?? e)))
+      .catch((e) => {
+        if (!cancelled) {
+          setError(String(e.message ?? e));
+          setIntroLoading(false);
+        }
+      })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -191,10 +212,11 @@ export default function GamePage() {
             <EndingPanel player={player} traits={traits} ending={ending ?? undefined} />
           ) : !welcomeDismissed && history.length === 0 && !loading ? (
             <WelcomeCard
-              sessionId={sessionId}
               player={player}
               traits={traits}
-              onDismiss={() => setWelcomeDismissed(true)}
+              intro={preloadedIntro}
+              introLoading={introLoading}
+              onDismiss={dismissWelcome}
             />
           ) : (
             <>

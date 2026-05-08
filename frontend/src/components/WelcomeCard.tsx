@@ -1,36 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
 import type { Player, Trait } from '@/lib/types';
 import { STAGE_LABELS } from '@/lib/format';
 
 interface Props {
-  sessionId: string;
   player: Player;
   traits: Trait[];
+  intro: string | null;
+  introLoading: boolean;
   onDismiss: () => void;
 }
 
-export function WelcomeCard({ sessionId, player, traits, onDismiss }: Props) {
-  const [intro, setIntro] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .getIntro(sessionId)
-      .then((res) => { if (!cancelled) setIntro(res.intro); })
-      .catch(() => { /* silently use fallback below */ })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [sessionId]);
-
+export function WelcomeCard({ player, traits, intro, introLoading, onDismiss }: Props) {
   const playerTraits = traits.filter((t) => player.traits.includes(t.id));
   const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
-
-  const fallbackIntro = `${player.name}，${stageLabel}。一切从这里开始。`;
-  const displayIntro = intro && intro.length > 0 ? intro : fallbackIntro;
+  const displayIntro = intro && intro.length > 0
+    ? intro
+    : `${player.name}，${stageLabel}。一切从这里开始。`;
 
   return (
     <div className="welcome-card">
@@ -50,7 +36,7 @@ export function WelcomeCard({ sessionId, player, traits, onDismiss }: Props) {
       <div className="welcome-divider" />
 
       <div className="welcome-intro">
-        {loading ? (
+        {introLoading ? (
           <span className="welcome-loading">故事开篇生成中…</span>
         ) : (
           displayIntro
@@ -60,10 +46,9 @@ export function WelcomeCard({ sessionId, player, traits, onDismiss }: Props) {
       <button
         type="button"
         className="primary-button welcome-start-btn"
-        disabled={loading}
         onClick={onDismiss}
       >
-        出发 →
+        {introLoading ? '跳过 →' : '出发 →'}
       </button>
     </div>
   );

@@ -511,6 +511,14 @@ app.post('/game/:sessionId/team-response', async (c) => {
 // 开场故事生成（仅 history 为空的新局调用）
 app.get('/game/:sessionId/intro', async (c) => {
   const id = c.req.param('sessionId');
+
+  // KV 缓存：intro 只需生成一次，命中直接返回
+  const cacheKey = `intro:${id}`;
+  try {
+    const cached = await c.env.KV.get(cacheKey);
+    if (cached) return c.json({ intro: cached });
+  } catch { /* KV 不可用时跳过缓存 */ }
+
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
@@ -524,6 +532,11 @@ app.get('/game/:sessionId/intro', async (c) => {
 
   const ai = makeAiService(c.env);
   const intro = await ai.intro(session.player, traitObjects, background);
+
+  // 写入 KV，永久缓存（intro 内容不会变）
+  if (intro) {
+    try { await c.env.KV.put(cacheKey, intro); } catch { /* 忽略写失败 */ }
+  }
 
   return c.json({ intro });
 });
