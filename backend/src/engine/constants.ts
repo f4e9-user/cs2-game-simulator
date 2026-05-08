@@ -60,6 +60,7 @@ export const POINT_POOL = 12;
 export const PER_STAT_MAX = 12;
 export const STAT_MIN = 0;
 export const STAT_MAX = 20;
+export const MONEY_MAX = 999;
 
 // ── 成长系统 ──────────────────────────────────────────────────
 // 生涯总成长上限（money 不计入）

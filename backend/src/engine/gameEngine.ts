@@ -57,6 +57,8 @@ import {
   MAX_ROUNDS,
   PERIPHERAL_PRICES,
   PERIPHERAL_SUCCESS_CHANCE,
+  CORE_STAT_KEYS,
+  MONEY_MAX,
   POINT_POOL,
   STAGE_ORDER,
   STAT_KEYS,
@@ -134,7 +136,7 @@ export function computeTraitMods(traits: Trait[]): {
   const floor: Stats = { ...BASE_STATS };
   const negative: Stats = { ...BASE_STATS };
   for (const t of traits) {
-    for (const k of STAT_KEYS) {
+    for (const k of CORE_STAT_KEYS) {
       const v = t.modifiers[k];
       if (typeof v !== 'number') continue;
       if (v > 0) floor[k] += v;
@@ -148,7 +150,7 @@ function randomStatsWithFloor(floor: Stats): Stats {
   const stats: Stats = { ...floor };
   let remaining = POINT_POOL;
   while (remaining > 0) {
-    const available = STAT_KEYS.filter((k) => stats[k] < floor[k] + POINT_POOL);
+    const available = CORE_STAT_KEYS.filter((k) => stats[k] < floor[k] + POINT_POOL);
     if (available.length === 0) break;
     const pick = available[Math.floor(Math.random() * available.length)]!;
     stats[pick] += 1;
@@ -159,7 +161,7 @@ function randomStatsWithFloor(floor: Stats): Stats {
 
 export function validateAllocation(stats: Stats, floor: Stats): string | null {
   let aboveFloor = 0;
-  for (const k of STAT_KEYS) {
+  for (const k of CORE_STAT_KEYS) {
     const v = stats[k];
     if (!Number.isInteger(v)) return `属性 ${k} 必须是整数`;
     if (v < floor[k]) return `属性 ${k} 不能低于特质底线 ${floor[k]}`;
@@ -310,7 +312,7 @@ function buildMatchResolveResult(
   // Apply stat changes via translateStatDelta for consistency
   const legacy = translateStatDelta(statChanges);
   let nextStats = { ...player.stats };
-  nextStats.money = Math.max(0, Math.min(20, nextStats.money + legacy.moneyDelta));
+  nextStats.money = Math.max(0, Math.min(MONEY_MAX, nextStats.money + legacy.moneyDelta));
 
   let growthApplied = 0;
   let growthKey: StatKey | undefined;
@@ -668,7 +670,7 @@ export function applyChoice(
 
   // 周薪入账
   if (nextPlayer.team) {
-    nextPlayer.stats.money = Math.min(20, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
+    nextPlayer.stats.money = Math.min(MONEY_MAX, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
     passiveEffects.push(`周薪入账 +${nextPlayer.team.weeklySalary * 10}K`);
   }
 

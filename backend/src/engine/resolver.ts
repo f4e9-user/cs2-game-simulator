@@ -22,6 +22,7 @@ import {
   FATIGUE_MAX,
   FATIGUE_MIN,
   GROWTH_CAP,
+  MONEY_MAX,
   STAGE_ORDER,
   STAT_KEYS,
   STAT_MAX,
@@ -34,7 +35,8 @@ import {
 export function clampStats(stats: Stats): Stats {
   const out = { ...stats };
   for (const k of STAT_KEYS) {
-    out[k] = Math.max(STAT_MIN, Math.min(STAT_MAX, out[k]));
+    const cap = k === 'money' ? MONEY_MAX : STAT_MAX;
+    out[k] = Math.max(STAT_MIN, Math.min(cap, out[k]));
   }
   return out;
 }
@@ -262,7 +264,7 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
   // ── 核心成长 ──
   let nextStats = { ...player.stats };
   // money 变化直接写入 stats.money（保持兼容）
-  nextStats.money = Math.max(0, Math.min(20, nextStats.money + moneyDelta));
+  nextStats.money = Math.max(0, Math.min(MONEY_MAX, nextStats.money + moneyDelta));
 
   let growthApplied = 0;
   let growthKey: StatKey | undefined;

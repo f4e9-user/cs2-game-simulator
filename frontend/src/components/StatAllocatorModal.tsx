@@ -13,7 +13,6 @@ const STAT_ORDER: StatKey[] = [
   'intelligence',
   'agility',
   'experience',
-  'money',
   'mentality',
   'constitution',
 ];

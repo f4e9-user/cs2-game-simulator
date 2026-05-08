@@ -38,7 +38,7 @@ export const TRAITS: Trait[] = [
     id: 'streamer-charm',
     name: '镜头感',
     description: '镜头前放得开，赞助和舆论更友好。',
-    modifiers: { money: 2, mentality: 1 },
+    modifiers: { mentality: 1 },
     tags: ['streamer', 'media'],
   },
   {
@@ -59,7 +59,7 @@ export const TRAITS: Trait[] = [
     id: 'scene-kid',
     name: '网吧少年',
     description: '街头出身，韧性强但对钱敏感。',
-    modifiers: { mentality: 2, experience: 1, money: -1, constitution: 1 },
+    modifiers: { mentality: 2, experience: 1, constitution: 1 },
     tags: ['streetwise', 'grinder'],
   },
   {
@@ -80,7 +80,7 @@ export const TRAITS: Trait[] = [
     id: 'gambler',
     name: '赌徒体质',
     description: '对风险有天然渴望，博彩事件更擅长掩饰，也更容易陷进去。',
-    modifiers: { agility: 1, money: -1 },
+    modifiers: { agility: 1 },
     tags: ['risky', 'gambler'],
   },
   {
@@ -101,21 +101,21 @@ export const TRAITS: Trait[] = [
     id: 'introvert',
     name: '社恐',
     description: '在镜头前、采访中、新环境里都容易发挥不出来。',
-    modifiers: { intelligence: 2, mentality: -1, money: -1 },
+    modifiers: { intelligence: 2, mentality: -1 },
     tags: ['shy', 'anti-media'],
   },
   {
     id: 'addicted',
     name: '沉迷型',
     description: '开局就是 12 小时。训练收益高，但生活会一团糟。',
-    modifiers: { experience: 2, mentality: -1, money: -1, constitution: -1 },
+    modifiers: { experience: 2, mentality: -1, constitution: -1 },
     tags: ['grinder', 'obsessed'],
   },
   {
     id: 'flashy',
     name: '花架子',
     description: '操作华丽但不稳定，观众喜欢，教练头疼。',
-    modifiers: { agility: 1, money: 1, experience: -1 },
+    modifiers: { agility: 1, experience: -1 },
     tags: ['media', 'flashy', 'inconsistent'],
   },
   {
@@ -143,7 +143,7 @@ export const TRAITS: Trait[] = [
     id: 'scapegoat',
     name: '背锅侠',
     description: '天生会接锅。队内关系稳，但常被当做输球的理由。',
-    modifiers: { mentality: 2, money: -1 },
+    modifiers: { mentality: 2 },
     tags: ['support', 'selfless'],
   },
   {

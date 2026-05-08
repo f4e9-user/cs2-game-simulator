@@ -26,7 +26,7 @@ export const BACKGROUNDS: Background[] = [
     name: '青训替补',
     description: '俱乐部青训营吃住全包，但竞争激烈。',
     startStage: 'youth',
-    statBias: { intelligence: 1, experience: 1, money: 1, constitution: 1 },
+    statBias: { intelligence: 1, experience: 1, constitution: 1 },
     tags: ['academy', 'steady'],
   },
   {
@@ -34,7 +34,7 @@ export const BACKGROUNDS: Background[] = [
     name: '主播转职业',
     description: '自带流量的主播，进队第一天就有镜头。',
     startStage: 'rookie',
-    statBias: { money: 3, mentality: 1, agility: -1, constitution: -1 },
+    statBias: { mentality: 1, agility: -1, constitution: -1 },
     tags: ['streamer', 'media'],
   },
   {
@@ -42,7 +42,7 @@ export const BACKGROUNDS: Background[] = [
     name: '网吧赛冠军',
     description: '从线下网吧赛一路杀出，经验粗糙但韧性十足。',
     startStage: 'rookie',
-    statBias: { mentality: 2, experience: 1, money: -2, constitution: 1 },
+    statBias: { mentality: 2, experience: 1, constitution: 1 },
     tags: ['streetwise', 'grinder'],
   },
   {
