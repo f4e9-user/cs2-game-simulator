@@ -52,7 +52,7 @@ export const RIVAL_EVENTS: EventDef[] = [
         success: {
           narrative:
             '法务发函、经纪人公关，48 小时内 {rival0} 那边低调撤了水军。',
-          statChanges: { intelligence: 1, money: -1 },
+          statChanges: { intelligence: 1, money: -10 },
           fameDelta: 1,
           stressDelta: -1,
         },

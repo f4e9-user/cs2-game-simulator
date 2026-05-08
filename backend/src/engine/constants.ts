@@ -60,6 +60,7 @@ export const POINT_POOL = 12;
 export const PER_STAT_MAX = 12;
 export const STAT_MIN = 0;
 export const STAT_MAX = 20;
+export const MONEY_MAX = 999;
 
 // ── 成长系统 ──────────────────────────────────────────────────
 // 生涯总成长上限（money 不计入）
@@ -93,7 +94,7 @@ export const FEEL_CAP_MIN     = 2.5; // 被骗后最低能跌到的上限
 export const FEEL_CAP_MAX     = 5;   // 最高等级上限
 
 // 外设四档价格（单位：money 点数，×10 = K）: 50K / 80K / 120K / 200K
-export const PERIPHERAL_PRICES = [5, 8, 12, 20] as const;
+export const PERIPHERAL_PRICES = [50, 80, 120, 200] as const;
 // 外设升级成功概率
 export const PERIPHERAL_SUCCESS_CHANCE = 0.70;
 export const TILT_MIN = 0;

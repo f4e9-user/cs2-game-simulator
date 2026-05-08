@@ -21,7 +21,7 @@ export const MEDIA_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你提到了 IGL 的指挥和替补兄弟的默契。赞助商私信了俱乐部。',
-          statChanges: { mentality: 1, money: 2 },
+          statChanges: { mentality: 1, money: 20 },
           tagAdds: ['team-trust'],
         },
         failure: {
@@ -41,7 +41,7 @@ export const MEDIA_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你在镜头前自信满满，直播间大量新粉丝涌入你的频道。',
-          statChanges: { money: 3, mentality: 1 },
+          statChanges: { money: 30, mentality: 1 },
           tagAdds: ['fan-favorite'],
         },
         failure: {

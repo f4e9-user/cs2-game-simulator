@@ -24,7 +24,7 @@ const DETECT_SMALL = {
 const BANNED = {
   narrative:
     '调查邮件在凌晨发到俱乐部。你的名字上了禁赛名单，所有账号冻结，生涯戛然而止。',
-  statChanges: { money: -5, mentality: -5 },
+  statChanges: { money: -50, mentality: -5 },
   endRun: true,
   endReason: 'banned_for_match_fixing',
   tagAdds: ['banned'],
@@ -52,7 +52,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '没人查到你头上。账户悄悄进账 60K，你装作什么都没发生。',
-          statChanges: { money: 6, mentality: -1 },
+          statChanges: { money: 60, mentality: -1 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -68,7 +68,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '账面进账 20K，安全下庄。',
-          statChanges: { money: 2, mentality: -1 },
+          statChanges: { money: 20, mentality: -1 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -116,7 +116,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '对方赢了图，加密钱包进账 50K。没人追问。',
-          statChanges: { money: 5, mentality: -2 },
+          statChanges: { money: 50, mentality: -2 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -132,7 +132,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你只在两把关键局放水。30K 到账，大部分队友没察觉。',
-          statChanges: { money: 3, mentality: -2 },
+          statChanges: { money: 30, mentality: -2 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -181,7 +181,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '账户进账 80K——几年不用愁的数字。没人找上门，但梦里开始出现审讯室。',
-          statChanges: { money: 8, mentality: -3 },
+          statChanges: { money: 80, mentality: -3 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -197,7 +197,7 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你给了他几个含糊的判断。他转来了 30K"咨询费"。',
-          statChanges: { money: 3, mentality: -1 },
+          statChanges: { money: 30, mentality: -1 },
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
