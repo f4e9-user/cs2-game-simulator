@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
+import { WelcomeCard } from '@/components/WelcomeCard';
 import { EventCard } from '@/components/EventCard';
 import { ChoiceList } from '@/components/ChoiceList';
 import { PlayerStats } from '@/components/PlayerStats';
@@ -50,6 +51,7 @@ export default function GamePage() {
   const [traits, setTraits] = useState<Trait[]>([]);
   const [shaking, setShaking] = useState(false);
   const [showNewGameModal, setShowNewGameModal] = useState(false);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [mobileTab, setMobileTab] = useState<'left' | 'center' | 'right'>('center');
   const prevStress = useRef(0);
 
@@ -187,6 +189,13 @@ export default function GamePage() {
         <main className="hud-center">
           {ended ? (
             <EndingPanel player={player} traits={traits} ending={ending ?? undefined} />
+          ) : !welcomeDismissed && history.length === 0 && !loading ? (
+            <WelcomeCard
+              sessionId={sessionId}
+              player={player}
+              traits={traits}
+              onDismiss={() => setWelcomeDismissed(true)}
+            />
           ) : (
             <>
               {lastResult && <ResultPanel result={lastResult} />}

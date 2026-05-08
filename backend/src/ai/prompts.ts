@@ -1,4 +1,4 @@
-import type { Player, RoundResult } from '../types.js';
+import type { Background, Player, RoundResult, Trait } from '../types.js';
 import { STAGE_LABELS } from '../engine/constants.js';
 
 export interface NarrativePromptInput {
@@ -21,6 +21,25 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
     `结果：${success ? '成功' : '失败'}`,
     `原始描述：${baseNarrative}`,
     '只输出润色后的正文，不要解释，不要加引号。',
+  ].join('\n');
+}
+
+export function buildIntroPrompt(
+  player: Player,
+  traits: Trait[],
+  background: Background,
+): string {
+  const traitDescs = traits
+    .map((t) => `${t.name}（${t.description}）`)
+    .join('、');
+  return [
+    `为以下 CS2 职业选手写一段 80-120 字的第三人称中文故事开头，`,
+    `像小说第一章第一段，有画面感、有情绪。`,
+    `禁止出现任何数值、属性名或游戏机制词汇，只写人物与环境。`,
+    `选手名：${player.name}`,
+    `出身背景：${background.name} —— ${background.description}`,
+    `天赋特质：${traitDescs}`,
+    `只输出故事正文，不要标题，不要引号。`,
   ].join('\n');
 }
 

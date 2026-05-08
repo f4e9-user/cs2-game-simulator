@@ -135,4 +135,8 @@ export const api = {
       `/api/game/${sessionId}/team-response`,
       { method: 'POST', body: JSON.stringify({ accept }) },
     ),
+  getIntro: (sessionId: string) =>
+    request<{ intro: string }>(`/api/game/${sessionId}/intro`),
+  getSummary: (sessionId: string) =>
+    request<{ summary: string; ending?: string }>(`/api/game/${sessionId}/summary`),
 };

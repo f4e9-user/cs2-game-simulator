@@ -1,5 +1,6 @@
-import type { Env, LeaderboardTeam, Player, RoundResult } from '../types.js';
+import type { Background, Env, LeaderboardTeam, Player, RoundResult, Trait } from '../types.js';
 import {
+  buildIntroPrompt,
   buildNarrativePrompt,
   buildSummaryPrompt,
   type NarrativePromptInput,
@@ -9,6 +10,7 @@ export interface AiService {
   readonly active: boolean;
   narrate(input: NarrativePromptInput): Promise<string>;
   summarize(player: Player, history: RoundResult[], ending?: string): Promise<string>;
+  intro(player: Player, traits: Trait[], background: Background): Promise<string>;
   simulateLeaderboardTick?(
     teams: LeaderboardTeam[],
     player: Player,
@@ -38,6 +40,10 @@ class TemplateNarrator implements AiService {
     const wins = history.filter((r) => r.success).length;
     const total = history.length;
     return `${player.name} 完成了 ${total} 轮生涯，胜率 ${total > 0 ? Math.round((wins / total) * 100) : 0}%。结局：${ending ?? '退役'}。`;
+  }
+
+  async intro(player: Player, _traits: Trait[], background: Background): Promise<string> {
+    return `${player.name}，${background.description}这条路，没有人能替你走。`;
   }
 }
 
@@ -88,6 +94,32 @@ class AnthropicNarrator implements AiService {
           max_tokens: 300,
           system: SUMMARY_SYSTEM_PROMPT,
           messages: [{ role: 'user', content: buildSummaryPrompt(player, history, ending) }],
+        }),
+      });
+      if (!res.ok) return '';
+      const data = (await res.json()) as {
+        content?: Array<{ type: string; text?: string }>;
+      };
+      return data.content?.find((c) => c.type === 'text')?.text?.trim() ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: 300,
+          system: '你是一部 CS2 电竞生涯小说的开篇叙事者。只输出故事正文，不要标题，不要引号。',
+          messages: [{ role: 'user', content: buildIntroPrompt(player, traits, background) }],
         }),
       });
       if (!res.ok) return '';
@@ -154,6 +186,16 @@ class OpenAINarrator implements AiService {
       (await this.chat(
         SUMMARY_SYSTEM_PROMPT,
         buildSummaryPrompt(player, history, ending),
+        300,
+      )) ?? ''
+    );
+  }
+
+  async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
+    return (
+      (await this.chat(
+        '你是一部 CS2 电竞生涯小说的开篇叙事者。只输出故事正文，不要标题，不要引号。',
+        buildIntroPrompt(player, traits, background),
         300,
       )) ?? ''
     );

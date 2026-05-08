@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { BACKGROUNDS } from '../data/backgrounds.js';
-import { TRAITS } from '../data/traits.js';
+import { BACKGROUNDS, getBackground } from '../data/backgrounds.js';
+import { TRAITS, getTrait } from '../data/traits.js';
 import {
   ACTIONS,
   SHOP_ITEMS,
@@ -17,7 +17,6 @@ import {
   validateAllocation,
 } from '../engine/gameEngine.js';
 import { checkTournamentPromotion } from '../engine/stages.js';
-import { getTrait } from '../data/traits.js';
 import { CLUBS, clubsForStage } from '../data/clubs.js';
 import {
   getTournament,
@@ -507,6 +506,26 @@ app.post('/game/:sessionId/team-response', async (c) => {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
   }
+});
+
+// 开场故事生成（仅 history 为空的新局调用）
+app.get('/game/:sessionId/intro', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  const traitObjects = session.player.traits
+    .map((tid) => getTrait(tid))
+    .filter((t): t is NonNullable<typeof t> => Boolean(t));
+
+  const background = getBackground(session.player.backgroundId);
+  if (!background) return c.json({ error: 'background not found' }, 400);
+
+  const ai = makeAiService(c.env);
+  const intro = await ai.intro(session.player, traitObjects, background);
+
+  return c.json({ intro });
 });
 
 // 游戏结束生涯总结（仅 status=ended 时有意义）
