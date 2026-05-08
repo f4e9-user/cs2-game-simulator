@@ -1117,6 +1117,48 @@ input[type='text']:focus {
   margin-top: 1px;
 }
 
+.qualification-result-card {
+  border: 1px solid rgba(255, 138, 92, 0.28);
+  background: linear-gradient(180deg, rgba(255, 138, 92, 0.12), rgba(255, 138, 92, 0.04));
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+
+.qualification-result-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(255, 138, 92, 0.12);
+  border: 1px solid rgba(255, 138, 92, 0.24);
+  border-radius: 999px;
+  padding: 3px 8px;
+  margin-bottom: 8px;
+}
+
+.qualification-result-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fg);
+  margin-bottom: 8px;
+}
+
+.qualification-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qualification-result-line {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* ── HLTV-style leaderboard ──────────────────────────────────── */
 
 .hltv-header {

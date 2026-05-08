@@ -98,6 +98,87 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function addQualificationRewards(
+  current: Record<string, number>,
+  rewards: { slot: string; count: number }[],
+): Record<string, number> {
+  const next = { ...current };
+  for (const reward of rewards) {
+    next[reward.slot] = (next[reward.slot] ?? 0) + reward.count;
+  }
+  return next;
+}
+
+function qualificationSlotLabel(slot: string): string {
+  const match = /^(iem|blast|pgl)-(open|closed|main)$/.exec(slot);
+  if (match) {
+    const brand = match[1].toUpperCase();
+    const phase = match[2] === 'open'
+      ? '公开预选门票'
+      : match[2] === 'closed'
+        ? '封闭预选门票'
+        : '正赛资格';
+    return `${brand}${phase}`;
+  }
+  switch (slot) {
+    case 'a-open':
+      return 'A级公开预选门票';
+    case 'a-main':
+      return 'A级正赛资格';
+    case 's-open':
+      return 'S公开预选门票';
+    case 's-closed':
+      return 'S封闭预选门票';
+    case 's-main':
+      return 'S正赛资格';
+    default:
+      return slot;
+  }
+}
+
+function formatQualificationRewards(rewards: { slot: string; count: number }[]): string {
+  return rewards
+    .map((reward) => `${qualificationSlotLabel(reward.slot)} x${reward.count}`)
+    .join('、');
+}
+
+function qualificationSlotOwner(slot: string): 'player' | 'team' {
+  if (slot === 'a-main' || slot === 's-main') return 'team';
+  if (slot.endsWith('-main')) return 'team';
+  return 'player';
+}
+
+function addQualificationRewardsByOwner(
+  playerSlots: Record<string, number>,
+  teamSlots: Record<string, number>,
+  rewards: { slot: string; count: number }[],
+): { playerSlots: Record<string, number>; teamSlots: Record<string, number> } {
+  const nextPlayerSlots = { ...playerSlots };
+  const nextTeamSlots = { ...teamSlots };
+  for (const reward of rewards) {
+    if (qualificationSlotOwner(reward.slot) === 'team') {
+      nextTeamSlots[reward.slot] = (nextTeamSlots[reward.slot] ?? 0) + reward.count;
+    } else {
+      nextPlayerSlots[reward.slot] = (nextPlayerSlots[reward.slot] ?? 0) + reward.count;
+    }
+  }
+  return { playerSlots: nextPlayerSlots, teamSlots: nextTeamSlots };
+}
+
+function clearTeamQualifications(player: Player, qualificationChanges: string[]): Player {
+  const total = Object.values(player.teamQualificationSlots ?? {}).reduce((sum, count) => sum + count, 0);
+  if (total > 0) qualificationChanges.push(`离开战队：失去 ${total} 张战队资格门票`);
+  const pendingMatch = player.pendingMatch?.qualificationSlotOwner === 'team' ? null : player.pendingMatch;
+  if (player.pendingMatch?.qualificationSlotOwner === 'team') {
+    qualificationChanges.push(`离开战队：失去 ${player.pendingMatch.displayName ?? player.pendingMatch.name} 的参赛资格`);
+  }
+  return {
+    ...player,
+    teamQualificationSlots: {},
+    pendingMatch,
+  };
+}
+
 function clampStress(v: number): number {
   return Math.max(STRESS_MIN, Math.min(STRESS_MAX, Math.round(v)));
 }
@@ -222,6 +303,8 @@ export function initPlayer(input: InitInput): Player {
     shopCooldowns: {},
     team: null,
     pendingApplication: null,
+    qualificationSlots: {},
+    teamQualificationSlots: {},
     pendingOffer: null,
     roster: null,
     preferredRole: deriveRoleFromTraits(traits),
@@ -428,6 +511,7 @@ export function applyChoice(
   // ── 核心属性（resolver 已应用成长）──
   let statsAfterGrowth = outcome.nextStats;
   const passiveEffects: string[] = [];
+  const qualificationChanges: string[] = [];
   const tagsAdded = [...outcome.tagsAdded];
   const tagsRemoved = [...outcome.tagsRemoved];
 
@@ -616,6 +700,19 @@ export function applyChoice(
     session.player.week ?? 1,
   );
 
+  let nextQualificationSlots = { ...(session.player.qualificationSlots ?? {}) };
+  let nextTeamQualificationSlots = { ...(session.player.teamQualificationSlots ?? {}) };
+  if (nextYear > (session.player.year ?? 1)) {
+    const expiredQualificationCount =
+      Object.values(nextQualificationSlots).reduce((sum, count) => sum + count, 0) +
+      Object.values(nextTeamQualificationSlots).reduce((sum, count) => sum + count, 0);
+    if (expiredQualificationCount > 0) {
+      qualificationChanges.push(`赛季资格过期：清空 ${expiredQualificationCount} 张资格门票`);
+    }
+    nextQualificationSlots = {};
+    nextTeamQualificationSlots = {};
+  }
+
   // ── 行动力重置（赛事比赛周冻结为 0，面试期间减半）────────────────
   const pm = session.player.pendingMatch;
   const isMatchWeek =
@@ -655,6 +752,8 @@ export function applyChoice(
     week: nextWeek,
     actionPoints: nextActionPoints,
     shopCooldowns: nextShopCooldowns,
+    qualificationSlots: nextQualificationSlots,
+    teamQualificationSlots: nextTeamQualificationSlots,
     consecutiveLosses,
   };
 
@@ -772,6 +871,7 @@ export function applyChoice(
     }
 
     nextPlayer.roster = null;
+    Object.assign(nextPlayer, clearTeamQualifications(nextPlayer, qualificationChanges));
   }
 
   // 队友后台成长
@@ -813,6 +913,7 @@ export function applyChoice(
     stageAfter: outcome.stageAfter,
     tagsAdded,
     passiveEffects,
+    qualificationChanges,
     stressChange: stress - stressBefore,
     fameChange: fame - fameBefore,
     feelChange,
@@ -854,20 +955,50 @@ export function applyChoice(
       if (idx === 0) {
         const tierPart = { ...(nextPlayer.tierParticipations ?? {}) };
         tierPart[t.tier] = (tierPart[t.tier] ?? 0) + 1;
+        tierPart[t.progressionTier] = (tierPart[t.progressionTier] ?? 0) + 1;
         nextPlayer.tierParticipations = tierPart;
         nextPlayer.tournamentParticipations = (nextPlayer.tournamentParticipations ?? 0) + 1;
+      }
+      if (outcome.success && t.qualificationMilestones?.length) {
+        const matchedMilestones = t.qualificationMilestones.filter(
+          (milestone) => milestone.stageIndex === idx && (milestone.requireWin ?? true),
+        );
+        const milestoneRewards = matchedMilestones.flatMap((milestone) => milestone.rewards);
+        if (milestoneRewards.length > 0) {
+          const rewardsByOwner = addQualificationRewardsByOwner(
+            nextPlayer.qualificationSlots ?? {},
+            nextPlayer.teamQualificationSlots ?? {},
+            milestoneRewards,
+          );
+          nextPlayer.qualificationSlots = rewardsByOwner.playerSlots;
+          nextPlayer.teamQualificationSlots = rewardsByOwner.teamSlots;
+          for (const milestone of matchedMilestones) {
+            qualificationChanges.push(`获得资格：${milestone.label}，${formatQualificationRewards(milestone.rewards)}`);
+          }
+        }
       }
       if (isFinal && outcome.success) {
         const tierChamp = { ...(nextPlayer.tierChampionships ?? {}) };
         tierChamp[t.tier] = (tierChamp[t.tier] ?? 0) + 1;
+        tierChamp[t.progressionTier] = (tierChamp[t.progressionTier] ?? 0) + 1;
         nextPlayer.tierChampionships = tierChamp;
         nextPlayer.tournamentChampionships = (nextPlayer.tournamentChampionships ?? 0) + 1;
+        if (t.qualificationRewards?.length) {
+          const rewardsByOwner = addQualificationRewardsByOwner(
+            nextPlayer.qualificationSlots ?? {},
+            nextPlayer.teamQualificationSlots ?? {},
+            t.qualificationRewards,
+          );
+          nextPlayer.qualificationSlots = rewardsByOwner.playerSlots;
+          nextPlayer.teamQualificationSlots = rewardsByOwner.teamSlots;
+          qualificationChanges.push(`获得资格：${formatQualificationRewards(t.qualificationRewards)}`);
+        }
 
         // 明星选手判定：Major ≥1 / S级 ≥3 / Tier1 ≥10
         const tc = nextPlayer.tierChampionships;
         const isStar =
           (tc['major'] ?? 0) >= 1 ||
-          (tc['s-class'] ?? 0) >= 3 ||
+          (tc['s-main'] ?? tc['s-class'] ?? 0) >= 3 ||
           (tc['tier1'] ?? 0) >= 10;
         if (isStar && !nextPlayer.tags.includes('star-player')) {
           nextPlayer.tags = dedupe([...nextPlayer.tags, 'star-player']);
@@ -1366,6 +1497,7 @@ export function respondTeamOffer(
       player.stress = Math.min(100, (player.stress ?? 0) + 25);
       const expiryRound = player.round + 12;
       player.tagExpiry = { ...(player.tagExpiry ?? {}), 'contract-dispute': expiryRound };
+      Object.assign(player, clearTeamQualifications(player, []));
     }
 
     const team: PlayerTeam = {
