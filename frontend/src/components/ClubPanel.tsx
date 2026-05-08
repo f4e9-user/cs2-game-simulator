@@ -110,7 +110,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
   const clubListSection = (
     <div style={{ marginTop: 10 }}>
       <div className="stat-desc" style={{ marginBottom: 6 }}>
-        {hasTeam ? '可转会的俱乐部（先离队再申请）' : '可申请的俱乐部（消耗 25 AP / 次）'}
+        可申请的俱乐部（消耗 25 AP / 次）
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {eligibleClubs.length === 0 && (
@@ -118,7 +118,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
         )}
         {eligibleClubs.map((c) => {
           const rookieBlock = rookieCheck !== null && !rookieCheck.eligible;
-          const canApply = enabled && !hasTeam && !hasPending && ap >= 25 && !loading && !rookieBlock;
+          const canApply = enabled && !hasPending && ap >= 25 && !loading && !rookieBlock;
           return (
             <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: 'var(--bg-2)' }}>
               <div>
@@ -136,7 +136,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                 onClick={() => apply(c.id)}
                 style={{ fontSize: 11, padding: '4px 10px', flexShrink: 0 }}
               >
-                {hasTeam ? '先离队' : rookieBlock ? '未达标' : ap < 25 ? 'AP 不足' : '发简历 -25 AP'}
+                {rookieBlock ? '未达标' : ap < 25 ? 'AP 不足' : '发简历 -25 AP'}
               </button>
             </div>
           );

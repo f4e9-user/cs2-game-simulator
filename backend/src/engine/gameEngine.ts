@@ -1286,7 +1286,7 @@ export function applyClubRequest(
   if (!club) throw new Error('未知俱乐部');
 
   const player = session.player;
-  if (player.team) throw new Error('你已经有战队了');
+  if (player.team && clubId === player.team.clubId) throw new Error('已经在这支战队了');
   if (player.pendingApplication) throw new Error('已经有一个进行中的申请');
 
   const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
@@ -1353,6 +1353,11 @@ export function respondTeamOffer(
   if (!offer) throw new Error('没有待处理的入队邀请');
 
   if (accept) {
+    // 骑驴找马：接受新 offer 时若仍在旧队，视为主动违约离队，名气 -5
+    if (player.team) {
+      player.fame = Math.max(0, (player.fame ?? 0) - 5);
+    }
+
     const team: PlayerTeam = {
       clubId: offer.clubId,
       name: offer.clubName,
