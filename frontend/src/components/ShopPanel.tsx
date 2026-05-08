@@ -75,19 +75,19 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
     if (item.id === 'pro-peripherals') {
       return PERIPHERAL_PRICES[player.peripheralTier ?? 0] ?? 0;
     }
-    return item.priceMoney * 10;
+    return item.priceMoney;
   };
 
   const canBuy = (item: ShopItem): { ok: boolean; reason?: string } => {
     if (item.id === 'pro-peripherals') {
       const tier = player.peripheralTier ?? 0;
       if (tier >= PERIPHERAL_PRICES.length) return { ok: false, reason: '外设已满级' };
-      const price = (PERIPHERAL_PRICES[tier] ?? 0) / 10;
-      if (player.stats.money < price) return { ok: false, reason: `资金不足（需 ${PERIPHERAL_PRICES[tier]}K）` };
+      const price = PERIPHERAL_PRICES[tier] ?? 0;
+      if (player.stats.money < price) return { ok: false, reason: `资金不足（需 ${price}K）` };
       return { ok: true };
     }
     if (player.stats.money < item.priceMoney) {
-      return { ok: false, reason: `资金不足（需 ${item.priceMoney * 10}K）` };
+      return { ok: false, reason: `资金不足（需 ${item.priceMoney}K）` };
     }
     const cdUntil = cooldowns[item.id] ?? 0;
     if (cdUntil > round) {

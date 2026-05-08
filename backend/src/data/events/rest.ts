@@ -68,7 +68,7 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '观众不多，但礼物够你下周点几顿外卖。',
-          statChanges: { money: 2, constitution: 1 },
+          statChanges: { money: 20, constitution: 1 },
           stressDelta: 1,
         },
         failure: {
@@ -144,7 +144,7 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '观众不多，但礼物够你下周点几顿外卖。',
-          statChanges: { money: 2, constitution: 1 },
+          statChanges: { money: 20, constitution: 1 },
           stressDelta: 1,
         },
         failure: {
@@ -199,7 +199,7 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你们第一次完整地聊这件事，最后妈妈帮你熬了一锅汤。',
-          statChanges: { constitution: 2, mentality: 3, money: 1 },
+          statChanges: { constitution: 2, mentality: 3, money: 10 },
           stressDelta: -4,
           tagAdds: ['family-support'],
         },

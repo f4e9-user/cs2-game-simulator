@@ -60,7 +60,7 @@ export const TRAINING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '今天观众不少，礼物飘得欢。手感这周没动——但你暂时不想想这件事。',
-          statChanges: { money: 2, mentality: 1, experience: -1 },
+          statChanges: { money: 20, mentality: 1, experience: -1 },
           tagAdds: ['missed-practice'],
         },
         failure: {

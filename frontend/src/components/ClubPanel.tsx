@@ -150,7 +150,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                         {c.name} [{c.tag}]
                       </div>
                       <div style={{ fontSize: 10, color: 'var(--fg-2)' }}>
-                        {TIER_LABELS[c.tier] ?? c.tier} · {c.region} · {c.salaryRange[0] * 10}–{c.salaryRange[1] * 10}K/周
+                        {TIER_LABELS[c.tier] ?? c.tier} · {c.region} · {c.salaryRange[0]}–{c.salaryRange[1]}K/周
                       </div>
                     </div>
                     <button

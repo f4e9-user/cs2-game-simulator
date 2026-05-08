@@ -671,7 +671,7 @@ export function applyChoice(
   // 周薪入账
   if (nextPlayer.team) {
     nextPlayer.stats.money = Math.min(MONEY_MAX, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
-    passiveEffects.push(`周薪入账 +${nextPlayer.team.weeklySalary * 10}K`);
+    passiveEffects.push(`周薪入账 +${nextPlayer.team.weeklySalary}K`);
   }
 
   if (!nextPlayer.team && nextPlayer.roster) {
@@ -1115,9 +1115,8 @@ export function applyShopPurchase(
     throw new Error(`商品冷却中，还需 ${cooldownUntil - round} 回合`);
   }
 
-  // Money check (price is in stat points, 1pt = 10K)
   if (player.stats.money < item.priceMoney) {
-    throw new Error(`资金不足，需要 ${item.priceMoney * 10}K`);
+    throw new Error(`资金不足，需要 ${item.priceMoney}K`);
   }
 
   // ── 外设升级：特殊分支处理 ──────────────────────────────────
@@ -1128,7 +1127,7 @@ export function applyShopPurchase(
     }
     const price = PERIPHERAL_PRICES[tier]!;
     if (player.stats.money < price) {
-      throw new Error(`资金不足，需要 ${price * 10}K`);
+      throw new Error(`资金不足，需要 ${price}K`);
     }
 
     const currentCap = player.feelCap ?? FEEL_CAP_DEFAULT;

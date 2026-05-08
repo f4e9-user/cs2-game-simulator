@@ -23,7 +23,7 @@ const DETECT_LIGHT = {
 const BANNED = {
   narrative:
     'VAC 邮件在训练赛中途弹出，队内账号被拉黑。你的名字被所有赛事主办方拉入禁赛名单。',
-  statChanges: { money: -5, mentality: -5 },
+  statChanges: { money: -50, mentality: -5 },
   endRun: true,
   endReason: 'banned_for_cheating',
   tagAdds: ['banned'],
@@ -121,7 +121,7 @@ export const CHEAT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '账号起飞，你在平台被称为"天才少年"，顺手进账 40K。你开始忘了自己真实段位是什么。',
-          statChanges: { agility: 3, experience: 2, money: 4 },
+          statChanges: { agility: 3, experience: 2, money: 40 },
           stressDelta: 5,
           tagAdds: ['cheater', 'dirty-money'],
         },

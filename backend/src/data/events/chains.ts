@@ -208,7 +208,7 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '说辞前后矛盾，审计升级为外部调查。你的名字出现在报告首页。',
-          statChanges: { money: -5, mentality: -5 },
+          statChanges: { money: -50, mentality: -5 },
           tagRemoves: ['dirty-money'],
           tagAdds: ['banned'],
           endRun: true,
@@ -229,13 +229,13 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '内部处理完结：接受赞助禁令 + 自愿退还 30K。没有公开处分。你睡得踏实一些了。',
-          statChanges: { mentality: 1, money: -3 },
+          statChanges: { mentality: 1, money: -30 },
           tagRemoves: ['dirty-money'],
           stressDelta: -1,
         },
         failure: {
           narrative: '坦白了但公司认为不够，决定上报联盟。禁赛通知随后到来。',
-          statChanges: { money: -5, mentality: -4 },
+          statChanges: { money: -50, mentality: -4 },
           tagRemoves: ['dirty-money'],
           tagAdds: ['banned'],
           endRun: true,
@@ -264,7 +264,7 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '对方把完整的聊天记录发给了调查组。局面一下子全崩了。',
-          statChanges: { money: -5, mentality: -5 },
+          statChanges: { money: -50, mentality: -5 },
           tagRemoves: ['dirty-money'],
           tagAdds: ['banned'],
           endRun: true,
@@ -347,7 +347,7 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '一个外设品牌签了三个月短约。有点钱，有点名。',
-          statChanges: { money: 3 },
+          statChanges: { money: 30 },
           tagRemoves: ['highlight-clip'],
           tagAdds: ['fan-favorite'],
           fameDelta: 2,
@@ -386,14 +386,14 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '合同签了，60K 到账。你的脸开始出现在外设网站首页。日程也跟着密了。',
-          statChanges: { money: 6 },
+          statChanges: { money: 60 },
           tagRemoves: ['fan-favorite'],
           fameDelta: 4,
           stressDelta: 2,
         },
         failure: {
           narrative: '活动太多压垮了训练计划。战队管理层打来电话表达不满。',
-          statChanges: { money: 4, mentality: -2 },
+          statChanges: { money: 40, mentality: -2 },
           tagRemoves: ['fan-favorite'],
           fameDelta: 2,
           stressDelta: 4,
@@ -410,7 +410,7 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '品牌方接受了条件。30K，少一些，但自由度保住了。',
-          statChanges: { money: 3, experience: 1 },
+          statChanges: { money: 30, experience: 1 },
           tagRemoves: ['fan-favorite'],
           fameDelta: 2,
         },
@@ -849,7 +849,7 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '沉默被解读为默认。帖子热度持续了更久，俱乐部扣了 20K 违约金。',
-          statChanges: { money: -2, mentality: -1 },
+          statChanges: { money: -20, mentality: -1 },
           tagRemoves: ['media-backlash'],
           fameDelta: -3,
           stressDelta: 2,
@@ -1529,7 +1529,7 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '经纪人为你争取到了更高的周薪。俱乐部虽然不情愿，但知道你的价值。',
-          moneyDelta: 2,
+          moneyDelta: 20,
           feelDelta: 1,
           stressDelta: -1,
           tagCooldowns: { 'contract-cd': 48 },
