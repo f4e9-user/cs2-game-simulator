@@ -204,6 +204,10 @@ export interface Player extends DynamicState {
   stats: Stats;
   // ── 状态系统 ──
   volatile: VolatileState;
+  // ── 手感上限（外设升级可提升，默认 3，范围 2.5~5）──
+  feelCap: number;
+  // ── 外设等级（0~4，决定下次购买价格）──
+  peripheralTier: number;
   // ── Buff 系统 ──
   buffs: Buff[];
   // ── 成长上限追踪（生涯累计成长点数，上限 30）──
