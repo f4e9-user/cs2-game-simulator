@@ -509,4 +509,22 @@ app.post('/game/:sessionId/team-response', async (c) => {
   }
 });
 
+// 主动离队
+app.post('/game/:sessionId/leave-team', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  if (!session.player.team) return c.json({ error: '当前没有战队' }, 400);
+  if (session.player.pendingMatch) return c.json({ error: '赛事进行中，不能离队' }, 400);
+
+  session.player.team = null;
+  session.player.consecutiveLosses = 0;
+  session.player.fame = Math.max(0, (session.player.fame ?? 0) - 5);
+  session.updatedAt = new Date().toISOString();
+  await storage.sessions.save(session);
+  return c.json({ player: session.player });
+});
+
 export default app;
