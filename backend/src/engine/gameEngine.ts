@@ -333,7 +333,6 @@ function buildMatchResolveResult(
 
   const tagAdds = won && isFinal ? ['tournament-winner'] : [];
   if (won && isFinal && t.tier === 'major') tagAdds.push('major-champion');
-  if (won && isFinal && ['tier1', 's-class', 'major'].includes(t.tier)) tagAdds.push('star-player');
 
   const chosenOutcome: Outcome = {
     narrative: sim.summary,
@@ -669,11 +668,6 @@ export function applyChoice(
     nextTags.push('veteran');
     tagsAdded.push('veteran');
   }
-  // 首次获得 star-player tag：+10 名气 +1 经验
-  if (tagsAdded.includes('star-player') && !session.player.tags.includes('star-player')) {
-    nextPlayer.stats = { ...nextPlayer.stats, experience: nextPlayer.stats.experience + 1 };
-    nextPlayer.fame = (nextPlayer.fame ?? 0) + 10;
-  }
   // 首次获得 veteran tag：+2 心态 -15 压力
   if (tagsAdded.includes('veteran') && !session.player.tags.includes('veteran')) {
     nextPlayer.stats = { ...nextPlayer.stats, mentality: nextPlayer.stats.mentality + 2 };
@@ -868,6 +862,18 @@ export function applyChoice(
         tierChamp[t.tier] = (tierChamp[t.tier] ?? 0) + 1;
         nextPlayer.tierChampionships = tierChamp;
         nextPlayer.tournamentChampionships = (nextPlayer.tournamentChampionships ?? 0) + 1;
+
+        // 明星选手判定：Major ≥1 / S级 ≥3 / Tier1 ≥10
+        const tc = nextPlayer.tierChampionships;
+        const isStar =
+          (tc['major'] ?? 0) >= 1 ||
+          (tc['s-class'] ?? 0) >= 3 ||
+          (tc['tier1'] ?? 0) >= 10;
+        if (isStar && !nextPlayer.tags.includes('star-player')) {
+          nextPlayer.tags = dedupe([...nextPlayer.tags, 'star-player']);
+          nextPlayer.stats = { ...nextPlayer.stats, experience: nextPlayer.stats.experience + 1 };
+          nextPlayer.fame = (nextPlayer.fame ?? 0) + 10;
+        }
       }
     }
 
