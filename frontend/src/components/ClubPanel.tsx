@@ -43,6 +43,33 @@ function rookieEligibility(player: Player): { eligible: boolean; path: 'open-mat
   };
 }
 
+function trustLabel(trust: number): { text: string; color: string; effect: string } {
+  if (trust >= 65) return { text: '高度信任', color: 'var(--up)', effect: '比赛表现 +1' };
+  if (trust >= 30) return { text: '正常', color: 'var(--fg-2)', effect: '无加成' };
+  if (trust >= 15) return { text: '关系紧张', color: 'var(--warn, #e8a030)', effect: '比赛表现 −1' };
+  return { text: '危机', color: 'var(--danger)', effect: '比赛表现 −2' };
+}
+
+function TeamTrustBar({ trust }: { trust: number }) {
+  const { text, color, effect } = trustLabel(trust);
+  return (
+    <div style={{ padding: '7px 8px', background: 'var(--bg-2)', borderRadius: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+        <span style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          战队信任度
+        </span>
+        <span style={{ fontSize: 11, color, fontWeight: 600 }}>
+          {trust} / 100 · {text}
+        </span>
+      </div>
+      <div style={{ height: 5, background: 'var(--bg-3, #333)', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${trust}%`, background: color, borderRadius: 3, transition: 'width 0.3s' }} />
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--fg-3)', marginTop: 4 }}>{effect}</div>
+    </div>
+  );
+}
+
 interface Props {
   sessionId: string;
   player: Player;
@@ -168,6 +195,8 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                 · 加入于第 {player.team!.joinedRound} 回合
               </div>
             </div>
+
+            <TeamTrustBar trust={player.teamTrust ?? 50} />
 
             {confirmLeave ? (
               <div style={{ padding: '8px', background: 'var(--bg-2)', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
