@@ -508,6 +508,25 @@ app.post('/game/:sessionId/team-response', async (c) => {
   }
 });
 
+// 事件个性化（玩家看到选项前调用，根据特质/属性改写 narrative 和 choice description）
+app.get('/game/:sessionId/personalize-event', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!session.currentEvent) return c.json({ error: 'no current event' }, 400);
+
+  const traitObjects = session.player.traits
+    .map((tid) => getTrait(tid))
+    .filter((t): t is NonNullable<typeof t> => Boolean(t));
+
+  const ai = makeAiService(c.env);
+  const personalized = await ai.personalizeEvent(session.player, traitObjects, session.currentEvent);
+
+  // null 表示 LLM 未启用或解析失败，前端保持原文
+  return c.json({ personalized });
+});
+
 // 开场故事生成（仅 history 为空的新局调用）
 app.get('/game/:sessionId/intro', async (c) => {
   const id = c.req.param('sessionId');

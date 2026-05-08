@@ -66,6 +66,32 @@ export default function GamePage() {
     setWelcomeDismissed(true);
   };
 
+  // 当前展示用的事件（原文即时显示，个性化版本到了再替换）
+  const [displayEvent, setDisplayEvent] = useState<typeof currentEvent>(null);
+
+  // currentEvent 变化时立刻更新 displayEvent，同时后台请求个性化
+  useEffect(() => {
+    setDisplayEvent(currentEvent);
+    if (!currentEvent) return;
+    let cancelled = false;
+    api.personalizeEvent(sessionId).then((res) => {
+      if (cancelled || !res.personalized) return;
+      const { narrative, choices: pChoices } = res.personalized;
+      setDisplayEvent((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          narrative,
+          choices: prev.choices.map((c) => {
+            const match = pChoices.find((p) => p.id === c.id);
+            return match ? { ...c, description: match.description } : c;
+          }),
+        };
+      });
+    }).catch(() => { /* 静默降级，保持原文 */ });
+    return () => { cancelled = true; };
+  }, [currentEvent?.id, sessionId]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -246,9 +272,9 @@ export default function GamePage() {
                     进入下一回合 →
                   </button>
                 </div>
-              ) : currentEvent ? (
+              ) : displayEvent ? (
                 <>
-                  <EventCard event={currentEvent} />
+                  <EventCard event={displayEvent} />
                   <div
                     style={{
                       marginTop: 8,
@@ -263,7 +289,7 @@ export default function GamePage() {
                     选择行动
                   </div>
                   <ChoiceList
-                    choices={currentEvent.choices}
+                    choices={displayEvent.choices}
                     disabled={loading}
                     onPick={pickChoice}
                   />

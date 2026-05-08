@@ -135,6 +135,10 @@ export const api = {
       `/api/game/${sessionId}/team-response`,
       { method: 'POST', body: JSON.stringify({ accept }) },
     ),
+  personalizeEvent: (sessionId: string) =>
+    request<{ personalized: { narrative: string; choices: Array<{ id: string; description: string }> } | null }>(
+      `/api/game/${sessionId}/personalize-event`,
+    ),
   getIntro: (sessionId: string) =>
     request<{ intro: string }>(`/api/game/${sessionId}/intro`),
   getSummary: (sessionId: string) =>
