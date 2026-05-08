@@ -140,7 +140,7 @@ export const TOURNAMENTS: Tournament[] = [
     stages: ['second', 'pro'],
     fameRequired: 18,
     pointsRequired: 5,
-    signupWeeks: [10, 26, 42],
+    signupWeeks: [10, 22, 34, 46],
     reward: { money: 50, experience: 5, fame: 8, points: 8, stressDelta: 1 },
     baseDifficulty: 4,
     bracket: FOUR_STAGE,
