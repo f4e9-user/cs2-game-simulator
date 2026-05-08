@@ -702,6 +702,9 @@ export function applyChoice(
 
   let nextQualificationSlots = { ...(session.player.qualificationSlots ?? {}) };
   let nextTeamQualificationSlots = { ...(session.player.teamQualificationSlots ?? {}) };
+  // ORDERING: expiry must run here, before tournament rewards are written below (~line 955).
+  // Year-end final-match wins earn tickets AFTER this clear, so the new tickets survive.
+  // Do not move this block past the tournament resolution block.
   if (nextYear > (session.player.year ?? 1)) {
     const expiredQualificationCount =
       Object.values(nextQualificationSlots).reduce((sum, count) => sum + count, 0) +

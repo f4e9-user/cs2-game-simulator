@@ -62,6 +62,9 @@ function qualificationSlotLabel(slot: string): string {
   }
 }
 
+// Brand-specific slots (e.g. iem-open) also accept the generic equivalent (s-open).
+// This lets a player use a generic S-class ticket for any brand's open qualifier.
+// Precedence: brand-specific first, then generic fallback.
 function qualificationFallbackSlots(slot: string): string[] {
   if (slot === 'a-open' || slot === 'a-main') return [slot];
   const match = /^(iem|blast|pgl)-(open|closed|main)$/.exec(slot);
@@ -470,18 +473,26 @@ app.post('/game/:sessionId/withdraw', async (c) => {
 
   if (session.player.pendingMatch.qualificationSlotUsed) {
     const slot = session.player.pendingMatch.qualificationSlotUsed;
-    if (session.player.pendingMatch.qualificationSlotOwner === 'team') {
-      session.player.teamQualificationSlots = {
-        ...(session.player.teamQualificationSlots ?? {}),
-        [slot]: (session.player.teamQualificationSlots?.[slot] ?? 0) + 1,
-      };
-    } else {
-      session.player.qualificationSlots = {
-        ...(session.player.qualificationSlots ?? {}),
-        [slot]: (session.player.qualificationSlots?.[slot] ?? 0) + 1,
-      };
+    const tm = getTournament(session.player.pendingMatch.tournamentId);
+    // Only refund if the tournament's qualificationTargets still covers this slot,
+    // guarding against stale pendingMatch data from a tournament definition change.
+    const slotIsValid = tm?.qualificationTargets?.some((target) =>
+      qualificationFallbackSlots(target).includes(slot),
+    ) ?? false;
+    if (slotIsValid) {
+      if (session.player.pendingMatch.qualificationSlotOwner === 'team') {
+        session.player.teamQualificationSlots = {
+          ...(session.player.teamQualificationSlots ?? {}),
+          [slot]: (session.player.teamQualificationSlots?.[slot] ?? 0) + 1,
+        };
+      } else {
+        session.player.qualificationSlots = {
+          ...(session.player.qualificationSlots ?? {}),
+          [slot]: (session.player.qualificationSlots?.[slot] ?? 0) + 1,
+        };
+      }
+      penalties.push(`退还资格：${qualificationSlotLabel(slot)}`);
     }
-    penalties.push(`退还资格：${qualificationSlotLabel(slot)}`);
   }
 
   // 弃赛惩罚
@@ -631,6 +642,7 @@ app.post('/game/:sessionId/leave-team', async (c) => {
   if (!session.player.team) return c.json({ error: '当前没有战队' }, 400);
   if (session.player.pendingMatch) return c.json({ error: '赛事进行中，不能离队' }, 400);
 
+  Object.assign(session.player, clearTeamQualifications(session.player));
   session.player.team = null;
   session.player.consecutiveLosses = 0;
   session.player.fame = Math.max(0, (session.player.fame ?? 0) - 5);
