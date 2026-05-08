@@ -314,7 +314,12 @@ function TournamentCard({
       </div>
       {teamReq && (
         <div style={{ fontSize: 10, color: canEnter ? 'var(--up)' : 'var(--danger)', marginBottom: 4 }}>
-          {canEnter ? '可参加' : '需战队'} · 需要 {TIER_LABELS[teamReq]}+ 战队
+          {canEnter
+            ? '可参加'
+            : !team
+              ? '无战队'
+              : `战队等级不足（当前${TIER_LABELS[team.tier]}）`
+          } · 需要 {TIER_LABELS[teamReq]}+ 战队
         </div>
       )}
       {t.qualificationTargets && t.qualificationTargets.length > 0 && (
@@ -354,7 +359,7 @@ function TournamentCard({
           onClick={onSignup}
           style={{ fontSize: 11, padding: '4px 10px', marginLeft: 'auto' }}
         >
-          {busy ? '…' : canEnter ? '报名' : '缺战队'}
+          {busy ? '…' : canEnter ? '报名' : !team ? '需要战队' : '等级不足'}
         </button>
       </div>
     </div>
