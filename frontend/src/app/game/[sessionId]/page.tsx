@@ -51,6 +51,7 @@ export default function GamePage() {
   const [shaking, setShaking] = useState(false);
   const [showNewGameModal, setShowNewGameModal] = useState(false);
   const [mobileTab, setMobileTab] = useState<'left' | 'center' | 'right'>('center');
+  const [centerTab, setCenterTab] = useState<'event' | 'shop' | 'team' | 'leaderboard'>('event');
   const prevStress = useRef(0);
 
   useEffect(() => {
@@ -68,6 +69,11 @@ export default function GamePage() {
       cancelled = true;
     };
   }, [sessionId, hydrateFromSession, setLoading, setError]);
+
+  // 新事件到来时自动切回事件标签
+  useEffect(() => {
+    if (currentEvent) setCenterTab('event');
+  }, [currentEvent?.id]);
 
   // 压力首次达到 100 时触发震动动画
   useEffect(() => {
@@ -151,7 +157,7 @@ export default function GamePage() {
 
       {/* Main body */}
       <div className="hud-body" data-tab={mobileTab}>
-        {/* Left: tournaments + actions + shop + leaderboard */}
+        {/* Left: tournaments + actions */}
         <aside className="hud-left">
           {!ended && (
             <>
@@ -167,87 +173,103 @@ export default function GamePage() {
                 enabled={actionsPhase}
                 onPlayerUpdate={(p: Player) => setPlayer(p)}
               />
-              <ShopPanel
-                sessionId={sessionId}
-                player={player}
-                onPlayerUpdate={(p: Player) => setPlayer(p)}
-              />
-              <ClubPanel
-                sessionId={sessionId}
-                player={player}
-                enabled={actionsPhase}
-                onPlayerUpdate={(p: Player) => setPlayer(p)}
-              />
             </>
           )}
-          {player.stage !== 'rookie' && <Leaderboard teams={leaderboard} />}
         </aside>
 
-        {/* Center: event narrative + choices */}
+        {/* Center: tab bar + tab content */}
         <main className="hud-center">
           {ended ? (
-            <EndingPanel player={player} traits={traits} ending={ending ?? undefined} />
+            <div className="center-tab-pane">
+              <EndingPanel player={player} traits={traits} ending={ending ?? undefined} />
+            </div>
           ) : (
             <>
-              {lastResult && <ResultPanel result={lastResult} />}
+              {/* 标签栏 */}
+              <div className="center-tabs">
+                {(['event', 'shop', 'team', 'leaderboard'] as const).map((tab) => {
+                  const labels: Record<string, string> = {
+                    event: '事件', shop: '商店', team: '战队信息', leaderboard: '排行榜',
+                  };
+                  const hasDot = tab === 'event' && centerTab !== 'event' && (!!currentEvent || actionsPhase);
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      className={`center-tab${centerTab === tab ? ' active' : ''}`}
+                      onClick={() => setCenterTab(tab)}
+                    >
+                      {labels[tab]}
+                      {hasDot && <span className="center-tab-dot" />}
+                    </button>
+                  );
+                })}
+              </div>
 
-              {actionsPhase ? (
-                /* 行动阶段：事件隐藏，等待玩家完成日常行动 */
-                <div className="actions-phase-banner">
-                  <div className="actions-phase-title">行动阶段</div>
-                  <div className="actions-phase-hint">
-                    在「行动」面板执行日常行动（最多 4 次），或直接进入下一回合。
-                  </div>
-                  <button
-                    type="button"
-                    className="ghost-button mob-only"
-                    style={{ marginTop: 10 }}
-                    onClick={() => setMobileTab('left')}
-                  >
-                    → 前往行动面板
-                  </button>
-                  <button
-                    type="button"
-                    className="primary-button"
-                    style={{ marginTop: 12 }}
-                    onClick={() => setActionsPhase(false)}
-                  >
-                    进入下一回合 →
-                  </button>
-                </div>
-              ) : currentEvent ? (
-                <>
-                  <EventCard event={currentEvent} />
-                  <div
-                    style={{
-                      marginTop: 8,
-                      marginBottom: 4,
-                      fontSize: 9,
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.08em',
-                      color: 'var(--fg-3)',
-                    }}
-                  >
-                    选择行动
-                  </div>
-                  <ChoiceList
-                    choices={currentEvent.choices}
-                    disabled={loading}
-                    onPick={pickChoice}
+              {/* 标签内容 */}
+              <div className="center-tab-pane">
+                {centerTab === 'event' && (
+                  <>
+                    {lastResult && <ResultPanel result={lastResult} />}
+                    {actionsPhase ? (
+                      <div className="actions-phase-banner">
+                        <div className="actions-phase-title">行动阶段</div>
+                        <div className="actions-phase-hint">
+                          在「行动」面板执行日常行动（最多 4 次），或直接进入下一回合。
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-button mob-only"
+                          style={{ marginTop: 10 }}
+                          onClick={() => setMobileTab('left')}
+                        >
+                          → 前往行动面板
+                        </button>
+                        <button
+                          type="button"
+                          className="primary-button"
+                          style={{ marginTop: 12 }}
+                          onClick={() => setActionsPhase(false)}
+                        >
+                          进入下一回合 →
+                        </button>
+                      </div>
+                    ) : currentEvent ? (
+                      <>
+                        <EventCard event={currentEvent} />
+                        <div style={{ marginTop: 8, marginBottom: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
+                          选择行动
+                        </div>
+                        <ChoiceList choices={currentEvent.choices} disabled={loading} onPick={pickChoice} />
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>等待下一回合…</div>
+                    )}
+                    {error && <div className="error" style={{ marginTop: 8 }}>错误：{error}</div>}
+                  </>
+                )}
+
+                {centerTab === 'shop' && (
+                  <ShopPanel
+                    sessionId={sessionId}
+                    player={player}
+                    onPlayerUpdate={(p: Player) => setPlayer(p)}
                   />
-                </>
-              ) : (
-                <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>
-                  等待下一回合…
-                </div>
-              )}
+                )}
 
-              {error && (
-                <div className="error" style={{ marginTop: 8 }}>
-                  错误：{error}
-                </div>
-              )}
+                {centerTab === 'team' && (
+                  <ClubPanel
+                    sessionId={sessionId}
+                    player={player}
+                    enabled={actionsPhase}
+                    onPlayerUpdate={(p: Player) => setPlayer(p)}
+                  />
+                )}
+
+                {centerTab === 'leaderboard' && (
+                  <Leaderboard teams={leaderboard} />
+                )}
+              </div>
             </>
           )}
         </main>
