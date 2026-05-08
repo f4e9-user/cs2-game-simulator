@@ -368,6 +368,7 @@ export interface Env {
   KV: KVNamespace;
   AI_PROVIDER?: string;
   AI_MODEL?: string;
+  AI_BASE_URL?: string;
   ANTHROPIC_API_KEY?: string;
   OPENAI_API_KEY?: string;
   AI?: unknown;

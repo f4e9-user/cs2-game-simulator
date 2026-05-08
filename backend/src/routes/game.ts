@@ -509,4 +509,24 @@ app.post('/game/:sessionId/team-response', async (c) => {
   }
 });
 
+// 游戏结束生涯总结（仅 status=ended 时有意义）
+app.get('/game/:sessionId/summary', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (session.status !== 'ended') {
+    return c.json({ error: '游戏尚未结束' }, 400);
+  }
+
+  const ai = makeAiService(c.env);
+  const summary = await ai.summarize(
+    session.player,
+    session.history,
+    session.ending,
+  );
+
+  return c.json({ summary, ending: session.ending });
+});
+
 export default app;

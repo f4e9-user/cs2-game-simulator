@@ -24,12 +24,39 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
   ].join('\n');
 }
 
-export function buildSummaryPrompt(history: RoundResult[], player: Player): string {
+const ENDING_LABELS: Record<string, string> = {
+  legend: '传奇退役',
+  champion: '冠军荣耀',
+  retired_on_top: '巅峰退役',
+  quiet_exit: '悄然离场',
+  stress_breakdown: '心态崩溃，被迫退出',
+  injury_ended_career: '伤病终结生涯',
+  career_ended: '生涯提前结束',
+  'free-agent-legend': '自由人传奇',
+  'loyal-veteran': '忠诚老将',
+};
+
+export function buildSummaryPrompt(
+  player: Player,
+  history: RoundResult[],
+  ending?: string,
+): string {
+  const wins = history.filter((r) => r.success).length;
+  const endingLabel = ending ? (ENDING_LABELS[ending] ?? ending) : '未知';
+  const highlights = history
+    .filter((r) => r.success && (r.fameChange > 0 || r.eventType === 'match'))
+    .slice(-3)
+    .map((r) => `- ${r.eventTitle}`);
+
   return [
-    `为这名选手 ${player.name} 当前生涯写 1 段 60 字以内的中文小结。`,
-    `当前阶段：${STAGE_LABELS[player.stage]}`,
-    `最近事件：`,
-    ...history.slice(-5).map((r) => `- ${r.eventTitle}：${r.success ? '成功' : '失败'}`),
-    '禁止编造未提供的事件。',
-  ].join('\n');
+    `为 CS2 职业选手 ${player.name} 写一段 80 字以内的生涯结语，语气像体育解说员盖棺定论。`,
+    `生涯阶段：${STAGE_LABELS[player.stage] ?? player.stage}`,
+    `总回合数：${history.length}，胜利：${wins}，失败：${history.length - wins}`,
+    `名气：${player.fame}，压力峰值经历：${player.stressMaxRounds > 0 ? '有过崩溃边缘' : '心态稳定'}`,
+    `结局：${endingLabel}`,
+    highlights.length > 0 ? `代表性高光：\n${highlights.join('\n')}` : '',
+    '只输出结语正文，不要标题，不要引号，禁止编造未提及的事件。',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }

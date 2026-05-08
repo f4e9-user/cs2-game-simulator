@@ -1,29 +1,47 @@
-import type { Env, LeaderboardTeam, Player } from '../types.js';
+import type { Env, LeaderboardTeam, Player, RoundResult } from '../types.js';
 import {
   buildNarrativePrompt,
+  buildSummaryPrompt,
   type NarrativePromptInput,
 } from './prompts.js';
 
 export interface AiService {
-  // True when a real model is wired up (not template fallback).
   readonly active: boolean;
-  // Polish narrative — returns base text on any failure.
   narrate(input: NarrativePromptInput): Promise<string>;
-  // Future hook: simulate non-player team point gains for the week. The
-  // template implementation just nudges scores randomly; LLM impl can read
-  // recent results and produce more interesting deltas.
+  summarize(player: Player, history: RoundResult[], ending?: string): Promise<string>;
   simulateLeaderboardTick?(
     teams: LeaderboardTeam[],
     player: Player,
   ): Promise<LeaderboardTeam[]>;
 }
 
+const NARRATIVE_SYSTEM_PROMPT =
+  '你是一个 CS2 电竞小说的叙事引擎。只输出润色后的正文，不要解释，不要加引号。';
+
+const SUMMARY_SYSTEM_PROMPT =
+  '你是一个 CS2 电竞生涯传记作者。只输出小结正文，不要标题，不要解释。';
+
+interface OpenAIChatResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+}
+
+// ── Template fallback (no LLM) ──────────────────────────────────
+
 class TemplateNarrator implements AiService {
   readonly active = false;
+
   async narrate(input: NarrativePromptInput): Promise<string> {
     return input.baseNarrative;
   }
+
+  async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
+    const wins = history.filter((r) => r.success).length;
+    const total = history.length;
+    return `${player.name} 完成了 ${total} 轮生涯，胜率 ${total > 0 ? Math.round((wins / total) * 100) : 0}%。结局：${ending ?? '退役'}。`;
+  }
 }
+
+// ── Anthropic ────────────────────────────────────────────────────
 
 class AnthropicNarrator implements AiService {
   readonly active = true;
@@ -41,9 +59,8 @@ class AnthropicNarrator implements AiService {
         body: JSON.stringify({
           model: this.model,
           max_tokens: 200,
-          messages: [
-            { role: 'user', content: buildNarrativePrompt(input) },
-          ],
+          system: NARRATIVE_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: buildNarrativePrompt(input) }],
         }),
       });
       if (!res.ok) return input.baseNarrative;
@@ -56,13 +73,108 @@ class AnthropicNarrator implements AiService {
       return input.baseNarrative;
     }
   }
+
+  async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: 300,
+          system: SUMMARY_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: buildSummaryPrompt(player, history, ending) }],
+        }),
+      });
+      if (!res.ok) return '';
+      const data = (await res.json()) as {
+        content?: Array<{ type: string; text?: string }>;
+      };
+      return data.content?.find((c) => c.type === 'text')?.text?.trim() ?? '';
+    } catch {
+      return '';
+    }
+  }
 }
+
+// ── OpenAI-compatible ────────────────────────────────────────────
+
+class OpenAINarrator implements AiService {
+  readonly active = true;
+  constructor(
+    private apiKey: string,
+    private model: string,
+    private baseUrl: string,
+  ) {}
+
+  private async chat(
+    systemPrompt: string,
+    userPrompt: string,
+    maxTokens: number,
+  ): Promise<string | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: maxTokens,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+        }),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as OpenAIChatResponse;
+      return data.choices?.[0]?.message?.content?.trim() ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async narrate(input: NarrativePromptInput): Promise<string> {
+    const text = await this.chat(
+      NARRATIVE_SYSTEM_PROMPT,
+      buildNarrativePrompt(input),
+      200,
+    );
+    return text && text.length > 0 ? text : input.baseNarrative;
+  }
+
+  async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
+    return (
+      (await this.chat(
+        SUMMARY_SYSTEM_PROMPT,
+        buildSummaryPrompt(player, history, ending),
+        300,
+      )) ?? ''
+    );
+  }
+}
+
+// ── Factory ──────────────────────────────────────────────────────
 
 export function makeAiService(env: Env): AiService {
   const provider = (env.AI_PROVIDER ?? 'none').toLowerCase();
+
   if (provider === 'anthropic' && env.ANTHROPIC_API_KEY) {
     const model = env.AI_MODEL ?? 'claude-haiku-4-5-20251001';
     return new AnthropicNarrator(env.ANTHROPIC_API_KEY, model);
   }
+
+  if (provider === 'openai' && env.OPENAI_API_KEY) {
+    const model = env.AI_MODEL ?? 'gpt-4o-mini';
+    const baseUrl = (env.AI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, '');
+    return new OpenAINarrator(env.OPENAI_API_KEY, model, baseUrl);
+  }
+
   return new TemplateNarrator();
 }
