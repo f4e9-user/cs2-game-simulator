@@ -18,6 +18,15 @@
       "agent": "Sisyphus-Junior",
       "category": "quick",
       "updated_at": "2026-05-09T09:26:54.827Z"
+    },
+    "todo:2": {
+      "task_key": "todo:2",
+      "task_label": "2",
+      "task_title": "薪资发放逻辑重写：周薪→月薪 + 离职结清",
+      "session_id": "ses_1f3ea0c5fffeUvaMNvx6FiSKFV",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-09T09:40:41.175Z"
     }
   }
 }

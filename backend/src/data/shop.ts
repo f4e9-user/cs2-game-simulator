@@ -41,7 +41,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     name: '能量饮料',
     description: '一罐进去，疲劳立减。',
     category: 'consumable',
-    priceMoney: 10, // 10K
+    priceMoney: 3, // 3K
     cooldownRounds: 0,
     effect: { fatigueDelta: -20 },
   },
@@ -50,7 +50,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     name: '外卖套餐',
     description: '好好吃一顿，心情和体力都回来了一点。',
     category: 'consumable',
-    priceMoney: 10, // 10K (round up from 3K, use 1 pt minimum)
+    priceMoney: 3, // 3K
     cooldownRounds: 0,
     effect: { fatigueDelta: -8, mentalityDelta: 0 }, // mentality not directly changeable, just fatigue
   },
@@ -59,7 +59,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     name: '止痛药',
     description: '暂时压制身体不适，让手腕撑过今天。',
     category: 'consumable',
-    priceMoney: 10, // 10K
+    priceMoney: 5, // 5K
     cooldownRounds: 0,
     effect: { fatigueDelta: -15, constitutionDelta: 1 },
   },
@@ -70,7 +70,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     name: '心理咨询',
     description: '和运动心理师谈一小时，把压力拆成能处理的碎片。',
     category: 'service',
-    priceMoney: 20, // 20K
+    priceMoney: 15, // 15K
     cooldownRounds: 5,
     effect: {
       stressDelta: -100,
@@ -88,7 +88,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     name: '短途旅行',
     description: '离开城市两三天，彻底切断与比赛的联系。',
     category: 'service',
-    priceMoney: 40, // 40K (was 35K, round to 4pt)
+    priceMoney: 30, // 30K
     cooldownRounds: 5,
     effect: {
       stressDelta: -35,
@@ -112,7 +112,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     name: '人体工学椅',
     description: '腰不酸了，坐满6小时也不累。',
     category: 'equipment',
-    priceMoney: 40, // 40K
+    priceMoney: 35, // 35K
     cooldownRounds: 20,
     effect: {
       constitutionDelta: 2,
@@ -132,7 +132,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     name: '请队友吃饭',
     description: '轻松的氛围能化解不少积怨，但饭桌上也可能出意外。',
     category: 'social',
-    priceMoney: 20, // 20K
+    priceMoney: 10, // 10K
     cooldownRounds: 3,
     requireStage: ['youth', 'second', 'pro'],
     effect: {
@@ -157,7 +157,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     name: '粉丝见面会',
     description: '当面感受支持者的热情，名气小幅上升，但这也很消耗人，偶尔还会出乱子。',
     category: 'social',
-    priceMoney: 30, // 30K
+    priceMoney: 15, // 15K
     cooldownRounds: 3,
     requireFame: 20,
     effect: {

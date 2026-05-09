@@ -223,7 +223,7 @@ Wave 4 (集成与验证): 边界条件 + 冷却叠加 + 前后端联调
 
   **Commit**: YES | Message: `feat(types): add Loan, SalaryTracker, pawnedItemIds` | Files: `shared/types.ts`, `backend/src/types.ts`, `frontend/src/lib/types.ts`
 
-- [ ] 2. 薪资发放逻辑重写：周薪→月薪 + 离职结清
+- [x] 2. 薪资发放逻辑重写：周薪→月薪 + 离职结清
 
   **What to do**:
   - 修改 `backend/src/engine/gameEngine.ts` `applyChoice` 函数（~line 669-674）薪资入账逻辑：
@@ -314,7 +314,7 @@ Wave 4 (集成与验证): 边界条件 + 冷却叠加 + 前后端联调
 
   **Commit**: YES | Message: `feat(ui): update salary labels 周薪→月薪` | Files: `frontend/src/components/ClubPanel.tsx`, `frontend/src/components/TeamOfferModal.tsx`
 
-- [ ] 4. 赛事奖金 ×10-15 倍重标定
+- [x] 4. 赛事奖金 ×10-15 倍重标定
 
   **What to do**:
   - 修改 `backend/src/data/tournaments.ts` 中所有 9 个赛事的 `reward.money`：
@@ -372,7 +372,7 @@ Wave 4 (集成与验证): 边界条件 + 冷却叠加 + 前后端联调
 
   **Commit**: YES | Message: `feat(tournaments): scale prize money ×10-15, Major=200K` | Files: `backend/src/data/tournaments.ts`
 
-- [ ] 5. 商店阶梯定价
+- [x] 5. 商店阶梯定价
 
   **What to do**:
   - 修改 `backend/src/data/shop.ts` 中商品价格：

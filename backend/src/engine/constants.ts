@@ -89,8 +89,8 @@ export const FEEL_CAP_DEFAULT = 3;   // 初始上限
 export const FEEL_CAP_MIN     = 2.5; // 被骗后最低能跌到的上限
 export const FEEL_CAP_MAX     = 5;   // 最高等级上限
 
-// 外设四档价格（单位：money 点数，×10 = K）: 50K / 80K / 120K / 200K
-export const PERIPHERAL_PRICES = [50, 80, 120, 200] as const;
+// 外设四档价格（单位：money 点数，×10 = K）: 30K / 60K / 100K / 150K
+export const PERIPHERAL_PRICES = [30, 60, 100, 150] as const;
 // 外设升级成功概率
 export const PERIPHERAL_SUCCESS_CHANCE = 0.70;
 export const TILT_MIN = 0;

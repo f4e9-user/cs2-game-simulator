@@ -267,6 +267,19 @@ function advanceWeek(year: number, week: number): { year: number; week: number }
   return { year, week: week + 1 };
 }
 
+function settleSalaryOnDeparture(player: Player): number {
+  if (!player.salaryTracker || !player.team) return 0;
+  const weeksServed = Math.max(0, player.round - player.salaryTracker.lastPayRound);
+  const settlement = Math.floor(
+    (player.team.weeklySalary * weeksServed) / player.salaryTracker.payCycle,
+  );
+  if (settlement > 0) {
+    player.stats.money = Math.min(MONEY_MAX, player.stats.money + settlement);
+  }
+  player.salaryTracker = null;
+  return settlement;
+}
+
 export function weekToMonth(week: number): number {
   return Math.min(12, Math.max(1, Math.ceil(week / 4)));
 }
@@ -770,10 +783,17 @@ export function applyChoice(
     nextPlayer.pendingApplication = null;
   }
 
-  // 周薪入账
-  if (nextPlayer.team) {
-    nextPlayer.stats.money = Math.min(MONEY_MAX, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
-    passiveEffects.push(`周薪入账 +${nextPlayer.team.weeklySalary}K`);
+  // 月薪入账：每 4 回合结算一次，入队后从 salaryTracker.lastPayRound 起算
+  if (nextPlayer.team && nextPlayer.salaryTracker) {
+    const roundsSinceLastPay = nextPlayer.round - nextPlayer.salaryTracker.lastPayRound;
+    if (roundsSinceLastPay >= nextPlayer.salaryTracker.payCycle) {
+      nextPlayer.stats.money = Math.min(MONEY_MAX, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
+      nextPlayer.salaryTracker = {
+        ...nextPlayer.salaryTracker,
+        lastPayRound: nextPlayer.round,
+      };
+      passiveEffects.push(`月薪入账 +${nextPlayer.team.weeklySalary}K`);
+    }
   }
 
   if (!nextPlayer.team && nextPlayer.roster) {
@@ -863,9 +883,14 @@ export function applyChoice(
     eventDef.id === 'chain-team-fired' ||
     (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'));
   const isTeamDeparture =
-    isConflictDeparture || eventDef.id === 'chain-contract-renewal';
+    (eventDef.id === 'chain-team-fired' && (choiceDef.id === 'accept-gracefully' || !outcome.success)) ||
+    (eventDef.id === 'chain-contract-renewal' && choiceDef.id === 'leave-team') ||
+    (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'));
 
   if (isTeamDeparture) {
+    const settlement = settleSalaryOnDeparture(nextPlayer);
+    if (settlement > 0) passiveEffects.push(`离队薪资结清 +${settlement}K`);
+
     // bad-blood 仅在冲突性离队时添加，合约到期正常分手不加
     if (isConflictDeparture && !tagsAdded.includes('bad-blood')) tagsAdded.push('bad-blood');
 
@@ -1615,6 +1640,11 @@ export function respondTeamOffer(
       team,
       stage: nextStage,
       everHadTeam: true,
+      salaryTracker: {
+        lastPayRound: player.round,
+        joinedRound: player.round,
+        payCycle: 4,
+      },
       pendingOffer: null,
       pendingApplication: null,
       roster,

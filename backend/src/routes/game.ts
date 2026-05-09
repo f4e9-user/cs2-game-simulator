@@ -628,6 +628,13 @@ app.post('/game/:sessionId/team-response', async (c) => {
 
   try {
     const player = respondTeamOffer(session, accept);
+    if (accept && player.team) {
+      player.salaryTracker = {
+        lastPayRound: player.round,
+        joinedRound: player.round,
+        payCycle: 4,
+      };
+    }
     session.player = player;
     // When accepting, update the player's leaderboard entry to reflect the real team name/tag/region.
     if (accept && player.team && session.leaderboard) {
