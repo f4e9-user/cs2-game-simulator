@@ -46,7 +46,7 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
     return () => { cancelled = true; };
   }, []);
 
-  const PERIPHERAL_PRICES = [50, 80, 120, 200];
+  const PERIPHERAL_PRICES = [30, 60, 100, 150];
 
   const buy = async (itemId: string) => {
     setBusyId(itemId);
