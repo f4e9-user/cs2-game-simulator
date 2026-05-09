@@ -617,8 +617,8 @@ app.post('/game/:sessionId/loan', async (c) => {
   const id = c.req.param('sessionId');
   const body = await c.req.json().catch(() => ({}));
   const { amount } = body ?? {};
-  if (typeof amount !== 'number') {
-    return c.json({ error: 'amount 必填' }, 400);
+  if (!Number.isInteger(amount)) {
+    return c.json({ error: 'amount 必须是整数' }, 400);
   }
 
   const storage = makeStorage(c.env);
@@ -630,7 +630,6 @@ app.post('/game/:sessionId/loan', async (c) => {
     if (!result.success || !result.loan) {
       return c.json({ error: result.message ?? '贷款申请失败' }, 400);
     }
-    session.player = session.player;
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
     return c.json({ player: session.player, loan: result.loan });
