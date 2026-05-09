@@ -204,6 +204,7 @@ app.post('/game/:sessionId/choice', async (c) => {
       choiceLabel: result.choiceLabel,
       success: result.success,
       customAction: hasCustomAction ? customActionTrimmed : undefined,
+      matchStats: result.matchStats,
     });
     result.narrative = polished;
 
