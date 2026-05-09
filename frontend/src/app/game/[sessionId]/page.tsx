@@ -19,7 +19,7 @@ import { HudTopBar } from '@/components/HudTopBar';
 import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { useGameStore } from '@/store/gameStore';
-import type { Player, Teammate, Trait } from '@/lib/types';
+import type { Player, SocialPost, Teammate, Trait } from '@/lib/types';
 
 function statAvg(tm: Teammate): number {
   const s = tm.stats;
@@ -61,6 +61,8 @@ export default function GamePage() {
   const [mobileTab, setMobileTab] = useState<'left' | 'center' | 'right'>('center');
   const [centerTab, setCenterTab] = useState<'event' | 'shop' | 'team' | 'leaderboard'>('event');
   const prevStress = useRef(0);
+  const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
 
   const storageKey = `intro-seen-${sessionId}`;
   const [welcomeDismissed, setWelcomeDismissed] = useState(() =>
@@ -132,6 +134,23 @@ export default function GamePage() {
   useEffect(() => {
     if (currentEvent) setCenterTab('event');
   }, [currentEvent?.id]);
+
+  // 刷新社区动态：页面加载后 & 每次回合结束后
+  const fetchSocialFeed = useRef(false);
+  useEffect(() => {
+    if (!player) return;
+    // 仅在会话初始化后或有新回合结果时触发
+    let cancelled = false;
+    setSocialLoading(true);
+    api.getSocialFeed(sessionId)
+      .then((res) => { if (!cancelled) setSocialPosts(res.posts); })
+      .catch(() => { /* 静默失败，保留上一次结果 */ })
+      .finally(() => { if (!cancelled) setSocialLoading(false); });
+    fetchSocialFeed.current = true;
+    return () => { cancelled = true; };
+  // lastResult?.round 变化 = 新回合完成；player 首次赋值时也触发一次
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, lastResult?.round, player?.round]);
 
   // 压力首次达到 100 时触发震动动画
   useEffect(() => {
@@ -362,7 +381,7 @@ export default function GamePage() {
         {/* Right: player info + feed */}
         <aside className="hud-right">
           <PlayerStats player={player} traits={traits} promotion={promotion} />
-          <FeedPanel history={history} />
+          <FeedPanel history={history} socialPosts={socialPosts} socialLoading={socialLoading} />
         </aside>
       </div>
 

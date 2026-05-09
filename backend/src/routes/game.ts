@@ -709,6 +709,18 @@ app.get('/game/:sessionId/intro', async (c) => {
   return c.json({ intro });
 });
 
+// 社区动态：LLM 模拟队友 / 俱乐部 / 对手的 X 风格帖子
+app.get('/game/:sessionId/social-feed', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  const ai = makeAiService(c.env);
+  const posts = await ai.simulateSocialFeed(session.player, session.history.slice(-5));
+  return c.json({ posts });
+});
+
 // 游戏结束生涯总结（仅 status=ended 时有意义）
 app.get('/game/:sessionId/summary', async (c) => {
   const id = c.req.param('sessionId');

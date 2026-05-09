@@ -1,6 +1,64 @@
 import type { Background, GameEventPublic, Player, RoundResult, Trait } from '../types.js';
 import { STAGE_LABELS } from '../engine/constants.js';
 
+// ── Social Feed ─────────────────────────────────────────────────────────────
+
+export type SocialPostAuthorType = 'teammate' | 'club' | 'rival' | 'media';
+
+export interface SocialFeedPost {
+  author: string;
+  authorType: SocialPostAuthorType;
+  handle: string;
+  content: string;
+}
+
+export function buildSocialFeedPrompt(
+  player: Player,
+  recentHistory: RoundResult[],
+): string {
+  const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
+
+  const recentSummary = recentHistory.slice(-4).map((r) => {
+    const outcome = r.success ? '✓成功' : '✗失败';
+    return `${outcome} 【${r.eventTitle}】${r.narrative.slice(0, 40)}`;
+  }).join('\n') || '（尚无记录）';
+
+  const teammateLines = player.roster && player.roster.length > 0
+    ? player.roster.slice(0, 3).map((tm) => `${tm.name}（${tm.role}）`).join('、')
+    : '无队友';
+
+  const clubName = player.team?.name ?? '无俱乐部';
+  const clubTag = player.team?.tag ?? '';
+  const rival = player.rivals?.[0];
+  const rivalLine = rival ? `${rival.name}（${rival.tag}，${rival.region}）` : '无';
+
+  const fameLabel = player.fame >= 80 ? '顶流' : player.fame >= 50 ? '知名选手' : player.fame >= 20 ? '有一定知名度' : '新人';
+
+  return [
+    '你是 CS2 电竞圈的社交媒体模拟引擎，模拟游戏世界中类似 X（推特）的社区帖子。',
+    '根据以下游戏状态，生成 3-4 条角色发布的中文短帖子，语气像真实电竞人在发推。',
+    '',
+    `主角：${player.name}，${stageLabel}阶段，${fameLabel}，名气值 ${player.fame}`,
+    `所属俱乐部：${clubName}${clubTag ? '（' + clubTag + '）' : ''}`,
+    `队友：${teammateLines}`,
+    `知名对手：${rivalLine}`,
+    '',
+    '最近动态：',
+    recentSummary,
+    '',
+    '发帖规则：',
+    '- 发帖者可以是：队友、俱乐部官号、对手、电竞媒体（根据上下文合理选择）',
+    '- 内容要贴合最近事件，有具体感，像真人在发推（可以赞美、调侃、晒日常、爆料、感慨）',
+    '- 每条 20-55 字，口语化，可加 emoji',
+    '- authorType 只能是：teammate / club / rival / media',
+    '- handle 格式：@英文小写昵称（根据名字缩写或谐音创造，不超过 15 字符）',
+    '- 禁止出现数值、属性名或游戏机制词汇',
+    '',
+    '严格输出 JSON 数组，不加任何其他内容：',
+    '[{"author":"...","authorType":"teammate","handle":"@...","content":"..."}]',
+  ].join('\n');
+}
+
 export type CustomActionQuality = 'poor' | 'ok' | 'good' | 'excellent';
 
 export interface CustomActionJudgment {

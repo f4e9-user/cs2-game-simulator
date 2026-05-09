@@ -5,11 +5,13 @@ import {
   buildJudgmentValidationPrompt,
   buildNarrativePrompt,
   buildPersonalizePrompt,
+  buildSocialFeedPrompt,
   buildSummaryPrompt,
   type CustomActionJudgment,
   type JudgmentValidation,
   type NarrativePromptInput,
   type PersonalizedEvent,
+  type SocialFeedPost,
 } from './prompts.js';
 
 export interface AiService {
@@ -20,6 +22,7 @@ export interface AiService {
   personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null>;
   judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null>;
   validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation>;
+  simulateSocialFeed(player: Player, recentHistory: RoundResult[]): Promise<SocialFeedPost[]>;
   simulateLeaderboardTick?(
     teams: LeaderboardTeam[],
     player: Player,
@@ -85,6 +88,64 @@ function parsePersonalized(text: string | null, event: GameEventPublic): Persona
   }
 }
 
+function parseSocialFeed(text: string | null): SocialFeedPost[] {
+  if (!text) return [];
+  try {
+    const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed = JSON.parse(clean) as SocialFeedPost[];
+    if (!Array.isArray(parsed)) return [];
+    const validTypes = new Set(['teammate', 'club', 'rival', 'media']);
+    return parsed.filter(
+      (p) =>
+        typeof p.author === 'string' &&
+        typeof p.content === 'string' &&
+        typeof p.handle === 'string' &&
+        validTypes.has(p.authorType),
+    ).slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+function templateSocialFeed(player: Player): SocialFeedPost[] {
+  const posts: SocialFeedPost[] = [];
+  if (player.roster && player.roster.length > 0) {
+    const tm = player.roster[0];
+    posts.push({
+      author: tm.name,
+      authorType: 'teammate',
+      handle: `@${tm.name.toLowerCase().replace(/\s+/g, '_').slice(0, 15)}`,
+      content: '今天训练量很大，但感觉状态在上升 💪 继续冲！',
+    });
+  }
+  if (player.team) {
+    posts.push({
+      author: player.team.name,
+      authorType: 'club',
+      handle: `@${player.team.tag.toLowerCase()}`,
+      content: `战队本周训练圆满收尾，感谢球迷们一如既往的支持 ❤️`,
+    });
+  }
+  const rival = player.rivals?.[0];
+  if (rival) {
+    posts.push({
+      author: rival.name,
+      authorType: 'rival',
+      handle: `@${rival.tag.toLowerCase()}`,
+      content: '最近状态很好，期待下次大赛见真章 🔥',
+    });
+  }
+  if (posts.length === 0) {
+    posts.push({
+      author: 'CS2 电竞资讯',
+      authorType: 'media',
+      handle: '@cs2esports',
+      content: '赛季新星辈出，哪位选手能脱颖而出？我们拭目以待！',
+    });
+  }
+  return posts;
+}
+
 // ── Template fallback (no LLM) ──────────────────────────────────
 
 class TemplateNarrator implements AiService {
@@ -114,6 +175,10 @@ class TemplateNarrator implements AiService {
 
   async validateJudgment(_playerInput: string, _event: GameEventPublic, _judgment: CustomActionJudgment): Promise<JudgmentValidation> {
     return { valid: true };
+  }
+
+  async simulateSocialFeed(player: Player, _recentHistory: RoundResult[]): Promise<SocialFeedPost[]> {
+    return templateSocialFeed(player);
   }
 }
 
@@ -189,6 +254,16 @@ class AnthropicNarrator implements AiService {
       80,
     );
     return parseJudgmentValidation(text);
+  }
+
+  async simulateSocialFeed(player: Player, recentHistory: RoundResult[]): Promise<SocialFeedPost[]> {
+    const text = await this.anthropicChat(
+      PERSONALIZE_SYSTEM_PROMPT,
+      buildSocialFeedPrompt(player, recentHistory),
+      400,
+    );
+    const posts = parseSocialFeed(text);
+    return posts.length > 0 ? posts : templateSocialFeed(player);
   }
 }
 
@@ -279,6 +354,17 @@ class OpenAINarrator implements AiService {
       true,
     );
     return parseJudgmentValidation(text);
+  }
+
+  async simulateSocialFeed(player: Player, recentHistory: RoundResult[]): Promise<SocialFeedPost[]> {
+    const text = await this.chat(
+      PERSONALIZE_SYSTEM_PROMPT,
+      buildSocialFeedPrompt(player, recentHistory),
+      400,
+      true,
+    );
+    const posts = parseSocialFeed(text);
+    return posts.length > 0 ? posts : templateSocialFeed(player);
   }
 }
 

@@ -8,6 +8,7 @@ import type {
   Player,
   RollTraitsResponse,
   ShopItem,
+  SocialPost,
   StartGameResponse,
   Stats,
   TournamentsResponse,
@@ -146,4 +147,6 @@ export const api = {
     request<{ intro: string }>(`/api/game/${sessionId}/intro`),
   getSummary: (sessionId: string) =>
     request<{ summary: string; ending?: string }>(`/api/game/${sessionId}/summary`),
+  getSocialFeed: (sessionId: string) =>
+    request<{ posts: SocialPost[] }>(`/api/game/${sessionId}/social-feed`),
 };

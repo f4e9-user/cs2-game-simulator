@@ -407,6 +407,16 @@ export interface ChoiceResponse {
   leaderboard?: LeaderboardTeam[];
 }
 
+// ── 社区动态 ───────────────────────────────────────────────────
+export type SocialPostAuthorType = 'teammate' | 'club' | 'rival' | 'media';
+
+export interface SocialPost {
+  author: string;
+  authorType: SocialPostAuthorType;
+  handle: string;
+  content: string;
+}
+
 // ── 派生属性（显示用）──────────────────────────────────────────
 export interface DerivedStats {
   aim: number;       // 枪法 0-100  = agility*0.7 + experience*0.3 → /20*100
