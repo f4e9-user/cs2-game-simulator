@@ -105,6 +105,7 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   cheat: '外挂风险',
   rest: '强制休养',
   routine: '每日行动',
+  bailout: '救济',
 };
 
 // ── 被动效果标签 ──────────────────────────────────────────────

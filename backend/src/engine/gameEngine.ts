@@ -236,6 +236,29 @@ export function processLoanRepayment(player: Player): void {
   }
 }
 
+function processRecoverySystems(player: Player, eventId: string): void {
+  processLoanRepayment(player);
+
+  const isTeamBailout = eventId.startsWith('bailout-team-');
+  const isFamilyBailout = !isTeamBailout && eventId.startsWith('bailout-');
+
+  if (isTeamBailout) {
+    player.teamBailoutCooldown = 24;
+    player.consecutiveBrokeRounds = 0;
+  } else if (isFamilyBailout) {
+    player.bailoutCooldown = 24;
+    player.consecutiveBrokeRounds = 0;
+  }
+
+  if (!isFamilyBailout && (player.bailoutCooldown ?? 0) > 0) {
+    player.bailoutCooldown -= 1;
+  }
+
+  if (!isTeamBailout && (player.teamBailoutCooldown ?? 0) > 0) {
+    player.teamBailoutCooldown -= 1;
+  }
+}
+
 export function initPlayer(input: InitInput): Player {
   const bgId = input.backgroundId || DEFAULT_BACKGROUND_ID;
   const bg = getBackground(bgId);
@@ -847,7 +870,7 @@ export function applyChoice(
     nextPlayer.pendingApplication = null;
   }
 
-  processLoanRepayment(nextPlayer);
+  processRecoverySystems(nextPlayer, eventDef.id);
 
   if (
     eventDef.id.startsWith('bailout-team-') &&
@@ -1181,23 +1204,6 @@ export function applyChoice(
       nextPlayer.promotionPending = null;
       nextPlayer.promotionCooldown = nextPlayer.round + 8;
     }
-  }
-
-  if (eventDef.id.startsWith('bailout-team-')) {
-    nextPlayer.teamBailoutCooldown = 24;
-    nextPlayer.consecutiveBrokeRounds = 0;
-    if ((nextPlayer.bailoutCooldown ?? 0) > 0) {
-      nextPlayer.bailoutCooldown -= 1;
-    }
-  } else if (eventDef.id.startsWith('bailout-')) {
-    nextPlayer.bailoutCooldown = 24;
-    nextPlayer.consecutiveBrokeRounds = 0;
-  } else if ((nextPlayer.bailoutCooldown ?? 0) > 0) {
-    nextPlayer.bailoutCooldown -= 1;
-  }
-
-  if (!eventDef.id.startsWith('bailout-team-') && (nextPlayer.teamBailoutCooldown ?? 0) > 0) {
-    nextPlayer.teamBailoutCooldown -= 1;
   }
 
   leaderboard = tickLeaderboard(leaderboard);
@@ -1691,7 +1697,11 @@ export function applyClubRequest(
   if (!club) throw new Error('未知俱乐部');
 
   const player = session.player;
+  if (player.tags.includes('transfer-ban')) {
+    throw new Error('因贷款违约，你目前被禁止转会（还有' + ((player.tagExpiry?.['transfer-ban'] ?? player.round) - player.round) + '回合）');
+  }
   if (player.team && clubId === player.team.clubId) throw new Error('已经在这支战队了');
+  if (player.team) throw new Error('你已经有战队了');
   if (player.pendingApplication) throw new Error('已经有一个进行中的申请');
 
   const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
