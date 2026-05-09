@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import debugRoutes from './routes/debug.js';
 import gameRoutes from './routes/game.js';
 import type { Env } from './types.js';
 
@@ -20,5 +21,6 @@ app.get('/', (c) =>
 );
 
 app.route('/api', gameRoutes);
+app.route('/api', debugRoutes);
 
 export default app;

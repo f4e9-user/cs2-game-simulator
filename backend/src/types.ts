@@ -178,6 +178,8 @@ export interface PendingDeparture {
   earlyRecruit: boolean;    // 玩家提前行动，新人质量更好
 }
 
+export type ForcedMatchResult = 'win' | 'loss';
+
 export interface DynamicState {
   stress: number;
   fame: number;
@@ -195,6 +197,8 @@ export interface DynamicState {
   consecutiveLosses: number;         // 连续赛事失利计数
   everHadTeam: boolean;               // 是否曾拥有过战队（用于结局判定）
   contractRenewals: number;           // 续约次数（用于 loyal-veteran 结局）
+  forceNextEvent: string | null;
+  forceMatchResult: ForcedMatchResult | null;
 }
 
 export interface ActionResult {
@@ -241,6 +245,7 @@ export interface Player extends DynamicState {
   promotionPending: Stage | null;
   promotionCooldown: number;
   pendingOffer: TeamOffer | null;
+  ownedItems: string[];
   roster: Teammate[] | null;
   preferredRole: TeammateRole | null;
   activeRole: TeammateRole | null;

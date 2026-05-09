@@ -231,7 +231,10 @@ export function initPlayer(input: InitInput): Player {
     pendingApplication: null,
     qualificationSlots: {},
     teamQualificationSlots: {},
+    forceNextEvent: null,
+    forceMatchResult: null,
     pendingOffer: null,
+    ownedItems: [],
     roster: null,
     preferredRole: deriveRoleFromTraits(traits),
     activeRole: null,
@@ -379,6 +382,33 @@ function buildMatchResolveResult(
   };
 }
 
+function applyForcedMatchResult(sim: MatchSimResult, forcedResult: 'win' | 'loss'): MatchSimResult {
+  if ((forcedResult === 'win') === sim.won) {
+    return {
+      ...sim,
+      summary: `调试强制${forcedResult === 'win' ? '胜利' : '失利'}：${sim.summary}`,
+    };
+  }
+
+  if (forcedResult === 'win') {
+    return {
+      ...sim,
+      won: true,
+      teamScore: Math.max(13, sim.teamScore),
+      enemyScore: Math.min(12, sim.enemyScore),
+      summary: `调试强制胜利：${sim.summary}`,
+    };
+  }
+
+  return {
+    ...sim,
+    won: false,
+    teamScore: Math.min(12, sim.teamScore),
+    enemyScore: Math.max(13, sim.enemyScore),
+    summary: `调试强制失利：${sim.summary}`,
+  };
+}
+
 export interface ApplyChoiceResult {
   session: GameSession;
   result: RoundResult;
@@ -422,6 +452,9 @@ export function applyChoice(
       if (t && stage) {
         const effectiveDiff = t.baseDifficulty + stage.difficultyBonus;
         pendingMatchSim = simulateMatch(session.player, effectiveDiff, rng);
+        if (session.player.forceMatchResult) {
+          pendingMatchSim = applyForcedMatchResult(pendingMatchSim, session.player.forceMatchResult);
+        }
         return buildMatchResolveResult(session.player, pendingMatchSim, t, stageIdx);
       }
     }
@@ -715,6 +748,10 @@ export function applyChoice(
   if (tagsAdded.includes('veteran') && !session.player.tags.includes('veteran')) {
     nextPlayer.stats = { ...nextPlayer.stats, mentality: nextPlayer.stats.mentality + 2 };
     nextPlayer.stress = Math.max(0, (nextPlayer.stress ?? 0) - 15);
+  }
+
+  if (tournamentMatch && session.player.forceMatchResult) {
+    nextPlayer.forceMatchResult = null;
   }
 
   // 面试事件完成后清空 pendingApplication（response 阶段保留，供面试 post-handler 读取 clubId）
@@ -1081,6 +1118,10 @@ export function applyChoice(
     }
     return pickEvent({ player: nextPlayer, recentEventIds: recent, rng, leaderboard });
   })();
+
+  if (nextPlayer.forceNextEvent && nextEventDef?.id === nextPlayer.forceNextEvent) {
+    nextPlayer.forceNextEvent = null;
+  }
 
   result.narrative = substituteRivals(result.narrative, nextPlayer.rivals);
   result.narrative = substituteTeammates(result.narrative, nextPlayer.roster ?? []);
@@ -1652,4 +1693,3 @@ function calcTrustRateMultiplier(roster: Teammate[], rng: () => number): number 
   if (counts.drama) mult *= (0.7 + rng() * 0.6);
   return mult;
 }
-

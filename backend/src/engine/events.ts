@@ -1,4 +1,4 @@
-import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
+import { EVENT_POOL, PROMOTION_EVENTS, getEventById } from '../data/events/index.js';
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
 import { CLUBS } from '../data/clubs.js';
@@ -238,6 +238,11 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   const { player, recentEventIds, rng } = ctx;
   const realTags = new Set(player.tags);
   const synthTags = new Set([...player.tags, ...dynamicTags(player)]);
+
+  if (player.forceNextEvent) {
+    const forcedEvent = getEventById(player.forceNextEvent);
+    if (forcedEvent) return forcedEvent;
+  }
 
   if ((player.restRounds ?? 0) > 0) {
     const restPool = EVENT_POOL.filter((e) => e.type === 'rest');
