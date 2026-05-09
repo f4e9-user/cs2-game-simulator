@@ -458,7 +458,7 @@ function buildYearTournaments(year: number): Tournament[] {
       id: `y${year}-s-main-01`, tier: 's-class', progressionTier: 's-main', entryType: 'invite', brand: 'IEM', subtype: 'iem',
       displayName: `IEM ${pickFrom(S_CITIES, year + 1)} ${yyyy}`,
       description: '顶级国际大赛，赢一届就会被整个圈子记住。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'pro', fameRequired: 24, pointsRequired: 12, signupWeeks: [11], reward: { money: 70, experience: 6, fame: 10, points: 12, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 1), qualificationTargets: ['iem-main'], qualificationMilestones: [milestone(2, '晋级决赛', reward('iem-main'))],
+      stages: ['pro'], teamRequirement: 'pro', fameRequired: 24, pointsRequired: 12, signupWeeks: [11], reward: { money: 70, experience: 6, fame: 10, points: 12, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 1), qualificationTargets: ['iem-main'], qualificationMilestones: [milestone(2, '晋级决赛', reward('iem-main'))],
     },
     {
       id: `y${year}-a-02`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'ESL Challenger League', subtype: 'challenger_league',
@@ -470,13 +470,13 @@ function buildYearTournaments(year: number): Tournament[] {
       id: `y${year}-s-main-02`, tier: 's-class', progressionTier: 's-main', entryType: 'invite', brand: 'BLAST Bounty', subtype: 'blast_bounty',
       displayName: `BLAST Bounty Season ${blastBountySeasonBase + 1}`,
       description: '顶级奖金池赛事，邀请名单紧，压力也高。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'pro', fameRequired: 26, pointsRequired: 14, signupWeeks: [12], reward: { money: 72, experience: 6, fame: 10, points: 12, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, seasonIndex: blastBountySeasonBase + 1, qualificationMilestones: [milestone(2, '晋级决赛', reward('blast-main'))],
+      stages: ['pro'], teamRequirement: 'pro', fameRequired: 26, pointsRequired: 14, signupWeeks: [12], reward: { money: 72, experience: 6, fame: 10, points: 12, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, seasonIndex: blastBountySeasonBase + 1, qualificationMilestones: [milestone(2, '晋级决赛', reward('blast-main'))],
     },
     {
       id: `y${year}-major-01`, tier: 'major', progressionTier: 'major', entryType: 'invite', brand: 'IEM', subtype: 'major',
       displayName: `IEM ${pickFrom(S_CITIES, year + 2)} Major ${yyyy}`,
       description: '上半年 Major，进场本身就是实力与地位的证明。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'top', fameRequired: 30, pointsRequired: 20, signupWeeks: [15], reward: { money: 110, experience: 7, fame: 18, points: 20, stressDelta: 3 }, baseDifficulty: 5, bracket: SIX_STAGE, city: pickFrom(S_CITIES, year + 2), qualificationTargets: ['iem-main'], qualificationMilestones: [milestone(3, '打进四强', reward('iem-main')), milestone(5, 'Major夺冠', reward('iem-main', 2))],
+      stages: ['pro'], teamRequirement: 'top', fameRequired: 30, pointsRequired: 20, signupWeeks: [15], reward: { money: 110, experience: 7, fame: 18, points: 20, stressDelta: 3 }, baseDifficulty: 5, bracket: SIX_STAGE, city: pickFrom(S_CITIES, year + 2), qualificationTargets: ['iem-main'], qualificationMilestones: [milestone(3, '打进四强', reward('iem-main')), milestone(5, 'Major夺冠', reward('iem-main', 2))],
     },
     {
       id: `y${year}-a-03`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'CCT', subtype: 'cct',
@@ -518,13 +518,13 @@ function buildYearTournaments(year: number): Tournament[] {
       id: `y${year}-s-closed-01`, tier: 's-closed', progressionTier: 's-qualifier', entryType: 'closed_qualifier', brand: 'BLAST Open', subtype: 'closed_qualifier',
       displayName: `BLAST Open ${pickFrom(S_CITIES, year + 3)} Season ${blastOpenSeasonBase + 1} Closed Qualifier`,
       description: 'S 级封闭预选，差一步就能进主舞台。',
-      stages: ['second', 'pro', 'star'], teamRequirement: 'pro', fameRequired: 16, pointsRequired: 10, signupWeeks: [18], reward: { money: 34, experience: 4, fame: 6, points: 7, stressDelta: 1 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 3), seasonIndex: blastOpenSeasonBase + 1, qualificationTargets: ['blast-closed'], qualificationMilestones: [milestone(2, '晋级决赛', reward('blast-main'))],
+      stages: ['second', 'pro'], teamRequirement: 'pro', fameRequired: 16, pointsRequired: 10, signupWeeks: [18], reward: { money: 34, experience: 4, fame: 6, points: 7, stressDelta: 1 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 3), seasonIndex: blastOpenSeasonBase + 1, qualificationTargets: ['blast-closed'], qualificationMilestones: [milestone(2, '晋级决赛', reward('blast-main'))],
     },
     {
       id: `y${year}-s-main-03`, tier: 's-class', progressionTier: 's-main', entryType: 'invite', brand: 'ESL Pro League', subtype: 'pro_league',
       displayName: `ESL Pro League Season ${proLeagueSeasonBase + 1}`,
       description: '顶级联赛循环，考验的是整段赛程的稳定性。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'pro', fameRequired: 28, pointsRequired: 15, signupWeeks: [20], reward: { money: 76, experience: 6, fame: 11, points: 13, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, seasonIndex: proLeagueSeasonBase + 1, qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
+      stages: ['pro'], teamRequirement: 'pro', fameRequired: 28, pointsRequired: 15, signupWeeks: [20], reward: { money: 76, experience: 6, fame: 11, points: 13, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, seasonIndex: proLeagueSeasonBase + 1, qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
     },
     {
       id: `y${year}-a-04`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'YaLLa Compass', subtype: 'yalla_compass',
@@ -536,7 +536,7 @@ function buildYearTournaments(year: number): Tournament[] {
       id: `y${year}-s-main-04`, tier: 's-class', progressionTier: 's-main', entryType: 'invite', brand: 'BLAST Open', subtype: 'blast_open',
       displayName: `BLAST Open ${pickFrom(S_CITIES, year + 4)} Season ${blastOpenSeasonBase + 1}`,
       description: 'BLAST 正赛站点，赛制凶，关注度也凶。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'pro', fameRequired: 28, pointsRequired: 16, signupWeeks: [24], reward: { money: 78, experience: 6, fame: 11, points: 13, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 4), seasonIndex: blastOpenSeasonBase + 1, qualificationTargets: ['blast-main'], qualificationMilestones: [milestone(2, '晋级决赛', reward('blast-main'))],
+      stages: ['pro'], teamRequirement: 'pro', fameRequired: 28, pointsRequired: 16, signupWeeks: [24], reward: { money: 78, experience: 6, fame: 11, points: 13, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 4), seasonIndex: blastOpenSeasonBase + 1, qualificationTargets: ['blast-main'], qualificationMilestones: [milestone(2, '晋级决赛', reward('blast-main'))],
     },
     {
       id: `y${year}-a-05`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'Regional Masters', subtype: 'regional_masters',
@@ -548,7 +548,7 @@ function buildYearTournaments(year: number): Tournament[] {
       id: `y${year}-s-main-05`, tier: 's-class', progressionTier: 's-main', entryType: 'invite', brand: 'FISSURE Playground', subtype: 'fissure',
       displayName: `FISSURE Playground #${fissureBase + 1}`,
       description: '高对抗度国际赛，队伍都爱拿来检验版本理解。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'pro', fameRequired: 30, pointsRequired: 16, signupWeeks: [28], reward: { money: 78, experience: 6, fame: 11, points: 13, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, seasonIndex: fissureBase + 1, qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
+      stages: ['pro'], teamRequirement: 'pro', fameRequired: 30, pointsRequired: 16, signupWeeks: [28], reward: { money: 78, experience: 6, fame: 11, points: 13, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, seasonIndex: fissureBase + 1, qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
     },
     {
       id: `y${year}-a-06`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'Champion of Champions Tour', subtype: 'cct_alt',
@@ -566,7 +566,7 @@ function buildYearTournaments(year: number): Tournament[] {
       id: `y${year}-s-main-06`, tier: 's-class', progressionTier: 's-main', entryType: 'invite', brand: 'Esports World Cup', subtype: 'ewc',
       displayName: `Esports World Cup ${yyyy}`,
       description: '超级奖金池赛事，所有人都会认真备战。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'pro', fameRequired: 32, pointsRequired: 18, signupWeeks: [34], reward: { money: 84, experience: 6, fame: 12, points: 14, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
+      stages: ['pro'], teamRequirement: 'pro', fameRequired: 32, pointsRequired: 18, signupWeeks: [34], reward: { money: 84, experience: 6, fame: 12, points: 14, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
     },
     {
       id: `y${year}-a-07`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'ESL Challenger League', subtype: 'challenger_league',
@@ -578,13 +578,13 @@ function buildYearTournaments(year: number): Tournament[] {
       id: `y${year}-s-main-07`, tier: 's-class', progressionTier: 's-main', entryType: 'invite', brand: 'BLAST Rivals', subtype: 'blast_rivals',
       displayName: `BLAST Rivals ${pickFrom(S_CITIES, year + 6)} Season ${blastRivalsSeasonBase + 1}`,
       description: '对手都很熟，细节被放大，失误就会被惩罚。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'pro', fameRequired: 32, pointsRequired: 18, signupWeeks: [39], reward: { money: 82, experience: 6, fame: 12, points: 14, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 6), seasonIndex: blastRivalsSeasonBase + 1, qualificationTargets: ['blast-main'], qualificationMilestones: [milestone(2, '晋级决赛', reward('blast-main'))],
+      stages: ['pro'], teamRequirement: 'pro', fameRequired: 32, pointsRequired: 18, signupWeeks: [39], reward: { money: 82, experience: 6, fame: 12, points: 14, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 6), seasonIndex: blastRivalsSeasonBase + 1, qualificationTargets: ['blast-main'], qualificationMilestones: [milestone(2, '晋级决赛', reward('blast-main'))],
     },
     {
       id: `y${year}-s-main-08`, tier: 's-class', progressionTier: 's-main', entryType: 'invite', brand: 'CS Asia Championships', subtype: 'asian_championship',
       displayName: `CS Asia Championships ${yyyy}`,
       description: '亚洲最高规格之一，区域豪强都会准时集合。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'pro', fameRequired: 30, pointsRequired: 17, signupWeeks: [40], reward: { money: 80, experience: 6, fame: 12, points: 14, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, region: 'Asia', qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
+      stages: ['pro'], teamRequirement: 'pro', fameRequired: 30, pointsRequired: 17, signupWeeks: [40], reward: { money: 80, experience: 6, fame: 12, points: 14, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, region: 'Asia', qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
     },
     {
       id: `y${year}-a-08`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'Thunderpick World Championship Qualifier', subtype: 'thunderpick',
@@ -596,25 +596,25 @@ function buildYearTournaments(year: number): Tournament[] {
       id: `y${year}-s-closed-02`, tier: 's-closed', progressionTier: 's-qualifier', entryType: 'closed_qualifier', brand: 'PGL', subtype: 'closed_qualifier',
       displayName: `PGL ${pickFrom(S_CITIES, year + 7)} ${yyyy} Closed Qualifier`,
       description: 'Major 前哨战，许多职业边缘队都会被逼到极限。',
-      stages: ['second', 'pro', 'star'], teamRequirement: 'pro', fameRequired: 18, pointsRequired: 10, signupWeeks: [43], reward: { money: 34, experience: 4, fame: 6, points: 7, stressDelta: 1 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 7), qualificationTargets: ['pgl-closed'], qualificationMilestones: [milestone(2, '晋级决赛', reward('pgl-main'))],
+      stages: ['second', 'pro'], teamRequirement: 'pro', fameRequired: 18, pointsRequired: 10, signupWeeks: [43], reward: { money: 34, experience: 4, fame: 6, points: 7, stressDelta: 1 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 7), qualificationTargets: ['pgl-closed'], qualificationMilestones: [milestone(2, '晋级决赛', reward('pgl-main'))],
     },
     {
       id: `y${year}-major-02`, tier: 'major', progressionTier: 'major', entryType: 'invite', brand: 'PGL', subtype: 'major',
       displayName: `PGL ${pickFrom(S_CITIES, year + 8)} Major ${yyyy}`,
       description: '年终 Major，拿下就是真正写进历史。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'top', fameRequired: 34, pointsRequired: 22, signupWeeks: [48], reward: { money: 120, experience: 8, fame: 20, points: 22, stressDelta: 3 }, baseDifficulty: 5, bracket: SIX_STAGE, city: pickFrom(S_CITIES, year + 8), qualificationTargets: ['pgl-main'], qualificationMilestones: [milestone(3, '打进四强', reward('pgl-main')), milestone(5, 'Major夺冠', reward('pgl-main', 2))],
+      stages: ['pro'], teamRequirement: 'top', fameRequired: 34, pointsRequired: 22, signupWeeks: [48], reward: { money: 120, experience: 8, fame: 20, points: 22, stressDelta: 3 }, baseDifficulty: 5, bracket: SIX_STAGE, city: pickFrom(S_CITIES, year + 8), qualificationTargets: ['pgl-main'], qualificationMilestones: [milestone(3, '打进四强', reward('pgl-main')), milestone(5, 'Major夺冠', reward('pgl-main', 2))],
     },
     {
       id: `y${year}-s-main-09`, tier: 's-class', progressionTier: 's-main', entryType: 'invite', brand: 'StarLadder StarSeries', subtype: 'starseries',
       displayName: `StarLadder StarSeries S${starSeriesBase + 1}`,
       description: '传统强赛，老牌豪门和新贵都想来这里站稳脚跟。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'pro', fameRequired: 30, pointsRequired: 18, signupWeeks: [46], reward: { money: 80, experience: 6, fame: 12, points: 14, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, seasonIndex: starSeriesBase + 1, qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
+      stages: ['pro'], teamRequirement: 'pro', fameRequired: 30, pointsRequired: 18, signupWeeks: [46], reward: { money: 80, experience: 6, fame: 12, points: 14, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, seasonIndex: starSeriesBase + 1, qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
     },
     {
       id: `y${year}-s-main-10`, tier: 's-class', progressionTier: 's-main', entryType: 'invite', brand: 'ESL Pro League', subtype: 'pro_league',
       displayName: `ESL Pro League Season ${proLeagueSeasonBase + 2}`,
       description: '年末 EPL，队伍状态、深度与执行力都会被彻底检验。',
-      stages: ['pro', 'star', 'veteran'], teamRequirement: 'pro', fameRequired: 32, pointsRequired: 18, signupWeeks: [47], reward: { money: 82, experience: 6, fame: 12, points: 14, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, seasonIndex: proLeagueSeasonBase + 2, qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
+      stages: ['pro'], teamRequirement: 'pro', fameRequired: 32, pointsRequired: 18, signupWeeks: [47], reward: { money: 82, experience: 6, fame: 12, points: 14, stressDelta: 2 }, baseDifficulty: 4, bracket: FOUR_STAGE, seasonIndex: proLeagueSeasonBase + 2, qualificationMilestones: [milestone(2, '晋级决赛', reward('s-main'))],
     },
   ];
 

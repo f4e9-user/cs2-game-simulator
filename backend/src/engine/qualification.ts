@@ -3,11 +3,11 @@ import type { Player } from '../types.js';
 export function qualificationSlotLabel(slot: string): string {
   const match = /^(iem|blast|pgl)-(open|closed|main)$/.exec(slot);
   if (match) {
-    const brand = match[1].toUpperCase();
+    const brand = match[1]!.toUpperCase();
     const phase =
-      match[2] === 'open'
+      match[2]! === 'open'
         ? '公开预选门票'
-        : match[2] === 'closed'
+        : match[2]! === 'closed'
           ? '封闭预选门票'
           : '正赛资格';
     return `${brand}${phase}`;

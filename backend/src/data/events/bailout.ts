@@ -1,6 +1,6 @@
 import type { EventDef } from '../../types.js';
 
-const ALL_STAGES: EventDef['stages'] = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran'];
+const ALL_STAGES: EventDef['stages'] = ['rookie', 'youth', 'second', 'pro'];
 
 export const BAILOUT_EVENTS: EventDef[] = [
   {
@@ -130,7 +130,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
     title: '俱乐部预支薪水',
     narrative:
       '俱乐部财务发来一份预支协议：队伍可以提前支付一部分未来薪水，但接下来十二周你的周薪会临时下调 20%。这是职业体系里的冷冰冰帮助。',
-    stages: ['second', 'pro', 'star', 'veteran'],
+    stages: ['second', 'pro'],
     difficulty: 0,
     weight: 10,
     requireTags: ['needs-team-bailout'],

@@ -466,6 +466,7 @@ function buildMatchResolveResult(
 
   return {
     success: won,
+    resultTier: won ? 'success' : 'failure',
     roll: Math.round(sim.rating * 100),
     dc: enemyAimProxy,
     chosenOutcome,
@@ -474,6 +475,7 @@ function buildMatchResolveResult(
     tagsAdded: tagAdds,
     tagsRemoved: [],
     endRun: false,
+    endReason: undefined,
     feelDelta: sim.feelDelta,
     tiltDelta: sim.tiltDelta,
     fatigueDelta: sim.fatigueDelta,

@@ -130,7 +130,7 @@ function templateSocialFeed(player: Player, leaderboard: LeaderboardTeam[]): Soc
 
   // 队友帖（有队伍时）
   if (player.roster && player.roster.length > 0) {
-    const tm = player.roster[0];
+    const tm = player.roster[0]!;
     posts.push({
       author: tm.name,
       authorType: 'teammate',

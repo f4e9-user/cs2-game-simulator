@@ -11,7 +11,7 @@ import type {
 
 const app = new Hono<{ Bindings: Env }>();
 
-const STAGES: Stage[] = ['rookie', 'youth', 'second', 'pro', 'star', 'veteran', 'retired'];
+const STAGES: Stage[] = ['rookie', 'youth', 'second', 'pro', 'retired'];
 const CLUB_TIERS: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
 const FORCED_MATCH_RESULTS: ForcedMatchResult[] = ['win', 'loss'];
 
