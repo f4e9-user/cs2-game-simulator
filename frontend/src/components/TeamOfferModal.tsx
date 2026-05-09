@@ -80,7 +80,7 @@ export function TeamOfferModal({ offer, onAccept, onDecline, loading }: Props) {
             borderRadius: 8,
             padding: '10px 12px',
           }}>
-            <div style={{ fontSize: 11, color: 'var(--fg-2)', marginBottom: 3 }}>周薪</div>
+            <div style={{ fontSize: 11, color: 'var(--fg-2)', marginBottom: 3 }}>月薪</div>
             <div style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600 }}>
               +{offer.weeklySalary * 10}K / 回合
             </div>
