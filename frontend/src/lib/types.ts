@@ -345,6 +345,7 @@ export interface PromotionCheck {
 
 export interface GameSession {
   id: string;
+  apiToken: string;
   player: Player;
   currentEvent: GameEvent | null;
   history: RoundResult[];
@@ -358,6 +359,7 @@ export interface GameSession {
 
 export interface StartGameResponse {
   sessionId: string;
+  apiToken: string;
   player: Player;
   currentEvent: GameEvent | null;
   leaderboard: LeaderboardTeam[];

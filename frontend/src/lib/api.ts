@@ -54,11 +54,13 @@ const API_BASE = getApiBase();
 async function request<T>(
   path: string,
   init: RequestInit = {},
+  apiToken?: string,
 ): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       'content-type': 'application/json',
+      ...(apiToken ? { authorization: `Bearer ${apiToken}` } : {}),
       ...(init.headers ?? {}),
     },
   });
@@ -139,14 +141,16 @@ export const api = {
     ),
   leaveTeam: (sessionId: string) =>
     request<{ player: Player }>(`/api/game/${sessionId}/leave-team`, { method: 'POST' }),
-  personalizeEvent: (sessionId: string) =>
+  personalizeEvent: (sessionId: string, apiToken?: string) =>
     request<{ personalized: { narrative: string; choices: Array<{ id: string; description: string }> } | null }>(
       `/api/game/${sessionId}/personalize-event`,
+      {},
+      apiToken,
     ),
-  getIntro: (sessionId: string) =>
-    request<{ intro: string }>(`/api/game/${sessionId}/intro`),
-  getSummary: (sessionId: string) =>
-    request<{ summary: string; ending?: string }>(`/api/game/${sessionId}/summary`),
-  getSocialFeed: (sessionId: string) =>
-    request<{ posts: SocialPost[] }>(`/api/game/${sessionId}/social-feed`),
+  getIntro: (sessionId: string, apiToken?: string) =>
+    request<{ intro: string }>(`/api/game/${sessionId}/intro`, {}, apiToken),
+  getSummary: (sessionId: string, apiToken?: string) =>
+    request<{ summary: string; ending?: string }>(`/api/game/${sessionId}/summary`, {}, apiToken),
+  getSocialFeed: (sessionId: string, apiToken?: string) =>
+    request<{ posts: SocialPost[] }>(`/api/game/${sessionId}/social-feed`, {}, apiToken),
 };

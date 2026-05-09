@@ -313,6 +313,7 @@ export type SessionStatus = 'active' | 'ended';
 
 export interface GameSession {
   id: string;
+  apiToken: string;
   player: Player;
   currentEvent: GameEventPublic | null;
   history: RoundResult[];

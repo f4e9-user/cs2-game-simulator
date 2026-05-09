@@ -32,6 +32,7 @@ export default function GamePage() {
 
   const {
     player,
+    apiToken,
     currentEvent,
     history,
     status,
@@ -85,7 +86,7 @@ export default function GamePage() {
     setDisplayEvent(currentEvent);
     if (!currentEvent || actionsPhase) return;
     let cancelled = false;
-    api.personalizeEvent(sessionId).then((res) => {
+    api.personalizeEvent(sessionId, apiToken ?? undefined).then((res) => {
       if (cancelled || !res.personalized) return;
       const { narrative, choices: pChoices } = res.personalized;
       setDisplayEvent((prev) => {
@@ -108,7 +109,7 @@ export default function GamePage() {
     setLoading(true);
     const fetchIntro = welcomeDismissed
       ? Promise.resolve(null)
-      : api.getIntro(sessionId).catch(() => null);
+      : api.getIntro(sessionId, apiToken ?? undefined).catch(() => null);
     Promise.all([api.getSession(sessionId), api.listTraits(), fetchIntro, api.getHealth().catch(() => null)])
       .then(([session, t, introRes, health]) => {
         if (cancelled) return;
@@ -140,7 +141,7 @@ export default function GamePage() {
     if (!player) return;
     let cancelled = false;
     setSocialLoading(true);
-    api.getSocialFeed(sessionId)
+    api.getSocialFeed(sessionId, apiToken ?? undefined)
       .then((res) => { if (!cancelled) setSocialPosts(res.posts); })
       .catch(() => { /* 静默失败，保留上一次结果 */ })
       .finally(() => { if (!cancelled) setSocialLoading(false); });

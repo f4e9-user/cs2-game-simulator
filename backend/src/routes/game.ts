@@ -43,6 +43,13 @@ function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier 
 
 const app = new Hono<{ Bindings: Env }>();
 
+// AI 路由鉴权：校验请求头携带的 apiToken 是否与 session 匹配
+function validateApiToken(authHeader: string | undefined, sessionToken: string): boolean {
+  if (!authHeader) return false;
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+  return token === sessionToken;
+}
+
 app.get('/health', (c) => {
   const ai = makeAiService(c.env);
   return c.json({
@@ -97,6 +104,7 @@ app.post('/game/start', async (c) => {
 
     return c.json({
       sessionId: session.id,
+      apiToken: session.apiToken,
       player: session.player,
       currentEvent: session.currentEvent,
       leaderboard: session.leaderboard,
@@ -663,6 +671,9 @@ app.get('/game/:sessionId/personalize-event', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
+    return c.json({ error: '无效的 API Token' }, 401);
+  }
   if (!session.currentEvent) return c.json({ error: 'no current event' }, 400);
 
   const traitObjects = session.player.traits
@@ -679,6 +690,12 @@ app.get('/game/:sessionId/personalize-event', async (c) => {
 // 开场故事生成（仅 history 为空的新局调用）
 app.get('/game/:sessionId/intro', async (c) => {
   const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
+    return c.json({ error: '无效的 API Token' }, 401);
+  }
 
   // KV 缓存：intro 只需生成一次，命中直接返回
   const cacheKey = `intro:${id}`;
@@ -686,10 +703,6 @@ app.get('/game/:sessionId/intro', async (c) => {
     const cached = await c.env.KV.get(cacheKey);
     if (cached) return c.json({ intro: cached });
   } catch { /* KV 不可用时跳过缓存 */ }
-
-  const storage = makeStorage(c.env);
-  const session = await storage.sessions.load(id);
-  if (!session) return c.json({ error: 'session not found' }, 404);
 
   const traitObjects = session.player.traits
     .map((tid) => getTrait(tid))
@@ -715,6 +728,9 @@ app.get('/game/:sessionId/social-feed', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
+    return c.json({ error: '无效的 API Token' }, 401);
+  }
 
   // KV 缓存：同一回合内容不变，直接返回
   const cacheKey = `social:${id}:r${session.player.round}`;
@@ -744,6 +760,9 @@ app.get('/game/:sessionId/summary', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
+    return c.json({ error: '无效的 API Token' }, 401);
+  }
   if (session.status !== 'ended') {
     return c.json({ error: '游戏尚未结束' }, 400);
   }
