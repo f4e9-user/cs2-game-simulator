@@ -12,6 +12,7 @@ import type {
 
 interface GameState {
   sessionId: string | null;
+  apiToken: string | null;
   player: Player | null;
   currentEvent: GameEvent | null;
   history: RoundResult[];
@@ -55,6 +56,7 @@ interface GameState {
 
 export const useGameStore = create<GameState>((set) => ({
   sessionId: null,
+  apiToken: null,
   player: null,
   currentEvent: null,
   history: [],
@@ -72,6 +74,7 @@ export const useGameStore = create<GameState>((set) => ({
   hydrateFromSession: (session) =>
     set({
       sessionId: session.id,
+      apiToken: session.apiToken,
       player: session.player,
       currentEvent: session.currentEvent,
       history: session.history,

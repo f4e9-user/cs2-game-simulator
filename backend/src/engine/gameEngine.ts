@@ -267,10 +267,12 @@ export function createSession(player: Player, rngSeed: number): GameSession {
   const firstEvent = pickEvent({ player, recentEventIds: [], rng, leaderboard: buildLeaderboard(player) });
 
   const id = uuid();
+  const apiToken = uuid();
   const ts = nowIso();
 
   return {
     id,
+    apiToken,
     player,
     currentEvent: firstEvent ? toPublicEvent(firstEvent, player.rivals, player.roster ?? []) : null,
     history: [],

@@ -345,6 +345,7 @@ export interface PromotionCheck {
 
 export interface GameSession {
   id: string;
+  apiToken: string;
   player: Player;
   currentEvent: GameEvent | null;
   history: RoundResult[];
@@ -358,6 +359,7 @@ export interface GameSession {
 
 export interface StartGameResponse {
   sessionId: string;
+  apiToken: string;
   player: Player;
   currentEvent: GameEvent | null;
   leaderboard: LeaderboardTeam[];
@@ -405,6 +407,16 @@ export interface ChoiceResponse {
   ending?: string;
   promotion?: PromotionCheck;
   leaderboard?: LeaderboardTeam[];
+}
+
+// ── 社区动态 ───────────────────────────────────────────────────
+export type SocialPostAuthorType = 'teammate' | 'club' | 'rival' | 'media';
+
+export interface SocialPost {
+  author: string;
+  authorType: SocialPostAuthorType;
+  handle: string;
+  content: string;
 }
 
 // ── 派生属性（显示用）──────────────────────────────────────────

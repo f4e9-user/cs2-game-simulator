@@ -19,7 +19,7 @@ import { HudTopBar } from '@/components/HudTopBar';
 import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { useGameStore } from '@/store/gameStore';
-import type { Player, Teammate, Trait } from '@/lib/types';
+import type { Player, SocialPost, Teammate, Trait } from '@/lib/types';
 
 function statAvg(tm: Teammate): number {
   const s = tm.stats;
@@ -32,6 +32,7 @@ export default function GamePage() {
 
   const {
     player,
+    apiToken,
     currentEvent,
     history,
     status,
@@ -61,6 +62,8 @@ export default function GamePage() {
   const [mobileTab, setMobileTab] = useState<'left' | 'center' | 'right'>('center');
   const [centerTab, setCenterTab] = useState<'event' | 'shop' | 'team' | 'leaderboard'>('event');
   const prevStress = useRef(0);
+  const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
 
   const storageKey = `intro-seen-${sessionId}`;
   const [welcomeDismissed, setWelcomeDismissed] = useState(() =>
@@ -83,7 +86,7 @@ export default function GamePage() {
     setDisplayEvent(currentEvent);
     if (!currentEvent || actionsPhase) return;
     let cancelled = false;
-    api.personalizeEvent(sessionId).then((res) => {
+    api.personalizeEvent(sessionId, apiToken ?? undefined).then((res) => {
       if (cancelled || !res.personalized) return;
       const { narrative, choices: pChoices } = res.personalized;
       setDisplayEvent((prev) => {
@@ -104,17 +107,23 @@ export default function GamePage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const fetchIntro = welcomeDismissed
-      ? Promise.resolve(null)
-      : api.getIntro(sessionId).catch(() => null);
-    Promise.all([api.getSession(sessionId), api.listTraits(), fetchIntro, api.getHealth().catch(() => null)])
-      .then(([session, t, introRes, health]) => {
+    // 先并行取 session / traits / health，session 返回后才有真实的 apiToken
+    Promise.all([api.getSession(sessionId), api.listTraits(), api.getHealth().catch(() => null)])
+      .then(([session, t, health]) => {
         if (cancelled) return;
         hydrateFromSession(session);
         setTraits(t.traits);
-        if (introRes) setPreloadedIntro(introRes.intro);
         if (health) setAiActive(health.ai.active);
-        setIntroLoading(false);
+
+        // 用 session.apiToken 触发 intro（fire-and-forget，不阻塞主流程）
+        if (!welcomeDismissed) {
+          api.getIntro(sessionId, session.apiToken)
+            .then((introRes) => { if (!cancelled) setPreloadedIntro(introRes.intro); })
+            .catch(() => {})
+            .finally(() => { if (!cancelled) setIntroLoading(false); });
+        } else {
+          setIntroLoading(false);
+        }
       })
       .catch((e) => {
         if (!cancelled) {
@@ -132,6 +141,20 @@ export default function GamePage() {
   useEffect(() => {
     if (currentEvent) setCenterTab('event');
   }, [currentEvent?.id]);
+
+  // 刷新社区动态：player 首次加载后 & 每回合结束后（后端有 KV 缓存，重复请求不会重新调用 LLM）
+  useEffect(() => {
+    if (!player) return;
+    let cancelled = false;
+    setSocialLoading(true);
+    api.getSocialFeed(sessionId, apiToken ?? undefined)
+      .then((res) => { if (!cancelled) setSocialPosts(res.posts); })
+      .catch(() => { /* 静默失败，保留上一次结果 */ })
+      .finally(() => { if (!cancelled) setSocialLoading(false); });
+    return () => { cancelled = true; };
+  // player.round 是回合计数器，每回合结束时 +1，用它作唯一触发条件
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, player?.round]);
 
   // 压力首次达到 100 时触发震动动画
   useEffect(() => {
@@ -362,7 +385,7 @@ export default function GamePage() {
         {/* Right: player info + feed */}
         <aside className="hud-right">
           <PlayerStats player={player} traits={traits} promotion={promotion} />
-          <FeedPanel history={history} />
+          <FeedPanel history={history} socialPosts={socialPosts} socialLoading={socialLoading} />
         </aside>
       </div>
 
