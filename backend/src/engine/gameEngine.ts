@@ -385,6 +385,7 @@ export interface ApplyChoiceResult {
 export function applyChoice(
   session: GameSession,
   choiceId: string,
+  rollBonus = 0,
 ): ApplyChoiceResult {
   if (session.status !== 'active') throw new Error('session is not active');
   if (!session.currentEvent) throw new Error('no pending event on this session');
@@ -428,6 +429,7 @@ export function applyChoice(
       choice: choiceDef,
       traits,
       rng,
+      rollBonus,
     });
   })();
 
@@ -546,6 +548,17 @@ export function applyChoice(
   if (tilt >= 2 && feel > 1) feel = clampFeel(feel - 0.5, feelCap);
   // 手感很热但疲劳极高 → 自然衰减
   if (fatigue >= 85 && feel > 0) feel = clampFeel(feel - 1, feelCap);
+
+  // ── 大成功 / 大失败 附加效果 ──
+  if (outcome.resultTier === 'critical_success') {
+    feel = clampFeel(feel + 1, feelCap);
+    stress = clampStress(stress - 5);
+    passiveEffects.push('critical-success-bonus');
+  } else if (outcome.resultTier === 'critical_failure') {
+    feel = clampFeel(feel - 1, feelCap);
+    stress = clampStress(stress + 10);
+    passiveEffects.push('critical-failure-penalty');
+  }
 
   const feelChange = feel - volatile.feel;
   const tiltChange = tilt - volatile.tilt;
@@ -852,6 +865,7 @@ export function applyChoice(
     choiceId: choiceDef.id,
     choiceLabel: choiceDef.label,
     success: outcome.success,
+    resultTier: outcome.resultTier,
     roll: outcome.roll,
     dc: outcome.dc,
     narrative: outcome.chosenOutcome.narrative,

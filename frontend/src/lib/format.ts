@@ -119,6 +119,8 @@ export const PASSIVE_EFFECT_LABELS: Record<string, string> = {
   'injury-triggered': '受伤，进入强制休养期',
   'physical-collapse-rest': '体能崩溃，强制休养',
   'rest-completed': '伤愈复出',
+  'critical-success-bonus': '天选之刻！手感 +1，压力 -5',
+  'critical-failure-penalty': '手滑崩盘…手感 -1，压力 +10',
 };
 
 // ── 生涯结局标签 ──────────────────────────────────────────────

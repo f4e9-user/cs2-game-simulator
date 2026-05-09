@@ -181,16 +181,34 @@ function stageModifier(stage: Stage): number {
 }
 
 // ── 主解析接口 ────────────────────────────────────────────────
+
+// 非线性属性加成：stat=10 时与原线性公式等值，高属性区间递减回报
+// statBonus(10, 2) = sqrt(100)*2 = 20  （原：10*2 = 20，相同）
+// statBonus(20, 2) = sqrt(200)*2 ≈ 28  （原：20*2 = 40，高属性封顶效果）
+function statBonus(stat: number, coefficient: number): number {
+  return Math.round(Math.sqrt(Math.max(0, stat) * 10) * coefficient);
+}
+
+// 侦测检定转 DC（保持平均属性时与原概率一致）
+// dc = 9 + chanceByStage * 20，d20+stats(coeff 0.5/0.25) 攻击
+function detectionDC(chance: number): number {
+  return Math.round(9 + chance * 20);
+}
+
+export type ResultTier = 'critical_success' | 'success' | 'failure' | 'critical_failure';
+
 export interface ResolveInput {
   player: Player;
   event: EventDef;
   choice: ChoiceDef;
   traits: Trait[];
   rng: () => number;
+  rollBonus?: number;
 }
 
 export interface ResolveResult {
   success: boolean;
+  resultTier: ResultTier;
   roll: number;
   dc: number;
   chosenOutcome: Outcome;
@@ -216,15 +234,31 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
   const traitTagSet = new Set<string>(traits.flatMap((t) => t.tags));
 
   let success: boolean;
+  let resultTier: ResultTier;
   let roll: number;
   let dc: number;
 
   if (choice.check.detection) {
+    // 侦测检定：统一进 d20+属性 框架（智力 + 心态*0.5）
+    // 低系数确保属性有影响但不压制随机性
     const chance = choice.check.detection.chanceByStage[player.stage] ?? 0;
-    const r = rng();
-    roll = Math.floor(r * 100) + 1;
-    dc = Math.round(chance * 100);
-    success = r >= chance;
+    const intel = player.stats.intelligence;
+    const mental = player.stats.mentality;
+    const d20 = rollD20(rng);
+    const attack = d20 + statBonus(intel, 0.5) + statBonus(mental, 0.25) + (input.rollBonus ?? 0);
+    dc = detectionDC(chance);
+    roll = attack;
+
+    if (d20 === 20) {
+      resultTier = 'critical_success';
+      success = true;
+    } else if (d20 === 1) {
+      resultTier = 'critical_failure';
+      success = false;
+    } else {
+      success = attack >= dc;
+      resultTier = success ? 'success' : 'failure';
+    }
   } else {
     const primaryKey = choice.check.primary;
     // money 不是核心属性，用 money / 2 近似（0-20 scale）
@@ -238,11 +272,29 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
         : player.stats[secondaryKey]
       : 0;
 
+    // 手感修正：feel -3~+3 直接加入攻击值，代表临场状态对判定的影响
+    const feelBonus = Math.round(player.volatile?.feel ?? 0);
+
     const d20 = rollD20(rng);
-    const attack = d20 + primary * 2 + secondary + traitModifier(choice, traitTagSet);
+    const attack = d20
+      + statBonus(primary, 2)
+      + statBonus(secondary, 1)
+      + traitModifier(choice, traitTagSet)
+      + feelBonus
+      + (input.rollBonus ?? 0);
     dc = choice.check.dc + event.difficulty * 2 + stageModifier(player.stage);
     roll = attack;
-    success = attack >= dc;
+
+    if (d20 === 20) {
+      resultTier = 'critical_success';
+      success = true;
+    } else if (d20 === 1) {
+      resultTier = 'critical_failure';
+      success = false;
+    } else {
+      success = attack >= dc;
+      resultTier = success ? 'success' : 'failure';
+    }
   }
 
   const chosenOutcome = success ? choice.success : choice.failure;
@@ -322,6 +374,7 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
 
   return {
     success,
+    resultTier,
     roll,
     dc,
     chosenOutcome,

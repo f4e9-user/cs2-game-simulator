@@ -847,6 +847,66 @@ input[type='text']:focus {
   line-height: 1.4;
 }
 
+/* ── Custom action input ─────────────────────────────────────── */
+
+.cs-choice-custom {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  margin-top: 2px;
+}
+
+.cs-choice-custom-input {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: 5px;
+  padding: 8px 10px;
+  color: var(--fg);
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  line-height: 1.4;
+  transition: border-color 0.1s;
+}
+
+.cs-choice-custom-input::placeholder {
+  color: var(--fg-3);
+}
+
+.cs-choice-custom-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.cs-choice-custom-input:disabled {
+  opacity: 0.35;
+}
+
+.cs-choice-custom-submit {
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.1s, color 0.1s, background 0.1s;
+}
+
+.cs-choice-custom-submit:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.cs-choice-custom-submit:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 /* ── Event panel (center) ────────────────────────────────────── */
 
 .event-panel {
@@ -979,16 +1039,36 @@ input[type='text']:focus {
   border: 1px solid;
 }
 
-.result-badge.ok {
+.result-badge.ok,
+.result-badge.success {
   color: var(--success);
   border-color: rgba(63, 185, 80, 0.3);
   background: rgba(63, 185, 80, 0.1);
 }
 
-.result-badge.fail {
+.result-badge.fail,
+.result-badge.failure {
   color: var(--danger);
   border-color: rgba(248, 81, 73, 0.3);
   background: rgba(248, 81, 73, 0.1);
+}
+
+.result-badge.critical_success {
+  color: #ffd700;
+  border-color: rgba(255, 215, 0, 0.5);
+  background: rgba(255, 215, 0, 0.12);
+  letter-spacing: 0.05em;
+}
+
+.result-badge.critical_failure {
+  color: #ff4400;
+  border-color: rgba(255, 68, 0, 0.5);
+  background: rgba(255, 68, 0, 0.12);
+  letter-spacing: 0.05em;
+}
+
+.result-panel.crit {
+  border-width: 2px;
 }
 
 .result-roll {

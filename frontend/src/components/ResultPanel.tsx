@@ -23,6 +23,8 @@ export function ResultPanel({ result }: { result: RoundResult }) {
   const tiltChange = result.tiltChange ?? 0;
   const fatigueChange = result.fatigueChange ?? 0;
   const ok = result.success;
+  const tier = result.resultTier;
+  const isCrit = tier === 'critical_success' || tier === 'critical_failure';
   const isMatch = Boolean(result.matchStats);
 
   const hasChips =
@@ -36,10 +38,12 @@ export function ResultPanel({ result }: { result: RoundResult }) {
     fatigueChange !== 0;
 
   return (
-    <div className={`result-panel ${ok ? 'ok' : 'fail'}`}>
+    <div className={`result-panel ${ok ? 'ok' : 'fail'}${isCrit ? ' crit' : ''}`}>
       <div className="result-meta">
-        <span className={`result-badge ${ok ? 'ok' : 'fail'}`}>
-          {ok ? '胜' : '败'}
+        <span className={`result-badge ${tier ?? (ok ? 'success' : 'failure')}`}>
+          {tier === 'critical_success' ? '大成功' :
+           tier === 'critical_failure' ? '大失败' :
+           ok ? '胜' : '败'}
         </span>
         {isMatch ? (
           <span className="result-roll" style={{ color: 'var(--fg-2)' }}>

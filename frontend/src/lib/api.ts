@@ -78,6 +78,7 @@ async function request<T>(
 }
 
 export const api = {
+  getHealth: () => request<{ ok: boolean; ai: { provider: string; active: boolean } }>('/api/health'),
   listTraits: () => request<{ traits: Trait[] }>('/api/traits'),
   listBackgrounds: () =>
     request<{ backgrounds: Background[] }>('/api/backgrounds'),
@@ -95,10 +96,10 @@ export const api = {
     }),
   getSession: (sessionId: string) =>
     request<GameSession>(`/api/game/${sessionId}`),
-  submitChoice: (sessionId: string, choiceId: string) =>
+  submitChoice: (sessionId: string, choiceId: string, customAction?: string) =>
     request<ChoiceResponse>(`/api/game/${sessionId}/choice`, {
       method: 'POST',
-      body: JSON.stringify({ choiceId }),
+      body: JSON.stringify(customAction ? { choiceId, customAction } : { choiceId }),
     }),
   listTournaments: (sessionId: string) =>
     request<TournamentsResponse>(`/api/game/${sessionId}/tournaments`),

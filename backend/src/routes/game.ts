@@ -117,11 +117,27 @@ app.get('/game/:sessionId', async (c) => {
   return c.json({ ...session, promotion });
 });
 
+const CUSTOM_QUALITY_BONUS: Record<string, number> = {
+  poor: -8,
+  ok: 0,
+  good: 6,
+  excellent: 12,
+};
+
 app.post('/game/:sessionId/choice', async (c) => {
   const id = c.req.param('sessionId');
   const body = await c.req.json().catch(() => ({}));
-  const { choiceId } = body ?? {};
-  if (typeof choiceId !== 'string' || !choiceId) {
+  const { choiceId: rawChoiceId, customAction } = body ?? {};
+
+  const customActionTrimmed = typeof customAction === 'string' ? customAction.trim() : '';
+  const hasCustomAction = customActionTrimmed.length > 0;
+
+  if (hasCustomAction && customActionTrimmed.length > 50) {
+    return c.json({ error: '自定义行动不能超过 50 个字' }, 400);
+  }
+
+  // customAction 路径：choiceId 可省略（自动取第一个选项）
+  if (!hasCustomAction && (typeof rawChoiceId !== 'string' || !rawChoiceId)) {
     return c.json({ error: 'choiceId 必填' }, 400);
   }
 
@@ -129,13 +145,49 @@ app.post('/game/:sessionId/choice', async (c) => {
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
 
+  const ai = makeAiService(c.env);
+
+  // 自定义行动：用 LLM 评判，映射为 rollBonus，使用第一个选项作为底牌
+  let choiceId = rawChoiceId as string;
+  let customRollBonus = 0;
+  let customNarrativePrefix: string | null = null;
+
+  if (hasCustomAction) {
+    if (!session.currentEvent || session.currentEvent.choices.length === 0) {
+      return c.json({ error: 'no current event' }, 400);
+    }
+    if (!ai.active) {
+      return c.json({ error: 'LLM 未启用，无法使用自由行动' }, 400);
+    }
+    // 默认用第一个选项作底牌
+    choiceId = rawChoiceId && typeof rawChoiceId === 'string'
+      ? rawChoiceId
+      : session.currentEvent.choices[0]!.id;
+
+    const judgment = await ai.judgeCustomAction(customActionTrimmed, session.currentEvent, session.player);
+    if (judgment) {
+      // 二次验证：检查判定质量与叙事方向是否合理
+      const validation = await ai.validateJudgment(customActionTrimmed, session.currentEvent, judgment);
+      if (validation.valid) {
+        customRollBonus = CUSTOM_QUALITY_BONUS[judgment.quality as keyof typeof CUSTOM_QUALITY_BONUS] ?? 0;
+        customNarrativePrefix = judgment.narrative;
+      }
+      // 验证不通过时：静默降级为 ok / 无叙事前缀，正常走第一个选项结算
+    }
+  }
+
   try {
     // 面试 post-handler 需要 clubId，但 applyChoice 内部会清空 pendingApplication
     // 提前保存，供下方生成入队邀请时使用
     const preChoicePendingApplication = session.player.pendingApplication;
-    const { session: updated, result } = applyChoice(session, choiceId);
+    const { session: updated, result } = applyChoice(session, choiceId, customRollBonus);
 
-    const ai = makeAiService(c.env);
+    // 自由行动时，把玩家行动叙事前置，再润色结果
+    if (customNarrativePrefix) {
+      result.narrative = `${customNarrativePrefix}　${result.narrative}`;
+      result.choiceLabel = customActionTrimmed.slice(0, 30);
+    }
+
     const polished = await ai.narrate({
       player: updated.player,
       baseNarrative: result.narrative,
