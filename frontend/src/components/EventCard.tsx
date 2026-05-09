@@ -1,7 +1,14 @@
 import type { GameEvent } from '@/lib/types';
 import { EVENT_TYPE_LABELS } from '@/lib/format';
+import { TypewriterText } from '@/components/TypewriterText';
 
-export function EventCard({ event }: { event: GameEvent }) {
+interface Props {
+  event: GameEvent;
+  /** true while LLM personalization is in-flight; shows skeleton instead of raw default text */
+  personalizing?: boolean;
+}
+
+export function EventCard({ event, personalizing }: Props) {
   return (
     <div className="event-panel">
       <div className="event-header">
@@ -10,7 +17,13 @@ export function EventCard({ event }: { event: GameEvent }) {
         </span>
         <span className="event-title">{event.title}</span>
       </div>
-      <div className="narrative">{event.narrative}</div>
+      {personalizing ? (
+        <div className="narrative-skeleton" aria-busy="true" />
+      ) : (
+        <div className="narrative">
+          <TypewriterText text={event.narrative} />
+        </div>
+      )}
     </div>
   );
 }
