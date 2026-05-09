@@ -224,11 +224,12 @@ class AnthropicNarrator implements AiService {
           'content-type': 'application/json',
           'x-api-key': this.apiKey,
           'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31',
         },
         body: JSON.stringify({
           model: this.model,
           max_tokens: maxTokens,
-          system,
+          system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
           messages: [{ role: 'user', content: user }],
         }),
       });
