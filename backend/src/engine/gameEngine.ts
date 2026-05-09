@@ -23,6 +23,7 @@ import type {
   Club,
   GameEventPublic,
   GameSession,
+  Loan,
   MatchStats,
   Outcome,
   PendingDeparture,
@@ -179,6 +180,60 @@ export function validateAllocation(stats: Stats, floor: Stats): string | null {
     return `可分配点数必须恰好为 ${POINT_POOL}，当前已分配 ${aboveFloor}`;
   }
   return null;
+}
+
+export function applyForLoan(player: Player, amount: number): { success: boolean; message?: string; loan?: Loan } {
+  if (!Number.isInteger(amount) || amount < 20 || amount > 100) {
+    return { success: false, message: '借款金额必须是 20K 到 100K 的整数' };
+  }
+  if (player.stage === 'rookie') {
+    return { success: false, message: '至少进入青训阶段后才能申请贷款' };
+  }
+  const hasActiveLoan = (player.loans ?? []).some((loan) => !loan.paid && !loan.defaulted);
+  if (hasActiveLoan) {
+    return { success: false, message: '已有未结清贷款，不能重复借款' };
+  }
+
+  const loan: Loan = {
+    id: uuid(),
+    principal: amount,
+    interestRate: 0.10,
+    remainingPrincipal: amount,
+    issuedRound: player.round,
+    dueRound: player.round + 4,
+    paid: false,
+    defaulted: false,
+  };
+
+  player.loans = [...(player.loans ?? []), loan];
+  player.stats.money = Math.min(MONEY_MAX, player.stats.money + amount);
+
+  return { success: true, loan };
+}
+
+export function processLoanRepayment(player: Player): void {
+  const activeLoans = (player.loans ?? []).filter((loan) => !loan.paid && !loan.defaulted);
+
+  for (const loan of activeLoans) {
+    if (player.round < loan.dueRound) continue;
+
+    const totalDue = Math.floor(loan.remainingPrincipal * (1 + loan.interestRate));
+    if (player.stats.money >= totalDue) {
+      player.stats.money = Math.max(0, player.stats.money - totalDue);
+      loan.paid = true;
+      loan.remainingPrincipal = 0;
+      continue;
+    }
+
+    loan.defaulted = true;
+    player.fame = Math.max(0, (player.fame ?? 0) - 10);
+    if (!player.tags.includes('loan-default')) player.tags.push('loan-default');
+    if (!player.tags.includes('transfer-ban')) player.tags.push('transfer-ban');
+    player.tagExpiry = {
+      ...(player.tagExpiry ?? {}),
+      'transfer-ban': player.round + 12,
+    };
+  }
 }
 
 export function initPlayer(input: InitInput): Player {
@@ -791,6 +846,8 @@ export function applyChoice(
   if (CLUB_INTERVIEW_IDS.has(eventDef.id)) {
     nextPlayer.pendingApplication = null;
   }
+
+  processLoanRepayment(nextPlayer);
 
   // 月薪入账：每 4 回合结算一次，入队后从 salaryTracker.lastPayRound 起算
   if (nextPlayer.team && nextPlayer.salaryTracker) {
