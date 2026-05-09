@@ -849,8 +849,42 @@ export function applyChoice(
 
   processLoanRepayment(nextPlayer);
 
+  if (
+    eventDef.id.startsWith('bailout-team-') &&
+    nextPlayer.team &&
+    nextPlayer.salaryTracker &&
+    !nextPlayer.salaryTracker.salaryRestoreRound
+  ) {
+    const originalWeeklySalary = nextPlayer.team.weeklySalary;
+    nextPlayer.team = {
+      ...nextPlayer.team,
+      weeklySalary: Math.floor(originalWeeklySalary * 0.8),
+    };
+    nextPlayer.salaryTracker = {
+      ...nextPlayer.salaryTracker,
+      originalWeeklySalary,
+      salaryRestoreRound: nextPlayer.round + 12,
+    };
+    passiveEffects.push('战队垫款：未来 12 周薪资临时下调 20%');
+  }
+
   // 月薪入账：每 4 回合结算一次，入队后从 salaryTracker.lastPayRound 起算
   if (nextPlayer.team && nextPlayer.salaryTracker) {
+    if (
+      nextPlayer.salaryTracker.salaryRestoreRound &&
+      nextPlayer.round >= nextPlayer.salaryTracker.salaryRestoreRound
+    ) {
+      nextPlayer.team = {
+        ...nextPlayer.team,
+        weeklySalary: nextPlayer.salaryTracker.originalWeeklySalary ?? nextPlayer.team.weeklySalary,
+      };
+      const restoredTracker = { ...nextPlayer.salaryTracker };
+      delete restoredTracker.originalWeeklySalary;
+      delete restoredTracker.salaryRestoreRound;
+      nextPlayer.salaryTracker = restoredTracker;
+      passiveEffects.push('临时薪资下调结束，周薪恢复');
+    }
+
     const roundsSinceLastPay = nextPlayer.round - nextPlayer.salaryTracker.lastPayRound;
     if (roundsSinceLastPay >= nextPlayer.salaryTracker.payCycle) {
       nextPlayer.stats.money = Math.min(MONEY_MAX, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
@@ -1149,11 +1183,21 @@ export function applyChoice(
     }
   }
 
-  if (eventDef.id.startsWith('bailout-')) {
+  if (eventDef.id.startsWith('bailout-team-')) {
+    nextPlayer.teamBailoutCooldown = 24;
+    nextPlayer.consecutiveBrokeRounds = 0;
+    if ((nextPlayer.bailoutCooldown ?? 0) > 0) {
+      nextPlayer.bailoutCooldown -= 1;
+    }
+  } else if (eventDef.id.startsWith('bailout-')) {
     nextPlayer.bailoutCooldown = 24;
     nextPlayer.consecutiveBrokeRounds = 0;
   } else if ((nextPlayer.bailoutCooldown ?? 0) > 0) {
     nextPlayer.bailoutCooldown -= 1;
+  }
+
+  if (!eventDef.id.startsWith('bailout-team-') && (nextPlayer.teamBailoutCooldown ?? 0) > 0) {
+    nextPlayer.teamBailoutCooldown -= 1;
   }
 
   leaderboard = tickLeaderboard(leaderboard);

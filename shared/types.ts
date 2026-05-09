@@ -23,6 +23,7 @@ export type EventType =
   | 'match'
   | 'media'
   | 'life'
+  | 'bailout'
   | 'betting'
   | 'cheat'
   | 'rest'
@@ -91,6 +92,8 @@ export interface SalaryTracker {
   lastPayRound: number;
   joinedRound: number;
   payCycle: number;
+  originalWeeklySalary?: number;
+  salaryRestoreRound?: number;
 }
 
 // Dynamic state that is NOT part of the 6-stat allocation.

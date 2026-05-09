@@ -95,4 +95,62 @@ export const BAILOUT_EVENTS: EventDef[] = [
       },
     ],
   },
+  {
+    id: 'bailout-team-emergency',
+    type: 'bailout',
+    title: '经理的应急垫款',
+    narrative:
+      '训练结束后，战队经理把你叫到办公室。他没有绕弯子：“我知道你最近现金流断了，队里先给你一笔应急资金，但接下来三个月工资要打八折。”',
+    stages: ['youth', 'second'],
+    difficulty: 0,
+    weight: 10,
+    requireTags: ['needs-team-bailout'],
+    choices: [
+      {
+        id: 'accept-team-emergency',
+        label: '接受战队的应急垫款',
+        description: '先稳住生活开销，后面用工资慢慢补回来。',
+        check: { primary: 'mentality', dc: 4 },
+        success: {
+          narrative: '你签下临时协议，经理很快把应急金打了过来。至少接下来几周，你能把注意力重新放回训练室。',
+          moneyDelta: 30,
+          stressDelta: -5,
+        },
+        failure: {
+          narrative: '你接受了垫款，但也感觉自己在队里欠下了一份难说出口的人情。钱到账了，压力却没有完全消失。',
+          moneyDelta: 20,
+          stressDelta: 5,
+        },
+      },
+    ],
+  },
+  {
+    id: 'bailout-team-advance',
+    type: 'bailout',
+    title: '俱乐部预支薪水',
+    narrative:
+      '俱乐部财务发来一份预支协议：队伍可以提前支付一部分未来薪水，但接下来十二周你的周薪会临时下调 20%。这是职业体系里的冷冰冰帮助。',
+    stages: ['second', 'pro', 'star', 'veteran'],
+    difficulty: 0,
+    weight: 10,
+    requireTags: ['needs-team-bailout'],
+    choices: [
+      {
+        id: 'take-salary-advance',
+        label: '签下预支协议',
+        description: '用未来三个月的部分工资换眼前的周转空间。',
+        check: { primary: 'experience', dc: 5 },
+        success: {
+          narrative: '你看懂了条款，也确认没有隐藏陷阱。预支到账后，账面终于不再刺眼，只是未来几个月要勒紧一点。',
+          moneyDelta: 50,
+          stressDelta: 10,
+        },
+        failure: {
+          narrative: '协议流程比你想象得更难堪，几层审批之后，款项少了一截。你还是签了，因为眼前没有更好的办法。',
+          moneyDelta: 40,
+          stressDelta: 15,
+        },
+      },
+    ],
+  },
 ];

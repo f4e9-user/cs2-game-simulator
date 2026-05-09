@@ -196,6 +196,8 @@ export interface SalaryTracker {
   lastPayRound: number;
   joinedRound: number;
   payCycle: number;
+  originalWeeklySalary?: number;
+  salaryRestoreRound?: number;
 }
 
 export interface DynamicState {

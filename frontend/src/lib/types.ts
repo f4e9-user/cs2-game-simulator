@@ -40,6 +40,7 @@ export type EventType =
   | 'match'
   | 'media'
   | 'life'
+  | 'bailout'
   | 'betting'
   | 'cheat'
   | 'rest'
@@ -217,6 +218,8 @@ export interface SalaryTracker {
   lastPayRound: number;
   joinedRound: number;
   payCycle: number;
+  originalWeeklySalary?: number;
+  salaryRestoreRound?: number;
 }
 
 export interface DynamicState {

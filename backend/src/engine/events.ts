@@ -100,6 +100,12 @@ function dynamicTags(player: Player): string[] {
     out.push('needs-bailout');
   }
 
+  const teamBailoutReady =
+    player.team &&
+    (player.stats.money ?? 0) <= 0 &&
+    (player.teamBailoutCooldown ?? 0) <= 0;
+  if (teamBailoutReady) out.push('needs-team-bailout');
+
   // ── 角色转型 tag ──────────────────────────────────────────────────
   if (player.preferredRole && !player.roleTransition) {
     const allRoles: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
@@ -264,7 +270,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   }
 
   // 破产恢复：持续破产且冷却结束时，直接注入家人/朋友救济事件
-  if (synthTags.has('needs-bailout')) {
+  if (synthTags.has('needs-bailout') || synthTags.has('needs-team-bailout')) {
     const bailoutPool = EVENT_POOL.filter(
       (e) =>
         e.type === 'bailout' &&
