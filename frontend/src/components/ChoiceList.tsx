@@ -38,11 +38,11 @@ export function ChoiceList({ choices, disabled, aiActive, onPick }: Props) {
         <div className="cs-choice-custom">
           <textarea
             className="cs-choice-custom-input"
-            placeholder="或者，输入你的行动…"
+            placeholder="或者，输入你的行动…（最多 50 字）"
             value={customText}
             disabled={disabled}
             rows={2}
-            maxLength={200}
+            maxLength={50}
             onChange={(e) => setCustomText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {

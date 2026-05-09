@@ -2,10 +2,12 @@ import type { Background, Env, GameEventPublic, LeaderboardTeam, Player, RoundRe
 import {
   buildCustomActionJudgePrompt,
   buildIntroPrompt,
+  buildJudgmentValidationPrompt,
   buildNarrativePrompt,
   buildPersonalizePrompt,
   buildSummaryPrompt,
   type CustomActionJudgment,
+  type JudgmentValidation,
   type NarrativePromptInput,
   type PersonalizedEvent,
 } from './prompts.js';
@@ -17,6 +19,7 @@ export interface AiService {
   intro(player: Player, traits: Trait[], background: Background): Promise<string>;
   personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null>;
   judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null>;
+  validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation>;
   simulateLeaderboardTick?(
     teams: LeaderboardTeam[],
     player: Player,
@@ -37,6 +40,18 @@ const PERSONALIZE_SYSTEM_PROMPT =
 
 interface OpenAIChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
+}
+
+function parseJudgmentValidation(text: string | null): JudgmentValidation {
+  if (!text) return { valid: true }; // LLM 无响应时宽松放行
+  try {
+    const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed = JSON.parse(clean) as JudgmentValidation;
+    if (typeof parsed.valid !== 'boolean') return { valid: true };
+    return parsed;
+  } catch {
+    return { valid: true };
+  }
 }
 
 function parseCustomActionJudgment(text: string | null): CustomActionJudgment | null {
@@ -95,6 +110,10 @@ class TemplateNarrator implements AiService {
 
   async judgeCustomAction(_playerInput: string, _event: GameEventPublic, _player: Player): Promise<CustomActionJudgment | null> {
     return null;
+  }
+
+  async validateJudgment(_playerInput: string, _event: GameEventPublic, _judgment: CustomActionJudgment): Promise<JudgmentValidation> {
+    return { valid: true };
   }
 }
 
@@ -161,6 +180,15 @@ class AnthropicNarrator implements AiService {
       150,
     );
     return parseCustomActionJudgment(text);
+  }
+
+  async validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation> {
+    const text = await this.anthropicChat(
+      PERSONALIZE_SYSTEM_PROMPT,
+      buildJudgmentValidationPrompt(playerInput, event, judgment),
+      80,
+    );
+    return parseJudgmentValidation(text);
   }
 }
 
@@ -241,6 +269,16 @@ class OpenAINarrator implements AiService {
       true,
     );
     return parseCustomActionJudgment(text);
+  }
+
+  async validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation> {
+    const text = await this.chat(
+      PERSONALIZE_SYSTEM_PROMPT,
+      buildJudgmentValidationPrompt(playerInput, event, judgment),
+      80,
+      true,
+    );
+    return parseJudgmentValidation(text);
   }
 }
 
