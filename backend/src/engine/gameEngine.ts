@@ -215,7 +215,7 @@ export function applyForLoan(player: Player, amount: number): { success: boolean
   return { success: true, loan };
 }
 
-export function processLoanRepayment(player: Player): void {
+export function processLoanRepayment(player: Player, effects?: string[]): void {
   const activeLoans = (player.loans ?? []).filter((loan) => !loan.paid && !loan.defaulted);
 
   for (const loan of activeLoans) {
@@ -226,6 +226,7 @@ export function processLoanRepayment(player: Player): void {
       player.stats.money = clampMoney(player.stats.money - totalDue);
       loan.paid = true;
       loan.remainingPrincipal = 0;
+      effects?.push(`贷款还款 -${totalDue}K`);
       continue;
     }
 
@@ -237,11 +238,12 @@ export function processLoanRepayment(player: Player): void {
       ...(player.tagExpiry ?? {}),
       'transfer-ban': player.round + 12,
     };
+    effects?.push('贷款违约！名气-10，转会禁止12回合');
   }
 }
 
-function processRecoverySystems(player: Player, eventId: string): void {
-  processLoanRepayment(player);
+function processRecoverySystems(player: Player, eventId: string, effects?: string[]): void {
+  processLoanRepayment(player, effects);
 
   const isTeamBailout = eventId.startsWith('bailout-team-');
   const isFamilyBailout = !isTeamBailout && eventId.startsWith('bailout-');
@@ -876,7 +878,9 @@ export function applyChoice(
     nextPlayer.pendingApplication = null;
   }
 
-  processRecoverySystems(nextPlayer, eventDef.id);
+  const recoveryEffects: string[] = [];
+  processRecoverySystems(nextPlayer, eventDef.id, recoveryEffects);
+  passiveEffects.push(...recoveryEffects);
 
   if (
     eventDef.id.startsWith('bailout-team-') &&
@@ -1671,16 +1675,18 @@ export function pawnItem(
     if (tier <= 0) {
       return { success: false, message: '当前没有可典当的外设升级' };
     }
-    pawnValue = Math.floor(PERIPHERAL_PRICES[tier - 1]! * 0.5);
-    player.peripheralTier = Math.max(0, tier - 1);
-    player.feelCap = Math.max(FEEL_CAP_MIN, (player.feelCap ?? FEEL_CAP_DEFAULT) - 0.5);
+    let totalValue = 0;
+    for (let i = 0; i < tier; i++) {
+      totalValue += PERIPHERAL_PRICES[i] ?? 0;
+    }
+    pawnValue = Math.floor(totalValue * 0.5);
+    player.peripheralTier = 0;
+    player.feelCap = FEEL_CAP_DEFAULT;
     player.volatile = {
       ...(player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 }),
       feel: clampFeel(player.volatile?.feel ?? 0, player.feelCap),
     };
-    if (player.peripheralTier < PERIPHERAL_PRICES.length) {
-      player.buffs = (player.buffs ?? []).filter((b) => b.id !== 'pro-gear');
-    }
+    player.buffs = (player.buffs ?? []).filter((b) => b.id !== 'pro-gear');
   }
 
   player.stats.money = clampMoney(player.stats.money + pawnValue);
