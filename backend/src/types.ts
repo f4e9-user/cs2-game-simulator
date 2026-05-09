@@ -277,6 +277,8 @@ export interface MatchStats {
   enemyScore: number;
 }
 
+export type ResultTier = 'critical_success' | 'success' | 'failure' | 'critical_failure';
+
 export interface RoundResult {
   round: number;
   eventId: string;
@@ -285,6 +287,7 @@ export interface RoundResult {
   choiceId: string;
   choiceLabel: string;
   success: boolean;
+  resultTier?: ResultTier;
   roll: number;
   dc: number;
   narrative: string;
