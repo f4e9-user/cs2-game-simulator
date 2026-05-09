@@ -167,6 +167,7 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
 
     return [
       '你是 CS2 电竞赛事的专业解说撰稿人。请根据以下比赛数据，为这场比赛写一段 2-3 句的中文赛后叙事。',
+      '全程使用第二人称"你"，禁止出现"他""她"或选手姓名作主语。',
       '',
       `选手：${player.name}，${stageLabel}阶段，${teamLine}`,
       `赛事：${eventTitle}`,
@@ -188,6 +189,7 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
   if (customAction) {
     return [
       '你是 CS2 电竞小说的叙事引擎。玩家选择了自定义行动，你需要以该行动为核心重新创作结果叙事。',
+      '全程使用第二人称"你"，禁止出现"他""她"或选手姓名作主语。',
       '',
       `选手：${player.name}，阶段：${stageLabel}`,
       `事件背景：【${eventTitle}】`,
@@ -207,6 +209,7 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
   // ── 普通事件：风格润色 ───────────────────────────────────────────
   return [
     '请基于下面的事实，把 "原始描述" 润色成 1-2 句更有画面感、更冷静的中文叙事。',
+    '全程使用第二人称"你"，禁止出现"他""她"或选手姓名作主语。',
     '禁止改变成败、属性、阶段、任何数值或剧情走向。只改文字风格。',
     `选手：${player.name}，阶段：${stageLabel}`,
     `事件：${eventTitle}`,
