@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { BACKGROUNDS } from '../data/backgrounds.js';
-import { TRAITS } from '../data/traits.js';
+import { BACKGROUNDS, getBackground } from '../data/backgrounds.js';
+import { TRAITS, getTrait } from '../data/traits.js';
 import {
   ACTIONS,
   SHOP_ITEMS,
@@ -17,7 +17,6 @@ import {
   validateAllocation,
 } from '../engine/gameEngine.js';
 import { checkTournamentPromotion } from '../engine/stages.js';
-import { getTrait } from '../data/traits.js';
 import { CLUBS, clubsForStage } from '../data/clubs.js';
 import {
   getTournament,
@@ -604,6 +603,78 @@ app.post('/game/:sessionId/leave-team', async (c) => {
   session.updatedAt = new Date().toISOString();
   await storage.sessions.save(session);
   return c.json({ player: session.player });
+});
+
+// 事件个性化（玩家看到选项前调用，根据特质/属性改写 narrative 和 choice description）
+app.get('/game/:sessionId/personalize-event', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!session.currentEvent) return c.json({ error: 'no current event' }, 400);
+
+  const traitObjects = session.player.traits
+    .map((tid) => getTrait(tid))
+    .filter((t): t is NonNullable<typeof t> => Boolean(t));
+
+  const ai = makeAiService(c.env);
+  const personalized = await ai.personalizeEvent(session.player, traitObjects, session.currentEvent);
+
+  // null 表示 LLM 未启用或解析失败，前端保持原文
+  return c.json({ personalized });
+});
+
+// 开场故事生成（仅 history 为空的新局调用）
+app.get('/game/:sessionId/intro', async (c) => {
+  const id = c.req.param('sessionId');
+
+  // KV 缓存：intro 只需生成一次，命中直接返回
+  const cacheKey = `intro:${id}`;
+  try {
+    const cached = await c.env.KV.get(cacheKey);
+    if (cached) return c.json({ intro: cached });
+  } catch { /* KV 不可用时跳过缓存 */ }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  const traitObjects = session.player.traits
+    .map((tid) => getTrait(tid))
+    .filter((t): t is NonNullable<typeof t> => Boolean(t));
+
+  const background = getBackground(session.player.backgroundId);
+  if (!background) return c.json({ error: 'background not found' }, 400);
+
+  const ai = makeAiService(c.env);
+  const intro = await ai.intro(session.player, traitObjects, background);
+
+  // 写入 KV，永久缓存（intro 内容不会变）
+  if (intro) {
+    try { await c.env.KV.put(cacheKey, intro); } catch { /* 忽略写失败 */ }
+  }
+
+  return c.json({ intro });
+});
+
+// 游戏结束生涯总结（仅 status=ended 时有意义）
+app.get('/game/:sessionId/summary', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (session.status !== 'ended') {
+    return c.json({ error: '游戏尚未结束' }, 400);
+  }
+
+  const ai = makeAiService(c.env);
+  const summary = await ai.summarize(
+    session.player,
+    session.history,
+    session.ending,
+  );
+
+  return c.json({ summary, ending: session.ending });
 });
 
 export default app;

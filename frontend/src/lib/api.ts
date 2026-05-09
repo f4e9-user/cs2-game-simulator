@@ -137,4 +137,12 @@ export const api = {
     ),
   leaveTeam: (sessionId: string) =>
     request<{ player: Player }>(`/api/game/${sessionId}/leave-team`, { method: 'POST' }),
+  personalizeEvent: (sessionId: string) =>
+    request<{ personalized: { narrative: string; choices: Array<{ id: string; description: string }> } | null }>(
+      `/api/game/${sessionId}/personalize-event`,
+    ),
+  getIntro: (sessionId: string) =>
+    request<{ intro: string }>(`/api/game/${sessionId}/intro`),
+  getSummary: (sessionId: string) =>
+    request<{ summary: string; ending?: string }>(`/api/game/${sessionId}/summary`),
 };

@@ -1,35 +1,90 @@
-import type { Env, LeaderboardTeam, Player } from '../types.js';
+import type { Background, Env, GameEventPublic, LeaderboardTeam, Player, RoundResult, Trait } from '../types.js';
 import {
+  buildIntroPrompt,
   buildNarrativePrompt,
+  buildPersonalizePrompt,
+  buildSummaryPrompt,
   type NarrativePromptInput,
+  type PersonalizedEvent,
 } from './prompts.js';
 
 export interface AiService {
-  // True when a real model is wired up (not template fallback).
   readonly active: boolean;
-  // Polish narrative — returns base text on any failure.
   narrate(input: NarrativePromptInput): Promise<string>;
-  // Future hook: simulate non-player team point gains for the week. The
-  // template implementation just nudges scores randomly; LLM impl can read
-  // recent results and produce more interesting deltas.
+  summarize(player: Player, history: RoundResult[], ending?: string): Promise<string>;
+  intro(player: Player, traits: Trait[], background: Background): Promise<string>;
+  personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null>;
   simulateLeaderboardTick?(
     teams: LeaderboardTeam[],
     player: Player,
   ): Promise<LeaderboardTeam[]>;
 }
 
+const NARRATIVE_SYSTEM_PROMPT =
+  '你是一个 CS2 电竞小说的叙事引擎。只输出润色后的正文，不要解释，不要加引号。';
+
+const SUMMARY_SYSTEM_PROMPT =
+  '你是一个 CS2 电竞生涯传记作者。只输出小结正文，不要标题，不要解释。';
+
+const INTRO_SYSTEM_PROMPT =
+  '你是一个 CS2 电竞小说的开篇作者。只输出开篇正文，不要标题，不要解释。';
+
+const PERSONALIZE_SYSTEM_PROMPT =
+  '你是 CS2 电竞小说的叙事引擎。严格按要求输出 JSON，不要输出任何其他内容。';
+
+interface OpenAIChatResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+}
+
+function parsePersonalized(text: string | null, event: GameEventPublic): PersonalizedEvent | null {
+  if (!text) return null;
+  try {
+    // 有时 LLM 会在 JSON 外包一层 ```json ... ```
+    const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed = JSON.parse(clean) as PersonalizedEvent;
+    if (typeof parsed.narrative !== 'string' || !Array.isArray(parsed.choices)) return null;
+    // 确保每个 choice 有 id 且原事件存在该 id
+    const validIds = new Set(event.choices.map((c) => c.id));
+    const allValid = parsed.choices.every(
+      (c) => typeof c.id === 'string' && validIds.has(c.id) && typeof c.description === 'string',
+    );
+    return allValid ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Template fallback (no LLM) ──────────────────────────────────
+
 class TemplateNarrator implements AiService {
   readonly active = false;
+
   async narrate(input: NarrativePromptInput): Promise<string> {
     return input.baseNarrative;
   }
+
+  async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
+    const wins = history.filter((r) => r.success).length;
+    const total = history.length;
+    return `${player.name} 完成了 ${total} 轮生涯，胜率 ${total > 0 ? Math.round((wins / total) * 100) : 0}%。结局：${ending ?? '退役'}。`;
+  }
+
+  async intro(player: Player, _traits: Trait[], background: Background): Promise<string> {
+    return `${player.name}，${background.description}这条路，没有人能替你走。`;
+  }
+
+  async personalizeEvent(_player: Player, _traits: Trait[], _event: GameEventPublic): Promise<PersonalizedEvent | null> {
+    return null;
+  }
 }
+
+// ── Anthropic ────────────────────────────────────────────────────
 
 class AnthropicNarrator implements AiService {
   readonly active = true;
   constructor(private apiKey: string, private model: string) {}
 
-  async narrate(input: NarrativePromptInput): Promise<string> {
+  private async anthropicChat(system: string, user: string, maxTokens: number): Promise<string | null> {
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -40,29 +95,131 @@ class AnthropicNarrator implements AiService {
         },
         body: JSON.stringify({
           model: this.model,
-          max_tokens: 200,
-          messages: [
-            { role: 'user', content: buildNarrativePrompt(input) },
-          ],
+          max_tokens: maxTokens,
+          system,
+          messages: [{ role: 'user', content: user }],
         }),
       });
-      if (!res.ok) return input.baseNarrative;
-      const data = (await res.json()) as {
-        content?: Array<{ type: string; text?: string }>;
-      };
-      const text = data.content?.find((c) => c.type === 'text')?.text?.trim();
-      return text && text.length > 0 ? text : input.baseNarrative;
+      if (!res.ok) return null;
+      const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+      return data.content?.find((c) => c.type === 'text')?.text?.trim() ?? null;
     } catch {
-      return input.baseNarrative;
+      return null;
     }
+  }
+
+  async narrate(input: NarrativePromptInput): Promise<string> {
+    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 200);
+    return text && text.length > 0 ? text : input.baseNarrative;
+  }
+
+  async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
+    return (await this.anthropicChat(SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt(player, history, ending), 300)) ?? '';
+  }
+
+  async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
+    return (await this.anthropicChat(
+      INTRO_SYSTEM_PROMPT,
+      buildIntroPrompt(player, traits, background),
+      300,
+    )) ?? '';
+  }
+
+  async personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null> {
+    const text = await this.anthropicChat(
+      PERSONALIZE_SYSTEM_PROMPT,
+      buildPersonalizePrompt(player, traits, event),
+      600,
+    );
+    return parsePersonalized(text, event);
   }
 }
 
+// ── OpenAI-compatible ────────────────────────────────────────────
+
+class OpenAINarrator implements AiService {
+  readonly active = true;
+  constructor(
+    private apiKey: string,
+    private model: string,
+    private baseUrl: string,
+  ) {}
+
+  private async chat(
+    systemPrompt: string,
+    userPrompt: string,
+    maxTokens: number,
+    jsonMode = false,
+  ): Promise<string | null> {
+    try {
+      const body: Record<string, unknown> = {
+        model: this.model,
+        max_tokens: maxTokens,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      };
+      if (jsonMode) body.response_format = { type: 'json_object' };
+      const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as OpenAIChatResponse;
+      return data.choices?.[0]?.message?.content?.trim() ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async narrate(input: NarrativePromptInput): Promise<string> {
+    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 200);
+    return text && text.length > 0 ? text : input.baseNarrative;
+  }
+
+  async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
+    return (await this.chat(SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt(player, history, ending), 300)) ?? '';
+  }
+
+  async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
+    return (await this.chat(
+      INTRO_SYSTEM_PROMPT,
+      buildIntroPrompt(player, traits, background),
+      300,
+    )) ?? '';
+  }
+
+  async personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null> {
+    const text = await this.chat(
+      PERSONALIZE_SYSTEM_PROMPT,
+      buildPersonalizePrompt(player, traits, event),
+      600,
+      true, // json_object mode
+    );
+    return parsePersonalized(text, event);
+  }
+}
+
+// ── Factory ──────────────────────────────────────────────────────
+
 export function makeAiService(env: Env): AiService {
   const provider = (env.AI_PROVIDER ?? 'none').toLowerCase();
+
   if (provider === 'anthropic' && env.ANTHROPIC_API_KEY) {
     const model = env.AI_MODEL ?? 'claude-haiku-4-5-20251001';
     return new AnthropicNarrator(env.ANTHROPIC_API_KEY, model);
   }
+
+  if (provider === 'openai' && env.OPENAI_API_KEY) {
+    const model = env.AI_MODEL ?? 'gpt-4o-mini';
+    const baseUrl = (env.AI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, '');
+    return new OpenAINarrator(env.OPENAI_API_KEY, model, baseUrl);
+  }
+
   return new TemplateNarrator();
 }
