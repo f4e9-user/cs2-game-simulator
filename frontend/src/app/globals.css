@@ -847,6 +847,66 @@ input[type='text']:focus {
   line-height: 1.4;
 }
 
+/* ── Custom action input ─────────────────────────────────────── */
+
+.cs-choice-custom {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  margin-top: 2px;
+}
+
+.cs-choice-custom-input {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: 5px;
+  padding: 8px 10px;
+  color: var(--fg);
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  line-height: 1.4;
+  transition: border-color 0.1s;
+}
+
+.cs-choice-custom-input::placeholder {
+  color: var(--fg-3);
+}
+
+.cs-choice-custom-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.cs-choice-custom-input:disabled {
+  opacity: 0.35;
+}
+
+.cs-choice-custom-submit {
+  background: var(--bg-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.1s, color 0.1s, background 0.1s;
+}
+
+.cs-choice-custom-submit:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.cs-choice-custom-submit:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 /* ── Event panel (center) ────────────────────────────────────── */
 
 .event-panel {

@@ -385,6 +385,7 @@ export interface ApplyChoiceResult {
 export function applyChoice(
   session: GameSession,
   choiceId: string,
+  rollBonus = 0,
 ): ApplyChoiceResult {
   if (session.status !== 'active') throw new Error('session is not active');
   if (!session.currentEvent) throw new Error('no pending event on this session');
@@ -428,6 +429,7 @@ export function applyChoice(
       choice: choiceDef,
       traits,
       rng,
+      rollBonus,
     });
   })();
 

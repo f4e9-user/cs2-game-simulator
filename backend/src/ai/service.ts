@@ -1,9 +1,11 @@
 import type { Background, Env, GameEventPublic, LeaderboardTeam, Player, RoundResult, Trait } from '../types.js';
 import {
+  buildCustomActionJudgePrompt,
   buildIntroPrompt,
   buildNarrativePrompt,
   buildPersonalizePrompt,
   buildSummaryPrompt,
+  type CustomActionJudgment,
   type NarrativePromptInput,
   type PersonalizedEvent,
 } from './prompts.js';
@@ -14,6 +16,7 @@ export interface AiService {
   summarize(player: Player, history: RoundResult[], ending?: string): Promise<string>;
   intro(player: Player, traits: Trait[], background: Background): Promise<string>;
   personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null>;
+  judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null>;
   simulateLeaderboardTick?(
     teams: LeaderboardTeam[],
     player: Player,
@@ -34,6 +37,19 @@ const PERSONALIZE_SYSTEM_PROMPT =
 
 interface OpenAIChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
+}
+
+function parseCustomActionJudgment(text: string | null): CustomActionJudgment | null {
+  if (!text) return null;
+  try {
+    const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed = JSON.parse(clean) as CustomActionJudgment;
+    const validQualities = new Set(['poor', 'ok', 'good', 'excellent']);
+    if (!validQualities.has(parsed.quality) || typeof parsed.narrative !== 'string') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 function parsePersonalized(text: string | null, event: GameEventPublic): PersonalizedEvent | null {
@@ -74,6 +90,10 @@ class TemplateNarrator implements AiService {
   }
 
   async personalizeEvent(_player: Player, _traits: Trait[], _event: GameEventPublic): Promise<PersonalizedEvent | null> {
+    return null;
+  }
+
+  async judgeCustomAction(_playerInput: string, _event: GameEventPublic, _player: Player): Promise<CustomActionJudgment | null> {
     return null;
   }
 }
@@ -132,6 +152,15 @@ class AnthropicNarrator implements AiService {
       600,
     );
     return parsePersonalized(text, event);
+  }
+
+  async judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null> {
+    const text = await this.anthropicChat(
+      PERSONALIZE_SYSTEM_PROMPT,
+      buildCustomActionJudgePrompt(playerInput, event, player),
+      150,
+    );
+    return parseCustomActionJudgment(text);
   }
 }
 
@@ -202,6 +231,16 @@ class OpenAINarrator implements AiService {
       true, // json_object mode
     );
     return parsePersonalized(text, event);
+  }
+
+  async judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null> {
+    const text = await this.chat(
+      PERSONALIZE_SYSTEM_PROMPT,
+      buildCustomActionJudgePrompt(playerInput, event, player),
+      150,
+      true,
+    );
+    return parseCustomActionJudgment(text);
   }
 }
 

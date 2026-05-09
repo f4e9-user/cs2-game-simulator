@@ -117,11 +117,22 @@ app.get('/game/:sessionId', async (c) => {
   return c.json({ ...session, promotion });
 });
 
+const CUSTOM_QUALITY_BONUS: Record<string, number> = {
+  poor: -8,
+  ok: 0,
+  good: 6,
+  excellent: 12,
+};
+
 app.post('/game/:sessionId/choice', async (c) => {
   const id = c.req.param('sessionId');
   const body = await c.req.json().catch(() => ({}));
-  const { choiceId } = body ?? {};
-  if (typeof choiceId !== 'string' || !choiceId) {
+  const { choiceId: rawChoiceId, customAction } = body ?? {};
+
+  const hasCustomAction = typeof customAction === 'string' && customAction.trim().length > 0;
+
+  // customAction 路径：choiceId 可省略（自动取第一个选项）
+  if (!hasCustomAction && (typeof rawChoiceId !== 'string' || !rawChoiceId)) {
     return c.json({ error: 'choiceId 必填' }, 400);
   }
 
@@ -129,11 +140,42 @@ app.post('/game/:sessionId/choice', async (c) => {
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
 
+  // 自定义行动：用 LLM 评判，映射为 rollBonus，使用第一个选项作为底牌
+  let choiceId = rawChoiceId as string;
+  let customRollBonus = 0;
+  let customNarrativePrefix: string | null = null;
+
+  if (hasCustomAction) {
+    if (!session.currentEvent || session.currentEvent.choices.length === 0) {
+      return c.json({ error: 'no current event' }, 400);
+    }
+    const ai = makeAiService(c.env);
+    if (!ai.active) {
+      return c.json({ error: 'LLM 未启用，无法使用自由行动' }, 400);
+    }
+    // 默认用第一个选项作底牌
+    choiceId = rawChoiceId && typeof rawChoiceId === 'string'
+      ? rawChoiceId
+      : session.currentEvent.choices[0]!.id;
+
+    const judgment = await ai.judgeCustomAction(customAction.trim(), session.currentEvent, session.player);
+    if (judgment) {
+      customRollBonus = CUSTOM_QUALITY_BONUS[judgment.quality] ?? 0;
+      customNarrativePrefix = judgment.narrative;
+    }
+  }
+
   try {
     // 面试 post-handler 需要 clubId，但 applyChoice 内部会清空 pendingApplication
     // 提前保存，供下方生成入队邀请时使用
     const preChoicePendingApplication = session.player.pendingApplication;
-    const { session: updated, result } = applyChoice(session, choiceId);
+    const { session: updated, result } = applyChoice(session, choiceId, customRollBonus);
+
+    // 自由行动时，把玩家行动叙事前置，再润色结果
+    if (customNarrativePrefix) {
+      result.narrative = `${customNarrativePrefix}　${result.narrative}`;
+      result.choiceLabel = customAction.trim().slice(0, 30);
+    }
 
     const ai = makeAiService(c.env);
     const polished = await ai.narrate({

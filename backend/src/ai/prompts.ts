@@ -1,6 +1,39 @@
 import type { Background, GameEventPublic, Player, RoundResult, Trait } from '../types.js';
 import { STAGE_LABELS } from '../engine/constants.js';
 
+export type CustomActionQuality = 'poor' | 'ok' | 'good' | 'excellent';
+
+export interface CustomActionJudgment {
+  quality: CustomActionQuality;
+  narrative: string; // 把玩家行动织入的结果叙事（1-2句，不含成败定论）
+}
+
+export function buildCustomActionJudgePrompt(
+  playerInput: string,
+  event: GameEventPublic,
+  player: Player,
+): string {
+  const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
+  return [
+    '你是 CS2 电竞小说的裁判引擎。玩家选择了自由行动，你需要评判这个行动的质量。',
+    '',
+    `选手：${player.name}，阶段：${stageLabel}，压力：${player.stress}，名气：${player.fame}`,
+    `当前事件：【${event.title}】${event.narrative}`,
+    `玩家的行动：「${playerInput}」`,
+    '',
+    '评判规则：',
+    '- excellent：行动极其聪明、有创意、完全符合情境，胜算大增',
+    '- good：行动合理、有针对性，对结局有正面帮助',
+    '- ok：行动平平，没有特别亮点，也没有明显失误',
+    '- poor：行动莽撞、偏题或与情境矛盾，反而增加失败风险',
+    '',
+    '同时，把玩家的行动融入一句 20-40 字的中文叙事（不要写成败，只描绘玩家的动作/决策）。',
+    '',
+    '严格输出 JSON，格式：{"quality":"ok","narrative":"..."}',
+    '禁止输出任何其他内容。',
+  ].join('\n');
+}
+
 export interface NarrativePromptInput {
   player: Player;
   baseNarrative: string;   // deterministic outcome text from event config

@@ -41,12 +41,14 @@ export default function GamePage() {
     leaderboard,
     actionsPhase,
     pendingOffer,
+    aiActive,
     loading,
     error,
     hydrateFromSession,
     applyChoiceResponse,
     setPlayer,
     setActionsPhase,
+    setAiActive,
     clearOffer,
     setLeaderboard,
     setLoading,
@@ -105,12 +107,13 @@ export default function GamePage() {
     const fetchIntro = welcomeDismissed
       ? Promise.resolve(null)
       : api.getIntro(sessionId).catch(() => null);
-    Promise.all([api.getSession(sessionId), api.listTraits(), fetchIntro])
-      .then(([session, t, introRes]) => {
+    Promise.all([api.getSession(sessionId), api.listTraits(), fetchIntro, api.getHealth().catch(() => null)])
+      .then(([session, t, introRes, health]) => {
         if (cancelled) return;
         hydrateFromSession(session);
         setTraits(t.traits);
         if (introRes) setPreloadedIntro(introRes.intro);
+        if (health) setAiActive(health.ai.active);
         setIntroLoading(false);
       })
       .catch((e) => {
@@ -143,11 +146,11 @@ export default function GamePage() {
     prevStress.current = cur;
   }, [player?.stress]);
 
-  const pickChoice = async (choiceId: string) => {
+  const pickChoice = async (choiceId: string, customAction?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.submitChoice(sessionId, choiceId);
+      const res = await api.submitChoice(sessionId, choiceId, customAction);
       applyChoiceResponse(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -303,7 +306,7 @@ export default function GamePage() {
                         <div style={{ marginTop: 8, marginBottom: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
                           选择行动
                         </div>
-                        <ChoiceList choices={displayEvent.choices} disabled={loading} onPick={pickChoice} />
+                        <ChoiceList choices={displayEvent.choices} disabled={loading} aiActive={aiActive} onPick={pickChoice} />
                       </>
                     ) : (
                       <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>等待下一回合…</div>

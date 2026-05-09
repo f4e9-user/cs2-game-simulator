@@ -24,9 +24,11 @@ interface GameState {
   actionsPhase: boolean;
   pendingOffer: TeamOffer | null;
 
+  aiActive: boolean;
   loading: boolean;
   error: string | null;
 
+  setAiActive: (v: boolean) => void;
   hydrateFromSession: (session: GameSession) => void;
   hydrateFromStart: (args: {
     sessionId: string;
@@ -63,6 +65,7 @@ export const useGameStore = create<GameState>((set) => ({
   leaderboard: [],
   actionsPhase: false,
   pendingOffer: null,
+  aiActive: false,
   loading: false,
   error: null,
 
@@ -117,6 +120,7 @@ export const useGameStore = create<GameState>((set) => ({
       error: null,
     })),
 
+  setAiActive: (v) => set({ aiActive: v }),
   setPlayer: (player) => set({ player, pendingOffer: player.pendingOffer ?? null }),
   setLeaderboard: (leaderboard) => set({ leaderboard }),
   setActionsPhase: (v) => set({ actionsPhase: v }),

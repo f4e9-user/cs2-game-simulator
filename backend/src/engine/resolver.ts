@@ -187,6 +187,7 @@ export interface ResolveInput {
   choice: ChoiceDef;
   traits: Trait[];
   rng: () => number;
+  rollBonus?: number;
 }
 
 export interface ResolveResult {
@@ -239,7 +240,7 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
       : 0;
 
     const d20 = rollD20(rng);
-    const attack = d20 + primary * 2 + secondary + traitModifier(choice, traitTagSet);
+    const attack = d20 + primary * 2 + secondary + traitModifier(choice, traitTagSet) + (input.rollBonus ?? 0);
     dc = choice.check.dc + event.difficulty * 2 + stageModifier(player.stage);
     roll = attack;
     success = attack >= dc;
