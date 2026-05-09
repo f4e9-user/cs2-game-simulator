@@ -134,6 +134,22 @@ export function HudTopBar({ player, leaderboard }: Props) {
           <span className="hud-gauge-val">{formatMoney(player.stats.money)}</span>
         </div>
 
+        {/* 负债指示器 */}
+        {player.loans?.some((l) => !l.paid && !l.defaulted) && (() => {
+          const active = player.loans.find((l) => !l.paid && !l.defaulted);
+          if (!active) return null;
+          const overdue = player.round >= active.dueRound;
+          return (
+            <div className={`hud-gauge ${overdue ? 'stress-hi' : ''}`} style={{ color: 'var(--danger)' }}>
+              <span className="hud-gauge-label">负债</span>
+              <span className="hud-gauge-val">
+                {formatMoney(Math.floor(active.remainingPrincipal * (1 + active.interestRate)))}
+                {overdue && <span style={{ fontSize: 9, marginLeft: 2 }}>逾期</span>}
+              </span>
+            </div>
+          );
+        })()}
+
         {/* 名气 */}
         <div className="hud-gauge fame">
           <span className="hud-gauge-label">名气</span>

@@ -5,6 +5,7 @@ import type {
   Club,
   GameSession,
   LeaderboardTeam,
+  Loan,
   Player,
   RollTraitsResponse,
   ShopItem,
@@ -153,4 +154,14 @@ export const api = {
     request<{ summary: string; ending?: string }>(`/api/game/${sessionId}/summary`, {}, apiToken),
   getSocialFeed: (sessionId: string, apiToken?: string) =>
     request<{ posts: SocialPost[] }>(`/api/game/${sessionId}/social-feed`, {}, apiToken),
+  takeLoan: (sessionId: string, amount: number) =>
+    request<{ player: Player; loan: Loan }>(
+      `/api/game/${sessionId}/loan`,
+      { method: 'POST', body: JSON.stringify({ amount }) },
+    ),
+  pawnItem: (sessionId: string, itemId: string) =>
+    request<{ player: Player; pawnValue: number }>(
+      `/api/game/${sessionId}/pawn`,
+      { method: 'POST', body: JSON.stringify({ itemId }) },
+    ),
 };
