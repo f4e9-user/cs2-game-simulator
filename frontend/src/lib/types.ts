@@ -172,7 +172,7 @@ export interface PlayerTeam {
   tag: string;
   region: string;
   tier: ClubTier;
-  weeklySalary: number;
+  monthlySalary: number;
   joinedRound: number;
 }
 
@@ -189,7 +189,7 @@ export interface TeamOffer {
   tag: string;
   tier: ClubTier;
   region: string;
-  weeklySalary: number;
+  monthlySalary: number;
 }
 
 export interface PendingDeparture {
@@ -218,7 +218,7 @@ export interface SalaryTracker {
   lastPayRound: number;
   joinedRound: number;
   payCycle: number;
-  originalWeeklySalary?: number;
+  originalMonthlySalary?: number;
   salaryRestoreRound?: number;
 }
 

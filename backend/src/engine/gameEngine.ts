@@ -355,7 +355,7 @@ function settleSalaryOnDeparture(player: Player): number {
   if (!player.salaryTracker || !player.team) return 0;
   const weeksServed = Math.max(0, player.round - player.salaryTracker.lastPayRound);
   const settlement = Math.floor(
-    (player.team.weeklySalary * weeksServed) / player.salaryTracker.payCycle,
+    (player.team.monthlySalary * weeksServed) / player.salaryTracker.payCycle,
   );
   if (settlement > 0) {
     player.stats.money = clampMoney(player.stats.money + settlement);
@@ -888,14 +888,14 @@ export function applyChoice(
     nextPlayer.salaryTracker &&
     !nextPlayer.salaryTracker.salaryRestoreRound
   ) {
-    const originalWeeklySalary = nextPlayer.team.weeklySalary;
+    const originalMonthlySalary = nextPlayer.team.monthlySalary;
     nextPlayer.team = {
       ...nextPlayer.team,
-      weeklySalary: Math.floor(originalWeeklySalary * 0.8),
+      monthlySalary: Math.floor(originalMonthlySalary * 0.8),
     };
     nextPlayer.salaryTracker = {
       ...nextPlayer.salaryTracker,
-      originalWeeklySalary,
+      originalMonthlySalary,
       salaryRestoreRound: nextPlayer.round + 12,
     };
     passiveEffects.push('战队垫款：未来 12 周薪资临时下调 20%');
@@ -909,10 +909,10 @@ export function applyChoice(
     ) {
       nextPlayer.team = {
         ...nextPlayer.team,
-        weeklySalary: nextPlayer.salaryTracker.originalWeeklySalary ?? nextPlayer.team.weeklySalary,
+        monthlySalary: nextPlayer.salaryTracker.originalMonthlySalary ?? nextPlayer.team.monthlySalary,
       };
       const restoredTracker = { ...nextPlayer.salaryTracker };
-      delete restoredTracker.originalWeeklySalary;
+      delete restoredTracker.originalMonthlySalary;
       delete restoredTracker.salaryRestoreRound;
       nextPlayer.salaryTracker = restoredTracker;
       passiveEffects.push('临时薪资下调结束，周薪恢复');
@@ -920,12 +920,12 @@ export function applyChoice(
 
     const roundsSinceLastPay = nextPlayer.round - nextPlayer.salaryTracker.lastPayRound;
     if (roundsSinceLastPay >= nextPlayer.salaryTracker.payCycle) {
-      nextPlayer.stats.money = clampMoney(nextPlayer.stats.money + nextPlayer.team.weeklySalary);
+      nextPlayer.stats.money = clampMoney(nextPlayer.stats.money + nextPlayer.team.monthlySalary);
       nextPlayer.salaryTracker = {
         ...nextPlayer.salaryTracker,
         lastPayRound: nextPlayer.round,
       };
-      passiveEffects.push(`月薪入账 +${nextPlayer.team.weeklySalary}K`);
+      passiveEffects.push(`月薪入账 +${nextPlayer.team.monthlySalary}K`);
     }
   }
 
@@ -1796,7 +1796,7 @@ export function respondTeamOffer(
       tag: offer.tag,
       region: offer.region,
       tier: offer.tier,
-      weeklySalary: offer.weeklySalary,
+      monthlySalary: offer.monthlySalary,
       joinedRound: player.round,
     };
 
@@ -1878,7 +1878,7 @@ export function generateTeamOffer(clubId: string): TeamOffer {
     tag: club.tag,
     tier: club.tier,
     region: club.region,
-    weeklySalary: salary,
+    monthlySalary: salary,
   };
 }
 

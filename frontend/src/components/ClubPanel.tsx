@@ -180,7 +180,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
         战队
         {hasTeam && (
           <span style={{ fontSize: 11, color: 'var(--fg-2)', marginLeft: 'auto' }}>
-            {player.team!.tag} · +{player.team!.weeklySalary}K/月
+            {player.team!.tag} · +{player.team!.monthlySalary}K/月
           </span>
         )}
       </div>

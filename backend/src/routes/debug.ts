@@ -60,7 +60,7 @@ app.post('/debug/:sessionId', async (c) => {
     pendingMatch,
     forceNextEvent,
     forceMatchResult,
-    teamWeeklySalary,
+    teamMonthlySalary,
     teamTier,
   } = body ?? {};
 
@@ -99,11 +99,11 @@ app.post('/debug/:sessionId', async (c) => {
     }
   }
 
-  if ((teamWeeklySalary !== undefined || teamTier !== undefined) && !session.player.team) {
+  if ((teamMonthlySalary !== undefined || teamTier !== undefined) && !session.player.team) {
     return c.json({ error: '玩家当前没有战队，不能覆盖战队合同字段' }, 400);
   }
-  if (teamWeeklySalary !== undefined && !Number.isFinite(teamWeeklySalary)) {
-    return c.json({ error: 'teamWeeklySalary 必须是数字' }, 400);
+  if (teamMonthlySalary !== undefined && !Number.isFinite(teamMonthlySalary)) {
+    return c.json({ error: 'teamMonthlySalary 必须是数字' }, 400);
   }
   if (teamTier !== undefined && (typeof teamTier !== 'string' || !CLUB_TIERS.includes(teamTier as ClubTier))) {
     return c.json({ error: 'teamTier 无效' }, 400);
@@ -121,7 +121,7 @@ app.post('/debug/:sessionId', async (c) => {
   if (forceMatchResult !== undefined) session.player.forceMatchResult = forceMatchResult;
 
   if (session.player.team) {
-    if (teamWeeklySalary !== undefined) session.player.team.weeklySalary = teamWeeklySalary;
+    if (teamMonthlySalary !== undefined) session.player.team.monthlySalary = teamMonthlySalary;
     if (teamTier !== undefined) session.player.team.tier = teamTier;
   }
 
