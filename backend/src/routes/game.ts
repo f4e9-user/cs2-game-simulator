@@ -709,15 +709,32 @@ app.get('/game/:sessionId/intro', async (c) => {
   return c.json({ intro });
 });
 
-// 社区动态：LLM 模拟队友 / 俱乐部 / 对手的 X 风格帖子
+// 社区动态：LLM 模拟队友 / 俱乐部 / 对手的 X 风格帖子（每回合缓存一次）
 app.get('/game/:sessionId/social-feed', async (c) => {
   const id = c.req.param('sessionId');
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
 
+  // KV 缓存：同一回合内容不变，直接返回
+  const cacheKey = `social:${id}:r${session.player.round}`;
+  try {
+    const cached = await c.env.KV.get(cacheKey);
+    if (cached) return c.json({ posts: JSON.parse(cached) });
+  } catch { /* KV 不可用时跳过缓存 */ }
+
   const ai = makeAiService(c.env);
-  const posts = await ai.simulateSocialFeed(session.player, session.history.slice(-5));
+  const posts = await ai.simulateSocialFeed(
+    session.player,
+    session.history.slice(-5),
+    session.leaderboard,
+  );
+
+  // 写入 KV，TTL 12 小时（同回合内复用，跨回合自动过期）
+  try {
+    await c.env.KV.put(cacheKey, JSON.stringify(posts), { expirationTtl: 43200 });
+  } catch { /* 忽略写失败 */ }
+
   return c.json({ posts });
 });
 

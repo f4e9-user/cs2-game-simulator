@@ -135,22 +135,19 @@ export default function GamePage() {
     if (currentEvent) setCenterTab('event');
   }, [currentEvent?.id]);
 
-  // 刷新社区动态：页面加载后 & 每次回合结束后
-  const fetchSocialFeed = useRef(false);
+  // 刷新社区动态：player 首次加载后 & 每回合结束后（后端有 KV 缓存，重复请求不会重新调用 LLM）
   useEffect(() => {
     if (!player) return;
-    // 仅在会话初始化后或有新回合结果时触发
     let cancelled = false;
     setSocialLoading(true);
     api.getSocialFeed(sessionId)
       .then((res) => { if (!cancelled) setSocialPosts(res.posts); })
       .catch(() => { /* 静默失败，保留上一次结果 */ })
       .finally(() => { if (!cancelled) setSocialLoading(false); });
-    fetchSocialFeed.current = true;
     return () => { cancelled = true; };
-  // lastResult?.round 变化 = 新回合完成；player 首次赋值时也触发一次
+  // player.round 是回合计数器，每回合结束时 +1，用它作唯一触发条件
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, lastResult?.round, player?.round]);
+  }, [sessionId, player?.round]);
 
   // 压力首次达到 100 时触发震动动画
   useEffect(() => {

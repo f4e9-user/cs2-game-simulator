@@ -22,7 +22,7 @@ export interface AiService {
   personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null>;
   judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null>;
   validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation>;
-  simulateSocialFeed(player: Player, recentHistory: RoundResult[]): Promise<SocialFeedPost[]>;
+  simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]>;
   simulateLeaderboardTick?(
     teams: LeaderboardTeam[],
     player: Player,
@@ -92,10 +92,14 @@ function parseSocialFeed(text: string | null): SocialFeedPost[] {
   if (!text) return [];
   try {
     const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed = JSON.parse(clean) as SocialFeedPost[];
-    if (!Array.isArray(parsed)) return [];
+    const raw = JSON.parse(clean) as unknown;
+    // Handle both bare array [...] and object-wrapped {"posts":[...]} (OpenAI json_object mode)
+    const arr: unknown = Array.isArray(raw)
+      ? raw
+      : (raw as Record<string, unknown>).posts ?? (raw as Record<string, unknown>).items ?? null;
+    if (!Array.isArray(arr)) return [];
     const validTypes = new Set(['teammate', 'club', 'rival', 'media']);
-    return parsed.filter(
+    return (arr as SocialFeedPost[]).filter(
       (p) =>
         typeof p.author === 'string' &&
         typeof p.content === 'string' &&
@@ -107,8 +111,24 @@ function parseSocialFeed(text: string | null): SocialFeedPost[] {
   }
 }
 
-function templateSocialFeed(player: Player): SocialFeedPost[] {
+const TEMPLATE_RIVAL_POSTS = [
+  '训练营最后一天，状态调得不错，就等开赛了 🔥',
+  '排位又是一条连胜，感觉这个版本我们吃透了 😤',
+  '和队友刚复盘完昨天的比赛，细节还得抠 📋',
+  '赛季快结束了，接下来才是真正的考验 🎯',
+];
+
+const TEMPLATE_MEDIA_POSTS = [
+  '本赛季冒出不少新面孔，职业圈的新陈代谢越来越快 👀',
+  '下周大赛开幕，这批种子队的状态都不错，好戏在后头 🏆',
+  '转会窗口流言满天飞，圈内消息人士称多支队伍在接触自由人 📰',
+  '今日训练局直播破了平台纪录，CS2 热度持续上升 📈',
+];
+
+function templateSocialFeed(player: Player, leaderboard: LeaderboardTeam[]): SocialFeedPost[] {
   const posts: SocialFeedPost[] = [];
+
+  // 队友帖（有队伍时）
   if (player.roster && player.roster.length > 0) {
     const tm = player.roster[0];
     posts.push({
@@ -118,31 +138,39 @@ function templateSocialFeed(player: Player): SocialFeedPost[] {
       content: '今天训练量很大，但感觉状态在上升 💪 继续冲！',
     });
   }
+
+  // 俱乐部官号
   if (player.team) {
     posts.push({
       author: player.team.name,
       authorType: 'club',
       handle: `@${player.team.tag.toLowerCase()}`,
-      content: `战队本周训练圆满收尾，感谢球迷们一如既往的支持 ❤️`,
+      content: '战队本周训练圆满收尾，感谢球迷们一如既往的支持 ❤️',
     });
   }
-  const rival = player.rivals?.[0];
-  if (rival) {
+
+  // 排行榜上的其他战队（对手发推，世界始终在运转）
+  const worldTeams = leaderboard.filter((t) => !t.isPlayer).slice(0, 4);
+  const rivalTeam = player.rivals?.[0] ?? worldTeams[0];
+  if (rivalTeam) {
+    const idx = player.round % TEMPLATE_RIVAL_POSTS.length;
     posts.push({
-      author: rival.name,
+      author: rivalTeam.name,
       authorType: 'rival',
-      handle: `@${rival.tag.toLowerCase()}`,
-      content: '最近状态很好，期待下次大赛见真章 🔥',
+      handle: `@${rivalTeam.tag.toLowerCase()}`,
+      content: TEMPLATE_RIVAL_POSTS[idx]!,
     });
   }
-  if (posts.length === 0) {
-    posts.push({
-      author: 'CS2 电竞资讯',
-      authorType: 'media',
-      handle: '@cs2esports',
-      content: '赛季新星辈出，哪位选手能脱颖而出？我们拭目以待！',
-    });
-  }
+
+  // 媒体帖（始终存在，无论玩家有无队伍）
+  const mediaIdx = (player.round + 1) % TEMPLATE_MEDIA_POSTS.length;
+  posts.push({
+    author: 'CS2 电竞速报',
+    authorType: 'media',
+    handle: '@cs2daily',
+    content: TEMPLATE_MEDIA_POSTS[mediaIdx]!,
+  });
+
   return posts;
 }
 
@@ -177,8 +205,8 @@ class TemplateNarrator implements AiService {
     return { valid: true };
   }
 
-  async simulateSocialFeed(player: Player, _recentHistory: RoundResult[]): Promise<SocialFeedPost[]> {
-    return templateSocialFeed(player);
+  async simulateSocialFeed(player: Player, _recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
+    return templateSocialFeed(player, leaderboard);
   }
 }
 
@@ -256,14 +284,14 @@ class AnthropicNarrator implements AiService {
     return parseJudgmentValidation(text);
   }
 
-  async simulateSocialFeed(player: Player, recentHistory: RoundResult[]): Promise<SocialFeedPost[]> {
+  async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
     const text = await this.anthropicChat(
       PERSONALIZE_SYSTEM_PROMPT,
-      buildSocialFeedPrompt(player, recentHistory),
-      400,
+      buildSocialFeedPrompt(player, recentHistory, leaderboard),
+      500,
     );
     const posts = parseSocialFeed(text);
-    return posts.length > 0 ? posts : templateSocialFeed(player);
+    return posts.length > 0 ? posts : templateSocialFeed(player, leaderboard);
   }
 }
 
@@ -356,15 +384,15 @@ class OpenAINarrator implements AiService {
     return parseJudgmentValidation(text);
   }
 
-  async simulateSocialFeed(player: Player, recentHistory: RoundResult[]): Promise<SocialFeedPost[]> {
+  async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
+    // json_object mode requires root object; prompt outputs an array, so skip that mode here
     const text = await this.chat(
       PERSONALIZE_SYSTEM_PROMPT,
-      buildSocialFeedPrompt(player, recentHistory),
-      400,
-      true,
+      buildSocialFeedPrompt(player, recentHistory, leaderboard),
+      500,
     );
     const posts = parseSocialFeed(text);
-    return posts.length > 0 ? posts : templateSocialFeed(player);
+    return posts.length > 0 ? posts : templateSocialFeed(player, leaderboard);
   }
 }
 

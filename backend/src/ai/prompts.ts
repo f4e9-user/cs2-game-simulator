@@ -1,4 +1,4 @@
-import type { Background, GameEventPublic, Player, RoundResult, Trait } from '../types.js';
+import type { Background, GameEventPublic, LeaderboardTeam, Player, RoundResult, Rival, Trait } from '../types.js';
 import { STAGE_LABELS } from '../engine/constants.js';
 
 // ── Social Feed ─────────────────────────────────────────────────────────────
@@ -15,47 +15,65 @@ export interface SocialFeedPost {
 export function buildSocialFeedPrompt(
   player: Player,
   recentHistory: RoundResult[],
+  leaderboard: LeaderboardTeam[],
 ): string {
   const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
-
-  const recentSummary = recentHistory.slice(-4).map((r) => {
-    const outcome = r.success ? '✓成功' : '✗失败';
-    return `${outcome} 【${r.eventTitle}】${r.narrative.slice(0, 40)}`;
-  }).join('\n') || '（尚无记录）';
-
-  const teammateLines = player.roster && player.roster.length > 0
-    ? player.roster.slice(0, 3).map((tm) => `${tm.name}（${tm.role}）`).join('、')
-    : '无队友';
-
-  const clubName = player.team?.name ?? '无俱乐部';
-  const clubTag = player.team?.tag ?? '';
-  const rival = player.rivals?.[0];
-  const rivalLine = rival ? `${rival.name}（${rival.tag}，${rival.region}）` : '无';
-
   const fameLabel = player.fame >= 80 ? '顶流' : player.fame >= 50 ? '知名选手' : player.fame >= 20 ? '有一定知名度' : '新人';
 
+  // 玩家自身信息
+  const playerTeamLine = player.team
+    ? `所属俱乐部：${player.team.name}（${player.team.tag}）`
+    : '当前无俱乐部（独立选手/练习生）';
+
+  const teammateLine = player.roster && player.roster.length > 0
+    ? `队友：${player.roster.slice(0, 3).map((tm) => `${tm.name}（${tm.role}）`).join('、')}`
+    : '暂无正式队友';
+
+  // 近期战绩
+  const recentSummary = recentHistory.slice(-4).map((r) => {
+    const outcome = r.success ? '✓' : '✗';
+    const preview = r.narrative.length > 40 ? r.narrative.slice(0, 40) + '…' : r.narrative;
+    return `${outcome} 【${r.eventTitle}】${preview}`;
+  }).join('\n') || '（尚无战绩记录）';
+
+  // 世界场景：排行榜顶队 + 对手（无论玩家有没有队伍，世界都在运转）
+  const topTeams = leaderboard
+    .filter((t) => !t.isPlayer)
+    .slice(0, 4)
+    .map((t) => `${t.name}（${t.tag}，${t.region}）`)
+    .join('、');
+
+  const rivals = (player.rivals ?? [])
+    .slice(0, 3)
+    .map((r: Rival) => `${r.name}（${r.tag}，${r.region}）`)
+    .join('、');
+
+  const worldTeams = [topTeams, rivals].filter(Boolean).join('；另有对手：');
+
   return [
-    '你是 CS2 电竞圈的社交媒体模拟引擎，模拟游戏世界中类似 X（推特）的社区帖子。',
-    '根据以下游戏状态，生成 3-4 条角色发布的中文短帖子，语气像真实电竞人在发推。',
+    '你是 CS2 职业电竞世界的社交媒体模拟引擎。',
+    '这是一个完整的电竞生态——无论玩家是否有战队，世界上的其他战队和选手都在持续活动。',
+    '请生成 4 条不同角色发布的中文短帖子，模拟 X（推特）上真实电竞人的日常推文。',
     '',
-    `主角：${player.name}，${stageLabel}阶段，${fameLabel}，名气值 ${player.fame}`,
-    `所属俱乐部：${clubName}${clubTag ? '（' + clubTag + '）' : ''}`,
-    `队友：${teammateLines}`,
-    `知名对手：${rivalLine}`,
+    `【主角】${player.name}，${stageLabel}阶段，${fameLabel}`,
+    playerTeamLine,
+    teammateLine,
     '',
-    '最近动态：',
+    `【当前活跃的其他战队】${worldTeams || '（生成世界战队）'}`,
+    '',
+    '【主角近期战绩】',
     recentSummary,
     '',
-    '发帖规则：',
-    '- 发帖者可以是：队友、俱乐部官号、对手、电竞媒体（根据上下文合理选择）',
-    '- 内容要贴合最近事件，有具体感，像真人在发推（可以赞美、调侃、晒日常、爆料、感慨）',
-    '- 每条 20-55 字，口语化，可加 emoji',
-    '- authorType 只能是：teammate / club / rival / media',
-    '- handle 格式：@英文小写昵称（根据名字缩写或谐音创造，不超过 15 字符）',
-    '- 禁止出现数值、属性名或游戏机制词汇',
+    '【发帖要求】',
+    '- 4 条帖子来自不同角色，覆盖尽量多的 authorType（teammate / club / rival / media）',
+    '- 若主角暂无队友/俱乐部，改为让排行榜战队、对手、媒体发帖——世界不会因为一个新人的缺席而沉默',
+    '- 内容贴合近期战绩或 CS2 赛季氛围，口语化，可加 emoji，每条 20-55 字',
+    '- 对手/媒体的帖子可以与主角无关，只反映 CS 世界的日常（赛事、训练营、转会期、排位等）',
+    '- handle 格式：@英文小写昵称（不超过 15 字符）',
+    '- 禁止出现数值、属性名、游戏机制词汇',
     '',
     '严格输出 JSON 数组，不加任何其他内容：',
-    '[{"author":"...","authorType":"teammate","handle":"@...","content":"..."}]',
+    '[{"author":"...","authorType":"rival","handle":"@...","content":"..."}]',
   ].join('\n');
 }
 
