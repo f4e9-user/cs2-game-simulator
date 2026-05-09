@@ -19,6 +19,10 @@ export interface ActionDef {
   failure: Outcome;
 }
 
+function randomMoney(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 export const ACTIONS: ActionDef[] = [
   {
     id: 'action-ranked-grind',
@@ -179,6 +183,87 @@ export const ACTIONS: ActionDef[] = [
       narrative: '心理素质还不足以撑过这个强度的模拟，训练中途崩了，有点挫败感。',
       fatigueDelta: 8,
       stressDelta: 2, // ×5 = +10 stress
+    },
+  },
+  {
+    id: 'action-boosting',
+    label: '代练接单',
+    description: '接几单高强度代练，用反应和枪法换取现金，但身心消耗很大。',
+    apCost: 25,
+    eventType: 'routine',
+    check: {
+      primary: 'agility',
+      dc: 10,
+      traitBonuses: { mechanical: 2, grinder: 1, solo: 1 },
+      traitPenalties: { fragile: 1, impulsive: 1 },
+    },
+    success: {
+      narrative: '订单打得干净利落，老板痛快结账，钱包终于鼓了一点。',
+      get statChanges() {
+        return { money: randomMoney(5, 8) };
+      },
+      fatigueDelta: 20,
+      stressDelta: 2, // ×5 = +10 stress
+    },
+    failure: {
+      narrative: '疲劳让操作变形，几局关键失误被扣了尾款，只赚到一点辛苦钱。',
+      statChanges: { money: 1 },
+      fatigueDelta: 40,
+      stressDelta: 4, // ×5 = +20 stress
+    },
+  },
+  {
+    id: 'action-coaching',
+    label: '陪玩指导',
+    description: '靠理解和复盘能力陪练指导新人，收入稳定但也会消耗耐心。',
+    apCost: 25,
+    eventType: 'routine',
+    check: {
+      primary: 'intelligence',
+      dc: 6,
+      traitBonuses: { tactical: 2, igl: 2, steady: 1 },
+      traitPenalties: { solo: 1, shy: 1 },
+    },
+    success: {
+      narrative: '讲点位、拆回合、带客户上分都很顺，指导费顺利到账。',
+      get statChanges() {
+        return { money: randomMoney(3, 5) };
+      },
+      fatigueDelta: 12,
+      stressDelta: 1, // ×5 = +5 stress
+    },
+    failure: {
+      narrative: '客户跟不上节奏，你也因为疲劳讲错细节，最后只拿到基础费用。',
+      statChanges: { money: 1 },
+      fatigueDelta: 24,
+      stressDelta: 2, // ×5 = +10 stress
+    },
+  },
+  {
+    id: 'action-net-cafe',
+    label: '网吧打工',
+    description: '去熟人网吧帮忙值班和处理设备杂事，靠体力换一点周转资金。',
+    apCost: 25,
+    eventType: 'routine',
+    check: {
+      primary: 'constitution',
+      dc: 4,
+      traitBonuses: { athletic: 2, steady: 1, streetwise: 1 },
+      traitPenalties: { fragile: 2, streamer: 1 },
+    },
+    success: {
+      narrative: '换外设、看机器、收银都没出岔子，老板按约定把工钱结清。',
+      get statChanges() {
+        return { money: randomMoney(3, 4) };
+      },
+      fatigueDelta: 15,
+      stressDelta: 1.6, // ×5 = +8 stress
+    },
+    failure: {
+      narrative: '一整天太累，盘点和找零都出了小错，被扣钱后只剩一点收入。',
+      statChanges: { money: 1 },
+      fatigueDelta: 30,
+      stressDelta: 3.2, // ×5 = +16 stress
     },
   },
 ];
