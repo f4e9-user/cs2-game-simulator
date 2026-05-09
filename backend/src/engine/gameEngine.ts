@@ -667,6 +667,14 @@ export function applyChoice(
     consecutiveLosses = 0;
   }
 
+  // 破产连续轮次追踪：用于家人救济事件触发
+  let consecutiveBrokeRounds = session.player.consecutiveBrokeRounds ?? 0;
+  if (statsAfterGrowth.money <= 0) {
+    consecutiveBrokeRounds += 1;
+  } else {
+    consecutiveBrokeRounds = 0;
+  }
+
   // ── 冷却 tag 处理 ──────────────────────────────────────────────
   // 1. 先剪掉已过期的冷却 tag
   const nextTagExpiry: Record<string, number> = { ...(session.player.tagExpiry ?? {}) };
@@ -751,6 +759,7 @@ export function applyChoice(
     qualificationSlots: nextQualificationSlots,
     teamQualificationSlots: nextTeamQualificationSlots,
     consecutiveLosses,
+    consecutiveBrokeRounds,
   };
 
   // ── 明星/老将 tag 检查与首次获得奖励 ─────────────────────────────
@@ -1081,6 +1090,13 @@ export function applyChoice(
       nextPlayer.promotionPending = null;
       nextPlayer.promotionCooldown = nextPlayer.round + 8;
     }
+  }
+
+  if (eventDef.id.startsWith('bailout-')) {
+    nextPlayer.bailoutCooldown = 24;
+    nextPlayer.consecutiveBrokeRounds = 0;
+  } else if ((nextPlayer.bailoutCooldown ?? 0) > 0) {
+    nextPlayer.bailoutCooldown -= 1;
   }
 
   leaderboard = tickLeaderboard(leaderboard);

@@ -27,6 +27,15 @@
       "agent": "Sisyphus-Junior",
       "category": "deep",
       "updated_at": "2026-05-09T09:40:41.175Z"
+    },
+    "todo:6": {
+      "task_key": "todo:6",
+      "task_label": "6",
+      "task_title": "家人救济事件池",
+      "session_id": "ses_1f3de7598ffeeBlaItIWjbIUAf",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-09T09:55:23.929Z"
     }
   }
 }

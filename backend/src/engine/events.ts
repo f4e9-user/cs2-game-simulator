@@ -91,6 +91,15 @@ function dynamicTags(player: Player): string[] {
     out.push('rival-match-pressure');
   }
 
+  // ── 破产救济 tag ───────────────────────────────────────────────
+  const bailoutReady =
+    (player.stats.money ?? 0) <= 0 &&
+    (player.consecutiveBrokeRounds ?? 0) >= 2 &&
+    (player.bailoutCooldown ?? 0) <= 0;
+  if (bailoutReady) {
+    out.push('needs-bailout');
+  }
+
   // ── 角色转型 tag ──────────────────────────────────────────────────
   if (player.preferredRole && !player.roleTransition) {
     const allRoles: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
@@ -252,6 +261,18 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   // 赛事隔离：进行中的赛事优先级最高，阻断晋级事件和随机事件
   if (player.pendingMatch) {
     return buildTournamentPrepEvent(player.pendingMatch);
+  }
+
+  // 破产恢复：持续破产且冷却结束时，直接注入家人/朋友救济事件
+  if (synthTags.has('needs-bailout')) {
+    const bailoutPool = EVENT_POOL.filter(
+      (e) =>
+        e.type === 'bailout' &&
+        e.stages.includes(player.stage) &&
+        !recentEventIds.includes(e.id) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)),
+    );
+    if (bailoutPool.length > 0) return weightedPick(bailoutPool, rng, (e) => stateWeight(e, player));
   }
 
   // Promotion pending: inject the stage-specific narrative event.

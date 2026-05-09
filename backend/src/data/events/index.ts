@@ -14,6 +14,7 @@ import { STRESS_EVENTS } from './stress.js';
 import { RIVAL_EVENTS } from './rival.js';
 import { BROADCAST_EVENTS } from './broadcast.js';
 import { DAILY_EVENTS } from './daily.js';
+import { BAILOUT_EVENTS } from './bailout.js';
 import { CHAIN_EVENTS } from './chains.js';
 import { SKIN_EVENTS } from './skins.js';
 
@@ -32,6 +33,7 @@ export const EVENT_POOL: EventDef[] = [
   ...RIVAL_EVENTS,
   ...BROADCAST_EVENTS,
   ...DAILY_EVENTS,
+  ...BAILOUT_EVENTS,
   ...CHAIN_EVENTS,
   ...SKIN_EVENTS,
 ];

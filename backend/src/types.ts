@@ -43,6 +43,7 @@ export type EventType =
   | 'match'
   | 'media'
   | 'life'
+  | 'bailout'
   | 'betting'
   | 'cheat'
   | 'rest'
