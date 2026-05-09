@@ -73,7 +73,7 @@ export function HudTopBar({ player, leaderboard }: Props) {
       {/* 战队信息 */}
       {player.team ? (
         <span className="hud-stage-tag" style={{ background: 'var(--bg-3)', color: 'var(--up)' }}>
-          [{player.team.tag}] +{player.team.weeklySalary}K/w
+          [{player.team.tag}] +{player.team.weeklySalary}K/月
         </span>
       ) : (
         <span className="hud-stage-tag" style={{ background: 'var(--bg-3)', color: 'var(--fg-2)' }}>

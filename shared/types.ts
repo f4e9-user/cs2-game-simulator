@@ -25,7 +25,8 @@ export type EventType =
   | 'life'
   | 'betting'
   | 'cheat'
-  | 'rest';
+  | 'rest'
+  | 'routine';
 
 export interface Trait {
   id: string;
@@ -44,18 +45,78 @@ export interface Background {
   tags: string[];
 }
 
+// ── 战队/经济相关类型 ──────────────────────────────────────────
+export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
+
+export interface PlayerTeam {
+  clubId: string;
+  name: string;
+  tag: string;
+  region: string;
+  tier: ClubTier;
+  weeklySalary: number;
+  joinedRound: number;
+}
+
+export interface PendingApplication {
+  clubId: string;
+  clubName: string;
+  appliedRound: number;
+  responseRound: number;
+}
+
+export interface TeamOffer {
+  clubId: string;
+  clubName: string;
+  tag: string;
+  tier: ClubTier;
+  region: string;
+  weeklySalary: number;
+}
+
+export type ForcedMatchResult = 'win' | 'loss';
+
+export interface Loan {
+  id: string;
+  principal: number;
+  interestRate: number;
+  remainingPrincipal: number;
+  issuedRound: number;
+  dueRound: number;
+  paid: boolean;
+  defaulted: boolean;
+}
+
+export interface SalaryTracker {
+  lastPayRound: number;
+  joinedRound: number;
+  payCycle: number;
+}
+
 // Dynamic state that is NOT part of the 6-stat allocation.
 // Derived display values live on the frontend (psychological = mentality*2 etc).
 export interface DynamicState {
   stress: number;
   fame: number;
-  restRounds: number;          // >0 means next N rounds forced to "rest" events
-  stressMaxRounds: number;     // consecutive rounds stuck at stress >= MAX
-  year: number;                // 1-indexed in-game year
-  week: number;                // 1-48 (4 weeks per month, 12 months)
+  restRounds: number;
+  stressMaxRounds: number;
+  year: number;
+  week: number;
   pendingMatch: PendingMatch | null;
   qualificationSlots: Record<string, number>;
   teamQualificationSlots: Record<string, number>;
+  actionPoints: number;
+  shopCooldowns: Record<string, number>;
+  team: PlayerTeam | null;
+  pendingApplication: PendingApplication | null;
+  consecutiveLosses: number;
+  everHadTeam: boolean;
+  contractRenewals: number;
+  forceNextEvent: string | null;
+  forceMatchResult: ForcedMatchResult | null;
+  bailoutCooldown: number;
+  teamBailoutCooldown: number;
+  consecutiveBrokeRounds: number;
 }
 
 // A tournament the player has signed up for. Resolves when (year, month) match.
@@ -133,6 +194,10 @@ export interface Player extends DynamicState {
   round: number;
   tags: string[];
   rivals: Rival[];
+  loans: Loan[];
+  salaryTracker: SalaryTracker | null;
+  pawnedItemIds: string[];
+  ownedItems: string[];
 }
 
 export interface Choice {

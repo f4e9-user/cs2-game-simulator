@@ -180,6 +180,23 @@ export interface PendingDeparture {
 
 export type ForcedMatchResult = 'win' | 'loss';
 
+export interface Loan {
+  id: string;
+  principal: number;
+  interestRate: number;
+  remainingPrincipal: number;
+  issuedRound: number;
+  dueRound: number;
+  paid: boolean;
+  defaulted: boolean;
+}
+
+export interface SalaryTracker {
+  lastPayRound: number;
+  joinedRound: number;
+  payCycle: number;
+}
+
 export interface DynamicState {
   stress: number;
   fame: number;
@@ -199,6 +216,9 @@ export interface DynamicState {
   contractRenewals: number;           // 续约次数（用于 loyal-veteran 结局）
   forceNextEvent: string | null;
   forceMatchResult: ForcedMatchResult | null;
+  bailoutCooldown: number;
+  teamBailoutCooldown: number;
+  consecutiveBrokeRounds: number;
 }
 
 export interface ActionResult {
@@ -246,6 +266,9 @@ export interface Player extends DynamicState {
   promotionCooldown: number;
   pendingOffer: TeamOffer | null;
   ownedItems: string[];
+  loans: Loan[];
+  salaryTracker: SalaryTracker | null;
+  pawnedItemIds: string[];
   roster: Teammate[] | null;
   preferredRole: TeammateRole | null;
   activeRole: TeammateRole | null;

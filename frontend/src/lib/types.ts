@@ -200,6 +200,25 @@ export interface PendingDeparture {
   earlyRecruit: boolean;
 }
 
+export type ForcedMatchResult = 'win' | 'loss';
+
+export interface Loan {
+  id: string;
+  principal: number;
+  interestRate: number;
+  remainingPrincipal: number;
+  issuedRound: number;
+  dueRound: number;
+  paid: boolean;
+  defaulted: boolean;
+}
+
+export interface SalaryTracker {
+  lastPayRound: number;
+  joinedRound: number;
+  payCycle: number;
+}
+
 export interface DynamicState {
   stress: number;
   fame: number;
@@ -217,6 +236,11 @@ export interface DynamicState {
   consecutiveLosses: number;
   everHadTeam: boolean;
   contractRenewals: number;
+  forceNextEvent: string | null;
+  forceMatchResult: ForcedMatchResult | null;
+  bailoutCooldown: number;
+  teamBailoutCooldown: number;
+  consecutiveBrokeRounds: number;
 }
 
 export interface ActionResult {
@@ -278,6 +302,10 @@ export interface Player extends DynamicState {
   roleTransition: RoleTransition | null;
   teamTrust: number;
   pendingDeparture?: PendingDeparture;
+  ownedItems: string[];
+  loans: Loan[];
+  salaryTracker: SalaryTracker | null;
+  pawnedItemIds: string[];
 }
 
 export interface Choice {
