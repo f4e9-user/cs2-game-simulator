@@ -21,12 +21,13 @@ export const MEDIA_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你提到了 IGL 的指挥和替补兄弟的默契。赞助商私信了俱乐部。',
-          statChanges: { mentality: 1, money: 20 },
+          feelDelta: 0.5,
+          moneyDelta: 20,
           tagAdds: ['team-trust'],
         },
         failure: {
           narrative: '你说得过于客套，反而被粉丝解读成虚伪。',
-          statChanges: { mentality: -1 },
+          feelDelta: -0.5,
         },
       },
       {
@@ -41,12 +42,14 @@ export const MEDIA_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你在镜头前自信满满，直播间大量新粉丝涌入你的频道。',
-          statChanges: { money: 30, mentality: 1 },
+          feelDelta: 0.5,
+          moneyDelta: 30,
           tagAdds: ['fan-favorite'],
         },
         failure: {
           narrative: '你越说越自负，社交媒体随后开始刷屏嘲讽。',
-          statChanges: { mentality: -3 },
+          feelDelta: -1.5,
+          tiltDelta: 1,
           tagAdds: ['media-backlash'],
         },
       },
@@ -62,11 +65,12 @@ export const MEDIA_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你礼貌带过，粉丝觉得你谦逊务实。',
-          statChanges: { mentality: 1 },
+          feelDelta: 0.5,
         },
         failure: {
           narrative: '记者追问下你越答越别扭，视频被剪成尴尬合集。',
-          statChanges: { mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
           tagAdds: ['media-backlash'],
         },
       },

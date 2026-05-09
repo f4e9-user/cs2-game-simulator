@@ -328,7 +328,7 @@ export interface GameSession {
 
 export interface Outcome {
   narrative: string;
-  // 旧版属性变化（现在转译为状态效果，不直接改核心属性）
+  // 仅供 gameEngine.ts 的赛事/锦标赛奖励路径使用；叙事事件改用直接字段
   statChanges?: StatDelta;
   tagAdds?: string[];
   tagRemoves?: string[];
@@ -341,14 +341,11 @@ export interface Outcome {
   fameDelta?: number;
   injuryRestRounds?: number;
   pointsDelta?: number;
-  // ── 新增：直接状态效果 ──
   feelDelta?: number;
   tiltDelta?: number;
   fatigueDelta?: number;
   moneyDelta?: number;
-  // ── 新增：每日行动触发核心成长 ──
-  dailyGrowth?: StatKey;  // 指定哪个核心属性从此次行动获得成长机会
-  // ── 新增：添加 Buff ──
+  dailyGrowth?: StatKey;
   buffAdd?: Buff;
   // ── 冷却 tag：key = tag 名称，value = 持续轮数（从本轮起算）──
   tagCooldowns?: Record<string, number>;

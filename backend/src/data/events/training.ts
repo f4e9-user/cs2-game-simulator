@@ -22,11 +22,12 @@ export const TRAINING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '两小时后你准星几乎没晃，点开录像自己都忍不住笑。',
-          statChanges: { agility: 2, experience: 1, mentality: -1 },
+          feelDelta: 0.7,
         },
         failure: {
           narrative: '练到一半手开始抖，越练越糟，索性关机。',
-          statChanges: { agility: 0, mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
         },
       },
       {
@@ -41,11 +42,10 @@ export const TRAINING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你照着职业选手的日常清单走了一遍，身体记住了很多东西。',
-          statChanges: { agility: 1, intelligence: 1, experience: 1 },
+          feelDelta: 1,
         },
         failure: {
           narrative: '计划太长，你心不在焉地把几个动作做完，没什么印象。',
-          statChanges: { experience: 1 },
         },
       },
       {
@@ -60,12 +60,14 @@ export const TRAINING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '今天观众不少，礼物飘得欢。手感这周没动——但你暂时不想想这件事。',
-          statChanges: { money: 20, mentality: 1, experience: -1 },
+          feelDelta: 0.5,
+          moneyDelta: 20,
           tagAdds: ['missed-practice'],
         },
         failure: {
           narrative: '没人来，键盘声回荡在空房间。你在公屏上被熟人喷了两句。',
-          statChanges: { money: 0, mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
           tagAdds: ['missed-practice'],
         },
       },
@@ -91,11 +93,11 @@ export const TRAINING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你发现对面 B 包点的烟雾时机有固定间隔，笔记被教练表扬。',
-          statChanges: { intelligence: 2, experience: 2 },
+          feelDelta: 0.8,
         },
         failure: {
           narrative: '一集没看完你就困了，笔记本上只有几行。',
-          statChanges: { intelligence: 0, mentality: -1 },
+          feelDelta: -0.5,
         },
       },
       {
@@ -110,11 +112,12 @@ export const TRAINING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '气氛不错，几个问题很快就理清楚，队内默契回来了一些。',
-          statChanges: { intelligence: 1, experience: 1, mentality: 1 },
+          feelDelta: 0.9,
         },
         failure: {
           narrative: '几句话后开始互相指责，最后不欢而散。',
-          statChanges: { mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
           tagAdds: ['locker-tension'],
         },
       },
@@ -130,12 +133,12 @@ export const TRAINING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你睡了个好觉，但工作群里教练的 @ 很显眼。',
-          statChanges: { mentality: 2, experience: -1 },
+          feelDelta: 1,
           tagAdds: ['missed-practice'],
         },
         failure: {
           narrative: '你想睡但睡不着，脑子里全是刚才的小话。',
-          statChanges: { mentality: -1 },
+          feelDelta: -0.5,
           tagAdds: ['missed-practice'],
         },
       },
