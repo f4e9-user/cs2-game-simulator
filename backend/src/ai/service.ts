@@ -241,7 +241,7 @@ class AnthropicNarrator implements AiService {
   }
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 350);
+    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
@@ -338,7 +338,7 @@ class OpenAINarrator implements AiService {
   }
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 350);
+    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
