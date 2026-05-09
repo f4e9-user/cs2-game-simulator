@@ -39,7 +39,7 @@ const INTRO_SYSTEM_PROMPT =
   '你是一个 CS2 电竞小说的开篇作者。只输出开篇正文，不要标题，不要解释。';
 
 const PERSONALIZE_SYSTEM_PROMPT =
-  '你是 CS2 电竞小说的叙事引擎。严格按要求输出 JSON，不要输出任何其他内容。';
+  '你是 CS2 电竞小说的叙事引擎。全程使用第二人称"你"，禁止出现"我""他""她"或选手姓名作主语。严格按要求输出 JSON，不要输出任何其他内容。';
 
 interface OpenAIChatResponse {
   choices?: Array<{ message?: { content?: string } }>;

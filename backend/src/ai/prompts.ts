@@ -262,7 +262,7 @@ export function buildPersonalizePrompt(
 
   return [
     '根据选手当前状态，把下面事件的 narrative 和每个选项的 description 改得更有个人色彩。',
-    '规则：禁止改变选项数量、选项 id、选项 label、事件类型或任何游戏机制含义。只改措辞和细节。',
+    '规则：全程使用第二人称"你"，禁止出现"我""他""她"或选手姓名作主语。禁止改变选项数量、选项 id、选项 label、事件类型或任何游戏机制含义。只改措辞和细节。',
     `选手：${player.name}，阶段：${STAGE_LABELS[player.stage] ?? player.stage}`,
     `特质：${traitNames || '无'}`,
     `当前状态：${stressLabel}，名气 ${player.fame}，${feelLabel}`,
