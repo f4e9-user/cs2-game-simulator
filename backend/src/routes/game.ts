@@ -13,6 +13,7 @@ import {
   createSession,
   initPlayer,
   generateTeamOffer,
+  pawnItem,
   respondTeamOffer,
   rollRandomTraits,
   validateAllocation,
@@ -578,6 +579,33 @@ app.post('/game/:sessionId/shop', async (c) => {
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
     return c.json({ player, itemName, shopNarrative, shopNarrativePositive });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+// 装备典当端点
+app.post('/game/:sessionId/pawn', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { itemId } = body ?? {};
+  if (typeof itemId !== 'string' || !itemId) {
+    return c.json({ error: 'itemId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const result = pawnItem(session.player, itemId);
+    if (!result.success) {
+      return c.json({ error: result.message ?? '典当失败' }, 400);
+    }
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player: session.player, pawnValue: result.pawnValue });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);

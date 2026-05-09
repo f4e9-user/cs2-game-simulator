@@ -1423,6 +1423,13 @@ export function applyShopPurchase(
   const player = session.player;
   const round = player.round;
 
+  if ((player.pawnedItemIds ?? []).includes(itemId)) {
+    throw new Error('该装备已永久典当，无法重新购买');
+  }
+  if (item.category === 'equipment' && itemId !== 'pro-peripherals' && (player.ownedItems ?? []).includes(itemId)) {
+    throw new Error('已经拥有该装备');
+  }
+
   // Stage check
   if (item.requireStage && !item.requireStage.includes(player.stage)) {
     throw new Error('当前阶段无法购买此商品');
@@ -1495,6 +1502,9 @@ export function applyShopPurchase(
       feelCap: newFeelCap,
       peripheralTier: newTier,
       buffs: newBuffs,
+      ownedItems: success && !(player.ownedItems ?? []).includes(itemId)
+        ? [...(player.ownedItems ?? []), itemId]
+        : player.ownedItems,
     };
     return { player: nextPlayer, itemName: item.name, shopNarrative, shopNarrativePositive: success };
   }
@@ -1568,6 +1578,9 @@ export function applyShopPurchase(
     fame,
     tags,
     shopCooldowns: nextShopCooldowns,
+    ownedItems: item.category === 'equipment' && !(player.ownedItems ?? []).includes(itemId)
+      ? [...(player.ownedItems ?? []), itemId]
+      : player.ownedItems,
   };
 
   return {
@@ -1576,6 +1589,50 @@ export function applyShopPurchase(
     shopNarrative,
     shopNarrativePositive: shopNarrative ? false : undefined,
   };
+}
+
+export function pawnItem(
+  player: Player,
+  itemId: string,
+): { success: boolean; message?: string; pawnValue?: number } {
+  if (!player.ownedItems.includes(itemId)) {
+    return { success: false, message: '未拥有该装备，无法典当' };
+  }
+  if ((player.pawnedItemIds ?? []).includes(itemId)) {
+    return { success: false, message: '该装备已经典当过了' };
+  }
+  if (itemId !== 'ergo-chair' && itemId !== 'pro-peripherals') {
+    return { success: false, message: '只有装备类物品可以典当' };
+  }
+
+  let pawnValue: number;
+  if (itemId === 'ergo-chair') {
+    pawnValue = Math.floor(35 * 0.6);
+    player.stats.constitution = Math.max(0, player.stats.constitution - 2);
+    player.buffs = (player.buffs ?? []).filter((b) => b.id !== 'ergo-recovery');
+  } else {
+    const tier = player.peripheralTier ?? 0;
+    if (tier <= 0) {
+      return { success: false, message: '当前没有可典当的外设升级' };
+    }
+    pawnValue = Math.floor(PERIPHERAL_PRICES[tier - 1]! * 0.5);
+    player.peripheralTier = Math.max(0, tier - 1);
+    player.feelCap = Math.max(FEEL_CAP_MIN, (player.feelCap ?? FEEL_CAP_DEFAULT) - 0.5);
+    player.volatile = {
+      ...(player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 }),
+      feel: clampFeel(player.volatile?.feel ?? 0, player.feelCap),
+    };
+    if (player.peripheralTier < PERIPHERAL_PRICES.length) {
+      player.buffs = (player.buffs ?? []).filter((b) => b.id !== 'pro-gear');
+    }
+  }
+
+  player.stats.money = Math.min(MONEY_MAX, player.stats.money + pawnValue);
+  player.stats = clampStats(player.stats);
+  player.ownedItems = player.ownedItems.filter((id) => id !== itemId);
+  player.pawnedItemIds = [...(player.pawnedItemIds ?? []), itemId];
+
+  return { success: true, pawnValue };
 }
 
 // ── 战队申请 ──────────────────────────────────────────────────
