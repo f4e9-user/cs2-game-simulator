@@ -1,0 +1,23 @@
+=== F4 Scope Fidelity Check ===
+
+--- Forbidden pattern 1: stage-based money scaling ---
+(no matches)
+
+--- Forbidden pattern 2: compound interest ---
+(no matches)
+
+--- Forbidden pattern 3: redemption/buyback ---
+(no matches)
+
+--- Forbidden pattern 4: credit score ---
+(no matches)
+
+--- MONEY_MAX check ---
+export const MONEY_MAX = 999;
+
+--- Contract 48-week check ---
+      '俱乐部合规部门发来内部邮件，说例行财务审计发现一笔来源不明的转账，要求你在 48 小时内说明。',
+          narrative: '声明措辞得当，大部分人接受了。舆论在 48 小时内平息。',
+          tagCooldowns: { 'contract-cd': 48 },
+          tagCooldowns: { 'contract-cd': 48 },
+          tagCooldowns: { 'contract-cd': 48 },
