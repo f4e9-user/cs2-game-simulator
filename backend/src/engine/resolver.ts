@@ -299,19 +299,11 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
 
   const chosenOutcome = success ? choice.success : choice.failure;
 
-  // ── 状态变化合并 ──
-  // 1. 先处理旧版 statChanges 转译
-  const legacy = translateStatDelta(chosenOutcome.statChanges ?? {});
-  let feelDelta = legacy.feelDelta;
-  let tiltDelta = legacy.tiltDelta;
-  let fatigueDelta = legacy.fatigueDelta;
-  let moneyDelta = legacy.moneyDelta;
-
-  // 2. 新版直接字段（优先级高，事件可显式指定）
-  if (typeof chosenOutcome.feelDelta === 'number') feelDelta += chosenOutcome.feelDelta;
-  if (typeof chosenOutcome.tiltDelta === 'number') tiltDelta += chosenOutcome.tiltDelta;
-  if (typeof chosenOutcome.fatigueDelta === 'number') fatigueDelta += chosenOutcome.fatigueDelta;
-  if (typeof chosenOutcome.moneyDelta === 'number') moneyDelta += chosenOutcome.moneyDelta;
+  // ── 状态变化 ──
+  let feelDelta = chosenOutcome.feelDelta ?? 0;
+  let tiltDelta = chosenOutcome.tiltDelta ?? 0;
+  let fatigueDelta = chosenOutcome.fatigueDelta ?? 0;
+  let moneyDelta = chosenOutcome.moneyDelta ?? 0;
 
   // ── 核心成长 ──
   let nextStats = { ...player.stats };
@@ -335,28 +327,6 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
     nextStats = result.stats;
     growthApplied = result.grown;
     growthKey = chosenOutcome.dailyGrowth;
-  } else if (legacy.expGrowth !== 0) {
-    // 叙事事件：极小 experience 成长
-    const result = applyGrowth(
-      nextStats,
-      'experience',
-      Math.abs(legacy.expGrowth),
-      player.growthSpent,
-      [],
-      'all',
-    );
-    if (legacy.expGrowth > 0) {
-      nextStats = result.stats;
-      growthApplied = result.grown;
-      growthKey = 'experience';
-    }
-    // 负向 experience → 直接扣（这里不走成长上限，是减少）
-    if (legacy.expGrowth < 0) {
-      nextStats.experience = Math.max(
-        0,
-        nextStats.experience + legacy.expGrowth,
-      );
-    }
   }
 
   nextStats = clampStats(nextStats);

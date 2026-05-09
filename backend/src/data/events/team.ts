@@ -23,12 +23,13 @@ export const TEAM_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你在训练赛里拿下 32 杀，队长点头。',
-          statChanges: { agility: 2, experience: 2, mentality: 1 },
+          feelDelta: 1.7,
           tagAdds: ['main-awper'],
         },
         failure: {
           narrative: '你表现一般，反倒让对方更有底气。',
-          statChanges: { mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
           tagAdds: ['locker-tension'],
         },
       },
@@ -43,11 +44,11 @@ export const TEAM_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你列了每个人擅长的图，队长觉得合理。队内气氛放松不少。',
-          statChanges: { intelligence: 2, mentality: 1, experience: 1 },
+          feelDelta: 1.3,
         },
         failure: {
           narrative: '方案看起来合理，但执行起来总是扯皮。',
-          statChanges: { mentality: -1 },
+          feelDelta: -0.5,
         },
       },
       {
@@ -62,12 +63,12 @@ export const TEAM_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '对方很感激，队内关系紧密了一层。',
-          statChanges: { mentality: 2, experience: 1 },
+          feelDelta: 1,
           tagAdds: ['team-trust'],
         },
         failure: {
           narrative: '你心里其实不服，表面平静。',
-          statChanges: { mentality: -1 },
+          feelDelta: -0.5,
           tagAdds: ['suppressed-anger'],
         },
       },

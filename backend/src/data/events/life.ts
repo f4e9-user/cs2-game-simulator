@@ -22,11 +22,12 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你把自己的训练计划和目标一条条解释清楚，对方沉默后说了声「注意身体」。',
-          statChanges: { mentality: 2, intelligence: 1 },
+          feelDelta: 1.4,
         },
         failure: {
           narrative: '话题很快滑向争吵，你挂电话后一整晚没睡好。',
-          statChanges: { mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
         },
       },
       {
@@ -41,12 +42,13 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你先稳住当下的情绪，第二天早上才回电话。',
-          statChanges: { mentality: 1, experience: -1 },
+          feelDelta: 0.5,
           tagAdds: ['family-strain'],
         },
         failure: {
           narrative: '手机被你静音后你根本没睡着，脑子里全是那句话。',
-          statChanges: { mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
           tagAdds: ['family-strain'],
         },
       },
@@ -62,11 +64,14 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '钱到账的那一刻家里的态度明显软化，但你账户里只剩几个数字。',
-          statChanges: { money: -30, mentality: 2 },
+          feelDelta: 1,
+          moneyDelta: -30,
         },
         failure: {
           narrative: '你没那么多钱，硬转让自己更焦虑。',
-          statChanges: { money: -20, mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
+          moneyDelta: -20,
         },
       },
     ],
@@ -91,11 +96,12 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '医生让你下周停训。休养后你感觉连点击鼠标都轻松了。',
-          statChanges: { agility: 1, mentality: 1, money: -10, experience: -1 },
+          feelDelta: 1.1,
+          moneyDelta: -10,
         },
         failure: {
           narrative: '你听医生嘱咐但忍不住还是偷偷练了，效果打折。',
-          statChanges: { mentality: -1 },
+          feelDelta: -0.5,
         },
       },
       {
@@ -111,11 +117,13 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你挺了过来，状态反而被练到极致。',
-          statChanges: { agility: 2, experience: 2, mentality: -1 },
+          feelDelta: 0.7,
         },
         failure: {
           narrative: '你的手腕彻底撑不住，需要停训一个月。',
-          statChanges: { agility: -3, mentality: -2, money: -20 },
+          feelDelta: -2.8,
+          tiltDelta: 1,
+          moneyDelta: -20,
           tagAdds: ['injured'],
         },
       },
@@ -131,11 +139,13 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '设备换了、康复师到位，你的状态迅速回升。',
-          statChanges: { agility: 1, mentality: 1, money: -30 },
+          feelDelta: 1.1,
+          moneyDelta: -30,
         },
         failure: {
           narrative: '你买了贵设备，但没坚持康复训练，效果不理想。',
-          statChanges: { money: -30, mentality: -1 },
+          feelDelta: -0.5,
+          moneyDelta: -30,
         },
       },
     ],

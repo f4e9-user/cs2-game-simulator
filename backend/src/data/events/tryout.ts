@@ -27,7 +27,7 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '两天试训打出了近期最好的状态，教练当场拍板签意向书——你正式进入青训营。',
-          statChanges: { experience: 2, mentality: 1 },
+          feelDelta: 0.5,
           stageSet: 'youth',
           tagAdds: ['signed-second-team'],
           fameDelta: 3,
@@ -35,7 +35,8 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '旅途颠簸，状态不佳，训练赛表现平平。教练让你回去继续练，说以后还有机会。',
-          statChanges: { experience: 1, mentality: -1, money: -10 },
+          feelDelta: -0.5,
+          moneyDelta: -10,
           stressDelta: 1,
         },
       },
@@ -50,7 +51,8 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '对方同意报销路费并加了一条保障条款。你以更稳的心态赴约，顺利通过考核。',
-          statChanges: { intelligence: 1, experience: 2, money: 10 },
+          feelDelta: 0.4,
+          moneyDelta: 10,
           stageSet: 'youth',
           tagAdds: ['signed-second-team'],
           fameDelta: 2,
@@ -58,7 +60,7 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '对方觉得你要价太高，撤回了邀请。这扇门暂时关上了。',
-          statChanges: { mentality: -1 },
+          feelDelta: -0.5,
           stressDelta: 2,
         },
       },
@@ -69,12 +71,10 @@ export const PROMOTION_EVENTS: EventDef[] = [
         check: { primary: 'experience', dc: 0 },
         success: {
           narrative: '你婉拒了邀请，继续专注在现有赛场。再磨几场，机会还会再来。',
-          statChanges: { experience: 1 },
           stressDelta: 0,
         },
         failure: {
           narrative: '你婉拒了邀请，继续专注在现有赛场。再磨几场，机会还会再来。',
-          statChanges: { experience: 1 },
           stressDelta: 0,
         },
       },
@@ -102,7 +102,7 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '合同签下，你正式成为二线队的一员。新的起点，新的压力，也有新的资源。',
-          statChanges: { experience: 2, money: 20 },
+          moneyDelta: 20,
           stageSet: 'second',
           teamTierSet: 'semi-pro',
           tagAdds: ['signed-second-team'],
@@ -111,7 +111,7 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '入队初期表现欠佳，队内地位不稳，你被挂在合同边缘观察期。',
-          statChanges: { experience: 1, mentality: -1 },
+          feelDelta: -0.5,
           stressDelta: 2,
         },
       },
@@ -126,7 +126,8 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '领队稍作思考后同意了你的条件。待遇提了一档，出场时间也有了保障。',
-          statChanges: { intelligence: 1, money: 30, experience: 2 },
+          feelDelta: 0.4,
+          moneyDelta: 30,
           stageSet: 'second',
           teamTierSet: 'semi-pro',
           tagAdds: ['signed-second-team'],
@@ -135,7 +136,8 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '谈崩了。领队另找了人，这次机会就此错过。',
-          statChanges: { mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
           stressDelta: 3,
         },
       },
@@ -146,12 +148,10 @@ export const PROMOTION_EVENTS: EventDef[] = [
         check: { primary: 'experience', dc: 0 },
         success: {
           narrative: '你礼貌拒绝了邀约。领队点点头说"想好了随时联系"。机会是否还在，取决于你接下来的表现。',
-          statChanges: { experience: 1 },
           stressDelta: 0,
         },
         failure: {
           narrative: '你礼貌拒绝了邀约。领队点点头说"想好了随时联系"。机会是否还在，取决于你接下来的表现。',
-          statChanges: { experience: 1 },
           stressDelta: 0,
         },
       },
@@ -180,7 +180,8 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '谈判顺利，合同当场签下。俱乐部提供专业训练设施和赛程安排——你是职业选手了。',
-          statChanges: { experience: 3, money: 30, mentality: 1 },
+          feelDelta: 0.5,
+          moneyDelta: 30,
           stageSet: 'pro',
           teamTierSet: 'pro',
           fameDelta: 8,
@@ -188,7 +189,8 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '谈判桌上你表现得有些紧张，条款谈得不理想，对方暂时搁置了签约意向。',
-          statChanges: { experience: 1, mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
           stressDelta: 3,
         },
       },
@@ -203,7 +205,8 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '经纪人谈下了比预期高 30% 的薪资，还附加了出场时间保障条款。职业生涯开门红。',
-          statChanges: { intelligence: 1, money: 50, experience: 2 },
+          feelDelta: 0.4,
+          moneyDelta: 50,
           stageSet: 'pro',
           teamTierSet: 'pro',
           fameDelta: 7,
@@ -211,7 +214,8 @@ export const PROMOTION_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '经纪人拖了太久，对方签了另一个人。这次机会从指缝溜走了。',
-          statChanges: { money: -10, mentality: -1 },
+          feelDelta: -0.5,
+          moneyDelta: -10,
           stressDelta: 3,
         },
       },
@@ -222,12 +226,10 @@ export const PROMOTION_EVENTS: EventDef[] = [
         check: { primary: 'experience', dc: 0 },
         success: {
           narrative: '你婉拒了邀约，经理笑着说下半赛季还有机会。继续打出成绩，他们会再来找你的。',
-          statChanges: { experience: 1 },
           stressDelta: 0,
         },
         failure: {
           narrative: '你婉拒了邀约，经理笑着说下半赛季还有机会。继续打出成绩，他们会再来找你的。',
-          statChanges: { experience: 1 },
           stressDelta: 0,
         },
       },
@@ -258,13 +260,16 @@ export const TRYOUT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '三天的训练赛，你打出近一个月最好的表现，签下意向书。',
-          statChanges: { experience: 3, mentality: 2, money: -20 },
+          feelDelta: 1,
+          moneyDelta: -20,
           stageDelta: 1,
           tagAdds: ['signed-second-team'],
         },
         failure: {
           narrative: '旅途劳顿，你表现一般，教练让你回去继续练。',
-          statChanges: { experience: 1, mentality: -2, money: -20 },
+          feelDelta: -1,
+          tiltDelta: 1,
+          moneyDelta: -20,
         },
       },
       {
@@ -278,13 +283,15 @@ export const TRYOUT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '对方同意报销路费并加一条保障条款，你以更稳的状态赴约。',
-          statChanges: { intelligence: 1, money: 20, experience: 2 },
+          feelDelta: 0.4,
+          moneyDelta: 20,
           stageDelta: 1,
           tagAdds: ['signed-second-team'],
         },
         failure: {
           narrative: '对方觉得你要求太多，直接收回邀请。',
-          statChanges: { mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
         },
       },
       {
@@ -298,11 +305,12 @@ export const TRYOUT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你专心打路人，三天后天梯前 100，但机会窗口关上了。',
-          statChanges: { experience: 2, agility: 1, mentality: -1 },
+          feelDelta: 0.1,
         },
         failure: {
           narrative: '你天梯也没打上去，机会又没抓住。',
-          statChanges: { mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
         },
       },
     ],
