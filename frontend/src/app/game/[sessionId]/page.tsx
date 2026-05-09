@@ -107,17 +107,23 @@ export default function GamePage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const fetchIntro = welcomeDismissed
-      ? Promise.resolve(null)
-      : api.getIntro(sessionId, apiToken ?? undefined).catch(() => null);
-    Promise.all([api.getSession(sessionId), api.listTraits(), fetchIntro, api.getHealth().catch(() => null)])
-      .then(([session, t, introRes, health]) => {
+    // 先并行取 session / traits / health，session 返回后才有真实的 apiToken
+    Promise.all([api.getSession(sessionId), api.listTraits(), api.getHealth().catch(() => null)])
+      .then(([session, t, health]) => {
         if (cancelled) return;
         hydrateFromSession(session);
         setTraits(t.traits);
-        if (introRes) setPreloadedIntro(introRes.intro);
         if (health) setAiActive(health.ai.active);
-        setIntroLoading(false);
+
+        // 用 session.apiToken 触发 intro（fire-and-forget，不阻塞主流程）
+        if (!welcomeDismissed) {
+          api.getIntro(sessionId, session.apiToken)
+            .then((introRes) => { if (!cancelled) setPreloadedIntro(introRes.intro); })
+            .catch(() => {})
+            .finally(() => { if (!cancelled) setIntroLoading(false); });
+        } else {
+          setIntroLoading(false);
+        }
       })
       .catch((e) => {
         if (!cancelled) {

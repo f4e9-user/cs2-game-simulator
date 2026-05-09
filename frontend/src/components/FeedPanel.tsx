@@ -45,7 +45,7 @@ export function FeedPanel({ history, socialPosts, socialLoading }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
           {socialPosts.map((post, i) => (
             <div
-              key={i}
+              key={`${post.handle}-${post.authorType}-${i}`}
               style={{
                 background: 'var(--bg-2)',
                 border: '1px solid var(--border)',
