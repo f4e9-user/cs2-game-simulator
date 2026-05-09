@@ -126,6 +126,10 @@ function clampFatigue(v: number): number {
   return Math.max(FATIGUE_MIN, Math.min(FATIGUE_MAX, Math.round(v)));
 }
 
+function clampMoney(v: number): number {
+  return Math.max(0, Math.min(MONEY_MAX, Math.round(v)));
+}
+
 export function rollRandomTraits(count = 3): Trait[] {
   const pool = [...TRAITS];
   const out: Trait[] = [];
@@ -206,7 +210,7 @@ export function applyForLoan(player: Player, amount: number): { success: boolean
   };
 
   player.loans = [...(player.loans ?? []), loan];
-  player.stats.money = Math.min(MONEY_MAX, player.stats.money + amount);
+  player.stats.money = clampMoney(player.stats.money + amount);
 
   return { success: true, loan };
 }
@@ -219,7 +223,7 @@ export function processLoanRepayment(player: Player): void {
 
     const totalDue = Math.floor(loan.remainingPrincipal * (1 + loan.interestRate));
     if (player.stats.money >= totalDue) {
-      player.stats.money = Math.max(0, player.stats.money - totalDue);
+      player.stats.money = clampMoney(player.stats.money - totalDue);
       loan.paid = true;
       loan.remainingPrincipal = 0;
       continue;
@@ -352,7 +356,7 @@ function settleSalaryOnDeparture(player: Player): number {
     (player.team.weeklySalary * weeksServed) / player.salaryTracker.payCycle,
   );
   if (settlement > 0) {
-    player.stats.money = Math.min(MONEY_MAX, player.stats.money + settlement);
+    player.stats.money = clampMoney(player.stats.money + settlement);
   }
   player.salaryTracker = null;
   return settlement;
@@ -423,7 +427,7 @@ function buildMatchResolveResult(
   // Apply stat changes via translateStatDelta for consistency
   const legacy = translateStatDelta(statChanges);
   let nextStats = { ...player.stats };
-  nextStats.money = Math.max(0, Math.min(MONEY_MAX, nextStats.money + legacy.moneyDelta));
+  nextStats.money = clampMoney(nextStats.money + legacy.moneyDelta);
 
   let growthApplied = 0;
   let growthKey: StatKey | undefined;
@@ -910,7 +914,7 @@ export function applyChoice(
 
     const roundsSinceLastPay = nextPlayer.round - nextPlayer.salaryTracker.lastPayRound;
     if (roundsSinceLastPay >= nextPlayer.salaryTracker.payCycle) {
-      nextPlayer.stats.money = Math.min(MONEY_MAX, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
+      nextPlayer.stats.money = clampMoney(nextPlayer.stats.money + nextPlayer.team.weeklySalary);
       nextPlayer.salaryTracker = {
         ...nextPlayer.salaryTracker,
         lastPayRound: nextPlayer.round,
@@ -1544,7 +1548,7 @@ export function applyShopPurchase(
     }
 
     const newStats = { ...player.stats };
-    newStats.money = Math.max(0, newStats.money - price);
+    newStats.money = clampMoney(newStats.money - price);
 
     const nextPlayer: Player = {
       ...player,
@@ -1564,7 +1568,7 @@ export function applyShopPurchase(
 
   // Apply money cost
   let stats = { ...player.stats };
-  stats.money = Math.max(0, stats.money - item.priceMoney);
+  stats.money = clampMoney(stats.money - item.priceMoney);
 
   // Constitution delta
   if (effect.constitutionDelta) {
@@ -1677,7 +1681,7 @@ export function pawnItem(
     }
   }
 
-  player.stats.money = Math.min(MONEY_MAX, player.stats.money + pawnValue);
+  player.stats.money = clampMoney(player.stats.money + pawnValue);
   player.stats = clampStats(player.stats);
   player.ownedItems = player.ownedItems.filter((id) => id !== itemId);
   player.pawnedItemIds = [...(player.pawnedItemIds ?? []), itemId];
