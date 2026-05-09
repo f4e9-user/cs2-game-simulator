@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { TypewriterText } from '@/components/TypewriterText';
 import type { MatchStats, RoundResult, StatKey } from '@/lib/types';
 import {
   PASSIVE_EFFECT_LABELS,
@@ -12,29 +12,6 @@ import {
   describeBuffAdded,
 } from '@/lib/format';
 
-function TypewriterText({ text }: { text: string }) {
-  const [displayed, setDisplayed] = useState('');
-  const prevTextRef = useRef('');
-
-  useEffect(() => {
-    if (text === prevTextRef.current) return;
-    prevTextRef.current = text;
-    setDisplayed('');
-    let i = 0;
-    // Vary speed slightly: kanji/punctuation a bit slower, ASCII faster
-    const tick = () => {
-      if (i >= text.length) return;
-      i++;
-      setDisplayed(text.slice(0, i));
-      const ch = text[i - 1] ?? '';
-      const delay = /[，。！？…\s]/.test(ch) ? 60 : 25;
-      setTimeout(tick, delay);
-    };
-    tick();
-  }, [text]);
-
-  return <>{displayed}</>;
-}
 
 export function ResultPanel({ result }: { result: RoundResult }) {
   const deltas = Object.entries(result.statChanges) as [StatKey, number][];

@@ -256,6 +256,24 @@ input[type='text']:focus {
   white-space: pre-wrap;
 }
 
+@keyframes narrative-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+.narrative-skeleton {
+  height: 4.5em;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-2) 25%,
+    var(--bg-3, #333) 50%,
+    var(--bg-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: narrative-shimmer 1.4s ease infinite;
+}
+
 .error {
   color: var(--danger);
   font-size: 14px;

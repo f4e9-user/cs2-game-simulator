@@ -20,7 +20,7 @@ export function WelcomeCard({ player, traits, intro, introLoading, onDismiss }: 
 
   return (
     <div className="welcome-card">
-      <div className="welcome-chapter">第一章</div>
+      <div className="welcome-chapter">生涯起点</div>
 
       <div className="welcome-name">{player.name}</div>
       <div className="welcome-stage">{stageLabel} · 第 1 回合</div>

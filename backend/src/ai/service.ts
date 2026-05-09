@@ -30,7 +30,7 @@ export interface AiService {
 }
 
 const NARRATIVE_SYSTEM_PROMPT =
-  '你是一个 CS2 电竞小说的叙事引擎。只输出润色后的正文，不要解释，不要加引号。';
+  '你是一个 CS2 电竞小说的叙事引擎。全程使用第二人称"你"叙述，禁止出现"他""她"或选手姓名作主语。只输出正文，不要解释，不要加引号。';
 
 const SUMMARY_SYSTEM_PROMPT =
   '你是一个 CS2 电竞生涯传记作者。只输出小结正文，不要标题，不要解释。';
@@ -241,7 +241,7 @@ class AnthropicNarrator implements AiService {
   }
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 200);
+    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
@@ -338,7 +338,7 @@ class OpenAINarrator implements AiService {
   }
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 200);
+    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 

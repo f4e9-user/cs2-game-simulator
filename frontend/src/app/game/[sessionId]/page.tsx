@@ -78,30 +78,41 @@ export default function GamePage() {
     setWelcomeDismissed(true);
   };
 
-  // 当前展示用的事件（原文即时显示，个性化版本到了再替换）
+  // 当前展示用的事件；personalizing=true 时叙事区显示骨架，完成后打字机显示 LLM 版本
   const [displayEvent, setDisplayEvent] = useState<typeof currentEvent>(null);
+  const [isPersonalizing, setIsPersonalizing] = useState(false);
 
-  // currentEvent 变化时立刻更新 displayEvent，同时后台请求个性化
-  // actionsPhase 期间事件不展示给玩家，跳过个性化请求
   useEffect(() => {
+    // actionsPhase 期间没有事件需要个性化
+    if (!currentEvent || actionsPhase) {
+      setDisplayEvent(currentEvent);
+      setIsPersonalizing(false);
+      return;
+    }
+    // 新事件到来：先只展示标题/类型，叙事区骨架等待 LLM
     setDisplayEvent(currentEvent);
-    if (!currentEvent || actionsPhase) return;
+    setIsPersonalizing(true);
     let cancelled = false;
     api.personalizeEvent(sessionId, apiToken ?? undefined).then((res) => {
-      if (cancelled || !res.personalized) return;
-      const { narrative, choices: pChoices } = res.personalized;
-      setDisplayEvent((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          narrative,
-          choices: prev.choices.map((c) => {
-            const match = pChoices.find((p) => p.id === c.id);
-            return match ? { ...c, description: match.description } : c;
-          }),
-        };
-      });
-    }).catch(() => { /* 静默降级，保持原文 */ });
+      if (cancelled) return;
+      if (res.personalized) {
+        const { narrative, choices: pChoices } = res.personalized;
+        setDisplayEvent((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            narrative,
+            choices: prev.choices.map((c) => {
+              const match = pChoices.find((p) => p.id === c.id);
+              return match ? { ...c, description: match.description } : c;
+            }),
+          };
+        });
+      }
+      setIsPersonalizing(false);
+    }).catch(() => {
+      if (!cancelled) setIsPersonalizing(false); // 降级：直接显示默认叙事
+    });
     return () => { cancelled = true; };
   }, [currentEvent?.id, sessionId, actionsPhase]);
 
@@ -143,9 +154,9 @@ export default function GamePage() {
     if (currentEvent) setCenterTab('event');
   }, [currentEvent?.id]);
 
-  // 刷新社区动态：player 首次加载后 & 每回合结束后（后端有 KV 缓存，重复请求不会重新调用 LLM）
+  // 刷新社区动态：5 回合后才开始出现，之后每回合结束刷新一次
   useEffect(() => {
-    if (!player) return;
+    if (!player || (player.round ?? 0) < 5) return;
     let cancelled = false;
     setSocialLoading(true);
     api.getSocialFeed(sessionId, apiToken ?? undefined)
@@ -331,7 +342,7 @@ export default function GamePage() {
                       </div>
                     ) : displayEvent ? (
                       <>
-                        <EventCard event={displayEvent} />
+                        <EventCard event={displayEvent} personalizing={isPersonalizing} />
                         <div style={{ marginTop: 8, marginBottom: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
                           选择行动
                         </div>
