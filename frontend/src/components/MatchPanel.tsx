@@ -196,6 +196,8 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
             key={t.id}
             t={t}
             team={player.team}
+            qualificationSlots={player.qualificationSlots ?? {}}
+            teamQualificationSlots={player.teamQualificationSlots ?? {}}
             onSignup={() => signup(t.id)}
             busy={busyId === t.id}
           />
@@ -277,20 +279,40 @@ function PendingMatchCard({
   );
 }
 
+function hasQualTicket(
+  targets: string[] | undefined,
+  qualSlots: Record<string, number>,
+  teamSlots: Record<string, number>,
+): boolean {
+  if (!targets?.length) return false;
+  return targets.some((slot) => {
+    // check brand-specific slot first, then generic fallback (s-open etc.)
+    const slots = [slot];
+    const generic = slot.replace(/^(iem|blast|pgl)-/, 's-');
+    if (generic !== slot) slots.push(generic);
+    return slots.some((s) => (qualSlots[s] ?? 0) > 0 || (teamSlots[s] ?? 0) > 0);
+  });
+}
+
 function TournamentCard({
   t,
   team,
+  qualificationSlots,
+  teamQualificationSlots,
   onSignup,
   busy,
 }: {
   t: Tournament;
   team: Player['team'];
+  qualificationSlots: Record<string, number>;
+  teamQualificationSlots: Record<string, number>;
   onSignup: () => void;
   busy: boolean;
 }) {
   const r = t.reward;
   const teamReq = t.teamRequirement ?? null;
-  const canEnter = teamReqMet(team, teamReq);
+  const ticketBypass = !!team && hasQualTicket(t.qualificationTargets, qualificationSlots, teamQualificationSlots);
+  const canEnter = teamReqMet(team, teamReq) || ticketBypass;
   return (
     <div className="tourney-card">
       <div className="tourney-name">
@@ -314,7 +336,14 @@ function TournamentCard({
       </div>
       {teamReq && (
         <div style={{ fontSize: 10, color: canEnter ? 'var(--up)' : 'var(--danger)', marginBottom: 4 }}>
-          {canEnter ? '可参加' : '需战队'} · 需要 {TIER_LABELS[teamReq]}+ 战队
+          {canEnter
+            ? ticketBypass
+              ? `持票破格（当前${TIER_LABELS[team!.tier]}）`
+              : '可参加'
+            : !team
+              ? '无战队'
+              : `战队等级不足（当前${TIER_LABELS[team.tier]}）`
+          } · 需要 {TIER_LABELS[teamReq]}+ 战队
         </div>
       )}
       {t.qualificationTargets && t.qualificationTargets.length > 0 && (
@@ -354,7 +383,7 @@ function TournamentCard({
           onClick={onSignup}
           style={{ fontSize: 11, padding: '4px 10px', marginLeft: 'auto' }}
         >
-          {busy ? '…' : canEnter ? '报名' : '缺战队'}
+          {busy ? '…' : canEnter ? '报名' : !team ? '需要战队' : '等级不足'}
         </button>
       </div>
     </div>

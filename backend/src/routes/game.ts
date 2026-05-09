@@ -316,22 +316,34 @@ app.post('/game/:sessionId/signup', async (c) => {
       400,
     );
   }
-  // 战队门槛校验
+  // 战队门槛校验：持有该赛事所需资格门票时可破格参加（只要有战队即可）
   const teamReq = t.teamRequirement ?? null;
   if (teamReq !== null && !teamMeetsRequirement(session.player.team, teamReq)) {
+    const hasQualTicket = !!t.qualificationTargets?.length &&
+      t.qualificationTargets
+        .flatMap((slot) => qualificationFallbackSlots(slot))
+        .some((slot) => {
+          const owner = qualificationSlotOwner(slot);
+          const pool = owner === 'team'
+            ? (session.player.teamQualificationSlots ?? {})
+            : (session.player.qualificationSlots ?? {});
+          return (pool[slot] ?? 0) > 0;
+        });
     if (!session.player.team) {
       return c.json({ error: `该赛事需要签约战队才能参加` }, 400);
     }
-    const tierLabels: Record<ClubTier, string> = {
-      youth: '青训',
-      'semi-pro': '半职业',
-      pro: '职业',
-      top: '顶级',
-    };
-    return c.json(
-      { error: `该赛事需要 ${tierLabels[teamReq]} 及以上战队（当前 ${tierLabels[session.player.team.tier]}）` },
-      400,
-    );
+    if (!hasQualTicket) {
+      const tierLabels: Record<ClubTier, string> = {
+        youth: '青训',
+        'semi-pro': '半职业',
+        pro: '职业',
+        top: '顶级',
+      };
+      return c.json(
+        { error: `该赛事需要 ${tierLabels[teamReq]} 及以上战队（当前 ${tierLabels[session.player.team.tier]}），或持有资格门票破格参加` },
+        400,
+      );
+    }
   }
   const week = session.player.week ?? 1;
   const inWindow =
