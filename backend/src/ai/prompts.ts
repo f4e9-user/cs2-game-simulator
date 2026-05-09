@@ -1,4 +1,4 @@
-import type { Background, GameEventPublic, LeaderboardTeam, Player, RoundResult, Rival, Trait } from '../types.js';
+import type { Background, GameEventPublic, LeaderboardTeam, MatchStats, Player, RoundResult, Rival, Trait } from '../types.js';
 import { STAGE_LABELS } from '../engine/constants.js';
 
 // ── Social Feed ─────────────────────────────────────────────────────────────
@@ -145,17 +145,74 @@ export interface NarrativePromptInput {
   eventTitle: string;
   choiceLabel: string;
   success: boolean;
+  customAction?: string;   // player's free-text input, triggers full narrative rewrite
+  matchStats?: MatchStats; // present for tournament-* events, triggers match narrative mode
 }
 
 export function buildNarrativePrompt(input: NarrativePromptInput): string {
-  const { player, baseNarrative, eventTitle, choiceLabel, success } = input;
+  const { player, baseNarrative, eventTitle, choiceLabel, success, customAction, matchStats } = input;
+  const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
+  const outcomeLabel = success ? '胜利' : '失败';
+
+  // ── 赛事专属叙事 ───────────────────────────────────────────────
+  if (matchStats) {
+    const { kills, deaths, assists, headshotRate, rating, teamScore, enemyScore } = matchStats;
+    const score = `${teamScore}:${enemyScore}`;
+    const hsrPct = Math.round(headshotRate * 100);
+    const kda = `${kills}/${deaths}/${assists}`;
+    const ratingStr = rating.toFixed(2);
+    const teamLine = player.team
+      ? `代表战队 ${player.team.name}（${player.team.tag}）出战`
+      : '以独立选手身份出战';
+
+    return [
+      '你是 CS2 电竞赛事的专业解说撰稿人。请根据以下比赛数据，为这场比赛写一段 2-3 句的中文赛后叙事。',
+      '',
+      `选手：${player.name}，${stageLabel}阶段，${teamLine}`,
+      `赛事：${eventTitle}`,
+      `比分：${score}（${outcomeLabel}）`,
+      `个人数据：${kda} KDA，Rating ${ratingStr}，爆头率 ${hsrPct}%`,
+      `赛前状态参考（仅作语气依据，禁止直接引用）：${baseNarrative}`,
+      '',
+      '创作要求：',
+      '- 以比赛结果和个人数据为核心，写出有现场感的赛后描述',
+      '- 若 Rating ≥ 1.3，突出个人统治力；若 Rating < 0.9，可写出挣扎感；中间段保持客观',
+      '- 不要照搬"赛前状态参考"原文，只借鉴情绪基调',
+      '- 禁止出现"手感""tilt""心态"等游戏机制词汇，改用自然语言描写',
+      '- 禁止出现具体数值（分数、KDA、Rating）——数字已在数据卡展示，叙事只写氛围和感受',
+      '只输出叙事正文，不要解释，不要引号。',
+    ].join('\n');
+  }
+
+  // ── 自定义行动：完全重写叙事 ────────────────────────────────────
+  if (customAction) {
+    return [
+      '你是 CS2 电竞小说的叙事引擎。玩家选择了自定义行动，你需要以该行动为核心重新创作结果叙事。',
+      '',
+      `选手：${player.name}，阶段：${stageLabel}`,
+      `事件背景：【${eventTitle}】`,
+      `玩家的实际行动：「${customAction}」`,
+      `结果：${outcomeLabel}`,
+      `结局参考方向（仅供参考结果性质，不要照搬原文）：${baseNarrative}`,
+      '',
+      '创作要求：',
+      '- 以玩家的实际行动为主线，使行动合理地导向该结果（即使行动很荒诞，也要找到叙事上的因果逻辑）',
+      '- 结果方向（成功/失败）必须与上述一致，不可更改',
+      '- 输出 1-3 句中文叙事，口吻冷静写实，有画面感',
+      '- 禁止出现属性名、数值、游戏机制词汇',
+      '- 禁止照搬"结局参考方向"的原文',
+      '只输出叙事正文，不要解释，不要引号。',
+    ].join('\n');
+  }
+
+  // ── 普通事件：风格润色 ───────────────────────────────────────────
   return [
     '请基于下面的事实，把 "原始描述" 润色成 1-2 句更有画面感、更冷静的中文叙事。',
     '禁止改变成败、属性、阶段、任何数值或剧情走向。只改文字风格。',
-    `选手：${player.name}，阶段：${STAGE_LABELS[player.stage] ?? player.stage}`,
+    `选手：${player.name}，阶段：${stageLabel}`,
     `事件：${eventTitle}`,
     `选择：${choiceLabel}`,
-    `结果：${success ? '成功' : '失败'}`,
+    `结果：${outcomeLabel}`,
     `原始描述：${baseNarrative}`,
   ].join('\n');
 }

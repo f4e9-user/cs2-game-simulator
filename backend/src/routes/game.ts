@@ -192,9 +192,8 @@ app.post('/game/:sessionId/choice', async (c) => {
     const preChoicePendingApplication = session.player.pendingApplication;
     const { session: updated, result } = applyChoice(session, choiceId, customRollBonus);
 
-    // 自由行动时，把玩家行动叙事前置，再润色结果
+    // 自由行动时：用自定义行动作为叙事重写依据，不拼接默认叙事
     if (customNarrativePrefix) {
-      result.narrative = `${customNarrativePrefix}　${result.narrative}`;
       result.choiceLabel = customActionTrimmed.slice(0, 30);
     }
 
@@ -204,6 +203,8 @@ app.post('/game/:sessionId/choice', async (c) => {
       eventTitle: result.eventTitle,
       choiceLabel: result.choiceLabel,
       success: result.success,
+      customAction: hasCustomAction ? customActionTrimmed : undefined,
+      matchStats: result.matchStats,
     });
     result.narrative = polished;
 
