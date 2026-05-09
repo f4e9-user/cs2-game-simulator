@@ -8,3 +8,9 @@ dist/
 *.log
 .vercel
 coverage/
+
+# Planning / orchestration artifacts
+.sisyphus/
+
+# TypeScript build info
+*.tsbuildinfo

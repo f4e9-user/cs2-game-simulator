@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { Player, ShopItem } from '@/lib/types';
 import { formatMoney } from '@/lib/format';
+import { PawnConfirmModal } from './PawnConfirmModal';
 
 const CATEGORY_LABELS: Record<string, string> = {
   consumable: '消耗品',
@@ -33,6 +34,7 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [shopModal, setShopModal] = useState<ShopModal | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showPawn, setShowPawn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +46,7 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
     return () => { cancelled = true; };
   }, []);
 
-  const PERIPHERAL_PRICES = [50, 80, 120, 200];
+  const PERIPHERAL_PRICES = [30, 60, 100, 150];
 
   const buy = async (itemId: string) => {
     setBusyId(itemId);
@@ -70,6 +72,13 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
   const cooldowns = player.shopCooldowns ?? {};
 
   const TOURNAMENT_LOCKED_ITEMS = new Set(['team-dinner', 'fan-meetup', 'short-trip']);
+
+  const hasPawnableItems = () => {
+    const pawned = new Set(player.pawnedItemIds ?? []);
+    const owned = player.ownedItems ?? [];
+    return (owned.includes('ergo-chair') && !pawned.has('ergo-chair')) ||
+      (owned.includes('pro-peripherals') && !pawned.has('pro-peripherals') && (player.peripheralTier ?? 0) > 0);
+  };
 
   const getDisplayPrice = (item: ShopItem): number => {
     if (item.id === 'pro-peripherals') {
@@ -124,6 +133,16 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
           <span style={{ fontSize: 11, color: 'var(--fg-2)' }}>
             余额 {formatMoney(player.stats.money)}
           </span>
+          {hasPawnableItems() && (
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => setShowPawn(true)}
+              style={{ fontSize: 10, padding: '2px 8px', color: 'var(--warn)' }}
+            >
+              典当
+            </button>
+          )}
         </div>
 
         {categories.map((cat) => {
@@ -172,6 +191,17 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
           </div>
         )}
       </div>
+
+      {showPawn && (
+        <PawnConfirmModal
+          sessionId={sessionId}
+          player={player}
+          onClose={(updatedPlayer) => {
+            onPlayerUpdate(updatedPlayer);
+            setShowPawn(false);
+          }}
+        />
+      )}
 
       {/* 购买结果弹框 */}
       {shopModal && (

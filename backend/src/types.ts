@@ -43,6 +43,7 @@ export type EventType =
   | 'match'
   | 'media'
   | 'life'
+  | 'bailout'
   | 'betting'
   | 'cheat'
   | 'rest'
@@ -149,7 +150,7 @@ export interface PlayerTeam {
   tag: string;
   region: string;
   tier: ClubTier;
-  weeklySalary: number;
+  monthlySalary: number;
   joinedRound: number;
 }
 
@@ -166,7 +167,7 @@ export interface TeamOffer {
   tag: string;
   tier: ClubTier;
   region: string;
-  weeklySalary: number;
+  monthlySalary: number;
 }
 
 export interface PendingDeparture {
@@ -176,6 +177,27 @@ export interface PendingDeparture {
   revealed: boolean;        // 具名预警事件（-4 回合）已触发
   destTeamName: string;     // 目标俱乐部名称（来自 rivals）
   earlyRecruit: boolean;    // 玩家提前行动，新人质量更好
+}
+
+export type ForcedMatchResult = 'win' | 'loss';
+
+export interface Loan {
+  id: string;
+  principal: number;
+  interestRate: number;
+  remainingPrincipal: number;
+  issuedRound: number;
+  dueRound: number;
+  paid: boolean;
+  defaulted: boolean;
+}
+
+export interface SalaryTracker {
+  lastPayRound: number;
+  joinedRound: number;
+  payCycle: number;
+  originalMonthlySalary?: number;
+  salaryRestoreRound?: number;
 }
 
 export interface DynamicState {
@@ -195,6 +217,11 @@ export interface DynamicState {
   consecutiveLosses: number;         // 连续赛事失利计数
   everHadTeam: boolean;               // 是否曾拥有过战队（用于结局判定）
   contractRenewals: number;           // 续约次数（用于 loyal-veteran 结局）
+  forceNextEvent: string | null;
+  forceMatchResult: ForcedMatchResult | null;
+  bailoutCooldown: number;
+  teamBailoutCooldown: number;
+  consecutiveBrokeRounds: number;
 }
 
 export interface ActionResult {
@@ -241,6 +268,10 @@ export interface Player extends DynamicState {
   promotionPending: Stage | null;
   promotionCooldown: number;
   pendingOffer: TeamOffer | null;
+  ownedItems: string[];
+  loans: Loan[];
+  salaryTracker: SalaryTracker | null;
+  pawnedItemIds: string[];
   roster: Teammate[] | null;
   preferredRole: TeammateRole | null;
   activeRole: TeammateRole | null;

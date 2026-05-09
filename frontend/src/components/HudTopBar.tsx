@@ -73,7 +73,7 @@ export function HudTopBar({ player, leaderboard }: Props) {
       {/* 战队信息 */}
       {player.team ? (
         <span className="hud-stage-tag" style={{ background: 'var(--bg-3)', color: 'var(--up)' }}>
-          [{player.team.tag}] +{player.team.weeklySalary}K/w
+          [{player.team.tag}] +{player.team.monthlySalary}K/月
         </span>
       ) : (
         <span className="hud-stage-tag" style={{ background: 'var(--bg-3)', color: 'var(--fg-2)' }}>
@@ -133,6 +133,22 @@ export function HudTopBar({ player, leaderboard }: Props) {
           <span className="hud-gauge-label">资金</span>
           <span className="hud-gauge-val">{formatMoney(player.stats.money)}</span>
         </div>
+
+        {/* 负债指示器 */}
+        {player.loans?.some((l) => !l.paid && !l.defaulted) && (() => {
+          const active = player.loans.find((l) => !l.paid && !l.defaulted);
+          if (!active) return null;
+          const overdue = player.round >= active.dueRound;
+          return (
+            <div className={`hud-gauge ${overdue ? 'stress-hi' : ''}`} style={{ color: 'var(--danger)' }}>
+              <span className="hud-gauge-label">负债</span>
+              <span className="hud-gauge-val">
+                {formatMoney(Math.floor(active.remainingPrincipal * (1 + active.interestRate)))}
+                {overdue && <span style={{ fontSize: 9, marginLeft: 2 }}>逾期</span>}
+              </span>
+            </div>
+          );
+        })()}
 
         {/* 名气 */}
         <div className="hud-gauge fame">

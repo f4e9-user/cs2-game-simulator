@@ -7,11 +7,13 @@ import {
   applyAction,
   applyChoice,
   applyClubRequest,
+  applyForLoan,
   applyShopPurchase,
   computeTraitMods,
   createSession,
   initPlayer,
   generateTeamOffer,
+  pawnItem,
   respondTeamOffer,
   rollRandomTraits,
   validateAllocation,
@@ -583,6 +585,60 @@ app.post('/game/:sessionId/shop', async (c) => {
   }
 });
 
+// 装备典当端点
+app.post('/game/:sessionId/pawn', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { itemId } = body ?? {};
+  if (typeof itemId !== 'string' || !itemId) {
+    return c.json({ error: 'itemId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const result = pawnItem(session.player, itemId);
+    if (!result.success) {
+      return c.json({ error: result.message ?? '典当失败' }, 400);
+    }
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player: session.player, pawnValue: result.pawnValue });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+// 贷款端点
+app.post('/game/:sessionId/loan', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { amount } = body ?? {};
+  if (!Number.isInteger(amount)) {
+    return c.json({ error: 'amount 必须是整数' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const result = applyForLoan(session.player, amount);
+    if (!result.success || !result.loan) {
+      return c.json({ error: result.message ?? '贷款申请失败' }, 400);
+    }
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player: session.player, loan: result.loan });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
 // 获取行动和商品列表（前端初始化用）
 app.get('/game/meta/actions', (c) => c.json({ actions: ACTIONS }));
 app.get('/game/meta/shop', (c) => c.json({ items: SHOP_ITEMS }));
@@ -628,6 +684,13 @@ app.post('/game/:sessionId/team-response', async (c) => {
 
   try {
     const player = respondTeamOffer(session, accept);
+    if (accept && player.team) {
+      player.salaryTracker = {
+        lastPayRound: player.round,
+        joinedRound: player.round,
+        payCycle: 4,
+      };
+    }
     session.player = player;
     // When accepting, update the player's leaderboard entry to reflect the real team name/tag/region.
     if (accept && player.team && session.leaderboard) {

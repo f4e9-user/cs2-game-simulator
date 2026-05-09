@@ -18,6 +18,7 @@ import { FeedPanel } from '@/components/FeedPanel';
 import { HudTopBar } from '@/components/HudTopBar';
 import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
+import { LoanPanel } from '@/components/LoanPanel';
 import { useGameStore } from '@/store/gameStore';
 import type { Player, SocialPost, Teammate, Trait } from '@/lib/types';
 
@@ -252,6 +253,11 @@ export default function GamePage() {
                 sessionId={sessionId}
                 player={player}
                 enabled={actionsPhase}
+                onPlayerUpdate={(p: Player) => setPlayer(p)}
+              />
+              <LoanPanel
+                sessionId={sessionId}
+                player={player}
                 onPlayerUpdate={(p: Player) => setPlayer(p)}
               />
             </>

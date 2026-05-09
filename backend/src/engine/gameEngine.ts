@@ -23,6 +23,7 @@ import type {
   Club,
   GameEventPublic,
   GameSession,
+  Loan,
   MatchStats,
   Outcome,
   PendingDeparture,
@@ -125,6 +126,10 @@ function clampFatigue(v: number): number {
   return Math.max(FATIGUE_MIN, Math.min(FATIGUE_MAX, Math.round(v)));
 }
 
+function clampMoney(v: number): number {
+  return Math.max(0, Math.min(MONEY_MAX, Math.round(v)));
+}
+
 export function rollRandomTraits(count = 3): Trait[] {
   const pool = [...TRAITS];
   const out: Trait[] = [];
@@ -181,6 +186,85 @@ export function validateAllocation(stats: Stats, floor: Stats): string | null {
   return null;
 }
 
+export function applyForLoan(player: Player, amount: number): { success: boolean; message?: string; loan?: Loan } {
+  if (!Number.isInteger(amount) || amount < 20 || amount > 100) {
+    return { success: false, message: '借款金额必须是 20K 到 100K 的整数' };
+  }
+  if (player.stage === 'rookie') {
+    return { success: false, message: '至少进入青训阶段后才能申请贷款' };
+  }
+  const hasActiveLoan = (player.loans ?? []).some((loan) => !loan.paid && !loan.defaulted);
+  if (hasActiveLoan) {
+    return { success: false, message: '已有未结清贷款，不能重复借款' };
+  }
+
+  const loan: Loan = {
+    id: uuid(),
+    principal: amount,
+    interestRate: 0.10,
+    remainingPrincipal: amount,
+    issuedRound: player.round,
+    dueRound: player.round + 4,
+    paid: false,
+    defaulted: false,
+  };
+
+  player.loans = [...(player.loans ?? []), loan];
+  player.stats.money = clampMoney(player.stats.money + amount);
+
+  return { success: true, loan };
+}
+
+export function processLoanRepayment(player: Player, effects?: string[]): void {
+  const activeLoans = (player.loans ?? []).filter((loan) => !loan.paid && !loan.defaulted);
+
+  for (const loan of activeLoans) {
+    if (player.round < loan.dueRound) continue;
+
+    const totalDue = Math.floor(loan.remainingPrincipal * (1 + loan.interestRate));
+    if (player.stats.money >= totalDue) {
+      player.stats.money = clampMoney(player.stats.money - totalDue);
+      loan.paid = true;
+      loan.remainingPrincipal = 0;
+      effects?.push(`贷款还款 -${totalDue}K`);
+      continue;
+    }
+
+    loan.defaulted = true;
+    player.fame = Math.max(0, (player.fame ?? 0) - 10);
+    if (!player.tags.includes('loan-default')) player.tags.push('loan-default');
+    if (!player.tags.includes('transfer-ban')) player.tags.push('transfer-ban');
+    player.tagExpiry = {
+      ...(player.tagExpiry ?? {}),
+      'transfer-ban': player.round + 12,
+    };
+    effects?.push('贷款违约！名气-10，转会禁止12回合');
+  }
+}
+
+function processRecoverySystems(player: Player, eventId: string, effects?: string[]): void {
+  processLoanRepayment(player, effects);
+
+  const isTeamBailout = eventId.startsWith('bailout-team-');
+  const isFamilyBailout = !isTeamBailout && eventId.startsWith('bailout-');
+
+  if (isTeamBailout) {
+    player.teamBailoutCooldown = 24;
+    player.consecutiveBrokeRounds = 0;
+  } else if (isFamilyBailout) {
+    player.bailoutCooldown = 24;
+    player.consecutiveBrokeRounds = 0;
+  }
+
+  if (!isFamilyBailout && (player.bailoutCooldown ?? 0) > 0) {
+    player.bailoutCooldown -= 1;
+  }
+
+  if (!isTeamBailout && (player.teamBailoutCooldown ?? 0) > 0) {
+    player.teamBailoutCooldown -= 1;
+  }
+}
+
 export function initPlayer(input: InitInput): Player {
   const bgId = input.backgroundId || DEFAULT_BACKGROUND_ID;
   const bg = getBackground(bgId);
@@ -231,7 +315,16 @@ export function initPlayer(input: InitInput): Player {
     pendingApplication: null,
     qualificationSlots: {},
     teamQualificationSlots: {},
+    forceNextEvent: null,
+    forceMatchResult: null,
+    bailoutCooldown: 0,
+    teamBailoutCooldown: 0,
+    consecutiveBrokeRounds: 0,
     pendingOffer: null,
+    ownedItems: [],
+    loans: [],
+    salaryTracker: null,
+    pawnedItemIds: [],
     roster: null,
     preferredRole: deriveRoleFromTraits(traits),
     activeRole: null,
@@ -256,6 +349,19 @@ function advanceWeek(year: number, week: number): { year: number; week: number }
   const WEEKS = 48;
   if (week >= WEEKS) return { year: year + 1, week: 1 };
   return { year, week: week + 1 };
+}
+
+function settleSalaryOnDeparture(player: Player): number {
+  if (!player.salaryTracker || !player.team) return 0;
+  const weeksServed = Math.max(0, player.round - player.salaryTracker.lastPayRound);
+  const settlement = Math.floor(
+    (player.team.monthlySalary * weeksServed) / player.salaryTracker.payCycle,
+  );
+  if (settlement > 0) {
+    player.stats.money = clampMoney(player.stats.money + settlement);
+  }
+  player.salaryTracker = null;
+  return settlement;
 }
 
 export function weekToMonth(week: number): number {
@@ -323,7 +429,7 @@ function buildMatchResolveResult(
   // Apply stat changes via translateStatDelta for consistency
   const legacy = translateStatDelta(statChanges);
   let nextStats = { ...player.stats };
-  nextStats.money = Math.max(0, Math.min(MONEY_MAX, nextStats.money + legacy.moneyDelta));
+  nextStats.money = clampMoney(nextStats.money + legacy.moneyDelta);
 
   let growthApplied = 0;
   let growthKey: StatKey | undefined;
@@ -362,6 +468,7 @@ function buildMatchResolveResult(
 
   return {
     success: won,
+    resultTier: won ? 'success' : 'failure',
     roll: Math.round(sim.rating * 100),
     dc: enemyAimProxy,
     chosenOutcome,
@@ -370,12 +477,40 @@ function buildMatchResolveResult(
     tagsAdded: tagAdds,
     tagsRemoved: [],
     endRun: false,
+    endReason: undefined,
     feelDelta: sim.feelDelta,
     tiltDelta: sim.tiltDelta,
     fatigueDelta: sim.fatigueDelta,
     moneyDelta: legacy.moneyDelta,
     growthApplied,
     growthKey,
+  };
+}
+
+function applyForcedMatchResult(sim: MatchSimResult, forcedResult: 'win' | 'loss'): MatchSimResult {
+  if ((forcedResult === 'win') === sim.won) {
+    return {
+      ...sim,
+      summary: `调试强制${forcedResult === 'win' ? '胜利' : '失利'}：${sim.summary}`,
+    };
+  }
+
+  if (forcedResult === 'win') {
+    return {
+      ...sim,
+      won: true,
+      teamScore: Math.max(13, sim.teamScore),
+      enemyScore: Math.min(12, sim.enemyScore),
+      summary: `调试强制胜利：${sim.summary}`,
+    };
+  }
+
+  return {
+    ...sim,
+    won: false,
+    teamScore: Math.min(12, sim.teamScore),
+    enemyScore: Math.max(13, sim.enemyScore),
+    summary: `调试强制失利：${sim.summary}`,
   };
 }
 
@@ -422,6 +557,9 @@ export function applyChoice(
       if (t && stage) {
         const effectiveDiff = t.baseDifficulty + stage.difficultyBonus;
         pendingMatchSim = simulateMatch(session.player, effectiveDiff, rng);
+        if (session.player.forceMatchResult) {
+          pendingMatchSim = applyForcedMatchResult(pendingMatchSim, session.player.forceMatchResult);
+        }
         return buildMatchResolveResult(session.player, pendingMatchSim, t, stageIdx);
       }
     }
@@ -615,6 +753,14 @@ export function applyChoice(
     consecutiveLosses = 0;
   }
 
+  // 破产连续轮次追踪：用于家人救济事件触发
+  let consecutiveBrokeRounds = session.player.consecutiveBrokeRounds ?? 0;
+  if (statsAfterGrowth.money <= 0) {
+    consecutiveBrokeRounds += 1;
+  } else {
+    consecutiveBrokeRounds = 0;
+  }
+
   // ── 冷却 tag 处理 ──────────────────────────────────────────────
   // 1. 先剪掉已过期的冷却 tag
   const nextTagExpiry: Record<string, number> = { ...(session.player.tagExpiry ?? {}) };
@@ -699,6 +845,7 @@ export function applyChoice(
     qualificationSlots: nextQualificationSlots,
     teamQualificationSlots: nextTeamQualificationSlots,
     consecutiveLosses,
+    consecutiveBrokeRounds,
   };
 
   // ── 明星/老将 tag 检查与首次获得奖励 ─────────────────────────────
@@ -717,6 +864,10 @@ export function applyChoice(
     nextPlayer.stress = Math.max(0, (nextPlayer.stress ?? 0) - 15);
   }
 
+  if (tournamentMatch && session.player.forceMatchResult) {
+    nextPlayer.forceMatchResult = null;
+  }
+
   // 面试事件完成后清空 pendingApplication（response 阶段保留，供面试 post-handler 读取 clubId）
   const CLUB_INTERVIEW_IDS = new Set([
     'chain-club-interview',
@@ -727,10 +878,55 @@ export function applyChoice(
     nextPlayer.pendingApplication = null;
   }
 
-  // 周薪入账
-  if (nextPlayer.team) {
-    nextPlayer.stats.money = Math.min(MONEY_MAX, nextPlayer.stats.money + nextPlayer.team.weeklySalary);
-    passiveEffects.push(`周薪入账 +${nextPlayer.team.weeklySalary}K`);
+  const recoveryEffects: string[] = [];
+  processRecoverySystems(nextPlayer, eventDef.id, recoveryEffects);
+  passiveEffects.push(...recoveryEffects);
+
+  if (
+    eventDef.id.startsWith('bailout-team-') &&
+    nextPlayer.team &&
+    nextPlayer.salaryTracker &&
+    !nextPlayer.salaryTracker.salaryRestoreRound
+  ) {
+    const originalMonthlySalary = nextPlayer.team.monthlySalary;
+    nextPlayer.team = {
+      ...nextPlayer.team,
+      monthlySalary: Math.floor(originalMonthlySalary * 0.8),
+    };
+    nextPlayer.salaryTracker = {
+      ...nextPlayer.salaryTracker,
+      originalMonthlySalary,
+      salaryRestoreRound: nextPlayer.round + 12,
+    };
+    passiveEffects.push('战队垫款：未来 12 周薪资临时下调 20%');
+  }
+
+  // 月薪入账：每 4 回合结算一次，入队后从 salaryTracker.lastPayRound 起算
+  if (nextPlayer.team && nextPlayer.salaryTracker) {
+    if (
+      nextPlayer.salaryTracker.salaryRestoreRound &&
+      nextPlayer.round >= nextPlayer.salaryTracker.salaryRestoreRound
+    ) {
+      nextPlayer.team = {
+        ...nextPlayer.team,
+        monthlySalary: nextPlayer.salaryTracker.originalMonthlySalary ?? nextPlayer.team.monthlySalary,
+      };
+      const restoredTracker = { ...nextPlayer.salaryTracker };
+      delete restoredTracker.originalMonthlySalary;
+      delete restoredTracker.salaryRestoreRound;
+      nextPlayer.salaryTracker = restoredTracker;
+      passiveEffects.push('临时薪资下调结束，周薪恢复');
+    }
+
+    const roundsSinceLastPay = nextPlayer.round - nextPlayer.salaryTracker.lastPayRound;
+    if (roundsSinceLastPay >= nextPlayer.salaryTracker.payCycle) {
+      nextPlayer.stats.money = clampMoney(nextPlayer.stats.money + nextPlayer.team.monthlySalary);
+      nextPlayer.salaryTracker = {
+        ...nextPlayer.salaryTracker,
+        lastPayRound: nextPlayer.round,
+      };
+      passiveEffects.push(`月薪入账 +${nextPlayer.team.monthlySalary}K`);
+    }
   }
 
   if (!nextPlayer.team && nextPlayer.roster) {
@@ -820,9 +1016,14 @@ export function applyChoice(
     eventDef.id === 'chain-team-fired' ||
     (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'));
   const isTeamDeparture =
-    isConflictDeparture || eventDef.id === 'chain-contract-renewal';
+    (eventDef.id === 'chain-team-fired' && (choiceDef.id === 'accept-gracefully' || !outcome.success)) ||
+    (eventDef.id === 'chain-contract-renewal' && choiceDef.id === 'leave-team') ||
+    (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'));
 
   if (isTeamDeparture) {
+    const settlement = settleSalaryOnDeparture(nextPlayer);
+    if (settlement > 0) passiveEffects.push(`离队薪资结清 +${settlement}K`);
+
     // bad-blood 仅在冲突性离队时添加，合约到期正常分手不加
     if (isConflictDeparture && !tagsAdded.includes('bad-blood')) tagsAdded.push('bad-blood');
 
@@ -1082,6 +1283,10 @@ export function applyChoice(
     return pickEvent({ player: nextPlayer, recentEventIds: recent, rng, leaderboard });
   })();
 
+  if (nextPlayer.forceNextEvent && nextEventDef?.id === nextPlayer.forceNextEvent) {
+    nextPlayer.forceNextEvent = null;
+  }
+
   result.narrative = substituteRivals(result.narrative, nextPlayer.rivals);
   result.narrative = substituteTeammates(result.narrative, nextPlayer.roster ?? []);
   result.eventTitle = substituteRivals(result.eventTitle, nextPlayer.rivals);
@@ -1278,6 +1483,13 @@ export function applyShopPurchase(
   const player = session.player;
   const round = player.round;
 
+  if ((player.pawnedItemIds ?? []).includes(itemId)) {
+    throw new Error('该装备已永久典当，无法重新购买');
+  }
+  if (item.category === 'equipment' && itemId !== 'pro-peripherals' && (player.ownedItems ?? []).includes(itemId)) {
+    throw new Error('已经拥有该装备');
+  }
+
   // Stage check
   if (item.requireStage && !item.requireStage.includes(player.stage)) {
     throw new Error('当前阶段无法购买此商品');
@@ -1342,7 +1554,7 @@ export function applyShopPurchase(
     }
 
     const newStats = { ...player.stats };
-    newStats.money = Math.max(0, newStats.money - price);
+    newStats.money = clampMoney(newStats.money - price);
 
     const nextPlayer: Player = {
       ...player,
@@ -1350,6 +1562,9 @@ export function applyShopPurchase(
       feelCap: newFeelCap,
       peripheralTier: newTier,
       buffs: newBuffs,
+      ownedItems: success && !(player.ownedItems ?? []).includes(itemId)
+        ? [...(player.ownedItems ?? []), itemId]
+        : player.ownedItems,
     };
     return { player: nextPlayer, itemName: item.name, shopNarrative, shopNarrativePositive: success };
   }
@@ -1359,7 +1574,7 @@ export function applyShopPurchase(
 
   // Apply money cost
   let stats = { ...player.stats };
-  stats.money = Math.max(0, stats.money - item.priceMoney);
+  stats.money = clampMoney(stats.money - item.priceMoney);
 
   // Constitution delta
   if (effect.constitutionDelta) {
@@ -1423,6 +1638,9 @@ export function applyShopPurchase(
     fame,
     tags,
     shopCooldowns: nextShopCooldowns,
+    ownedItems: item.category === 'equipment' && !(player.ownedItems ?? []).includes(itemId)
+      ? [...(player.ownedItems ?? []), itemId]
+      : player.ownedItems,
   };
 
   return {
@@ -1431,6 +1649,52 @@ export function applyShopPurchase(
     shopNarrative,
     shopNarrativePositive: shopNarrative ? false : undefined,
   };
+}
+
+export function pawnItem(
+  player: Player,
+  itemId: string,
+): { success: boolean; message?: string; pawnValue?: number } {
+  if (!player.ownedItems.includes(itemId)) {
+    return { success: false, message: '未拥有该装备，无法典当' };
+  }
+  if ((player.pawnedItemIds ?? []).includes(itemId)) {
+    return { success: false, message: '该装备已经典当过了' };
+  }
+  if (itemId !== 'ergo-chair' && itemId !== 'pro-peripherals') {
+    return { success: false, message: '只有装备类物品可以典当' };
+  }
+
+  let pawnValue: number;
+  if (itemId === 'ergo-chair') {
+    pawnValue = Math.floor(35 * 0.6);
+    player.stats.constitution = Math.max(0, player.stats.constitution - 2);
+    player.buffs = (player.buffs ?? []).filter((b) => b.id !== 'ergo-recovery');
+  } else {
+    const tier = player.peripheralTier ?? 0;
+    if (tier <= 0) {
+      return { success: false, message: '当前没有可典当的外设升级' };
+    }
+    let totalValue = 0;
+    for (let i = 0; i < tier; i++) {
+      totalValue += PERIPHERAL_PRICES[i] ?? 0;
+    }
+    pawnValue = Math.floor(totalValue * 0.5);
+    player.peripheralTier = 0;
+    player.feelCap = FEEL_CAP_DEFAULT;
+    player.volatile = {
+      ...(player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 }),
+      feel: clampFeel(player.volatile?.feel ?? 0, player.feelCap),
+    };
+    player.buffs = (player.buffs ?? []).filter((b) => b.id !== 'pro-gear');
+  }
+
+  player.stats.money = clampMoney(player.stats.money + pawnValue);
+  player.stats = clampStats(player.stats);
+  player.ownedItems = player.ownedItems.filter((id) => id !== itemId);
+  player.pawnedItemIds = [...(player.pawnedItemIds ?? []), itemId];
+
+  return { success: true, pawnValue };
 }
 
 // ── 战队申请 ──────────────────────────────────────────────────
@@ -1445,7 +1709,11 @@ export function applyClubRequest(
   if (!club) throw new Error('未知俱乐部');
 
   const player = session.player;
+  if (player.tags.includes('transfer-ban')) {
+    throw new Error('因贷款违约，你目前被禁止转会（还有' + ((player.tagExpiry?.['transfer-ban'] ?? player.round) - player.round) + '回合）');
+  }
   if (player.team && clubId === player.team.clubId) throw new Error('已经在这支战队了');
+  if (player.team) throw new Error('你已经有战队了');
   if (player.pendingApplication) throw new Error('已经有一个进行中的申请');
 
   const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
@@ -1528,7 +1796,7 @@ export function respondTeamOffer(
       tag: offer.tag,
       region: offer.region,
       tier: offer.tier,
-      weeklySalary: offer.weeklySalary,
+      monthlySalary: offer.monthlySalary,
       joinedRound: player.round,
     };
 
@@ -1568,6 +1836,11 @@ export function respondTeamOffer(
       team,
       stage: nextStage,
       everHadTeam: true,
+      salaryTracker: {
+        lastPayRound: player.round,
+        joinedRound: player.round,
+        payCycle: 4,
+      },
       pendingOffer: null,
       pendingApplication: null,
       roster,
@@ -1605,7 +1878,7 @@ export function generateTeamOffer(clubId: string): TeamOffer {
     tag: club.tag,
     tier: club.tier,
     region: club.region,
-    weeklySalary: salary,
+    monthlySalary: salary,
   };
 }
 
@@ -1652,4 +1925,3 @@ function calcTrustRateMultiplier(roster: Teammate[], rng: () => number): number 
   if (counts.drama) mult *= (0.7 + rng() * 0.6);
   return mult;
 }
-

@@ -1,4 +1,4 @@
-import { EVENT_POOL, PROMOTION_EVENTS } from '../data/events/index.js';
+import { EVENT_POOL, PROMOTION_EVENTS, getEventById } from '../data/events/index.js';
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
 import { CLUBS } from '../data/clubs.js';
@@ -90,6 +90,21 @@ function dynamicTags(player: Player): string[] {
   if (player.team && player.pendingMatch) {
     out.push('rival-match-pressure');
   }
+
+  // ── 破产救济 tag ───────────────────────────────────────────────
+  const bailoutReady =
+    (player.stats.money ?? 0) <= 0 &&
+    (player.consecutiveBrokeRounds ?? 0) >= 2 &&
+    (player.bailoutCooldown ?? 0) <= 0;
+  if (bailoutReady) {
+    out.push('needs-bailout');
+  }
+
+  const teamBailoutReady =
+    player.team &&
+    (player.stats.money ?? 0) <= 0 &&
+    (player.teamBailoutCooldown ?? 0) <= 0;
+  if (teamBailoutReady) out.push('needs-team-bailout');
 
   // ── 角色转型 tag ──────────────────────────────────────────────────
   if (player.preferredRole && !player.roleTransition) {
@@ -239,6 +254,11 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   const realTags = new Set(player.tags);
   const synthTags = new Set([...player.tags, ...dynamicTags(player)]);
 
+  if (player.forceNextEvent) {
+    const forcedEvent = getEventById(player.forceNextEvent);
+    if (forcedEvent) return forcedEvent;
+  }
+
   if ((player.restRounds ?? 0) > 0) {
     const restPool = EVENT_POOL.filter((e) => e.type === 'rest');
     if (restPool.length > 0) return weightedPick(restPool, rng, () => 1);
@@ -247,6 +267,18 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   // 赛事隔离：进行中的赛事优先级最高，阻断晋级事件和随机事件
   if (player.pendingMatch) {
     return buildTournamentPrepEvent(player.pendingMatch);
+  }
+
+  // 破产恢复：持续破产且冷却结束时，直接注入家人/朋友救济事件
+  if (synthTags.has('needs-bailout') || synthTags.has('needs-team-bailout')) {
+    const bailoutPool = EVENT_POOL.filter(
+      (e) =>
+        e.type === 'bailout' &&
+        e.stages.includes(player.stage) &&
+        !recentEventIds.includes(e.id) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)),
+    );
+    if (bailoutPool.length > 0) return weightedPick(bailoutPool, rng, (e) => stateWeight(e, player));
   }
 
   // Promotion pending: inject the stage-specific narrative event.
