@@ -154,9 +154,9 @@ export default function GamePage() {
     if (currentEvent) setCenterTab('event');
   }, [currentEvent?.id]);
 
-  // 刷新社区动态：player 首次加载后 & 每回合结束后（后端有 KV 缓存，重复请求不会重新调用 LLM）
+  // 刷新社区动态：5 回合后才开始出现，之后每回合结束刷新一次
   useEffect(() => {
-    if (!player) return;
+    if (!player || (player.round ?? 0) < 5) return;
     let cancelled = false;
     setSocialLoading(true);
     api.getSocialFeed(sessionId, apiToken ?? undefined)
