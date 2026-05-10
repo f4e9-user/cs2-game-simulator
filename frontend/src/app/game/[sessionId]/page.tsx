@@ -66,6 +66,10 @@ export default function GamePage() {
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
   const [socialLoading, setSocialLoading] = useState(false);
 
+  const [streamingNarrative, setStreamingNarrative] = useState<string | null>(null);
+  const [isNarrating, setIsNarrating] = useState(false);
+  const narrateCtxRef = useRef<{ cancelled: boolean } | null>(null);
+
   const storageKey = `intro-seen-${sessionId}`;
   const [welcomeDismissed, setWelcomeDismissed] = useState(() =>
     typeof window !== 'undefined' && sessionStorage.getItem(storageKey) === '1'
@@ -182,11 +186,41 @@ export default function GamePage() {
   }, [player?.stress]);
 
   const pickChoice = async (choiceId: string, customAction?: string) => {
+    // Cancel any in-flight narrative stream from a previous choice
+    if (narrateCtxRef.current) narrateCtxRef.current.cancelled = true;
+    setStreamingNarrative(null);
+    setIsNarrating(false);
+
     setLoading(true);
     setError(null);
     try {
       const res = await api.submitChoice(sessionId, choiceId, customAction);
       applyChoiceResponse(res);
+
+      // personalizeEvent starts in the background via the useEffect above.
+      // Kick off narrative streaming in parallel (both run concurrently).
+      if (aiActive && apiToken) {
+        const ctx = { cancelled: false };
+        narrateCtxRef.current = ctx;
+        setIsNarrating(true);
+        api.narrateStream(
+          sessionId,
+          {
+            baseNarrative: res.result.narrative,
+            eventTitle: res.result.eventTitle,
+            choiceLabel: res.result.choiceLabel,
+            success: res.result.success,
+            customAction,
+            matchStats: res.result.matchStats ?? undefined,
+          },
+          apiToken,
+          (chunk) => {
+            if (!ctx.cancelled) setStreamingNarrative((prev) => (prev ?? '') + chunk);
+          },
+        ).finally(() => {
+          if (!ctx.cancelled) setIsNarrating(false);
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -316,7 +350,13 @@ export default function GamePage() {
               <div className="center-tab-pane">
                 {centerTab === 'event' && (
                   <>
-                    {lastResult && <ResultPanel result={lastResult} />}
+                    {lastResult && (
+                      <ResultPanel
+                        result={lastResult}
+                        streamingNarrative={streamingNarrative}
+                        isNarrating={isNarrating}
+                      />
+                    )}
                     {actionsPhase ? (
                       <div className="actions-phase-banner">
                         <div className="actions-phase-title">行动阶段</div>
