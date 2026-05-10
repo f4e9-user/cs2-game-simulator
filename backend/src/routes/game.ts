@@ -154,6 +154,9 @@ app.post('/game/:sessionId/choice', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
+    return c.json({ error: '无效的 API Token' }, 401);
+  }
 
   const ai = makeAiService(c.env);
 
@@ -575,11 +578,29 @@ app.post('/game/:sessionId/shop', async (c) => {
   if (!session) return c.json({ error: 'session not found' }, 404);
 
   try {
-    const { player, itemName, shopNarrative, shopNarrativePositive } = applyShopPurchase(session, itemId);
+    const {
+      player,
+      itemName,
+      shopNarrative,
+      shopNarrativePositive,
+      shopBuffLabelsAdded,
+      shopBuffLabelsRemoved,
+      shopTagsAdded,
+      shopTagsRemoved,
+    } = applyShopPurchase(session, itemId);
     session.player = player;
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
-    return c.json({ player, itemName, shopNarrative, shopNarrativePositive });
+    return c.json({
+      player,
+      itemName,
+      shopNarrative,
+      shopNarrativePositive,
+      shopBuffLabelsAdded,
+      shopBuffLabelsRemoved,
+      shopTagsAdded,
+      shopTagsRemoved,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
@@ -601,9 +622,10 @@ app.post('/game/:sessionId/pawn', async (c) => {
 
   try {
     const result = pawnItem(session.player, itemId);
-    if (!result.success) {
+    if (!result.success || !result.player) {
       return c.json({ error: result.message ?? '典当失败' }, 400);
     }
+    session.player = result.player;
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
     return c.json({ player: session.player, pawnValue: result.pawnValue });
