@@ -101,11 +101,11 @@ export const api = {
     }),
   getSession: (sessionId: string) =>
     request<GameSession>(`/api/game/${sessionId}`),
-  submitChoice: (sessionId: string, choiceId: string, customAction?: string) =>
+  submitChoice: (sessionId: string, choiceId: string, customAction?: string, apiToken?: string) =>
     request<ChoiceResponse>(`/api/game/${sessionId}/choice`, {
       method: 'POST',
       body: JSON.stringify(customAction ? { choiceId, customAction } : { choiceId }),
-    }),
+    }, apiToken),
   listTournaments: (sessionId: string) =>
     request<TournamentsResponse>(`/api/game/${sessionId}/tournaments`),
   signup: (sessionId: string, tournamentId: string) =>

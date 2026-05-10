@@ -15,6 +15,13 @@ interface LlmLogEntry {
   stream: boolean;
 }
 
+interface AiStatus {
+  provider: string;
+  model: string | null;
+  active: boolean;
+  kvBound: boolean;
+}
+
 const METHOD_COLORS: Record<string, string> = {
   narrate: '#ff5b1f',
   narrateStream: '#ff8a5c',
@@ -24,6 +31,7 @@ const METHOD_COLORS: Record<string, string> = {
   judgeCustomAction: '#ffa657',
   validateJudgment: '#f0883e',
   simulateSocialFeed: '#79c0ff',
+  test: '#8b949e',
 };
 
 function methodColor(method: string): string {
@@ -35,8 +43,8 @@ function fmtTime(ts: string): string {
   return d.toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
 }
 
-function PromptBlock({ label, text }: { label: string; text: string }) {
-  const [collapsed, setCollapsed] = useState(true);
+function PromptBlock({ label, text, defaultOpen = false }: { label: string; text: string; defaultOpen?: boolean }) {
+  const [collapsed, setCollapsed] = useState(!defaultOpen);
   return (
     <div style={{ marginBottom: 8 }}>
       <button
@@ -55,7 +63,7 @@ function PromptBlock({ label, text }: { label: string; text: string }) {
       >
         <span style={{ fontSize: 10 }}>{collapsed ? '▶' : '▼'}</span>
         <span style={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-        <span style={{ color: '#3d444d' }}>({text.length} chars)</span>
+        <span style={{ color: '#3d444d' }}>({text.length} 字符)</span>
       </button>
       {!collapsed && (
         <pre
@@ -83,12 +91,7 @@ function PromptBlock({ label, text }: { label: string; text: string }) {
 
 function LogRow({ entry, expanded, onToggle }: { entry: LlmLogEntry; expanded: boolean; onToggle: () => void }) {
   return (
-    <div
-      style={{
-        borderBottom: '1px solid #21262d',
-        background: expanded ? '#0d1117' : 'transparent',
-      }}
-    >
+    <div style={{ borderBottom: '1px solid #21262d', background: expanded ? '#0d1117' : 'transparent' }}>
       <button
         onClick={onToggle}
         style={{
@@ -112,9 +115,7 @@ function LogRow({ entry, expanded, onToggle }: { entry: LlmLogEntry; expanded: b
         </span>
         <span style={{ color: methodColor(entry.method), fontWeight: 600 }}>
           {entry.method}
-          {entry.stream && (
-            <span style={{ marginLeft: 6, fontSize: 10, color: '#8b949e', fontWeight: 400 }}>stream</span>
-          )}
+          {entry.stream && <span style={{ marginLeft: 6, fontSize: 10, color: '#8b949e', fontWeight: 400 }}>stream</span>}
         </span>
         <span style={{ color: '#8b949e', fontSize: 12 }}>{entry.model.split('-').slice(0, 2).join('-')}</span>
         <span
@@ -127,13 +128,7 @@ function LogRow({ entry, expanded, onToggle }: { entry: LlmLogEntry; expanded: b
         >
           {entry.latencyMs}ms
         </span>
-        <span
-          style={{
-            textAlign: 'right',
-            fontSize: 11,
-            color: entry.response ? '#3fb950' : '#f85149',
-          }}
-        >
+        <span style={{ textAlign: 'right', fontSize: 11, color: entry.response ? '#3fb950' : '#f85149' }}>
           {entry.response ? `${entry.response.length}c` : 'null'}
         </span>
       </button>
@@ -143,7 +138,7 @@ function LogRow({ entry, expanded, onToggle }: { entry: LlmLogEntry; expanded: b
           <div style={{ marginTop: 10 }}>
             <PromptBlock label="System Prompt" text={entry.systemPrompt} />
             <PromptBlock label="User Prompt" text={entry.userPrompt} />
-            <PromptBlock label="Response" text={entry.response ?? '(null)'} />
+            <PromptBlock label="Response" text={entry.response ?? '(null)'} defaultOpen />
           </div>
           <div style={{ marginTop: 8, fontSize: 11, color: '#3d444d' }}>
             provider: {entry.provider} · id: {entry.id}
@@ -154,7 +149,28 @@ function LogRow({ entry, expanded, onToggle }: { entry: LlmLogEntry; expanded: b
   );
 }
 
-const ALL_METHODS = Object.keys(METHOD_COLORS);
+const ALL_METHODS = Object.keys(METHOD_COLORS).filter((m) => m !== 'test');
+
+function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '2px 8px',
+        borderRadius: 12,
+        background: ok ? 'rgba(63,185,80,0.12)' : 'rgba(248,81,73,0.12)',
+        border: `1px solid ${ok ? '#3fb950' : '#f85149'}`,
+        fontSize: 12,
+        color: ok ? '#3fb950' : '#f85149',
+      }}
+    >
+      <span style={{ fontSize: 8 }}>●</span>
+      {label}
+    </span>
+  );
+}
 
 export default function LlmDebugPage() {
   const [logs, setLogs] = useState<LlmLogEntry[]>([]);
@@ -163,6 +179,8 @@ export default function LlmDebugPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('all');
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const apiBase =
@@ -176,7 +194,7 @@ export default function LlmDebugPage() {
     setError(null);
     try {
       const res = await fetch(`${apiBase}/api/debug/llm-logs?limit=100`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status} — 请确认 Worker 在本地运行 (http://127.0.0.1:8787)`);
       const data = (await res.json()) as { logs: LlmLogEntry[] };
       setLogs(data.logs ?? []);
     } catch (e) {
@@ -186,9 +204,29 @@ export default function LlmDebugPage() {
     }
   }, [apiBase]);
 
+  const fetchAiStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/debug/ai-status`);
+      if (res.ok) setAiStatus((await res.json()) as AiStatus);
+    } catch {}
+  }, [apiBase]);
+
+  const writeTestLog = useCallback(async () => {
+    setTestMsg(null);
+    try {
+      const res = await fetch(`${apiBase}/api/debug/llm-logs/test`, { method: 'POST' });
+      const data = (await res.json()) as { message?: string; error?: string };
+      setTestMsg(data.message ?? data.error ?? '未知响应');
+      await fetchLogs();
+    } catch (e) {
+      setTestMsg(e instanceof Error ? e.message : String(e));
+    }
+  }, [apiBase, fetchLogs]);
+
   useEffect(() => {
     void fetchLogs();
-  }, [fetchLogs]);
+    void fetchAiStatus();
+  }, [fetchLogs, fetchAiStatus]);
 
   useEffect(() => {
     if (autoRefresh) {
@@ -213,71 +251,66 @@ export default function LlmDebugPage() {
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px 64px', fontFamily: 'inherit' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 20, color: '#e6edf3' }}>LLM Debug</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#8b949e' }}>
-            查看最近 100 条 LLM 调用 · prompt / response review
+            查看最近 100 条 LLM 调用的 prompt / response
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <label style={{ fontSize: 13, color: '#8b949e', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              style={{ accentColor: '#ff5b1f' }}
-            />
+            <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} style={{ accentColor: '#ff5b1f' }} />
             每 3s 刷新
           </label>
           <button
             onClick={() => void fetchLogs()}
             disabled={loading}
-            style={{
-              background: '#ff5b1f',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 6,
-              padding: '6px 14px',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.6 : 1,
-            }}
+            style={{ background: '#ff5b1f', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}
           >
             {loading ? '加载中…' : '刷新'}
           </button>
         </div>
       </div>
 
+      {/* AI status bar */}
+      {aiStatus && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+          <StatusBadge ok={aiStatus.active} label={aiStatus.active ? `AI 已启用 (${aiStatus.provider})` : `AI 未启用 (${aiStatus.provider})`} />
+          {aiStatus.model && <StatusBadge ok label={aiStatus.model} />}
+          <StatusBadge ok={aiStatus.kvBound} label={aiStatus.kvBound ? 'KV 已绑定' : 'KV 未绑定'} />
+          {!aiStatus.active && (
+            <span style={{ fontSize: 12, color: '#d29922' }}>
+              ⚠ AI_PROVIDER=none → 使用模板叙事，不产生 LLM 日志
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Test write button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <button
+          onClick={() => void writeTestLog()}
+          style={{ background: '#21262d', color: '#e6edf3', border: '1px solid #30363d', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer' }}
+        >
+          写入测试日志
+        </button>
+        <span style={{ fontSize: 12, color: '#8b949e' }}>验证 KV 管道是否正常</span>
+        {testMsg && <span style={{ fontSize: 12, color: '#3fb950' }}>{testMsg}</span>}
+      </div>
+
       {/* Stats bar */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 16,
-          padding: '10px 16px',
-          background: '#0d1117',
-          border: '1px solid #21262d',
-          borderRadius: 8,
-          marginBottom: 16,
-          flexWrap: 'wrap',
-          fontSize: 13,
-        }}
-      >
+      <div style={{ display: 'flex', gap: 16, padding: '10px 16px', background: '#0d1117', border: '1px solid #21262d', borderRadius: 8, marginBottom: 16, flexWrap: 'wrap', fontSize: 13 }}>
         <span style={{ color: '#8b949e' }}>共 <strong style={{ color: '#e6edf3' }}>{logs.length}</strong> 条</span>
         <span style={{ color: '#8b949e' }}>均延迟 <strong style={{ color: avgLatency > 2000 ? '#f85149' : '#3fb950' }}>{avgLatency}ms</strong></span>
         {ALL_METHODS.map((m) =>
-          methodCounts[m] ? (
-            <span key={m} style={{ color: methodColor(m) }}>
-              {m}: {methodCounts[m]}
-            </span>
-          ) : null,
+          methodCounts[m] ? <span key={m} style={{ color: methodColor(m) }}>{m}: {methodCounts[m]}</span> : null,
         )}
       </div>
 
       {/* Filter tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        {(['all', ...ALL_METHODS] as string[]).map((m) => (
+        {(['all', ...ALL_METHODS, 'test'] as string[]).map((m) => (
           <button
             key={m}
             onClick={() => setFilter(m)}
@@ -292,47 +325,21 @@ export default function LlmDebugPage() {
               fontWeight: filter === m ? 600 : 400,
             }}
           >
-            {m}
-            {m !== 'all' && methodCounts[m] ? ` (${methodCounts[m]})` : ''}
+            {m}{m !== 'all' && methodCounts[m] ? ` (${methodCounts[m]})` : ''}
           </button>
         ))}
       </div>
 
       {/* Error */}
       {error && (
-        <div
-          style={{
-            padding: '10px 14px',
-            background: 'rgba(248,81,73,0.1)',
-            border: '1px solid #f85149',
-            borderRadius: 6,
-            color: '#f85149',
-            fontSize: 13,
-            marginBottom: 12,
-          }}
-        >
-          {error} — 请确认 Worker 在本地运行（http://127.0.0.1:8787）
+        <div style={{ padding: '10px 14px', background: 'rgba(248,81,73,0.1)', border: '1px solid #f85149', borderRadius: 6, color: '#f85149', fontSize: 13, marginBottom: 12 }}>
+          {error}
         </div>
       )}
 
       {/* Table header */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '20px 130px 1fr 80px 70px 56px',
-          gap: 12,
-          padding: '6px 16px',
-          fontSize: 11,
-          color: '#3d444d',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          borderBottom: '1px solid #21262d',
-        }}
-      >
-        <span />
-        <span>时间</span>
-        <span>方法</span>
-        <span>模型</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '20px 130px 1fr 80px 70px 56px', gap: 12, padding: '6px 16px', fontSize: 11, color: '#3d444d', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid #21262d' }}>
+        <span /><span>时间</span><span>方法</span><span>模型</span>
         <span style={{ textAlign: 'right' }}>延迟</span>
         <span style={{ textAlign: 'right' }}>响应</span>
       </div>
@@ -341,7 +348,14 @@ export default function LlmDebugPage() {
       <div style={{ border: '1px solid #21262d', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
         {visible.length === 0 ? (
           <div style={{ padding: '32px 16px', textAlign: 'center', color: '#3d444d', fontSize: 13 }}>
-            {loading ? '加载中…' : '暂无记录。触发任意 LLM 调用后数据将出现在这里。'}
+            {loading ? '加载中…' : (
+              <>
+                暂无记录。
+                {aiStatus && !aiStatus.active
+                  ? ' AI 未启用，请在 wrangler.toml 设置 AI_PROVIDER 后重启 Worker。'
+                  : ' 触发任意 LLM 调用后数据将出现在这里，或点击"写入测试日志"验证管道。'}
+              </>
+            )}
           </div>
         ) : (
           visible.map((entry) => (
@@ -356,7 +370,7 @@ export default function LlmDebugPage() {
       </div>
 
       <p style={{ marginTop: 16, fontSize: 11, color: '#3d444d' }}>
-        此页面仅在本地 Worker 运行时可用（isLocalDebugRequest 检查）· 日志 KV TTL 24h · 最多保留 100 条
+        日志仅在本地 Worker 运行时可读写（isLocalDebugRequest 检查） · KV TTL 24h · 最多保留 100 条
       </p>
     </div>
   );

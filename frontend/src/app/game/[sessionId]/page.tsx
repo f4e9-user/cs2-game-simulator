@@ -195,7 +195,7 @@ export default function GamePage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.submitChoice(sessionId, choiceId, customAction);
+      const res = await api.submitChoice(sessionId, choiceId, customAction, apiToken ?? undefined);
       applyChoiceResponse(res);
 
       // personalizeEvent starts in the background via the useEffect above.

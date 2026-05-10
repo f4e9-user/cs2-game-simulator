@@ -53,7 +53,7 @@ function validateApiToken(authHeader: string | undefined, sessionToken: string):
 }
 
 app.get('/health', (c) => {
-  const ai = makeAiService(c.env);
+  const ai = makeAiService(c.env, c.executionCtx);
   return c.json({
     ok: true,
     ts: new Date().toISOString(),
@@ -158,7 +158,7 @@ app.post('/game/:sessionId/choice', async (c) => {
     return c.json({ error: '无效的 API Token' }, 401);
   }
 
-  const ai = makeAiService(c.env);
+  const ai = makeAiService(c.env, c.executionCtx);
 
   // 自定义行动：用 LLM 评判，映射为 rollBonus，使用第一个选项作为底牌
   let choiceId = rawChoiceId as string;
@@ -747,7 +747,7 @@ app.get('/game/:sessionId/personalize-event', async (c) => {
     .map((tid) => getTrait(tid))
     .filter((t): t is NonNullable<typeof t> => Boolean(t));
 
-  const ai = makeAiService(c.env);
+  const ai = makeAiService(c.env, c.executionCtx);
   const personalized = await ai.personalizeEvent(session.player, traitObjects, session.currentEvent);
 
   // null 表示 LLM 未启用或解析失败，前端保持原文
@@ -778,7 +778,7 @@ app.get('/game/:sessionId/intro', async (c) => {
   const background = getBackground(session.player.backgroundId);
   if (!background) return c.json({ error: 'background not found' }, 400);
 
-  const ai = makeAiService(c.env);
+  const ai = makeAiService(c.env, c.executionCtx);
   const intro = await ai.intro(session.player, traitObjects, background);
 
   // 写入 KV，永久缓存（intro 内容不会变）
@@ -806,7 +806,7 @@ app.get('/game/:sessionId/social-feed', async (c) => {
     if (cached) return c.json({ posts: JSON.parse(cached) });
   } catch { /* KV 不可用时跳过缓存 */ }
 
-  const ai = makeAiService(c.env);
+  const ai = makeAiService(c.env, c.executionCtx);
   const posts = await ai.simulateSocialFeed(
     session.player,
     session.history.slice(-5),
@@ -840,7 +840,7 @@ app.post('/game/:sessionId/narrate-stream', async (c) => {
     matchStats?: MatchStats;
   };
 
-  const ai = makeAiService(c.env);
+  const ai = makeAiService(c.env, c.executionCtx);
   if (!ai.active) return c.json({ error: 'AI not active' }, 400);
 
   const input = {
@@ -891,7 +891,7 @@ app.get('/game/:sessionId/summary', async (c) => {
     return c.json({ error: '游戏尚未结束' }, 400);
   }
 
-  const ai = makeAiService(c.env);
+  const ai = makeAiService(c.env, c.executionCtx);
   const summary = await ai.summarize(
     session.player,
     session.history,

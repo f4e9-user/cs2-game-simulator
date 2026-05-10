@@ -284,7 +284,8 @@ class AnthropicNarrator implements AiService {
       }
     } catch {
     } finally {
-      void this.logger?.log({ method, provider: 'anthropic', model: this.model, systemPrompt: system, userPrompt: user, response: chunks.join(''), latencyMs: Date.now() - t0, stream: true });
+      // waitUntil tracks this past stream close; without ctx it's best-effort
+      this.logger?.log({ method, provider: 'anthropic', model: this.model, systemPrompt: system, userPrompt: user, response: chunks.join(''), latencyMs: Date.now() - t0, stream: true });
     }
   }
 
@@ -304,7 +305,8 @@ class AnthropicNarrator implements AiService {
     } catch {
       return null;
     } finally {
-      void this.logger?.log({ method, provider: 'anthropic', model: this.model, systemPrompt: system, userPrompt: user, response, latencyMs: Date.now() - t0, stream: false });
+      // Awaited here — this runs within the request so KV write completes reliably
+      await this.logger?.log({ method, provider: 'anthropic', model: this.model, systemPrompt: system, userPrompt: user, response, latencyMs: Date.now() - t0, stream: false });
     }
   }
 
@@ -411,7 +413,7 @@ class OpenAINarrator implements AiService {
       }
     } catch {
     } finally {
-      void this.logger?.log({ method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response: chunks.join(''), latencyMs: Date.now() - t0, stream: true });
+      this.logger?.log({ method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response: chunks.join(''), latencyMs: Date.now() - t0, stream: true });
     }
   }
 
@@ -449,7 +451,7 @@ class OpenAINarrator implements AiService {
     } catch {
       return null;
     } finally {
-      void this.logger?.log({ method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response, latencyMs: Date.now() - t0, stream: false });
+      await this.logger?.log({ method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response, latencyMs: Date.now() - t0, stream: false });
     }
   }
 
@@ -524,9 +526,11 @@ class OpenAINarrator implements AiService {
 
 // ── Factory ──────────────────────────────────────────────────────
 
-export function makeAiService(env: Env): AiService {
+type WaitUntilCtx = { waitUntil(p: Promise<unknown>): void };
+
+export function makeAiService(env: Env, ctx?: WaitUntilCtx): AiService {
   const provider = (env.AI_PROVIDER ?? 'none').toLowerCase();
-  const logger = env.KV ? new LlmLogger(env.KV) : undefined;
+  const logger = env.KV ? new LlmLogger(env.KV, ctx) : undefined;
 
   if (provider === 'anthropic' && env.ANTHROPIC_API_KEY) {
     const model = env.AI_MODEL ?? 'claude-haiku-4-5-20251001';
