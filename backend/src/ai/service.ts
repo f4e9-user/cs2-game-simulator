@@ -1,4 +1,5 @@
 import type { Background, Env, GameEventPublic, LeaderboardTeam, Player, RoundResult, Trait } from '../types.js';
+import { LlmLogger } from './logger.js';
 import {
   buildCustomActionJudgePrompt,
   buildIntroPrompt,
@@ -243,7 +244,7 @@ class TemplateNarrator implements AiService {
 
 class AnthropicNarrator implements AiService {
   readonly active = true;
-  constructor(private apiKey: string, private model: string) {}
+  constructor(private apiKey: string, private model: string, private logger?: LlmLogger) {}
 
   private anthropicBody(system: string, user: string, maxTokens: number, stream = false) {
     return JSON.stringify({
@@ -264,7 +265,9 @@ class AnthropicNarrator implements AiService {
     };
   }
 
-  private async *anthropicChatStream(system: string, user: string, maxTokens: number): AsyncGenerator<string> {
+  private async *anthropicChatStream(system: string, user: string, maxTokens: number, method: string): AsyncGenerator<string> {
+    const t0 = Date.now();
+    const chunks: string[] = [];
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -275,13 +278,19 @@ class AnthropicNarrator implements AiService {
       for await (const ev of readSseStream(res)) {
         const e = ev as { type: string; delta?: { type: string; text?: string } };
         if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta' && e.delta.text) {
+          chunks.push(e.delta.text);
           yield e.delta.text;
         }
       }
-    } catch {}
+    } catch {
+    } finally {
+      void this.logger?.log({ method, provider: 'anthropic', model: this.model, systemPrompt: system, userPrompt: user, response: chunks.join(''), latencyMs: Date.now() - t0, stream: true });
+    }
   }
 
-  private async anthropicChat(system: string, user: string, maxTokens: number): Promise<string | null> {
+  private async anthropicChat(system: string, user: string, maxTokens: number, method: string): Promise<string | null> {
+    const t0 = Date.now();
+    let response: string | null = null;
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -290,23 +299,26 @@ class AnthropicNarrator implements AiService {
       });
       if (!res.ok) return null;
       const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-      return data.content?.find((c) => c.type === 'text')?.text?.trim() ?? null;
+      response = data.content?.find((c) => c.type === 'text')?.text?.trim() ?? null;
+      return response;
     } catch {
       return null;
+    } finally {
+      void this.logger?.log({ method, provider: 'anthropic', model: this.model, systemPrompt: system, userPrompt: user, response, latencyMs: Date.now() - t0, stream: false });
     }
   }
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
+    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500, 'narrate');
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
   async *narrateStream(input: NarrativePromptInput): AsyncGenerator<string> {
-    yield* this.anthropicChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
+    yield* this.anthropicChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500, 'narrateStream');
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
-    return (await this.anthropicChat(SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt(player, history, ending), 300)) ?? '';
+    return (await this.anthropicChat(SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt(player, history, ending), 300, 'summarize')) ?? '';
   }
 
   async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
@@ -314,6 +326,7 @@ class AnthropicNarrator implements AiService {
       INTRO_SYSTEM_PROMPT,
       buildIntroPrompt(player, traits, background),
       300,
+      'intro',
     )) ?? '';
   }
 
@@ -322,6 +335,7 @@ class AnthropicNarrator implements AiService {
       PERSONALIZE_SYSTEM_PROMPT,
       buildPersonalizePrompt(player, traits, event),
       600,
+      'personalizeEvent',
     );
     return parsePersonalized(text, event);
   }
@@ -331,6 +345,7 @@ class AnthropicNarrator implements AiService {
       PERSONALIZE_SYSTEM_PROMPT,
       buildCustomActionJudgePrompt(playerInput, event, player),
       150,
+      'judgeCustomAction',
     );
     return parseCustomActionJudgment(text);
   }
@@ -340,6 +355,7 @@ class AnthropicNarrator implements AiService {
       PERSONALIZE_SYSTEM_PROMPT,
       buildJudgmentValidationPrompt(playerInput, event, judgment),
       80,
+      'validateJudgment',
     );
     return parseJudgmentValidation(text);
   }
@@ -349,6 +365,7 @@ class AnthropicNarrator implements AiService {
       PERSONALIZE_SYSTEM_PROMPT,
       buildSocialFeedPrompt(player, recentHistory, leaderboard),
       500,
+      'simulateSocialFeed',
     );
     const posts = parseSocialFeed(text);
     return posts.length > 0 ? posts : templateSocialFeed(player, leaderboard);
@@ -363,9 +380,12 @@ class OpenAINarrator implements AiService {
     private apiKey: string,
     private model: string,
     private baseUrl: string,
+    private logger?: LlmLogger,
   ) {}
 
-  private async *chatStream(systemPrompt: string, userPrompt: string, maxTokens: number): AsyncGenerator<string> {
+  private async *chatStream(systemPrompt: string, userPrompt: string, maxTokens: number, method: string): AsyncGenerator<string> {
+    const t0 = Date.now();
+    const chunks: string[] = [];
     try {
       const res = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
@@ -384,9 +404,15 @@ class OpenAINarrator implements AiService {
       for await (const ev of readSseStream(res)) {
         const text = (ev as { choices?: Array<{ delta?: { content?: string } }> })
           .choices?.[0]?.delta?.content;
-        if (typeof text === 'string' && text) yield text;
+        if (typeof text === 'string' && text) {
+          chunks.push(text);
+          yield text;
+        }
       }
-    } catch {}
+    } catch {
+    } finally {
+      void this.logger?.log({ method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response: chunks.join(''), latencyMs: Date.now() - t0, stream: true });
+    }
   }
 
   private async chat(
@@ -394,7 +420,10 @@ class OpenAINarrator implements AiService {
     userPrompt: string,
     maxTokens: number,
     jsonMode = false,
+    method = 'unknown',
   ): Promise<string | null> {
+    const t0 = Date.now();
+    let response: string | null = null;
     try {
       const body: Record<string, unknown> = {
         model: this.model,
@@ -415,23 +444,26 @@ class OpenAINarrator implements AiService {
       });
       if (!res.ok) return null;
       const data = (await res.json()) as OpenAIChatResponse;
-      return data.choices?.[0]?.message?.content?.trim() ?? null;
+      response = data.choices?.[0]?.message?.content?.trim() ?? null;
+      return response;
     } catch {
       return null;
+    } finally {
+      void this.logger?.log({ method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response, latencyMs: Date.now() - t0, stream: false });
     }
   }
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
+    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500, false, 'narrate');
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
   async *narrateStream(input: NarrativePromptInput): AsyncGenerator<string> {
-    yield* this.chatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
+    yield* this.chatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500, 'narrateStream');
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
-    return (await this.chat(SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt(player, history, ending), 300)) ?? '';
+    return (await this.chat(SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt(player, history, ending), 300, false, 'summarize')) ?? '';
   }
 
   async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
@@ -439,6 +471,8 @@ class OpenAINarrator implements AiService {
       INTRO_SYSTEM_PROMPT,
       buildIntroPrompt(player, traits, background),
       300,
+      false,
+      'intro',
     )) ?? '';
   }
 
@@ -447,7 +481,8 @@ class OpenAINarrator implements AiService {
       PERSONALIZE_SYSTEM_PROMPT,
       buildPersonalizePrompt(player, traits, event),
       600,
-      true, // json_object mode
+      true,
+      'personalizeEvent',
     );
     return parsePersonalized(text, event);
   }
@@ -458,6 +493,7 @@ class OpenAINarrator implements AiService {
       buildCustomActionJudgePrompt(playerInput, event, player),
       150,
       true,
+      'judgeCustomAction',
     );
     return parseCustomActionJudgment(text);
   }
@@ -468,16 +504,18 @@ class OpenAINarrator implements AiService {
       buildJudgmentValidationPrompt(playerInput, event, judgment),
       80,
       true,
+      'validateJudgment',
     );
     return parseJudgmentValidation(text);
   }
 
   async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
-    // json_object mode requires root object; prompt outputs an array, so skip that mode here
     const text = await this.chat(
       PERSONALIZE_SYSTEM_PROMPT,
       buildSocialFeedPrompt(player, recentHistory, leaderboard),
       500,
+      false,
+      'simulateSocialFeed',
     );
     const posts = parseSocialFeed(text);
     return posts.length > 0 ? posts : templateSocialFeed(player, leaderboard);
@@ -488,17 +526,20 @@ class OpenAINarrator implements AiService {
 
 export function makeAiService(env: Env): AiService {
   const provider = (env.AI_PROVIDER ?? 'none').toLowerCase();
+  const logger = env.KV ? new LlmLogger(env.KV) : undefined;
 
   if (provider === 'anthropic' && env.ANTHROPIC_API_KEY) {
     const model = env.AI_MODEL ?? 'claude-haiku-4-5-20251001';
-    return new AnthropicNarrator(env.ANTHROPIC_API_KEY, model);
+    return new AnthropicNarrator(env.ANTHROPIC_API_KEY, model, logger);
   }
 
   if (provider === 'openai' && env.OPENAI_API_KEY) {
     const model = env.AI_MODEL ?? 'gpt-4o-mini';
     const baseUrl = (env.AI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, '');
-    return new OpenAINarrator(env.OPENAI_API_KEY, model, baseUrl);
+    return new OpenAINarrator(env.OPENAI_API_KEY, model, baseUrl, logger);
   }
 
   return new TemplateNarrator();
 }
+
+export { LlmLogger };

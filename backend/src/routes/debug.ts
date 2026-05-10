@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { getEventById } from '../data/events/index.js';
+import { LlmLogger } from '../ai/logger.js';
 import { makeStorage } from '../storage/index.js';
 import type {
   ClubTier,
@@ -129,6 +130,26 @@ app.post('/debug/:sessionId', async (c) => {
   await storage.sessions.save(session);
 
   return c.json({ player: session.player });
+});
+
+// ── LLM log endpoints (local-only) ───────────────────────────────
+
+app.get('/debug/llm-logs', async (c) => {
+  if (!isLocalDebugRequest(c.req.url)) return c.json({ error: 'not found' }, 404);
+
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '50', 10) || 50, 100);
+  const logger = new LlmLogger(c.env.KV);
+  const logs = await logger.listRecent(limit);
+  return c.json({ logs, total: logs.length });
+});
+
+app.get('/debug/llm-logs/:id', async (c) => {
+  if (!isLocalDebugRequest(c.req.url)) return c.json({ error: 'not found' }, 404);
+
+  const logger = new LlmLogger(c.env.KV);
+  const entry = await logger.getById(c.req.param('id'));
+  if (!entry) return c.json({ error: 'not found' }, 404);
+  return c.json(entry);
 });
 
 export default app;
