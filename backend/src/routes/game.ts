@@ -575,11 +575,29 @@ app.post('/game/:sessionId/shop', async (c) => {
   if (!session) return c.json({ error: 'session not found' }, 404);
 
   try {
-    const { player, itemName, shopNarrative, shopNarrativePositive } = applyShopPurchase(session, itemId);
+    const {
+      player,
+      itemName,
+      shopNarrative,
+      shopNarrativePositive,
+      shopBuffLabelsAdded,
+      shopBuffLabelsRemoved,
+      shopTagsAdded,
+      shopTagsRemoved,
+    } = applyShopPurchase(session, itemId);
     session.player = player;
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
-    return c.json({ player, itemName, shopNarrative, shopNarrativePositive });
+    return c.json({
+      player,
+      itemName,
+      shopNarrative,
+      shopNarrativePositive,
+      shopBuffLabelsAdded,
+      shopBuffLabelsRemoved,
+      shopTagsAdded,
+      shopTagsRemoved,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);

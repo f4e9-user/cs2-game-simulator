@@ -17,6 +17,7 @@ import { DAILY_EVENTS } from './daily.js';
 import { BAILOUT_EVENTS } from './bailout.js';
 import { CHAIN_EVENTS } from './chains.js';
 import { SKIN_EVENTS } from './skins.js';
+import { AGENT_EVENTS } from './agent.js';
 
 export const EVENT_POOL: EventDef[] = [
   ...TRAINING_EVENTS,
@@ -36,6 +37,7 @@ export const EVENT_POOL: EventDef[] = [
   ...BAILOUT_EVENTS,
   ...CHAIN_EVENTS,
   ...SKIN_EVENTS,
+  ...AGENT_EVENTS,
 ];
 
 export { PROMOTION_EVENTS };

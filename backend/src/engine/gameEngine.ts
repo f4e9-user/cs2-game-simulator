@@ -1469,6 +1469,10 @@ export interface ApplyShopResult {
   itemName: string;
   shopNarrative?: string;          // 外设升级结果 或 负面事件文字
   shopNarrativePositive?: boolean; // true=好结果(绿色) false=负面(橙色/红色)
+  shopBuffLabelsAdded?: string[];
+  shopBuffLabelsRemoved?: string[];
+  shopTagsAdded?: string[];
+  shopTagsRemoved?: string[];
 }
 
 export function applyShopPurchase(
@@ -1508,6 +1512,14 @@ export function applyShopPurchase(
 
   if (player.stats.money < item.priceMoney) {
     throw new Error(`资金不足，需要 ${item.priceMoney}K`);
+  }
+
+  if (itemId === 'hire-agent' && player.tags.includes('has-agent')) {
+    throw new Error('已经签约经纪人，无需重复购买');
+  }
+
+  if (itemId === 'fire-agent' && !player.tags.includes('has-agent')) {
+    throw new Error('当前没有经纪人可解约');
   }
 
   // ── 外设升级：特殊分支处理 ──────────────────────────────────
@@ -1597,6 +1609,9 @@ export function applyShopPurchase(
   if (effect.fameDelta) fame = clampFame(fame + effect.fameDelta);
 
   let buffs = [...(player.buffs ?? [])];
+  if (effect.buffRemoveId) {
+    buffs = buffs.filter((b) => b.id !== effect.buffRemoveId);
+  }
   if (effect.buffAdd) {
     buffs = buffs.filter((b) => b.id !== effect.buffAdd!.id);
     buffs.push(effect.buffAdd);
@@ -1621,6 +1636,7 @@ export function applyShopPurchase(
         if (neg.effect.stressDelta) stress = clampStress(stress + neg.effect.stressDelta);
         if (neg.effect.fatigueDelta) fatigue = clampFatigue(fatigue + neg.effect.fatigueDelta);
         if (neg.effect.fameDelta) fame = clampFame(fame + neg.effect.fameDelta);
+        if (neg.effect.feelReset) feel = clampFeel(0, player.feelCap ?? FEEL_CAP_DEFAULT);
         if (neg.effect.tagAdd && !tags.includes(neg.effect.tagAdd)) tags.push(neg.effect.tagAdd);
         if (neg.effect.tagRemove) tags = tags.filter((t) => t !== neg.effect.tagRemove);
         shopNarrative = neg.narrative;
@@ -1646,8 +1662,21 @@ export function applyShopPurchase(
   return {
     player: nextPlayer,
     itemName: item.name,
-    shopNarrative,
-    shopNarrativePositive: shopNarrative ? false : undefined,
+    shopNarrative:
+      shopNarrative
+      ?? (itemId === 'hire-agent'
+        ? '签约成功：获得长期增益「经纪团队」，并添加标签「has-agent」。后续回合将有概率触发经纪人相关事件。'
+        : itemId === 'fire-agent'
+          ? '经纪合作已结束：移除长期增益「经纪团队」，并删除标签「has-agent」。'
+          : undefined),
+    shopNarrativePositive:
+      shopNarrative ? false : (itemId === 'hire-agent' || itemId === 'fire-agent' ? true : undefined),
+    shopBuffLabelsAdded: effect.buffAdd ? [effect.buffAdd.label] : undefined,
+    shopBuffLabelsRemoved: effect.buffRemoveId
+      ? (player.buffs ?? []).filter((b) => b.id === effect.buffRemoveId).map((b) => b.label)
+      : undefined,
+    shopTagsAdded: effect.tagAdd ? [effect.tagAdd] : undefined,
+    shopTagsRemoved: effect.tagRemove ? [effect.tagRemove] : undefined,
   };
 }
 

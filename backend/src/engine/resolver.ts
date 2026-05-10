@@ -93,7 +93,7 @@ export function applyGrowth(
 
   // 应用 buff 倍率
   const multiplier = buffs
-    .filter((b) => b.actionTag === 'all' || b.actionTag === actionTag)
+    .filter((b) => (b.actionTag === 'all' || b.actionTag === actionTag) && (!b.growthKey || b.growthKey === growthKey))
     .reduce((acc, b) => acc * b.multiplier, 1);
 
   const current = stats[growthKey];
