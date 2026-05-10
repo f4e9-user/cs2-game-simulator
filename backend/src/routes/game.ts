@@ -33,7 +33,7 @@ import {
 import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
-import type { ClubTier, Env, PlayerTeam, Stats } from '../types.js';
+import type { ClubTier, Env, MatchStats, PlayerTeam, Stats } from '../types.js';
 
 function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
   if (!required) return true;
@@ -198,25 +198,6 @@ app.post('/game/:sessionId/choice', async (c) => {
     // 自由行动时：用自定义行动作为叙事重写依据，不拼接默认叙事
     if (customNarrativePrefix) {
       result.choiceLabel = customActionTrimmed.slice(0, 30);
-    }
-
-    const polished = await ai.narrate({
-      player: updated.player,
-      baseNarrative: result.narrative,
-      eventTitle: result.eventTitle,
-      choiceLabel: result.choiceLabel,
-      success: result.success,
-      customAction: hasCustomAction ? customActionTrimmed : undefined,
-      matchStats: result.matchStats,
-    });
-    result.narrative = polished;
-
-    const lastIdx = updated.history.length - 1;
-    if (lastIdx >= 0) {
-      updated.history[lastIdx] = {
-        ...updated.history[lastIdx]!,
-        narrative: polished,
-      };
     }
 
     // 战后处理：面试成功 → 生成入队邀请
@@ -838,6 +819,63 @@ app.get('/game/:sessionId/social-feed', async (c) => {
   } catch { /* 忽略写失败 */ }
 
   return c.json({ posts });
+});
+
+// 流式叙事：choice 端点不再等待 LLM，前端拿到结果后调这里做流式渲染
+app.post('/game/:sessionId/narrate-stream', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
+    return c.json({ error: '无效的 API Token' }, 401);
+  }
+
+  const body = await c.req.json().catch(() => ({})) as {
+    baseNarrative?: string;
+    eventTitle?: string;
+    choiceLabel?: string;
+    success?: boolean;
+    customAction?: string;
+    matchStats?: MatchStats;
+  };
+
+  const ai = makeAiService(c.env);
+  if (!ai.active) return c.json({ error: 'AI not active' }, 400);
+
+  const input = {
+    player: session.player,
+    baseNarrative: body.baseNarrative ?? '',
+    eventTitle: body.eventTitle ?? '',
+    choiceLabel: body.choiceLabel ?? '',
+    success: body.success ?? false,
+    customAction: body.customAction,
+    matchStats: body.matchStats,
+  };
+
+  const encoder = new TextEncoder();
+  const stream = ai.narrateStream(input);
+
+  return new Response(
+    new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`));
+          }
+        } catch {}
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      },
+    }),
+    {
+      headers: {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+        'x-content-type-options': 'nosniff',
+      },
+    },
+  );
 });
 
 // 游戏结束生涯总结（仅 status=ended 时有意义）

@@ -13,7 +13,15 @@ import {
 } from '@/lib/format';
 
 
-export function ResultPanel({ result }: { result: RoundResult }) {
+export function ResultPanel({
+  result,
+  streamingNarrative,
+  isNarrating,
+}: {
+  result: RoundResult;
+  streamingNarrative?: string | null;
+  isNarrating?: boolean;
+}) {
   const deltas = Object.entries(result.statChanges) as [StatKey, number][];
   const stageChanged = result.stageBefore !== result.stageAfter;
   const passives = result.passiveEffects ?? [];
@@ -72,7 +80,15 @@ export function ResultPanel({ result }: { result: RoundResult }) {
       {/* 比赛数据卡片 */}
       {result.matchStats && <MatchStatsCard stats={result.matchStats} won={ok} />}
 
-      <div className="result-narrative"><TypewriterText text={result.narrative} /></div>
+      <div className="result-narrative">
+        {isNarrating && !streamingNarrative ? (
+          <div className="narrative-skeleton" />
+        ) : streamingNarrative != null ? (
+          streamingNarrative
+        ) : (
+          <TypewriterText text={result.narrative} />
+        )}
+      </div>
 
       {passives.length > 0 && (
         <div style={{ marginBottom: 6 }}>
