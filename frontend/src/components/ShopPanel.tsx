@@ -13,12 +13,28 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 // 购买后弹框的物品
-const MODAL_ITEMS = new Set(['pro-peripherals', 'team-dinner', 'fan-meetup']);
+const MODAL_ITEMS = new Set([
+  'pro-peripherals',
+  'team-dinner',
+  'fan-meetup',
+  'wrist-brace',
+  'aim-coach',
+  'tactical-review',
+  'massage-therapy',
+  'pr-interview',
+  'hire-agent',
+  'fire-agent',
+]);
 
 interface ShopModal {
   itemName: string;
   narrative: string;
   positive: boolean;
+  tagText?: string;
+  buffsAdded?: string[];
+  buffsRemoved?: string[];
+  tagsAdded?: string[];
+  tagsRemoved?: string[];
 }
 
 interface Props {
@@ -57,6 +73,11 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
           itemName: res.itemName,
           narrative: res.shopNarrative ?? '一切顺利，没有意外发生。',
           positive: res.shopNarrativePositive ?? !res.shopNarrative,
+          tagText: itemId === 'hire-agent' ? '签约成功' : itemId === 'fire-agent' ? '解约成功' : undefined,
+          buffsAdded: res.shopBuffLabelsAdded,
+          buffsRemoved: res.shopBuffLabelsRemoved,
+          tagsAdded: res.shopTagsAdded,
+          tagsRemoved: res.shopTagsRemoved,
         });
       }
     } catch (e) {
@@ -68,6 +89,7 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
 
   const round = player.round;
   const cooldowns = player.shopCooldowns ?? {};
+  const hasAgent = player.tags.includes('has-agent');
 
   const TOURNAMENT_LOCKED_ITEMS = new Set(['team-dinner', 'fan-meetup', 'short-trip']);
 
@@ -85,6 +107,12 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
       const price = PERIPHERAL_PRICES[tier] ?? 0;
       if (player.stats.money < price) return { ok: false, reason: `资金不足（需 ${price}K）` };
       return { ok: true };
+    }
+    if (item.id === 'hire-agent' && hasAgent) {
+      return { ok: false, reason: '已签约经纪人' };
+    }
+    if (item.id === 'fire-agent' && !hasAgent) {
+      return { ok: false, reason: '当前没有经纪人' };
     }
     if (player.stats.money < item.priceMoney) {
       return { ok: false, reason: `资金不足（需 ${item.priceMoney}K）` };
@@ -106,6 +134,11 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
   };
 
   const categories = ['consumable', 'service', 'equipment', 'social'] as const;
+  const visibleItems = items.filter((item) => {
+    if (item.id === 'hire-agent') return !hasAgent;
+    if (item.id === 'fire-agent') return hasAgent;
+    return true;
+  });
 
   if (loadingItems) {
     return (
@@ -127,7 +160,7 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
         </div>
 
         {categories.map((cat) => {
-          const catItems = items.filter((i) => i.category === cat);
+          const catItems = visibleItems.filter((i) => i.category === cat);
           if (catItems.length === 0) return null;
           return (
             <div key={cat} className="shop-category">
@@ -156,7 +189,7 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
                         onClick={() => buy(item.id)}
                         style={{ fontSize: 10, padding: '2px 8px' }}
                       >
-                        {busyId === item.id ? '…' : '购买'}
+                        {busyId === item.id ? '…' : item.id === 'fire-agent' ? '解约' : '购买'}
                       </button>
                     </div>
                   </div>
@@ -178,7 +211,7 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
         <div className="modal-backdrop" onClick={() => setShopModal(null)}>
           <div className="modal shop-result-modal" onClick={(e) => e.stopPropagation()}>
             <div className="shop-result-modal-tag">
-              {shopModal.positive ? '购买成功' : '意外发生'}
+              {shopModal.tagText ?? (shopModal.positive ? '购买成功' : '意外发生')}
             </div>
             <div className="shop-result-modal-title">{shopModal.itemName}</div>
             <div
@@ -187,6 +220,26 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
             >
               {shopModal.narrative}
             </div>
+            {shopModal.buffsAdded && shopModal.buffsAdded.length > 0 && (
+              <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-1)' }}>
+                获得 Buff：{shopModal.buffsAdded.join('、')}
+              </div>
+            )}
+            {shopModal.buffsRemoved && shopModal.buffsRemoved.length > 0 && (
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--fg-2)' }}>
+                移除 Buff：{shopModal.buffsRemoved.join('、')}
+              </div>
+            )}
+            {shopModal.tagsAdded && shopModal.tagsAdded.length > 0 && (
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--fg-1)' }}>
+                添加标签：{shopModal.tagsAdded.join('、')}
+              </div>
+            )}
+            {shopModal.tagsRemoved && shopModal.tagsRemoved.length > 0 && (
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--fg-2)' }}>
+                移除标签：{shopModal.tagsRemoved.join('、')}
+              </div>
+            )}
             <button
               type="button"
               className="primary-button"

@@ -1894,48 +1894,97 @@ export const CHAIN_EVENTS: EventDef[] = [
     ],
   },
 
+  // ── 队友转会预警：匿名阶段（departureRound - 7）────────────────
   {
-    id: 'chain-rival-teammate-leave',
+    id: 'chain-teammate-transfer-rumor',
     type: 'team',
-    title: '队友离队传闻',
-    narrative: '有消息称 {teammate0} 正在和其他俱乐部接触，更衣室里的气氛变得有些微妙。',
+    title: '转会风声',
+    narrative: '你在刷论坛时，看到知名星探 @ScoutRadar 发了条帖子："{rival0} 正在接触一支战队的某位选手，据悉双方已有初步意向。"看战队描述，隐约像是你们队……',
     stages: ['youth', 'second', 'pro'],
-    difficulty: 2,
-    weight: 2,
-    requireTags: ['has-team'],
-    forbidTags: ['teammate-leave-cd'],
+    difficulty: 1,
+    weight: 1,
+    requireTags: ['teammate-transfer-rumor-due'],
     choices: [
       {
-        id: 'talk-to-teammate',
-        label: '私下和 {teammate0} 谈谈',
-        description: '不管传闻是真是假，直接沟通总比胡思乱想强。',
-        check: { primary: 'mentality', dc: 6, traitBonuses: { support: 2, selfless: 2, igl: 1 } },
+        id: 'observe-quietly',
+        label: '留心队里的动向',
+        description: '风声未明，先观察一下各队友的状态。',
+        check: { primary: 'intelligence', dc: 5, traitBonuses: { tactical: 1, igl: 2 } },
         success: {
-          narrative: '{teammate0} 坦言有些想法，但和你聊完之后决定暂时留下来。团队气氛有所缓和。',
-          feelDelta: 0.5,
-          tagCooldowns: { 'teammate-leave-cd': 12 },
+          narrative: '你暗暗观察了几天，感觉有队友最近心思不太在训练上，但还不能确定是谁。',
+          feelDelta: 0,
         },
         failure: {
-          narrative: '{teammate0} 态度含糊，你也不知道这段对话有没有起作用。',
+          narrative: '消息来源可信度存疑，你没能判断这是不是空穴来风，只能先放下。',
           stressDelta: 1,
-          tagCooldowns: { 'teammate-leave-cd': 8 },
         },
       },
       {
-        id: 'focus-on-self',
-        label: '专注自身，别管闲事',
-        description: '队友的去留是他自己的决定，你能控制的只有自己的状态。',
-        check: { primary: 'mentality', dc: 4, traitBonuses: { solo: 1, steady: 1 } },
+        id: 'ignore-transfer-rumor',
+        label: '不管，专注自己',
+        description: '网络上的东西真真假假，先把状态搞好再说。',
+        check: { primary: 'mentality', dc: 3, traitBonuses: { solo: 1, steady: 2 } },
         success: {
-          narrative: '你把注意力拉回到训练上，管好自己的状态是最重要的事。',
+          narrative: '你把注意力拉回到训练上，管好自己最重要。',
           dailyGrowth: 'mentality',
-          tagCooldowns: { 'teammate-leave-cd': 10 },
         },
         failure: {
-          narrative: '嘴上说不在意，心里还是会想。这件事无形中消耗了你不少精力。',
-          fatigueDelta: 8,
+          narrative: '嘴上说不在意，心里总忍不住想这件事，白白消耗了一些精力。',
           stressDelta: 1,
-          tagCooldowns: { 'teammate-leave-cd': 8 },
+          fatigueDelta: 5,
+        },
+      },
+    ],
+  },
+
+  // ── 队友转会预警：具名阶段（departureRound - 4）────────────────
+  {
+    id: 'chain-teammate-transfer-reveal',
+    type: 'team',
+    title: '转会消息坐实',
+    narrative: '这次消息更加具体了——同一位星探 @ScoutRadar 发出新帖："{rival0} 锁定的转会目标就是你的队友 {transferTarget}，双方已进入合同细节谈判。"',
+    stages: ['youth', 'second', 'pro'],
+    difficulty: 2,
+    weight: 1,
+    requireTags: ['teammate-transfer-reveal-due'],
+    choices: [
+      {
+        id: 'contact-coach',
+        label: '联系教练，提前安排替补',
+        description: '先下手为强，让管理层提前从青训／二线队物色合适人选，争取更充裕的磨合时间。',
+        check: { primary: 'intelligence', dc: 5, traitBonuses: { igl: 2, tactical: 1 } },
+        success: {
+          narrative: '教练重视你的情报，立刻联系了二线队物色人选。新人将提前开始融入训练，届时接班会更顺畅。',
+        },
+        failure: {
+          narrative: '教练认为流言不足为信，没有立刻行动。你的努力白费了，只能寄希望于事情不成真。',
+          stressDelta: 2,
+        },
+      },
+      {
+        id: 'confront-teammate',
+        label: '当面质询 {transferTarget}',
+        description: '直接开口问清楚，确认是真是假。',
+        check: { primary: 'mentality', dc: 6, traitBonuses: { igl: 1, support: 2 } },
+        success: {
+          narrative: '{transferTarget} 沉默片刻后坦承了转会意向。消息确认后，教练联同管理层紧急启动了青训选拔，阵容会提前补齐。',
+        },
+        failure: {
+          narrative: '{transferTarget} 矢口否认，你也拿不准真假。就这样，你只能等待事态发展。',
+          stressDelta: 2,
+        },
+      },
+      {
+        id: 'do-nothing-transfer',
+        label: '按兵不动，顺其自然',
+        description: '不确定的事不要轻举妄动，走一步看一步。',
+        check: { primary: 'mentality', dc: 3, traitBonuses: { steady: 2 } },
+        success: {
+          narrative: '你选择静观其变，内心已经做好了迎接变化的准备。',
+        },
+        failure: {
+          narrative: '这件事在心里挥之不去，无形中给你带来了不少压力。',
+          stressDelta: 2,
         },
       },
     ],

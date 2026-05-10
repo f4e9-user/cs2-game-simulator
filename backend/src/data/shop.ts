@@ -11,6 +11,7 @@ export interface ShopEffect {
   mentalityDelta?: number;
   fameDelta?: number;
   buffAdd?: Buff;
+  buffRemoveId?: string;
   tagRemove?: string;
   tagAdd?: string;
 }
@@ -84,6 +85,64 @@ export const SHOP_ITEMS: ShopItem[] = [
     },
   },
   {
+    id: 'aim-coach',
+    name: '枪法私教',
+    description: '请教练盯着你把拉枪和定位一点点抠顺，短期涨得快，但练狠了也容易把手感练乱。',
+    category: 'service',
+    priceMoney: 30,
+    cooldownRounds: 4,
+    effect: {
+      fatigueDelta: -6,
+      stressDelta: -8,
+      buffAdd: {
+        id: 'aim-coached',
+        label: '枪法私教',
+        actionTag: 'ranked',
+        growthKey: 'agility',
+        multiplier: 1.18,
+        remainingUses: 4,
+      },
+    },
+    negativeEvents: [
+      {
+        chance: 0.25,
+        effect: { fatigueDelta: 12, stressDelta: 6 },
+        narrative: '私教把训练强度拉得太满，动作是纠了，但手臂和手腕也跟着酸了一整天。',
+      },
+      {
+        chance: 0.15,
+        effect: { feelReset: true, stressDelta: 8 },
+        narrative: '你试着硬改发力习惯，结果原本的节奏被打散了，今天的手感一下子冷了下来。',
+      },
+    ],
+  },
+  {
+    id: 'tactical-review',
+    name: '战术复盘',
+    description: '拉上分析师和队友把 demo 过一遍，理清思路后训练效率更高。',
+    category: 'service',
+    priceMoney: 25,
+    cooldownRounds: 4,
+    effect: {
+      stressDelta: -12,
+      buffAdd: {
+        id: 'tactical-review',
+        label: '战术复盘',
+        actionTag: 'training',
+        growthKey: 'intelligence',
+        multiplier: 1.15,
+        remainingUses: 4,
+      },
+    },
+    negativeEvents: [
+      {
+        chance: 0.2,
+        effect: { stressDelta: 10 },
+        narrative: '信息量一下子灌得太多，越复盘越乱，脑子里全是没解开的细节。',
+      },
+    ],
+  },
+  {
     id: 'short-trip',
     name: '短途旅行',
     description: '离开城市两三天，彻底切断与比赛的联系。',
@@ -95,6 +154,25 @@ export const SHOP_ITEMS: ShopItem[] = [
       fatigueDelta: -30,
       feelReset: true,
     },
+  },
+  {
+    id: 'massage-therapy',
+    name: '理疗按摩',
+    description: '让理疗师把肩颈和前臂彻底放松下来，恢复很扎实，但按得太重也可能适得其反。',
+    category: 'service',
+    priceMoney: 35,
+    cooldownRounds: 6,
+    effect: {
+      fatigueDelta: -20,
+      stressDelta: -15,
+    },
+    negativeEvents: [
+      {
+        chance: 0.15,
+        effect: { fatigueDelta: 4, stressDelta: 6 },
+        narrative: '这次手法有点重，刚按完是松了，但过一会儿反而有种隐隐发酸的迟滞感。',
+      },
+    ],
   },
 
   // ── 装备类（外设升级，特殊分支，price 由 peripheralTier 动态决定）──────
@@ -124,6 +202,37 @@ export const SHOP_ITEMS: ShopItem[] = [
         remainingUses: 15,
       },
     },
+  },
+  {
+    id: 'wrist-brace',
+    name: '护腕支撑套',
+    description: '给手腕加一层稳定支撑，短期训练更稳，也能缓一口气，但不一定完全适配你的发力习惯。',
+    category: 'equipment',
+    priceMoney: 30, // 30K
+    cooldownRounds: 6,
+    effect: {
+      fatigueDelta: -12,
+      stressDelta: -15,
+      buffAdd: {
+        id: 'wrist-support',
+        label: '腕部支撑',
+        actionTag: 'all',
+        multiplier: 1.1,
+        remainingUses: 5,
+      },
+    },
+    negativeEvents: [
+      {
+        chance: 0.25,
+        effect: { fatigueDelta: 10, stressDelta: 8 },
+        narrative: '护腕的支撑角度和你平时的发力习惯不太合拍，刚戴上时反而有些别扭，训练后比预想更累。',
+      },
+      {
+        chance: 0.12,
+        effect: { stressDelta: 15 },
+        narrative: '材质有些发硬，手腕被勒得不太舒服，你一整天都在调整姿势，心情也跟着烦躁起来。',
+      },
+    ],
   },
 
   // ── 社交类（冷却 3 回合）─────────────────────────────────────────
@@ -176,6 +285,57 @@ export const SHOP_ITEMS: ShopItem[] = [
         narrative: '某媒体断章取义，把你的一句话炒成了负面新闻，名气反而受损。',
       },
     ],
+  },
+  {
+    id: 'pr-interview',
+    name: '媒体专访',
+    description: '安排一次更正式的采访和露出，能带来名气，但说错一句话也可能被无限放大。',
+    category: 'social',
+    priceMoney: 25,
+    cooldownRounds: 4,
+    requireStage: ['second', 'pro'],
+    effect: {
+      fameDelta: 8,
+      stressDelta: 5,
+    },
+    negativeEvents: [
+      {
+        chance: 0.25,
+        effect: { fameDelta: -6, stressDelta: 12 },
+        narrative: '采访中的一句话被单独拎了出来，舆论直接拐了个方向，热度有了，但全是压力。',
+      },
+    ],
+  },
+  {
+    id: 'hire-agent',
+    name: '签约经纪人',
+    description: '把商务、采访和部分资源协调交给职业经纪人，后续也会逐渐带来新的机会与麻烦。',
+    category: 'social',
+    priceMoney: 60,
+    cooldownRounds: 0,
+    requireStage: ['second', 'pro'],
+    effect: {
+      tagAdd: 'has-agent',
+      buffAdd: {
+        id: 'agent-support',
+        label: '经纪团队',
+        actionTag: 'all',
+        multiplier: 1.12,
+        remainingUses: 9999,
+      },
+    },
+  },
+  {
+    id: 'fire-agent',
+    name: '解雇经纪人',
+    description: '结束这段合作，暂时少掉外部安排，也失去经纪团队带来的长期帮助。',
+    category: 'social',
+    priceMoney: 0,
+    cooldownRounds: 0,
+    effect: {
+      tagRemove: 'has-agent',
+      buffRemoveId: 'agent-support',
+    },
   },
 ];
 

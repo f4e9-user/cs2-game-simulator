@@ -191,6 +191,15 @@ export interface TeamOffer {
   weeklySalary: number;
 }
 
+export interface PendingDeparture {
+  slotId: string;
+  departureRound: number;
+  rumorShown: boolean;
+  revealed: boolean;
+  destTeamName: string;
+  earlyRecruit: boolean;
+}
+
 export interface DynamicState {
   stress: number;
   fame: number;
@@ -268,6 +277,7 @@ export interface Player extends DynamicState {
   activeRoleRounds: number;
   roleTransition: RoleTransition | null;
   teamTrust: number;
+  pendingDeparture?: PendingDeparture;
 }
 
 export interface Choice {

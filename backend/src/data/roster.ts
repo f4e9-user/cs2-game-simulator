@@ -75,6 +75,36 @@ function pickTraits(pool: string[], desired: number, rng: () => number): string[
   return fisherYates(pool, rng).slice(0, Math.min(desired, pool.length));
 }
 
+// ── 单人补位生成（队友转会替换）─────────────────────────────────
+// quality 'good'：提前招募，属性 +1，3 条特质
+// quality 'poor'：临时顶替，属性 -1，2 条特质
+export function generateSingleTeammate(
+  clubTier: ClubTier,
+  rng: () => number,
+  quality: 'good' | 'poor',
+  replacedSlotId: string,
+): import('../types.js').Teammate {
+  const roles = fisherYates([...ROLES], rng);
+  const role = roles[0]!;
+  const traitCount = quality === 'good' ? 3 : 2;
+  const [lo, hi] = TIER_STAT_RANGE[clubTier];
+  const boost = quality === 'good' ? 1 : -1;
+  return {
+    id: replacedSlotId,
+    name: randomName(rng),
+    role,
+    personality: pick(PERSONALITIES, rng),
+    traits: pickTraits(ROLE_TRAIT_POOL[role], traitCount, rng),
+    stats: {
+      agility:      Math.max(1, rollStat(lo, hi, rng) + boost),
+      intelligence: Math.max(1, rollStat(lo, hi, rng) + boost),
+      mentality:    Math.max(1, rollStat(lo, hi, rng) + boost),
+      experience:   Math.max(1, rollStat(lo, hi, rng) + boost),
+    },
+    growthSpent: 0,
+  };
+}
+
 // ── 主生成函数 ────────────────────────────────────────────────────
 export function generateRoster(
   clubTier: ClubTier,

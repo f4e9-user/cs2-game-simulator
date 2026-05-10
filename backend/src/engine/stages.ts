@@ -41,17 +41,7 @@ export const TOURNAMENT_GATES: TournamentGate[] = [
     minChampionships: 1,
     promotionEventId: 'promotion-second-to-pro',
   },
-  {
-    from: 'pro',
-    to: 'star',
-    tiers: ['s-main', 'major'],
-    legacyTiers: ['tier1', 's-class', 'major'],
-    minParticipations: 2,
-    champTiers: ['s-main', 'major'],
-    legacyChampTiers: ['tier1', 's-class', 'major'],
-    minChampionships: 1,
-    promotionEventId: 'promotion-pro-to-star',
-  },
+  // pro is the terminal competitive stage; star/veteran are tags, not stages.
 ];
 
 export function getGate(from: Stage): TournamentGate | undefined {
@@ -105,7 +95,7 @@ export function checkTournamentPromotion(player: Player): PromotionCheck {
 
   const gate = getGate(player.stage);
   if (!gate) {
-    // star / veteran — story-driven only, no auto-check
+    // pro is the terminal stage; no further tournament gate exists
     return { canPromote: false, reasons: [] };
   }
 

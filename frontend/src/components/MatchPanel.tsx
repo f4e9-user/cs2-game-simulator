@@ -66,6 +66,7 @@ function formatSlots(slots: Record<string, number>): string[] {
     .map(([slot, count]) => `${slotLabel(slot)} x${count}`);
 }
 
+// Keep in sync with qualificationRewards / qualificationMilestones in tournaments.ts
 const QUALIFICATION_OVERVIEW = [
   'B赛：夺冠可拿 A级公开预选门票，打通青训到二线入口',
   'A级：A公开预选 -> A正赛 -> 品牌S赛资格',
