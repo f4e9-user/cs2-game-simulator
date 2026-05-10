@@ -84,6 +84,8 @@ export const useGameStore = create<GameState>((set) => ({
       promotion: session.promotion ?? null,
       leaderboard: session.leaderboard ?? [],
       pendingOffer: session.player.pendingOffer ?? null,
+      // 第一回合（从未做过选择）自动进入行动阶段，让玩家先熟悉面板再面对随机事件
+      actionsPhase: session.history.length === 0,
       error: null,
     }),
 

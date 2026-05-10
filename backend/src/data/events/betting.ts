@@ -24,7 +24,9 @@ const DETECT_SMALL = {
 const BANNED = {
   narrative:
     '调查邮件在凌晨发到俱乐部。你的名字上了禁赛名单，所有账号冻结，生涯戛然而止。',
-  statChanges: { money: -50, mentality: -5 },
+  feelDelta: -1.5,
+  tiltDelta: 1,
+  moneyDelta: -50,
   endRun: true,
   endReason: 'banned_for_match_fixing',
   tagAdds: ['banned'],
@@ -52,7 +54,8 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '没人查到你头上。账户悄悄进账 60K，你装作什么都没发生。',
-          statChanges: { money: 60, mentality: -1 },
+          feelDelta: -0.5,
+          moneyDelta: 60,
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -68,7 +71,8 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '账面进账 20K，安全下庄。',
-          statChanges: { money: 20, mentality: -1 },
+          feelDelta: -0.5,
+          moneyDelta: 20,
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -85,12 +89,12 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你把截图发给经纪人。他回了个 "good"。你今晚睡得很好。',
-          statChanges: { mentality: 2, experience: 1 },
+          feelDelta: 1,
           tagAdds: ['clean-record'],
         },
         failure: {
           narrative: '你拒绝了，但没敢上报。这件事成了心里的一根刺。',
-          statChanges: { mentality: -1 },
+          feelDelta: -0.5,
         },
       },
     ],
@@ -116,7 +120,9 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '对方赢了图，加密钱包进账 50K。没人追问。',
-          statChanges: { money: 50, mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
+          moneyDelta: 50,
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -132,7 +138,9 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你只在两把关键局放水。30K 到账，大部分队友没察觉。',
-          statChanges: { money: 30, mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
+          moneyDelta: 30,
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -150,12 +158,13 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '队长当场打电话给俱乐部。对面教练第二天就被通报。',
-          statChanges: { mentality: 1, experience: 2 },
+          feelDelta: 0.5,
           tagAdds: ['clean-record', 'team-trust'],
         },
         failure: {
           narrative: '你犹豫了一下没说出口，散会后整晚在复盘这个决定。',
-          statChanges: { mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
         },
       },
     ],
@@ -181,7 +190,9 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '账户进账 80K——几年不用愁的数字。没人找上门，但梦里开始出现审讯室。',
-          statChanges: { money: 80, mentality: -3 },
+          feelDelta: -1.5,
+          tiltDelta: 1,
+          moneyDelta: 80,
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -197,7 +208,8 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你给了他几个含糊的判断。他转来了 30K"咨询费"。',
-          statChanges: { money: 30, mentality: -1 },
+          feelDelta: -0.5,
+          moneyDelta: 30,
           tagAdds: ['dirty-money'],
         },
         failure: BANNED,
@@ -214,12 +226,13 @@ export const BETTING_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你委婉地把话题岔开，之后也不再出席他召集的场子。干净。',
-          statChanges: { mentality: 2 },
+          feelDelta: 1,
           tagAdds: ['clean-record'],
         },
         failure: {
           narrative: '你没去赴约，但也没说破。之后他的名字在圈子里偶尔飘过来，你躲得心累。',
-          statChanges: { mentality: -2 },
+          feelDelta: -1,
+          tiltDelta: 1,
         },
       },
     ],

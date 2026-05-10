@@ -6,6 +6,7 @@ import type {
   GameSession,
   LeaderboardTeam,
   Loan,
+  MatchStats,
   Player,
   RollTraitsResponse,
   ShopItem,
@@ -122,7 +123,16 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ actionId }) },
     ),
   buyShopItem: (sessionId: string, itemId: string) =>
-    request<{ player: Player; itemName: string; shopNarrative?: string; shopNarrativePositive?: boolean }>(
+    request<{
+      player: Player;
+      itemName: string;
+      shopNarrative?: string;
+      shopNarrativePositive?: boolean;
+      shopBuffLabelsAdded?: string[];
+      shopBuffLabelsRemoved?: string[];
+      shopTagsAdded?: string[];
+      shopTagsRemoved?: string[];
+    }>(
       `/api/game/${sessionId}/shop`,
       { method: 'POST', body: JSON.stringify({ itemId }) },
     ),
@@ -164,4 +174,47 @@ export const api = {
       `/api/game/${sessionId}/pawn`,
       { method: 'POST', body: JSON.stringify({ itemId }) },
     ),
+
+  narrateStream: async (
+    sessionId: string,
+    body: {
+      baseNarrative: string;
+      eventTitle: string;
+      choiceLabel: string;
+      success: boolean;
+      customAction?: string;
+      matchStats?: MatchStats;
+    },
+    apiToken: string,
+    onChunk: (text: string) => void,
+  ): Promise<void> => {
+    const res = await fetch(`${API_BASE}/api/game/${sessionId}/narrate-stream`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${apiToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok || !res.body) return;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') return;
+        try {
+          const ev = JSON.parse(data) as { text?: string };
+          if (typeof ev.text === 'string') onChunk(ev.text);
+        } catch {}
+      }
+    }
+  },
 };

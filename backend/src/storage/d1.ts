@@ -1,5 +1,51 @@
 import type { GameSession } from '../types.js';
 
+// Migrate legacy session data after loading from storage.
+// Handles schema changes that would otherwise silently produce undefined/NaN.
+function migrateSession(session: GameSession): GameSession {
+  const p = session.player as Record<string, unknown>;
+
+  // weeklySalary → monthlySalary (renamed; multiply by 4 to approximate monthly)
+  const team = p['team'] as Record<string, unknown> | null;
+  if (team && 'weeklySalary' in team && !('monthlySalary' in team)) {
+    team['monthlySalary'] = (team['weeklySalary'] as number) * 4;
+    delete team['weeklySalary'];
+  }
+  const pendingOffer = p['pendingOffer'] as Record<string, unknown> | null;
+  if (pendingOffer && 'weeklySalary' in pendingOffer && !('monthlySalary' in pendingOffer)) {
+    pendingOffer['monthlySalary'] = (pendingOffer['weeklySalary'] as number) * 4;
+    delete pendingOffer['weeklySalary'];
+  }
+
+  // star/veteran stage removed — remap to nearest valid stage
+  const stage = p['stage'] as string;
+  if (stage === 'star' || stage === 'veteran') {
+    p['stage'] = 'pro';
+  }
+
+  // Ensure new fields have safe defaults when loading old sessions
+  if (!('feelCap' in p)) p['feelCap'] = 3;
+  if (!('peripheralTier' in p)) p['peripheralTier'] = 0;
+  if (!('qualificationSlots' in p)) p['qualificationSlots'] = {};
+  if (!('teamQualificationSlots' in p)) p['teamQualificationSlots'] = {};
+  if (!('ownedItems' in p)) p['ownedItems'] = [];
+  if (!('loans' in p)) p['loans'] = [];
+  if (!('pawnedItemIds' in p)) p['pawnedItemIds'] = [];
+  if (!('consecutiveBrokeRounds' in p)) p['consecutiveBrokeRounds'] = 0;
+  if (!('bailoutCooldown' in p)) p['bailoutCooldown'] = 0;
+  if (!('teamBailoutCooldown' in p)) p['teamBailoutCooldown'] = 0;
+  if (!('forceNextEvent' in p)) p['forceNextEvent'] = null;
+  if (!('forceMatchResult' in p)) p['forceMatchResult'] = null;
+  if (!('salaryTracker' in p)) p['salaryTracker'] = null;
+
+  // Ensure apiToken exists (sessions created before apiToken was added)
+  if (!session.apiToken) {
+    (session as Record<string, unknown>)['apiToken'] = `legacy-${session.id}`;
+  }
+
+  return session;
+}
+
 export class SessionRepo {
   constructor(private db: D1Database) {}
 
@@ -38,7 +84,8 @@ export class SessionRepo {
       .first<{ data: string }>();
     if (!row) return null;
     try {
-      return JSON.parse(row.data) as GameSession;
+      const session = JSON.parse(row.data) as GameSession;
+      return migrateSession(session);
     } catch {
       return null;
     }

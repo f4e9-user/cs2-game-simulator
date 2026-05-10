@@ -17,6 +17,7 @@ import {
 export interface AiService {
   readonly active: boolean;
   narrate(input: NarrativePromptInput): Promise<string>;
+  narrateStream(input: NarrativePromptInput): AsyncIterable<string>;
   summarize(player: Player, history: RoundResult[], ending?: string): Promise<string>;
   intro(player: Player, traits: Trait[], background: Background): Promise<string>;
   personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null>;
@@ -30,7 +31,7 @@ export interface AiService {
 }
 
 const NARRATIVE_SYSTEM_PROMPT =
-  '你是一个 CS2 电竞小说的叙事引擎。只输出润色后的正文，不要解释，不要加引号。';
+  '你是一个 CS2 电竞小说的叙事引擎。全程使用第二人称"你"叙述，禁止出现"他""她"或选手姓名作主语。只输出正文，不要解释，不要加引号。';
 
 const SUMMARY_SYSTEM_PROMPT =
   '你是一个 CS2 电竞生涯传记作者。只输出小结正文，不要标题，不要解释。';
@@ -39,7 +40,7 @@ const INTRO_SYSTEM_PROMPT =
   '你是一个 CS2 电竞小说的开篇作者。只输出开篇正文，不要标题，不要解释。';
 
 const PERSONALIZE_SYSTEM_PROMPT =
-  '你是 CS2 电竞小说的叙事引擎。严格按要求输出 JSON，不要输出任何其他内容。';
+  '你是 CS2 电竞小说的叙事引擎。全程使用第二人称"你"，禁止出现"我""他""她"或选手姓名作主语。严格按要求输出 JSON，不要输出任何其他内容。';
 
 interface OpenAIChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
@@ -174,6 +175,30 @@ function templateSocialFeed(player: Player, leaderboard: LeaderboardTeam[]): Soc
   return posts;
 }
 
+// ── Shared SSE stream reader ─────────────────────────────────────
+
+async function* readSseStream(res: Response): AsyncGenerator<Record<string, unknown>> {
+  if (!res.body) return;
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (data === '[DONE]') return;
+      try {
+        yield JSON.parse(data) as Record<string, unknown>;
+      } catch {}
+    }
+  }
+}
+
 // ── Template fallback (no LLM) ──────────────────────────────────
 
 class TemplateNarrator implements AiService {
@@ -181,6 +206,10 @@ class TemplateNarrator implements AiService {
 
   async narrate(input: NarrativePromptInput): Promise<string> {
     return input.baseNarrative;
+  }
+
+  async *narrateStream(input: NarrativePromptInput): AsyncGenerator<string> {
+    yield input.baseNarrative;
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
@@ -216,21 +245,48 @@ class AnthropicNarrator implements AiService {
   readonly active = true;
   constructor(private apiKey: string, private model: string) {}
 
+  private anthropicBody(system: string, user: string, maxTokens: number, stream = false) {
+    return JSON.stringify({
+      model: this.model,
+      max_tokens: maxTokens,
+      stream,
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: user }],
+    });
+  }
+
+  private anthropicHeaders() {
+    return {
+      'content-type': 'application/json',
+      'x-api-key': this.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
+    };
+  }
+
+  private async *anthropicChatStream(system: string, user: string, maxTokens: number): AsyncGenerator<string> {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: this.anthropicHeaders(),
+        body: this.anthropicBody(system, user, maxTokens, true),
+      });
+      if (!res.ok) return;
+      for await (const ev of readSseStream(res)) {
+        const e = ev as { type: string; delta?: { type: string; text?: string } };
+        if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta' && e.delta.text) {
+          yield e.delta.text;
+        }
+      }
+    } catch {}
+  }
+
   private async anthropicChat(system: string, user: string, maxTokens: number): Promise<string | null> {
     try {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': this.apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: this.model,
-          max_tokens: maxTokens,
-          system,
-          messages: [{ role: 'user', content: user }],
-        }),
+        headers: this.anthropicHeaders(),
+        body: this.anthropicBody(system, user, maxTokens),
       });
       if (!res.ok) return null;
       const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
@@ -241,8 +297,12 @@ class AnthropicNarrator implements AiService {
   }
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 200);
+    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
     return text && text.length > 0 ? text : input.baseNarrative;
+  }
+
+  async *narrateStream(input: NarrativePromptInput): AsyncGenerator<string> {
+    yield* this.anthropicChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
@@ -305,6 +365,30 @@ class OpenAINarrator implements AiService {
     private baseUrl: string,
   ) {}
 
+  private async *chatStream(systemPrompt: string, userPrompt: string, maxTokens: number): AsyncGenerator<string> {
+    try {
+      const res = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${this.apiKey}` },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: maxTokens,
+          stream: true,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+        }),
+      });
+      if (!res.ok) return;
+      for await (const ev of readSseStream(res)) {
+        const text = (ev as { choices?: Array<{ delta?: { content?: string } }> })
+          .choices?.[0]?.delta?.content;
+        if (typeof text === 'string' && text) yield text;
+      }
+    } catch {}
+  }
+
   private async chat(
     systemPrompt: string,
     userPrompt: string,
@@ -338,8 +422,12 @@ class OpenAINarrator implements AiService {
   }
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 200);
+    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
     return text && text.length > 0 ? text : input.baseNarrative;
+  }
+
+  async *narrateStream(input: NarrativePromptInput): AsyncGenerator<string> {
+    yield* this.chatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500);
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
