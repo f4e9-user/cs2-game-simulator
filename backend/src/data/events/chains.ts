@@ -475,7 +475,6 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '录像看了六遍。你找到了三个可以改进的位置习惯。下次不会再犯。',
-          feelDelta: 0.4,
           tagRemoves: ['grand-final-loss'],
           stressDelta: -2,
           feelDelta: 1,
@@ -523,7 +522,6 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '顾问帮你重构了对"输"的定义。你睡前不再反复回放那场比赛了。',
-          feelDelta: 1,
           tagRemoves: ['grand-final-loss'],
           stressDelta: -3,
           feelDelta: 1,

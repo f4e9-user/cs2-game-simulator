@@ -9,9 +9,9 @@ export function buildLeaderboard(player: Player): LeaderboardTeam[] {
   const all: LeaderboardTeam[] = [];
 
   const playerTeam: LeaderboardTeam = {
-    name: player.team?.name ?? `Team ${player.name || 'You'}`,
-    tag: player.team?.tag ?? 'YOU',
-    region: player.team?.region ?? 'YOU',
+    name: player.team?.name ?? (player.name || '你'),
+    tag: player.team?.tag ?? '自由人',
+    region: player.team?.region ?? '—',
     points: 0,
     isPlayer: true,
   };

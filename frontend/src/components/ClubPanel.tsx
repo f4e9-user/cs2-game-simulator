@@ -14,10 +14,8 @@ const TIER_LABELS: Record<string, string> = {
 function rookieEligibility(player: Player): { eligible: boolean; path: 'open-match' | 'talent' | null; hint: string } {
   const tp = player.tierParticipations ?? {};
   const tc = player.tierChampionships ?? {};
-  const legacyParticipations = (tp['netcafe'] ?? 0) + (tp['city'] ?? 0) + (tp['platform'] ?? 0);
-  const legacyChampionships = (tc['netcafe'] ?? 0) + (tc['city'] ?? 0) + (tc['platform'] ?? 0);
-  const openParticipations = Math.max(tp.b ?? 0, legacyParticipations);
-  const openChampionships = Math.max(tc.b ?? 0, legacyChampionships);
+  const openParticipations = (tp['b'] ?? 0) + (tp['a'] ?? 0);
+  const openChampionships = (tc['b'] ?? 0) + (tc['a'] ?? 0);
   const hasOpenMatch = openParticipations >= 3 && openChampionships >= 1;
 
   const traitTags = player.traits.flatMap((id) => {
@@ -36,8 +34,8 @@ function rookieEligibility(player: Player): { eligible: boolean; path: 'open-mat
   if (hasTalentTrait) return { eligible: true, path: 'talent', hint: '✓ 枪法天才特质达标' };
 
   const parts: string[] = [];
-  if (openParticipations < 3) parts.push(`公开赛参赛 ${openParticipations}/3 场`);
-  else if (openChampionships < 1) parts.push('公开赛夺冠 0/1 次');
+  if (openParticipations < 3) parts.push(`B/A 级赛事参赛 ${openParticipations}/3 场`);
+  else if (openChampionships < 1) parts.push('B/A 级赛事夺冠 0/1 次');
   return {
     eligible: false,
     path: null,

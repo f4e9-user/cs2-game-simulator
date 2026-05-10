@@ -53,7 +53,7 @@ export function ResultPanel({ result }: { result: RoundResult }) {
           </span>
         ) : (
           <span className="result-roll">
-            {result.roll} vs DC {result.dc}
+            d20 <strong>{result.naturalRoll ?? '?'}</strong> → {result.roll} vs DC {result.dc}
           </span>
         )}
         <span

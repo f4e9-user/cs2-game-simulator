@@ -471,6 +471,7 @@ function buildMatchResolveResult(
     resultTier: won ? 'success' : 'failure',
     roll: Math.round(sim.rating * 100),
     dc: enemyAimProxy,
+    naturalRoll: Math.round(sim.rating * 100),
     chosenOutcome,
     nextStats,
     stageAfter: player.stage,
@@ -849,9 +850,9 @@ export function applyChoice(
   };
 
   // ── 明星/老将 tag 检查与首次获得奖励 ─────────────────────────────
-  // veteran tag：顶级赛事（tier1/s-class/major）累计参加 4 场即可获得
+  // veteran tag：顶级赛事（s-main/s-class/major）累计参加 4 场即可获得
   const topParticipations =
-    (nextPlayer.tierParticipations?.['tier1'] ?? 0) +
+    (nextPlayer.tierParticipations?.['s-main'] ?? 0) +
     (nextPlayer.tierParticipations?.['s-class'] ?? 0) +
     (nextPlayer.tierParticipations?.['major'] ?? 0);
   if (topParticipations >= 4 && !nextTags.includes('veteran')) {
@@ -1071,6 +1072,7 @@ export function applyChoice(
     resultTier: outcome.resultTier,
     roll: outcome.roll,
     dc: outcome.dc,
+    naturalRoll: outcome.naturalRoll,
     narrative: outcome.chosenOutcome.narrative,
     statChanges,
     newStats: nextPlayer.stats,
@@ -1451,6 +1453,7 @@ export function applyAction(
     success: outcome.success,
     roll: outcome.roll,
     dc: outcome.dc,
+    naturalRoll: outcome.naturalRoll,
     narrative: outcome.chosenOutcome.narrative,
     feelChange: feel - volatile.feel,
     fatigueChange: fatigue - volatile.fatigue,
@@ -1730,14 +1733,14 @@ export function applyClubRequest(
   if (ap < 25) throw new Error('行动力不足');
 
   // Rookie-specific eligibility: must have proven themselves before clubs will respond.
-  // Path A: 3+ open-match participations (netcafe/city/platform) AND 1+ championship.
+  // Path A: 3+ B-tier participations AND 1+ championship.
   // Path B: holds 枪法天才 (aimer trait tag); 天赋之子 reserved for future trait 'prodigy'.
   let pathTag: 'application-path-open-match' | 'application-path-talent' | null = null;
   if (player.stage === 'rookie') {
     const tp = player.tierParticipations ?? {};
     const tc = player.tierChampionships ?? {};
-    const openParticipations = (tp['netcafe'] ?? 0) + (tp['city'] ?? 0) + (tp['platform'] ?? 0);
-    const openChampionships = (tc['netcafe'] ?? 0) + (tc['city'] ?? 0) + (tc['platform'] ?? 0);
+    const openParticipations = (tp['b'] ?? 0) + (tp['a'] ?? 0);
+    const openChampionships = (tc['b'] ?? 0) + (tc['a'] ?? 0);
     const hasOpenMatchPath = openParticipations >= 3 && openChampionships >= 1;
 
     const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
@@ -1745,7 +1748,7 @@ export function applyClubRequest(
 
     if (!hasOpenMatchPath && !hasTalentPath) {
       throw new Error(
-        '需要先在公开赛积累经验（参赛 ≥ 3 场 + 夺冠 ≥ 1 次），或拥有枪法天才特质',
+        '需要先在 B/A 级赛事积累经验（参赛 ≥ 3 场 + 夺冠 ≥ 1 次），或拥有枪法天才特质',
       );
     }
     pathTag = hasOpenMatchPath ? 'application-path-open-match' : 'application-path-talent';
