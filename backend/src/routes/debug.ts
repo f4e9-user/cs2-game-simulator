@@ -152,4 +152,36 @@ app.get('/debug/llm-logs/:id', async (c) => {
   return c.json(entry);
 });
 
+// Write a synthetic log entry to verify the KV pipeline is working end-to-end
+app.post('/debug/llm-logs/test', async (c) => {
+  if (!isLocalDebugRequest(c.req.url)) return c.json({ error: 'not found' }, 404);
+
+  const logger = new LlmLogger(c.env.KV);
+  await logger.log({
+    method: 'test',
+    provider: 'debug',
+    model: 'test-model',
+    systemPrompt: '这是一条测试 system prompt，用来验证 KV 日志管道正常工作。',
+    userPrompt: '这是一条测试 user prompt。',
+    response: '这是一条测试 response，如果你能在调试面板看到这条记录，说明日志管道工作正常。',
+    latencyMs: 42,
+    stream: false,
+  });
+  return c.json({ ok: true, message: '测试日志已写入，请刷新调试面板' });
+});
+
+// Current AI provider info (does not require local-only)
+app.get('/debug/ai-status', (c) => {
+  const provider = c.env.AI_PROVIDER ?? 'none';
+  const active = provider !== 'none'
+    && ((provider === 'anthropic' && !!c.env.ANTHROPIC_API_KEY)
+      || (provider === 'openai' && !!c.env.OPENAI_API_KEY));
+  return c.json({
+    provider,
+    model: c.env.AI_MODEL ?? null,
+    active,
+    kvBound: !!c.env.KV,
+  });
+});
+
 export default app;
