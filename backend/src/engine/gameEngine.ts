@@ -204,7 +204,7 @@ export function applyForLoan(player: Player, amount: number): { success: boolean
     interestRate: 0.10,
     remainingPrincipal: amount,
     issuedRound: player.round,
-    dueRound: player.round + 4,
+    dueRound: player.round + 12,
     paid: false,
     defaulted: false,
   };
@@ -218,27 +218,29 @@ export function applyForLoan(player: Player, amount: number): { success: boolean
 export function processLoanRepayment(player: Player, effects?: string[]): void {
   const activeLoans = (player.loans ?? []).filter((loan) => !loan.paid && !loan.defaulted);
 
-  for (const loan of activeLoans) {
-    if (player.round < loan.dueRound) continue;
+  // Sort by dueRound ascending so earliest-due loans are repaid first
+  const dueLoans = activeLoans
+    .filter((loan) => player.round >= loan.dueRound)
+    .sort((a, b) => a.dueRound - b.dueRound);
 
+  for (const loan of dueLoans) {
     const totalDue = Math.floor(loan.remainingPrincipal * (1 + loan.interestRate));
     if (player.stats.money >= totalDue) {
       player.stats.money = clampMoney(player.stats.money - totalDue);
       loan.paid = true;
       loan.remainingPrincipal = 0;
       effects?.push(`贷款还款 -${totalDue}K`);
-      continue;
+    } else {
+      loan.defaulted = true;
+      player.fame = Math.max(0, (player.fame ?? 0) - 10);
+      if (!player.tags.includes('loan-default')) player.tags.push('loan-default');
+      if (!player.tags.includes('transfer-ban')) player.tags.push('transfer-ban');
+      player.tagExpiry = {
+        ...(player.tagExpiry ?? {}),
+        'transfer-ban': player.round + 12,
+      };
+      effects?.push('贷款违约！名气-10，转会禁止12回合');
     }
-
-    loan.defaulted = true;
-    player.fame = Math.max(0, (player.fame ?? 0) - 10);
-    if (!player.tags.includes('loan-default')) player.tags.push('loan-default');
-    if (!player.tags.includes('transfer-ban')) player.tags.push('transfer-ban');
-    player.tagExpiry = {
-      ...(player.tagExpiry ?? {}),
-      'transfer-ban': player.round + 12,
-    };
-    effects?.push('贷款违约！名气-10，转会禁止12回合');
   }
 }
 
@@ -1522,7 +1524,7 @@ export function applyShopPurchase(
     throw new Error('当前没有经纪人可解约');
   }
 
-  // ── 外设升级：特殊分支处理 ──────────────────────────────────
+  // ── 外设升级：特殊分支处理（priceMoney:0 是占位，价格由此分支动态决定）──
   if (itemId === 'pro-peripherals') {
     const tier = player.peripheralTier ?? 0;
     if (tier >= PERIPHERAL_PRICES.length) {
@@ -1582,6 +1584,8 @@ export function applyShopPurchase(
   }
 
   // ── 普通商品流程 ────────────────────────────────────────────
+  // pro-peripherals uses dynamic pricing and must be handled by the special branch above
+  if (itemId === 'pro-peripherals') throw new Error('外设升级走了非预期的购买路径');
   const { effect } = item;
 
   // Apply money cost
@@ -1628,7 +1632,9 @@ export function applyShopPurchase(
     nextShopCooldowns[itemId] = round + item.cooldownRounds;
   }
 
-  // ── 负面事件随机触发（功能1：team-dinner / fan-meetup）──
+  // ── 负面事件随机触发（team-dinner / fan-meetup 等）──
+  // 概率检定是顺序独立的：第一个未触发才检定第二个，break 保证每次最多触发一个。
+  // 实际触发率 ≈ chance[0] + (1-chance[0])*chance[1] + ...，非累加。
   let shopNarrative: string | undefined;
   if (item.negativeEvents) {
     for (const neg of item.negativeEvents) {
@@ -1683,7 +1689,7 @@ export function applyShopPurchase(
 export function pawnItem(
   player: Player,
   itemId: string,
-): { success: boolean; message?: string; pawnValue?: number } {
+): { success: boolean; message?: string; pawnValue?: number; player?: Player } {
   if (!player.ownedItems.includes(itemId)) {
     return { success: false, message: '未拥有该装备，无法典当' };
   }
@@ -1695,10 +1701,22 @@ export function pawnItem(
   }
 
   let pawnValue: number;
+  let nextPlayer: Player;
+
   if (itemId === 'ergo-chair') {
     pawnValue = Math.floor(35 * 0.6);
-    player.stats.constitution = Math.max(0, player.stats.constitution - 2);
-    player.buffs = (player.buffs ?? []).filter((b) => b.id !== 'ergo-recovery');
+    const newStats = clampStats({
+      ...player.stats,
+      constitution: Math.max(0, player.stats.constitution - 2),
+      money: clampMoney(player.stats.money + pawnValue),
+    });
+    nextPlayer = {
+      ...player,
+      stats: newStats,
+      buffs: (player.buffs ?? []).filter((b) => b.id !== 'ergo-recovery'),
+      ownedItems: player.ownedItems.filter((id) => id !== itemId),
+      pawnedItemIds: [...(player.pawnedItemIds ?? []), itemId],
+    };
   } else {
     const tier = player.peripheralTier ?? 0;
     if (tier <= 0) {
@@ -1709,21 +1727,27 @@ export function pawnItem(
       totalValue += PERIPHERAL_PRICES[i] ?? 0;
     }
     pawnValue = Math.floor(totalValue * 0.5);
-    player.peripheralTier = 0;
-    player.feelCap = FEEL_CAP_DEFAULT;
-    player.volatile = {
-      ...(player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 }),
-      feel: clampFeel(player.volatile?.feel ?? 0, player.feelCap),
+    const newFeelCap = FEEL_CAP_DEFAULT;
+    const newStats = clampStats({
+      ...player.stats,
+      money: clampMoney(player.stats.money + pawnValue),
+    });
+    nextPlayer = {
+      ...player,
+      stats: newStats,
+      peripheralTier: 0,
+      feelCap: newFeelCap,
+      volatile: {
+        ...(player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 }),
+        feel: clampFeel(player.volatile?.feel ?? 0, newFeelCap),
+      },
+      buffs: (player.buffs ?? []).filter((b) => b.id !== 'pro-gear'),
+      ownedItems: player.ownedItems.filter((id) => id !== itemId),
+      pawnedItemIds: [...(player.pawnedItemIds ?? []), itemId],
     };
-    player.buffs = (player.buffs ?? []).filter((b) => b.id !== 'pro-gear');
   }
 
-  player.stats.money = clampMoney(player.stats.money + pawnValue);
-  player.stats = clampStats(player.stats);
-  player.ownedItems = player.ownedItems.filter((id) => id !== itemId);
-  player.pawnedItemIds = [...(player.pawnedItemIds ?? []), itemId];
-
-  return { success: true, pawnValue };
+  return { success: true, pawnValue, player: nextPlayer };
 }
 
 // ── 战队申请 ──────────────────────────────────────────────────
@@ -1745,10 +1769,9 @@ export function applyClubRequest(
   if (player.team) throw new Error('你已经有战队了');
   if (player.pendingApplication) throw new Error('已经有一个进行中的申请');
 
-  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
   // Rookie 申请 youth 档俱乐部时跳过阶段门槛，后续的 Rookie 专属资格检查会接管
   const isRookieApplyingToYouth = player.stage === 'rookie' && club.requiredStage === 'youth';
-  if (!isRookieApplyingToYouth && stageOrder.indexOf(player.stage) < stageOrder.indexOf(club.requiredStage)) {
+  if (!isRookieApplyingToYouth && STAGE_ORDER.indexOf(player.stage) < STAGE_ORDER.indexOf(club.requiredStage)) {
     throw new Error('当前阶段不满足该俱乐部的门槛');
   }
   if (club.requiredFame !== undefined && (player.fame ?? 0) < club.requiredFame) {
