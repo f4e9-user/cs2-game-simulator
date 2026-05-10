@@ -42,9 +42,10 @@ interface Props {
   sessionId: string;
   player: Player;
   onPlayerUpdate: (p: Player) => void;
+  onRequestLoan?: () => void;
 }
 
-export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
+export function ShopPanel({ sessionId, player, onPlayerUpdate, onRequestLoan }: Props) {
   const [items, setItems] = useState<ShopItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -163,19 +164,31 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate }: Props) {
       <div className="shop-panel">
         <div className="shop-panel-header">
           <span>商店</span>
-          <span style={{ fontSize: 11, color: 'var(--fg-2)' }}>
-            余额 {formatMoney(player.stats.money)}
-          </span>
-          {hasPawnableItems() && (
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => setShowPawn(true)}
-              style={{ fontSize: 10, padding: '2px 8px', color: 'var(--warn)' }}
-            >
-              典当
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+            <span style={{ fontSize: 11, color: 'var(--fg-2)' }}>
+              余额 {formatMoney(player.stats.money)}
+            </span>
+            {onRequestLoan && (
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={onRequestLoan}
+                style={{ fontSize: 10, padding: '2px 8px' }}
+              >
+                {(player.loans ?? []).some((l) => !l.paid && !l.defaulted) ? '查看贷款' : '贷款'}
+              </button>
+            )}
+            {hasPawnableItems() && (
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setShowPawn(true)}
+                style={{ fontSize: 10, padding: '2px 8px', color: 'var(--warn)' }}
+              >
+                典当
+              </button>
+            )}
+          </div>
         </div>
 
         {categories.map((cat) => {

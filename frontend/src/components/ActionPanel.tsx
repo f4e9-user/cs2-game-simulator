@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
-import type { ActionResult, Player } from '@/lib/types';
+import type { ActionResult, Player, Stage } from '@/lib/types';
 
 const ACTIONS = [
   {
@@ -54,7 +54,38 @@ const ACTIONS = [
     icon: '🏖',
     apCost: 25,
   },
+  {
+    id: 'action-boosting',
+    label: '代练接单',
+    description: '高强度代练，用枪法换现金',
+    icon: '💰',
+    apCost: 25,
+  },
+  {
+    id: 'action-coaching',
+    label: '陪玩指导',
+    description: '指导新人，稳定收入',
+    icon: '🎓',
+    apCost: 25,
+  },
+  {
+    id: 'action-net-cafe',
+    label: '网吧打工',
+    description: '网吧值班，体力换钱',
+    icon: '🖥️',
+    apCost: 25,
+  },
 ];
+
+const STAGE_ORDER: Stage[] = ['rookie', 'youth', 'second', 'pro', 'retired'];
+const ACTION_STAGE_REQUIREMENTS: Record<string, Stage> = {
+  'action-boosting': 'youth',
+  'action-coaching': 'youth',
+};
+
+function stageIndex(stage: Stage): number {
+  return STAGE_ORDER.indexOf(stage);
+}
 
 const AP_MAX = 100;
 
@@ -82,7 +113,7 @@ function ApBar({ ap }: { ap: number }) {
   );
 }
 
-function ActionResultCard({ result }: { result: ActionResult }) {
+function ActionResultCard({ result, moneyChange }: { result: ActionResult; moneyChange?: number }) {
   const statusClass = result.success ? 'ok' : 'fail';
   return (
     <div className={`action-result-mini ${statusClass}`}>
@@ -116,6 +147,11 @@ function ActionResultCard({ result }: { result: ActionResult }) {
             成长 +{result.growthAmount.toFixed(2)}
           </span>
         )}
+        {moneyChange !== undefined && moneyChange !== 0 && (
+          <span className={`chip ${moneyChange > 0 ? 'chip-up' : 'chip-down'}`}>
+            金钱 {moneyChange > 0 ? '+' : ''}{moneyChange}K
+          </span>
+        )}
       </div>
     </div>
   );
@@ -125,6 +161,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
   const [results, setResults] = useState<Record<string, ActionResult>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [moneyChanges, setMoneyChanges] = useState<Record<string, number>>({});
 
   const ap = player.actionPoints ?? 0;
 
@@ -136,9 +173,12 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
   const doAction = async (actionId: string) => {
     setBusyId(actionId);
     setError(null);
+    const prevMoney = player.stats.money;
     try {
       const res = await api.submitAction(sessionId, actionId);
+      const moneyChange = res.actionResult.newStats.money - prevMoney;
       setResults((prev) => ({ ...prev, [actionId]: res.actionResult }));
+      setMoneyChanges((prev) => ({ ...prev, [actionId]: moneyChange }));
       onPlayerUpdate(res.player);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -166,7 +206,17 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
 
       <div className={`action-list ${panelDisabledReason ? 'panel-disabled' : ''}`}>
         {ACTIONS.map((a) => {
-          const canDo = enabled && !panelDisabledReason && ap >= a.apCost && busyId === null;
+          const requiredStage = ACTION_STAGE_REQUIREMENTS[a.id];
+          const isStageLocked = !!requiredStage && stageIndex(player.stage) < stageIndex(requiredStage);
+          let actionDisabledReason: string | null = null;
+          if (!enabled || panelDisabledReason) {
+            actionDisabledReason = panelDisabledReason || '先完成本回合事件决策';
+          } else if (ap < a.apCost) {
+            actionDisabledReason = 'AP 不足';
+          } else if (isStageLocked) {
+            actionDisabledReason = `需达到 ${requiredStage === 'youth' ? '青训' : requiredStage} 阶段`;
+          }
+          const canDo = actionDisabledReason === null && busyId === null;
           const result = results[a.id];
           return (
             <div key={a.id} className="action-item">
@@ -175,6 +225,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
                 className="action-btn"
                 disabled={!canDo || busyId === a.id}
                 onClick={() => doAction(a.id)}
+                title={actionDisabledReason || undefined}
               >
                 <div className="action-btn-body">
                   <div className="action-btn-label">{a.label}</div>
@@ -182,7 +233,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
                 </div>
                 <span className="ap-cost-badge">-{a.apCost} AP</span>
               </button>
-              {result && <ActionResultCard result={result} />}
+              {result && <ActionResultCard result={result} moneyChange={moneyChanges[a.id]} />}
             </div>
           );
         })}

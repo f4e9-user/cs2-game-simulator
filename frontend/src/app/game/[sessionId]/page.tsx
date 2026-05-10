@@ -18,7 +18,7 @@ import { FeedPanel } from '@/components/FeedPanel';
 import { HudTopBar } from '@/components/HudTopBar';
 import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
-import { LoanPanel } from '@/components/LoanPanel';
+import { LoanModal } from '@/components/LoanModal';
 import { useGameStore } from '@/store/gameStore';
 import type { Player, SocialPost, Teammate, Trait } from '@/lib/types';
 
@@ -65,6 +65,7 @@ export default function GamePage() {
   const prevStress = useRef(0);
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
   const [socialLoading, setSocialLoading] = useState(false);
+  const [showLoan, setShowLoan] = useState(false);
 
   const [streamingNarrative, setStreamingNarrative] = useState<string | null>(null);
   const [isNarrating, setIsNarrating] = useState(false);
@@ -300,11 +301,6 @@ export default function GamePage() {
                 enabled={actionsPhase}
                 onPlayerUpdate={(p: Player) => setPlayer(p)}
               />
-              <LoanPanel
-                sessionId={sessionId}
-                player={player}
-                onPlayerUpdate={(p: Player) => setPlayer(p)}
-              />
             </>
           )}
         </aside>
@@ -400,6 +396,7 @@ export default function GamePage() {
                     sessionId={sessionId}
                     player={player}
                     onPlayerUpdate={(p: Player) => setPlayer(p)}
+                    onRequestLoan={() => setShowLoan(true)}
                   />
                 )}
 
@@ -509,6 +506,14 @@ export default function GamePage() {
           loading={loading}
         />
       )}
+
+      <LoanModal
+        open={showLoan}
+        onClose={() => setShowLoan(false)}
+        sessionId={sessionId}
+        player={player}
+        onPlayerUpdate={(p: Player) => setPlayer(p)}
+      />
 
       {/* New-game confirm modal */}
       {showNewGameModal && (

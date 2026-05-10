@@ -229,6 +229,7 @@ export interface RoundResult {
   success: boolean;
   roll: number;
   dc: number;
+  naturalRoll?: number;
   narrative: string;
   statChanges: StatDelta;
   newStats: Stats;

@@ -23,7 +23,7 @@ function dynamicTags(player: Player): string[] {
   // broadcast at week 24/48 to give it space.
   const w = player.week ?? 1;
   const isMajorAftermath = w === 24 || w === 48;
-  const inMajorMatch = player.pendingMatch?.tournamentId === 't-major';
+  const inMajorMatch = player.pendingMatch?.tier === 'major';
   if (isMajorAftermath && !inMajorMatch) out.push('major-broadcast');
 
   // ── 特质派生 tag ───────────────────────────────────────────────
@@ -34,9 +34,9 @@ function dynamicTags(player: Player): string[] {
   }
 
   // ── 参赛经验 tag ───────────────────────────────────────────────
-  // has-open-match-exp：参加过城市赛或平台赛合计超过1次（被星探发现的前提）
+  // has-open-match-exp：参加过 B/A 级赛事合计超过1次（被星探发现的前提）
   const tp = player.tierParticipations ?? {};
-  const openMatchCount = (tp['city'] ?? 0) + (tp['platform'] ?? 0);
+  const openMatchCount = (tp['b'] ?? 0) + (tp['a'] ?? 0);
   if (openMatchCount > 1) out.push('has-open-match-exp');
 
   // ── 战队申请系统 tag ─────────────────────────────────────────────

@@ -211,6 +211,7 @@ export interface ResolveResult {
   resultTier: ResultTier;
   roll: number;
   dc: number;
+  naturalRoll: number;
   chosenOutcome: Outcome;
   nextStats: Stats;
   stageAfter: Stage;
@@ -237,6 +238,7 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
   let resultTier: ResultTier;
   let roll: number;
   let dc: number;
+  let naturalRoll: number;
 
   if (choice.check.detection) {
     // 侦测检定：统一进 d20+属性 框架（智力 + 心态*0.5）
@@ -245,6 +247,7 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
     const intel = player.stats.intelligence;
     const mental = player.stats.mentality;
     const d20 = rollD20(rng);
+    naturalRoll = d20;
     const attack = d20 + statBonus(intel, 0.5) + statBonus(mental, 0.25) + (input.rollBonus ?? 0);
     dc = detectionDC(chance);
     roll = attack;
@@ -276,6 +279,7 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
     const feelBonus = Math.round(player.volatile?.feel ?? 0);
 
     const d20 = rollD20(rng);
+    naturalRoll = d20;
     const attack = d20
       + statBonus(primary, 2)
       + statBonus(secondary, 1)
@@ -347,6 +351,7 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
     resultTier,
     roll,
     dc,
+    naturalRoll,
     chosenOutcome,
     nextStats,
     stageAfter,

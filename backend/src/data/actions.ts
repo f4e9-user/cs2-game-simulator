@@ -41,11 +41,13 @@ export const ACTIONS: ActionDef[] = [
       dailyGrowth: 'agility' as StatKey,
       feelDelta: 1,
       fatigueDelta: 15,
+      stressDelta: 1, // ×5 = +5 stress
     },
     failure: {
       narrative: '发挥失常，连输几局，情绪开始走低。',
       fatigueDelta: 10,
       tiltDelta: 1,
+      stressDelta: 2, // ×5 = +10 stress
     },
   },
   {
@@ -63,10 +65,12 @@ export const ACTIONS: ActionDef[] = [
       narrative: '训练顺畅，身体记住了不少东西。',
       dailyGrowth: 'intelligence' as StatKey,
       fatigueDelta: 12,
+      stressDelta: 1, // ×5 = +5 stress
     },
     failure: {
       narrative: '注意力散漫，训练质量一般。',
       fatigueDelta: 8,
+      stressDelta: 1.4, // ×5 = +7 stress
     },
   },
   {

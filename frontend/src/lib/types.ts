@@ -252,6 +252,7 @@ export interface ActionResult {
   success: boolean;
   roll: number;
   dc: number;
+  naturalRoll?: number;
   narrative: string;
   feelChange: number;
   fatigueChange: number;
@@ -348,6 +349,7 @@ export interface RoundResult {
   resultTier?: ResultTier;
   roll: number;
   dc: number;
+  naturalRoll?: number;
   narrative: string;
   statChanges: Partial<Stats>;
   newStats: Stats;

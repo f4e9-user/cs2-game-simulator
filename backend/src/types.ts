@@ -230,6 +230,7 @@ export interface ActionResult {
   success: boolean;
   roll: number;
   dc: number;
+  naturalRoll?: number;
   narrative: string;
   feelChange: number;
   fatigueChange: number;
@@ -321,6 +322,7 @@ export interface RoundResult {
   resultTier?: ResultTier;
   roll: number;
   dc: number;
+  naturalRoll?: number;
   narrative: string;
   statChanges: StatDelta;   // 实际核心属性变化（极小，来自成长系统）
   newStats: Stats;
