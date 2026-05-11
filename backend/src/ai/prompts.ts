@@ -156,6 +156,38 @@ export interface NarrativePromptInput {
   matchStats?: MatchStats; // present for tournament-* events, triggers match narrative mode
 }
 
+export interface ShopNarrativeInput {
+  player: Player;
+  itemName: string;
+  baseNarrative: string;
+  positive?: boolean;
+}
+
+export function buildShopNarrativePrompt(
+  input: ShopNarrativeInput,
+  traitRules?: TraitNarrativeRule[],
+): string {
+  const { player, itemName, baseNarrative, positive } = input;
+  const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
+
+  return [
+    '你是 CS2 电竞小说的叙事引擎。请根据以下信息，为选手的商店购买行为写一段 1-2 句的中文叙事。',
+    '全程使用第二人称"你"，禁止出现"他""她"或选手姓名作主语。',
+    '',
+    `选手：${player.name}，阶段：${stageLabel}`,
+    `商品：${itemName}`,
+    `购买结果：${positive ? '顺利获得' : '遇到意外'}`,
+    `原始描述：${baseNarrative}`,
+    '',
+    '【人物特质上下文】',
+    `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}`).join('\n') ?? '无'}`,
+    '',
+    '要求：让叙事贴合选手的特质和当前情境，有画面感，冷静写实。',
+    '禁止出现数值、属性名或游戏机制词汇。',
+    '只输出叙事正文，不要解释，不要引号。',
+  ].join('\n');
+}
+
 export function buildNarrativePrompt(
   input: NarrativePromptInput,
   traitRules?: TraitNarrativeRule[],

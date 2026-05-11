@@ -5,11 +5,13 @@ import {
   buildIntroPrompt,
   buildJudgmentValidationPrompt,
   buildNarrativePrompt,
+  buildShopNarrativePrompt,
   buildSocialFeedPrompt,
   buildSummaryPrompt,
   type CustomActionJudgment,
   type JudgmentValidation,
   type NarrativePromptInput,
+  type ShopNarrativeInput,
   type SocialFeedPost,
 } from './prompts.js';
 import {
@@ -22,6 +24,7 @@ export interface AiService {
   readonly active: boolean;
   narrate(input: NarrativePromptInput): Promise<string>;
   narrateStream(input: NarrativePromptInput): AsyncIterable<string>;
+  narrateShopPurchase(input: ShopNarrativeInput): Promise<string>;
   summarize(player: Player, history: RoundResult[], ending?: string): Promise<string>;
   intro(player: Player, traits: Trait[], background: Background): Promise<string>;
   judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null>;
@@ -220,6 +223,10 @@ class TemplateNarrator implements AiService {
     yield input.baseNarrative;
   }
 
+  async narrateShopPurchase(input: ShopNarrativeInput): Promise<string> {
+    return input.baseNarrative;
+  }
+
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
     const wins = history.filter((r) => r.success).length;
     const total = history.length;
@@ -337,6 +344,15 @@ class AnthropicNarrator implements AiService {
       ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
       : [];
     yield* this.anthropicChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 500, 'narrateStream');
+  }
+
+  async narrateShopPurchase(input: ShopNarrativeInput): Promise<string> {
+    const traitConfig = await this.getTraitConfig();
+    const traitRules = input.player.traits
+      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
+      : [];
+    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildShopNarrativePrompt(input, traitRules), 300, 'narrateShopPurchase');
+    return text && text.length > 0 ? text : input.baseNarrative;
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
@@ -499,6 +515,15 @@ class OpenAINarrator implements AiService {
       ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
       : [];
     yield* this.chatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 500, 'narrateStream');
+  }
+
+  async narrateShopPurchase(input: ShopNarrativeInput): Promise<string> {
+    const traitConfig = await this.getTraitConfig();
+    const traitRules = input.player.traits
+      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
+      : [];
+    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildShopNarrativePrompt(input, traitRules), 300, false, 'narrateShopPurchase');
+    return text && text.length > 0 ? text : input.baseNarrative;
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {

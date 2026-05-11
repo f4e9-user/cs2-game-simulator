@@ -856,6 +856,36 @@ app.post('/game/:sessionId/narrate-stream', async (c) => {
   );
 });
 
+// 商店购买叙事：购买结算后统一交给 LLM 润色，未启用 AI 时返回原始描述
+app.post('/game/:sessionId/narrate-shop', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
+    return c.json({ error: '无效的 API Token' }, 401);
+  }
+
+  const body = await c.req.json().catch(() => ({})) as {
+    itemName?: string;
+    baseNarrative?: string;
+    positive?: boolean;
+  };
+
+  const baseNarrative = body.baseNarrative ?? '';
+  const ai = makeAiService(c.env, c.executionCtx);
+  if (!ai.active) return c.json({ narrative: baseNarrative });
+
+  const narrative = await ai.narrateShopPurchase({
+    player: session.player,
+    itemName: body.itemName ?? '',
+    baseNarrative,
+    positive: body.positive,
+  });
+
+  return c.json({ narrative });
+});
+
 // 游戏结束生涯总结（仅 status=ended 时有意义）
 app.get('/game/:sessionId/summary', async (c) => {
   const id = c.req.param('sessionId');
