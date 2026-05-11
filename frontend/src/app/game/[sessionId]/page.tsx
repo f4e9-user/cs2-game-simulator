@@ -21,7 +21,8 @@ import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { LoanModal } from '@/components/LoanModal';
 import { useGameStore } from '@/store/gameStore';
-import type { Player, SocialPost, Teammate, Trait } from '@/lib/types';
+import type { ActionResult, Player, SocialPost, Teammate, Trait } from '@/lib/types';
+import type { SettlementActionResult, SettlementShopResult } from '@/components/ResultPanel';
 
 function statAvg(tm: Teammate): number {
   const s = tm.stats;
@@ -42,7 +43,6 @@ export default function GamePage() {
     lastResult,
     promotion,
     leaderboard,
-    actionsPhase,
     pendingOffer,
     aiActive,
     loading,
@@ -51,13 +51,13 @@ export default function GamePage() {
     hydrateFromSession,
     applyChoiceResponse,
     setPlayer,
-    setActionsPhase,
     setAiActive,
     setTransitioning,
     clearOffer,
     setLeaderboard,
     setLoading,
     setError,
+    clearLastResult,
   } = useGameStore();
 
   const [traits, setTraits] = useState<Trait[]>([]);
@@ -69,6 +69,11 @@ export default function GamePage() {
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
   const [socialLoading, setSocialLoading] = useState(false);
   const [showLoan, setShowLoan] = useState(false);
+  const [phase, setPhase] = useState<'action' | 'event' | 'settlement'>('action');
+  const [actionResults, setActionResults] = useState<SettlementActionResult[]>([]);
+  const [shopResults, setShopResults] = useState<SettlementShopResult[]>([]);
+  const [shopNarratives, setShopNarratives] = useState<Record<string, string>>({});
+  const [settlementLoading, setSettlementLoading] = useState(false);
 
   const [streamingNarrative, setStreamingNarrative] = useState<string | null>(null);
   const [isNarrating, setIsNarrating] = useState(false);
@@ -86,16 +91,6 @@ export default function GamePage() {
     setWelcomeDismissed(true);
   };
 
-  const [displayEvent, setDisplayEvent] = useState<typeof currentEvent>(null);
-
-  useEffect(() => {
-    if (!currentEvent || actionsPhase) {
-      setDisplayEvent(currentEvent);
-      return;
-    }
-    setDisplayEvent(currentEvent);
-  }, [currentEvent?.id, actionsPhase]);
-
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -106,6 +101,14 @@ export default function GamePage() {
         hydrateFromSession(session);
         setTraits(t.traits);
         if (health) setAiActive(health.ai.active);
+        setPhase('action');
+        setActionResults([]);
+        setShopResults([]);
+        setShopNarratives({});
+        setSettlementLoading(false);
+        setStreamingNarrative(null);
+        setIsNarrating(false);
+        clearLastResult();
 
         // 用 session.apiToken 触发 intro（fire-and-forget，不阻塞主流程）
         if (!welcomeDismissed) {
@@ -127,7 +130,7 @@ export default function GamePage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, hydrateFromSession, setLoading, setError]);
+  }, [sessionId, hydrateFromSession, setLoading, setError, setAiActive, clearLastResult]);
 
   // 新事件到来时自动切回事件标签
   useEffect(() => {
@@ -161,6 +164,35 @@ export default function GamePage() {
     prevStress.current = cur;
   }, [player?.stress]);
 
+  const isActionPhase = phase === 'action';
+
+  const handleEndActionPhase = () => {
+    setPhase('event');
+  };
+
+  const handleActionResult = (result: ActionResult, moneyChange: number) => {
+    setActionResults((prev) => [...prev, { result, moneyChange }]);
+  };
+
+  const handleShopResult = (result: SettlementShopResult) => {
+    setShopResults((prev) => [...prev, result]);
+  };
+
+  const handleEnterNextRound = () => {
+    setTransitioning(true);
+    setTimeout(() => {
+      setTransitioning(false);
+      setPhase('action');
+      setActionResults([]);
+      setShopResults([]);
+      setShopNarratives({});
+      setStreamingNarrative(null);
+      setSettlementLoading(false);
+      setIsNarrating(false);
+      clearLastResult();
+    }, 400);
+  };
+
   const pickChoice = async (choiceId: string, customAction?: string) => {
     // Cancel any in-flight narrative stream from a previous choice
     if (narrateCtxRef.current) narrateCtxRef.current.cancelled = true;
@@ -173,12 +205,16 @@ export default function GamePage() {
       const res = await api.submitChoice(sessionId, choiceId, customAction, apiToken ?? undefined);
       applyChoiceResponse(res);
 
+      setPhase('settlement');
+
+      const settlementTasks: Promise<unknown>[] = [];
+
       // Kick off narrative streaming in parallel.
       if (aiActive && apiToken) {
         const ctx = { cancelled: false };
         narrateCtxRef.current = ctx;
         setIsNarrating(true);
-        api.narrateStream(
+        const streamTask = api.narrateStream(
           sessionId,
           {
             baseNarrative: res.result.narrative,
@@ -195,20 +231,53 @@ export default function GamePage() {
         ).finally(() => {
           if (!ctx.cancelled) setIsNarrating(false);
         });
+        settlementTasks.push(streamTask);
       }
+
+      const shopSnapshot = [...shopResults];
+      if (shopSnapshot.length > 0 && aiActive && apiToken) {
+        for (const shop of shopSnapshot) {
+          const task = api
+            .narrateShop(
+              sessionId,
+              {
+                itemName: shop.itemName,
+                baseNarrative: shop.shopNarrative ?? '',
+                positive: shop.shopNarrativePositive,
+              },
+              apiToken,
+            )
+            .then((r) => {
+              if (!narrateCtxRef.current?.cancelled) {
+                setShopNarratives((prev) => ({ ...prev, [shop.itemId]: r.narrative }));
+              }
+            })
+            .catch(() => {
+              if (!narrateCtxRef.current?.cancelled) {
+                setShopNarratives((prev) => ({
+                  ...prev,
+                  [shop.itemId]: shop.shopNarrative ?? '购买结果已记录。',
+                }));
+              }
+            });
+          settlementTasks.push(task);
+        }
+      }
+
+      if (settlementTasks.length > 0) {
+        setSettlementLoading(true);
+        await Promise.allSettled(settlementTasks);
+      } else {
+        setSettlementLoading(false);
+      }
+
+      setSettlementLoading(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setSettlementLoading(false);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleEnterNextRound = () => {
-    setTransitioning(true);
-    setTimeout(() => {
-      setTransitioning(false);
-      setActionsPhase(false);
-    }, 400);
   };
 
   if (!player && loading) {
@@ -281,8 +350,10 @@ export default function GamePage() {
                 key={player.round}
                 sessionId={sessionId}
                 player={player}
-                enabled={actionsPhase}
+                enabled={isActionPhase && !loading && !settlementLoading}
                 onPlayerUpdate={(p: Player) => setPlayer(p)}
+                onActionResult={handleActionResult}
+                disabledReason={phase === 'settlement' ? '结算中，暂不可执行' : '先完成本回合事件决策'}
               />
             </>
           )}
@@ -310,7 +381,7 @@ export default function GamePage() {
                   const labels: Record<string, string> = {
                     event: '事件', shop: '商店', team: '战队信息', leaderboard: '排行榜',
                   };
-                  const hasDot = tab === 'event' && centerTab !== 'event' && (!!currentEvent || actionsPhase);
+                  const hasDot = tab === 'event' && centerTab !== 'event' && (!!currentEvent || phase !== 'event');
                   return (
                     <button
                       key={tab}
@@ -334,13 +405,18 @@ export default function GamePage() {
                         result={lastResult}
                         streamingNarrative={streamingNarrative}
                         isNarrating={isNarrating}
+                        settlementLoading={settlementLoading}
+                        actionResults={actionResults}
+                        shopResults={shopResults}
+                        shopNarratives={shopNarratives}
+                        onEnterNextRound={handleEnterNextRound}
                       />
                     )}
-                    {actionsPhase ? (
+                    {phase === 'action' ? (
                       <div className="actions-phase-banner">
                         <div className="actions-phase-title">行动阶段</div>
                         <div className="actions-phase-hint">
-                          在「行动」面板执行日常行动（最多 4 次），或直接进入下一回合。
+                          在左侧执行日常行动和商店购买，完成后再进入事件。
                         </div>
                         <button
                           type="button"
@@ -354,18 +430,20 @@ export default function GamePage() {
                           type="button"
                           className="primary-button"
                           style={{ marginTop: 12 }}
-                          onClick={handleEnterNextRound}
+                          onClick={handleEndActionPhase}
                         >
-                          进入下一回合 →
+                          结束行动 →
                         </button>
                       </div>
-                    ) : displayEvent ? (
+                    ) : phase === 'settlement' ? (
+                      lastResult ? null : <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>结算中…</div>
+                    ) : currentEvent ? (
                       <>
-                        <EventCard event={displayEvent} />
+                        <EventCard event={currentEvent} />
                         <div style={{ marginTop: 8, marginBottom: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
                           选择行动
                         </div>
-                        <ChoiceList choices={displayEvent.choices} disabled={loading} aiActive={aiActive} onPick={pickChoice} />
+                        <ChoiceList choices={currentEvent.choices} disabled={loading} aiActive={aiActive} onPick={pickChoice} />
                       </>
                     ) : (
                       <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>等待下一回合…</div>
@@ -380,6 +458,9 @@ export default function GamePage() {
                     player={player}
                     onPlayerUpdate={(p: Player) => setPlayer(p)}
                     onRequestLoan={() => setShowLoan(true)}
+                    onShopResult={handleShopResult}
+                    enabled={isActionPhase && !loading && !settlementLoading}
+                    disabledReason={phase === 'settlement' ? '结算中，暂不可购买' : '先完成本回合事件决策'}
                   />
                 )}
 
@@ -405,7 +486,7 @@ export default function GamePage() {
                     <ClubPanel
                       sessionId={sessionId}
                       player={player}
-                      enabled={actionsPhase}
+                      enabled={isActionPhase && !loading && !settlementLoading}
                       onPlayerUpdate={(p: Player) => setPlayer(p)}
                     />
                   </>
@@ -433,7 +514,7 @@ export default function GamePage() {
           className={`mob-tab${mobileTab === 'left' ? ' active' : ''}`}
           onClick={() => setMobileTab('left')}
         >
-          {actionsPhase && mobileTab !== 'left' && (
+          {isActionPhase && mobileTab !== 'left' && (
             <span className="mob-tab-badge" />
           )}
           <span className="mob-tab-icon">⚔</span>
@@ -556,6 +637,11 @@ export default function GamePage() {
         {loading && (
           <span style={{ fontSize: 11, color: 'var(--fg-3)', marginLeft: 'auto' }}>
             处理中…
+          </span>
+        )}
+        {settlementLoading && !loading && (
+          <span style={{ fontSize: 11, color: 'var(--fg-3)', marginLeft: 'auto' }}>
+            结算中…
           </span>
         )}
       </footer>

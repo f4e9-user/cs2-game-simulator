@@ -136,6 +136,16 @@ export const api = {
       `/api/game/${sessionId}/shop`,
       { method: 'POST', body: JSON.stringify({ itemId }) },
     ),
+  narrateShop: (
+    sessionId: string,
+    body: { itemName: string; baseNarrative: string; positive?: boolean },
+    apiToken?: string,
+  ) =>
+    request<{ narrative: string }>(
+      `/api/game/${sessionId}/narrate-shop`,
+      { method: 'POST', body: JSON.stringify(body) },
+      apiToken,
+    ),
   listShopItems: () =>
     request<{ items: ShopItem[] }>('/api/game/meta/shop'),
   listClubs: () =>
@@ -168,7 +178,6 @@ export const api = {
       `/api/game/${sessionId}/pawn`,
       { method: 'POST', body: JSON.stringify({ itemId }) },
     ),
-
   narrateStream: async (
     sessionId: string,
     body: {

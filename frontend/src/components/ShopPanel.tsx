@@ -13,45 +13,52 @@ const CATEGORY_LABELS: Record<string, string> = {
   social: '社交',
 };
 
-// 购买后弹框的物品
-const MODAL_ITEMS = new Set([
-  'pro-peripherals',
-  'team-dinner',
-  'fan-meetup',
-  'wrist-brace',
-  'aim-coach',
-  'tactical-review',
-  'massage-therapy',
-  'pr-interview',
-  'hire-agent',
-  'fire-agent',
-]);
 
-interface ShopModal {
-  itemName: string;
-  narrative: string;
-  positive: boolean;
-  tagText?: string;
-  buffsAdded?: string[];
-  buffsRemoved?: string[];
-  tagsAdded?: string[];
-  tagsRemoved?: string[];
-}
 
 interface Props {
   sessionId: string;
   player: Player;
   onPlayerUpdate: (p: Player) => void;
   onRequestLoan?: () => void;
+  onShopResult?: (result: {
+    itemId: string;
+    itemName: string;
+    shopNarrative?: string;
+    shopNarrativePositive?: boolean;
+    shopBuffLabelsAdded?: string[];
+    shopBuffLabelsRemoved?: string[];
+    shopTagsAdded?: string[];
+    shopTagsRemoved?: string[];
+  }) => void;
+  enabled?: boolean;
+  disabledReason?: string;
 }
 
-export function ShopPanel({ sessionId, player, onPlayerUpdate, onRequestLoan }: Props) {
+export function ShopPanel({
+  sessionId,
+  player,
+  onPlayerUpdate,
+  onRequestLoan,
+  onShopResult,
+  enabled = true,
+  disabledReason,
+}: Props) {
   const [items, setItems] = useState<ShopItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [shopModal, setShopModal] = useState<ShopModal | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showPawn, setShowPawn] = useState(false);
+  const [recentBoughtId, setRecentBoughtId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!recentBoughtId) return;
+    const timer = window.setTimeout(() => setRecentBoughtId(null), 1200);
+    return () => window.clearTimeout(timer);
+  }, [recentBoughtId]);
+
+  useEffect(() => {
+    setRecentBoughtId(null);
+  }, [player.round]);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,18 +78,17 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate, onRequestLoan }: 
     try {
       const res = await api.buyShopItem(sessionId, itemId);
       onPlayerUpdate(res.player);
-      if (MODAL_ITEMS.has(itemId)) {
-        setShopModal({
-          itemName: res.itemName,
-          narrative: res.shopNarrative ?? '一切顺利，没有意外发生。',
-          positive: res.shopNarrativePositive ?? !res.shopNarrative,
-          tagText: itemId === 'hire-agent' ? '签约成功' : itemId === 'fire-agent' ? '解约成功' : undefined,
-          buffsAdded: res.shopBuffLabelsAdded,
-          buffsRemoved: res.shopBuffLabelsRemoved,
-          tagsAdded: res.shopTagsAdded,
-          tagsRemoved: res.shopTagsRemoved,
-        });
-      }
+      onShopResult?.({
+        itemId,
+        itemName: res.itemName,
+        shopNarrative: res.shopNarrative,
+        shopNarrativePositive: res.shopNarrativePositive,
+        shopBuffLabelsAdded: res.shopBuffLabelsAdded,
+        shopBuffLabelsRemoved: res.shopBuffLabelsRemoved,
+        shopTagsAdded: res.shopTagsAdded,
+        shopTagsRemoved: res.shopTagsRemoved,
+      });
+      setRecentBoughtId(itemId);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -111,6 +117,9 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate, onRequestLoan }: 
   };
 
   const canBuy = (item: ShopItem): { ok: boolean; reason?: string } => {
+    if (!enabled) {
+      return { ok: false, reason: disabledReason ?? '结算中，暂不可购买' };
+    }
     if (item.id === 'pro-peripherals') {
       const tier = player.peripheralTier ?? 0;
       if (tier >= PERIPHERAL_PRICES.length) return { ok: false, reason: '外设已满级' };
@@ -173,6 +182,7 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate, onRequestLoan }: 
                 type="button"
                 className="ghost-button"
                 onClick={onRequestLoan}
+                disabled={!enabled}
                 style={{ fontSize: 10, padding: '2px 8px' }}
               >
                 {(player.loans ?? []).some((l) => !l.paid && !l.defaulted) ? '查看贷款' : '贷款'}
@@ -183,6 +193,7 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate, onRequestLoan }: 
                 type="button"
                 className="ghost-button"
                 onClick={() => setShowPawn(true)}
+                disabled={!enabled}
                 style={{ fontSize: 10, padding: '2px 8px', color: 'var(--warn)' }}
               >
                 典当
@@ -221,7 +232,13 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate, onRequestLoan }: 
                         onClick={() => buy(item.id)}
                         style={{ fontSize: 10, padding: '2px 8px' }}
                       >
-                        {busyId === item.id ? '…' : item.id === 'fire-agent' ? '解约' : '购买'}
+                        {busyId === item.id
+                          ? '…'
+                          : recentBoughtId === item.id
+                          ? '已购买'
+                          : item.id === 'fire-agent'
+                          ? '解约'
+                          : '购买'}
                       </button>
                     </div>
                   </div>
@@ -249,51 +266,6 @@ export function ShopPanel({ sessionId, player, onPlayerUpdate, onRequestLoan }: 
         />
       )}
 
-      {/* 购买结果弹框 */}
-      {shopModal && (
-        <div className="modal-backdrop" onClick={() => setShopModal(null)}>
-          <div className="modal shop-result-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="shop-result-modal-tag">
-              {shopModal.tagText ?? (shopModal.positive ? '购买成功' : '意外发生')}
-            </div>
-            <div className="shop-result-modal-title">{shopModal.itemName}</div>
-            <div
-              className="shop-result-modal-narrative"
-              style={{ color: shopModal.positive ? 'var(--success)' : 'var(--warn)' }}
-            >
-              {shopModal.narrative}
-            </div>
-            {shopModal.buffsAdded && shopModal.buffsAdded.length > 0 && (
-              <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-1)' }}>
-                获得 Buff：{shopModal.buffsAdded.join('、')}
-              </div>
-            )}
-            {shopModal.buffsRemoved && shopModal.buffsRemoved.length > 0 && (
-              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--fg-2)' }}>
-                移除 Buff：{shopModal.buffsRemoved.join('、')}
-              </div>
-            )}
-            {shopModal.tagsAdded && shopModal.tagsAdded.length > 0 && (
-              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--fg-1)' }}>
-                添加标签：{shopModal.tagsAdded.join('、')}
-              </div>
-            )}
-            {shopModal.tagsRemoved && shopModal.tagsRemoved.length > 0 && (
-              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--fg-2)' }}>
-                移除标签：{shopModal.tagsRemoved.join('、')}
-              </div>
-            )}
-            <button
-              type="button"
-              className="primary-button"
-              style={{ width: '100%', marginTop: 16 }}
-              onClick={() => setShopModal(null)}
-            >
-              确认
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { TypewriterText } from '@/components/TypewriterText';
-import type { MatchStats, RoundResult, StatKey } from '@/lib/types';
+import type { ActionResult, MatchStats, RoundResult, StatKey } from '@/lib/types';
 import {
   PASSIVE_EFFECT_LABELS,
   STAGE_LABELS,
@@ -12,16 +12,43 @@ import {
   describeBuffAdded,
 } from '@/lib/format';
 
+export interface SettlementActionResult {
+  result: ActionResult;
+  moneyChange: number;
+}
+
+export interface SettlementShopResult {
+  itemId: string;
+  itemName: string;
+  shopNarrative?: string;
+  shopNarrativePositive?: boolean;
+  shopBuffLabelsAdded?: string[];
+  shopBuffLabelsRemoved?: string[];
+  shopTagsAdded?: string[];
+  shopTagsRemoved?: string[];
+}
+
+interface Props {
+  result: RoundResult;
+  streamingNarrative?: string | null;
+  isNarrating?: boolean;
+  settlementLoading?: boolean;
+  actionResults?: SettlementActionResult[];
+  shopResults?: SettlementShopResult[];
+  shopNarratives?: Record<string, string>;
+  onEnterNextRound?: () => void;
+}
 
 export function ResultPanel({
   result,
   streamingNarrative,
   isNarrating,
-}: {
-  result: RoundResult;
-  streamingNarrative?: string | null;
-  isNarrating?: boolean;
-}) {
+  settlementLoading,
+  actionResults = [],
+  shopResults = [],
+  shopNarratives = {},
+  onEnterNextRound,
+}: Props) {
   const deltas = Object.entries(result.statChanges) as [StatKey, number][];
   const stageChanged = result.stageBefore !== result.stageAfter;
   const passives = result.passiveEffects ?? [];
@@ -36,6 +63,8 @@ export function ResultPanel({
   const tier = result.resultTier;
   const isCrit = tier === 'critical_success' || tier === 'critical_failure';
   const isMatch = Boolean(result.matchStats);
+  const pendingShopNarratives = shopResults.some((shop) => !(shop.itemId in shopNarratives));
+  const loadingActive = Boolean(settlementLoading || isNarrating || pendingShopNarratives);
 
   const hasChips =
     deltas.length > 0 ||
@@ -48,12 +77,27 @@ export function ResultPanel({
     fatigueChange !== 0;
 
   return (
-    <div className={`result-panel ${ok ? 'ok' : 'fail'}${isCrit ? ' crit' : ''}`}>
+    <div className={`result-panel settlement-result-panel ${ok ? 'ok' : 'fail'}${isCrit ? ' crit' : ''}`}>
+      {loadingActive && (
+        <div className="settlement-loading-overlay" aria-live="polite" aria-busy="true">
+          <div className="settlement-loading-spinner" />
+          <div className="settlement-loading-text">正在书写本回合叙事…</div>
+          <div className="settlement-loading-subtext">根据你的选择和特质生成专属叙事中</div>
+          {shopResults.length > 0 && (
+            <div className="settlement-loading-subtext">正在润色商店购买叙事…</div>
+          )}
+        </div>
+      )}
+
       <div className="result-meta">
         <span className={`result-badge ${tier ?? (ok ? 'success' : 'failure')}`}>
-          {tier === 'critical_success' ? '大成功' :
-           tier === 'critical_failure' ? '大失败' :
-           ok ? '胜' : '败'}
+          {tier === 'critical_success'
+            ? '大成功'
+            : tier === 'critical_failure'
+            ? '大失败'
+            : ok
+            ? '胜'
+            : '败'}
         </span>
         {isMatch ? (
           <span className="result-roll" style={{ color: 'var(--fg-2)' }}>
@@ -77,7 +121,6 @@ export function ResultPanel({
         </span>
       </div>
 
-      {/* 比赛数据卡片 */}
       {result.matchStats && <MatchStatsCard stats={result.matchStats} won={ok} />}
 
       <div className="result-narrative">
@@ -100,9 +143,7 @@ export function ResultPanel({
         </div>
       )}
 
-      {qualificationChanges.length > 0 && (
-        <QualificationResultCard changes={qualificationChanges} />
-      )}
+      {qualificationChanges.length > 0 && <QualificationResultCard changes={qualificationChanges} />}
 
       {hasChips && (
         <div className="chips-row">
@@ -148,6 +189,93 @@ export function ResultPanel({
           ))}
         </div>
       )}
+
+      {actionResults.length > 0 && (
+        <div className="settlement-section">
+          <div className="settlement-section-title">本回合行动</div>
+          <div className="settlement-section-list">
+            {actionResults.map((entry, idx) => (
+                <div key={`${entry.result.actionId}-${idx}`} className="settlement-action-row">
+                <div className="settlement-row-head">
+                  <span className={`badge ${entry.result.success ? 'success' : 'danger'}`}>
+                    {entry.result.actionLabel}
+                  </span>
+                  <span className="settlement-row-meta">
+                    {entry.result.success ? '成功' : '失败'} · {entry.result.roll} vs {entry.result.dc}
+                  </span>
+                </div>
+                <div className="settlement-row-narrative">{entry.result.narrative}</div>
+                <div className="chips-row">
+                  {entry.result.feelChange !== 0 && (
+                    <span className={`chip ${entry.result.feelChange > 0 ? 'chip-up' : 'chip-down'}`}>
+                      {describeFeelChange(entry.result.feelChange)}
+                    </span>
+                  )}
+                  {entry.result.fatigueChange !== 0 && (
+                    <span className={`chip ${entry.result.fatigueChange > 0 ? 'chip-down' : 'chip-up'}`}>
+                      {describeFatigueChange(entry.result.fatigueChange)}
+                    </span>
+                  )}
+                  {entry.result.stressChange !== 0 && (
+                    <span className={`chip ${entry.result.stressChange > 0 ? 'chip-down' : 'chip-up'}`}>
+                      {describeStressChange(entry.result.stressChange)}
+                    </span>
+                  )}
+                  {entry.moneyChange !== 0 && (
+                    <span className={`chip ${entry.moneyChange > 0 ? 'chip-up' : 'chip-down'}`}>
+                      金钱 {entry.moneyChange > 0 ? '+' : ''}{entry.moneyChange}K
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {shopResults.length > 0 && (
+        <div className="settlement-section">
+          <div className="settlement-section-title">商店购买</div>
+          <div className="settlement-section-list">
+            {shopResults.map((shop, idx) => {
+              const narrative = shopNarratives[shop.itemId] ?? shop.shopNarrative ?? '购买结果已记录。';
+              return (
+                <div key={`${shop.itemId}-${idx}`} className="settlement-shop-row">
+                  <div className="settlement-row-head">
+                    <span className="badge accent">{shop.itemName}</span>
+                    <span className="settlement-row-meta">
+                      {shop.shopNarrativePositive === false ? '波折' : '顺利'}
+                    </span>
+                  </div>
+                  <div className="settlement-row-narrative">{narrative}</div>
+                  <div className="chips-row">
+                    {shop.shopBuffLabelsAdded?.map((label) => (
+                      <span key={`add-${label}`} className="chip chip-up">Buff +{label}</span>
+                    ))}
+                    {shop.shopBuffLabelsRemoved?.map((label) => (
+                      <span key={`rm-${label}`} className="chip chip-down">Buff -{label}</span>
+                    ))}
+                    {shop.shopTagsAdded?.map((label) => (
+                      <span key={`tag-add-${label}`} className="chip chip-up">标签 +{label}</span>
+                    ))}
+                    {shop.shopTagsRemoved?.map((label) => (
+                      <span key={`tag-rm-${label}`} className="chip chip-down">标签 -{label}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {!loadingActive && onEnterNextRound && (
+        <div className="settlement-footer">
+          <button type="button" className="primary-button" onClick={onEnterNextRound}>
+            进入下一回合 →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -184,14 +312,12 @@ function MatchStatsCard({ stats, won }: { stats: MatchStats; won: boolean }) {
 
   return (
     <div className="match-stats-card">
-      {/* 比分行 */}
       <div className="match-score-row">
         <span className={`match-score-team ${won ? 'won' : 'lost'}`}>{teamScore}</span>
         <span className="match-score-sep">:</span>
         <span className={`match-score-enemy ${won ? 'lost' : 'won'}`}>{enemyScore}</span>
       </div>
 
-      {/* 数据行 */}
       <div className="match-stats-grid">
         <div className="match-stat-cell">
           <div className="match-stat-value">{kills} / {deaths} / {assists}</div>

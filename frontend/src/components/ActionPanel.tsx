@@ -94,6 +94,8 @@ interface Props {
   player: Player;
   enabled: boolean; // false = 事件决策前，不可用
   onPlayerUpdate: (p: Player) => void;
+  onActionResult?: (result: ActionResult, moneyChange: number) => void;
+  disabledReason?: string;
 }
 
 const AP_SEGMENT = 25; // bar displays segments of 25 AP
@@ -113,7 +115,7 @@ function ApBar({ ap }: { ap: number }) {
   );
 }
 
-function ActionResultCard({ result, moneyChange }: { result: ActionResult; moneyChange?: number }) {
+export function ActionResultCard({ result, moneyChange }: { result: ActionResult; moneyChange?: number }) {
   const statusClass = result.success ? 'ok' : 'fail';
   return (
     <div className={`action-result-mini ${statusClass}`}>
@@ -157,11 +159,10 @@ function ActionResultCard({ result, moneyChange }: { result: ActionResult; money
   );
 }
 
-export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Props) {
-  const [results, setResults] = useState<Record<string, ActionResult>>({});
+
+export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActionResult, disabledReason }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [moneyChanges, setMoneyChanges] = useState<Record<string, number>>({});
 
   const ap = player.actionPoints ?? 0;
 
@@ -177,8 +178,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
     try {
       const res = await api.submitAction(sessionId, actionId);
       const moneyChange = res.actionResult.newStats.money - prevMoney;
-      setResults((prev) => ({ ...prev, [actionId]: res.actionResult }));
-      setMoneyChanges((prev) => ({ ...prev, [actionId]: moneyChange }));
+      onActionResult?.(res.actionResult, moneyChange);
       onPlayerUpdate(res.player);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -188,7 +188,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
   };
 
   const panelDisabledReason = !enabled
-    ? '先完成本回合事件决策'
+    ? (disabledReason ?? '先完成本回合事件决策')
     : isTournamentWeek
     ? '赛事比赛周 — 行动力冻结'
     : null;
@@ -217,7 +217,6 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
             actionDisabledReason = `需达到 ${requiredStage === 'youth' ? '青训' : requiredStage} 阶段`;
           }
           const canDo = actionDisabledReason === null && busyId === null;
-          const result = results[a.id];
           return (
             <div key={a.id} className="action-item">
               <button
@@ -233,7 +232,6 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate }: Prop
                 </div>
                 <span className="ap-cost-badge">-{a.apCost} AP</span>
               </button>
-              {result && <ActionResultCard result={result} moneyChange={moneyChanges[a.id]} />}
             </div>
           );
         })}
