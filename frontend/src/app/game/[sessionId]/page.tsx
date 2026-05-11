@@ -87,18 +87,14 @@ export default function GamePage() {
     setWelcomeDismissed(true);
   };
 
-  // 当前展示用的事件；personalizing=true 时叙事区显示骨架，完成后打字机显示 LLM 版本
   const [displayEvent, setDisplayEvent] = useState<typeof currentEvent>(null);
-  const [isPersonalizing, setIsPersonalizing] = useState(false);
 
   useEffect(() => {
     if (!currentEvent || actionsPhase) {
       setDisplayEvent(currentEvent);
-      setIsPersonalizing(false);
       return;
     }
     setDisplayEvent(currentEvent);
-    setIsPersonalizing(false);
   }, [currentEvent?.id, actionsPhase]);
 
   useEffect(() => {
@@ -392,7 +388,7 @@ export default function GamePage() {
                       </div>
                     ) : displayEvent ? (
                       <>
-                        <EventCard event={displayEvent} personalizing={isPersonalizing} />
+                        <EventCard event={displayEvent} />
                         <div style={{ marginTop: 8, marginBottom: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
                           选择行动
                         </div>
