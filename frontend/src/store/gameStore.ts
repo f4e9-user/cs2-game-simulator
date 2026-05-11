@@ -27,6 +27,7 @@ interface GameState {
 
   aiActive: boolean;
   loading: boolean;
+  transitioning: boolean;
   error: string | null;
 
   setAiActive: (v: boolean) => void;
@@ -50,6 +51,7 @@ interface GameState {
   setActionsPhase: (v: boolean) => void;
   clearOffer: () => void;
   setLoading: (loading: boolean) => void;
+  setTransitioning: (v: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
 }
@@ -69,6 +71,7 @@ export const useGameStore = create<GameState>((set) => ({
   pendingOffer: null,
   aiActive: false,
   loading: false,
+  transitioning: false,
   error: null,
 
   hydrateFromSession: (session) =>
@@ -131,6 +134,7 @@ export const useGameStore = create<GameState>((set) => ({
   setActionsPhase: (v) => set({ actionsPhase: v }),
   clearOffer: () => set({ pendingOffer: null }),
   setLoading: (loading) => set({ loading }),
+  setTransitioning: (v) => set({ transitioning: v }),
   setError: (error) => set({ error, loading: false }),
   reset: () =>
     set({
