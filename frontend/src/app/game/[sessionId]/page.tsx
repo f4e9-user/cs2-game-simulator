@@ -16,9 +16,11 @@ import { ShopPanel } from '@/components/ShopPanel';
 import { Leaderboard } from '@/components/Leaderboard';
 import { FeedPanel } from '@/components/FeedPanel';
 import { HudTopBar } from '@/components/HudTopBar';
+import TransitionOverlay from '@/components/TransitionOverlay';
 import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { LoanModal } from '@/components/LoanModal';
+import { personalizeAsync } from '@/lib/personalizeAsync';
 import { useGameStore } from '@/store/gameStore';
 import type { Player, SocialPost, Teammate, Trait } from '@/lib/types';
 
@@ -45,12 +47,14 @@ export default function GamePage() {
     pendingOffer,
     aiActive,
     loading,
+    transitioning,
     error,
     hydrateFromSession,
     applyChoiceResponse,
     setPlayer,
     setActionsPhase,
     setAiActive,
+    setTransitioning,
     clearOffer,
     setLeaderboard,
     setLoading,
@@ -88,38 +92,14 @@ export default function GamePage() {
   const [isPersonalizing, setIsPersonalizing] = useState(false);
 
   useEffect(() => {
-    // actionsPhase 期间没有事件需要个性化
     if (!currentEvent || actionsPhase) {
       setDisplayEvent(currentEvent);
       setIsPersonalizing(false);
       return;
     }
-    // 新事件到来：先只展示标题/类型，叙事区骨架等待 LLM
     setDisplayEvent(currentEvent);
-    setIsPersonalizing(true);
-    let cancelled = false;
-    api.personalizeEvent(sessionId, apiToken ?? undefined).then((res) => {
-      if (cancelled) return;
-      if (res.personalized) {
-        const { narrative, choices: pChoices } = res.personalized;
-        setDisplayEvent((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            narrative,
-            choices: prev.choices.map((c) => {
-              const match = pChoices.find((p) => p.id === c.id);
-              return match ? { ...c, description: match.description } : c;
-            }),
-          };
-        });
-      }
-      setIsPersonalizing(false);
-    }).catch(() => {
-      if (!cancelled) setIsPersonalizing(false); // 降级：直接显示默认叙事
-    });
-    return () => { cancelled = true; };
-  }, [currentEvent?.id, sessionId, actionsPhase]);
+    setIsPersonalizing(false);
+  }, [currentEvent?.id, actionsPhase]);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,6 +209,39 @@ export default function GamePage() {
     }
   };
 
+  const handleEnterNextRound = async () => {
+    const eventIdBefore = currentEvent?.id;
+    setTransitioning(true);
+
+    try {
+      const personalized = await personalizeAsync(
+        () => api.personalizeEvent(sessionId, apiToken ?? undefined),
+        { retries: 1, timeout: 6000 },
+      );
+
+      if (useGameStore.getState().currentEvent?.id !== eventIdBefore) return;
+
+      if (personalized) {
+        setDisplayEvent((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            narrative: personalized.narrative,
+            choices: prev.choices.map((c) => {
+              const match = personalized.choices.find((p) => p.id === c.id);
+              return match ? { ...c, description: match.description } : c;
+            }),
+          };
+        });
+      }
+    } catch {
+      // Silent fallback: displayEvent remains default
+    } finally {
+      setTransitioning(false);
+      setActionsPhase(false);
+    }
+  };
+
   if (!player && loading) {
     return (
       <div
@@ -279,6 +292,7 @@ export default function GamePage() {
     <div className={`hud-root${isCritical ? ' stress-critical' : ''}${shaking ? ' stress-shaking' : ''}`}>
       {/* 压力临界红框警告 */}
       {isCritical && <div className="stress-critical-overlay" />}
+      {transitioning && <TransitionOverlay visible />}
 
       {/* Top bar */}
       <HudTopBar player={player} leaderboard={leaderboard} />
@@ -371,7 +385,7 @@ export default function GamePage() {
                           type="button"
                           className="primary-button"
                           style={{ marginTop: 12 }}
-                          onClick={() => setActionsPhase(false)}
+                          onClick={handleEnterNextRound}
                         >
                           进入下一回合 →
                         </button>
