@@ -75,6 +75,24 @@ export const LIFE_EVENTS: EventDef[] = [
         },
       },
     ],
+    narrativeMeta: {
+      eventId: 'life-family-call',
+      emotionTone: '亲情与梦想的拉锯',
+      traitReactions: {
+        scapegoat: {
+          emphasis: ['你没法解释清楚，因为解释就是让他们更担心', '挂了电话后你会怪自己为什么要接'],
+          avoid: ['禁止写成完全不在乎家人', '禁止写成家人的关心是负担'],
+        },
+        hothead: {
+          emphasis: ['语气越来越冲，明知道不该这样', '挂了电话后更烦躁'],
+          avoid: ['禁止写成对家人大吼大叫', '不要写成摔手机'],
+        },
+        'tactical-mind': {
+          emphasis: ['试图用规划说服家人，但他们听不懂'],
+          avoid: ['不要写成书呆子式的说教'],
+        },
+      },
+    },
   },
   {
     id: 'life-wrist-pain',
@@ -149,5 +167,23 @@ export const LIFE_EVENTS: EventDef[] = [
         },
       },
     ],
+    narrativeMeta: {
+      eventId: 'life-wrist-pain',
+      conflictType: '身体-野心',
+      traitReactions: {
+        scapegoat: {
+          emphasis: ['觉得伤病是自己训练不当造成的', '不该让别人知道自己的脆弱'],
+          avoid: ['不要写成怨天尤人', '不要写成抱怨命运'],
+        },
+        hothead: {
+          emphasis: ['你想砸键盘，但砸的是自己的身体', '愤怒于身体的背叛'],
+          avoid: ['禁止写成怨天尤人', '不要写成迁怒他人'],
+        },
+        grinder: {
+          emphasis: ['即使疼痛也想继续练', '休息比疼痛更让人焦虑'],
+          avoid: ['不要写成享受休息'],
+        },
+      },
+    },
   },
 ];

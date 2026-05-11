@@ -14,6 +14,15 @@ import {
   type PersonalizedEvent,
   type SocialFeedPost,
 } from './prompts.js';
+import {
+  buildTraitRulesForPlayer,
+  loadEventNarrativeMeta,
+  loadTraitNarrativeConfig,
+  resolveNarrativeMeta,
+  type EventNarrativeOverride,
+  type EventNarrativeMetaConfig,
+  type TraitNarrativeConfig,
+} from './narrativeConfig.js';
 
 export interface AiService {
   readonly active: boolean;
@@ -32,16 +41,39 @@ export interface AiService {
 }
 
 const NARRATIVE_SYSTEM_PROMPT =
-  '你是一个 CS2 电竞小说的叙事引擎。全程使用第二人称"你"叙述，禁止出现"他""她"或选手姓名作主语。只输出正文，不要解释，不要加引号。';
+  '你是一个 CS2 电竞小说的叙事引擎。全程使用第二人称"你"叙述，禁止出现"他""她"或选手姓名作主语。只输出正文，不要解释，不要加引号。\n' +
+  '\n' +
+  '你收到的【人物特质上下文】用于让叙事更贴合人物性格，但不要写成心理分析报告。\n' +
+  '禁止凭特质名称自由联想——以收到的上下文为准。';
 
 const SUMMARY_SYSTEM_PROMPT =
   '你是一个 CS2 电竞生涯传记作者。只输出小结正文，不要标题，不要解释。';
 
 const INTRO_SYSTEM_PROMPT =
-  '你是一个 CS2 电竞小说的开篇作者。只输出开篇正文，不要标题，不要解释。';
+  '你是一个 CS2 电竞小说的开篇作者。只输出开篇正文，不要标题，不要解释。\n' +
+  '\n' +
+  '你收到的【特质叙事指令】用于让主角的第一次亮相就带有其性格特质。\n' +
+  '禁止凭特质名称自由联想——以收到的指令为准。';
 
 const PERSONALIZE_SYSTEM_PROMPT =
-  '你是 CS2 电竞小说的叙事引擎。全程使用第二人称"你"，禁止出现"我""他""她"或选手姓名作主语。严格按要求输出 JSON，不要输出任何其他内容。';
+  '你是 CS2 电竞小说的叙事引擎。你的任务是根据选手特质和事件语境，精准改写叙事文案。\n' +
+  '\n' +
+  '全程使用第二人称"你"，禁止出现"我""他""她"或选手姓名作主语。\n' +
+  '\n' +
+  '【特质理解准则】你收到的【特质叙事词典】是权威定义。禁止凭特质名称自由联想。\n' +
+  '例如"背锅侠"的内核是"习惯性承担责任与内疚"，不是"抱怨他人"。\n' +
+  '你必须严格遵循词典中的 behaviorPatterns、forbiddenMisreads 和 emotionalCore。\n' +
+  '\n' +
+  '【事件语境准则】你收到的【事件元数据】定义了该事件的情感基调、玩家立场和冲突类型。\n' +
+  '叙事必须贴合这些信息，不能偏离。\n' +
+  '\n' +
+  '严格按要求输出 JSON，不要输出任何其他内容。';
+
+const SOCIAL_SYSTEM_PROMPT =
+  '你是 CS2 职业电竞世界的社交媒体模拟引擎。\n' +
+  '你收到的【主角特质映射到社媒】定义了每个特质在第三方帖子中的间接体现方式。\n' +
+  '禁止凭特质名称自由联想——以收到的映射说明为准。\n' +
+  '严格输出 JSON 数组，不加任何其他内容。';
 
 interface OpenAIChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
@@ -111,6 +143,10 @@ function parseSocialFeed(text: string | null): SocialFeedPost[] {
   } catch {
     return [];
   }
+}
+
+function getEventNarrativeMeta(event: GameEventPublic): EventNarrativeOverride | undefined {
+  return (event as GameEventPublic & { narrativeMeta?: EventNarrativeOverride }).narrativeMeta;
 }
 
 const TEMPLATE_RIVAL_POSTS = [
@@ -244,7 +280,24 @@ class TemplateNarrator implements AiService {
 
 class AnthropicNarrator implements AiService {
   readonly active = true;
+  private traitConfigPromise?: Promise<TraitNarrativeConfig>;
+  private eventMetaPromise?: Promise<EventNarrativeMetaConfig>;
+
   constructor(private apiKey: string, private model: string, private logger?: LlmLogger) {}
+
+  private async getTraitConfig(): Promise<TraitNarrativeConfig> {
+    if (!this.traitConfigPromise) {
+      this.traitConfigPromise = loadTraitNarrativeConfig();
+    }
+    return this.traitConfigPromise;
+  }
+
+  private async getEventMeta(): Promise<EventNarrativeMetaConfig> {
+    if (!this.eventMetaPromise) {
+      this.eventMetaPromise = loadEventNarrativeMeta();
+    }
+    return this.eventMetaPromise;
+  }
 
   private anthropicBody(system: string, user: string, maxTokens: number, stream = false) {
     return JSON.stringify({
@@ -311,12 +364,20 @@ class AnthropicNarrator implements AiService {
   }
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500, 'narrate');
+    const traitConfig = await this.getTraitConfig();
+    const traitRules = input.player.traits
+      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
+      : [];
+    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 500, 'narrate');
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
   async *narrateStream(input: NarrativePromptInput): AsyncGenerator<string> {
-    yield* this.anthropicChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500, 'narrateStream');
+    const traitConfig = await this.getTraitConfig();
+    const traitRules = input.player.traits
+      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
+      : [];
+    yield* this.anthropicChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 500, 'narrateStream');
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
@@ -324,18 +385,40 @@ class AnthropicNarrator implements AiService {
   }
 
   async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
+    const traitConfig = await this.getTraitConfig();
+    const traitRules = buildTraitRulesForPlayer(
+      traits.map((t) => t.id),
+      traitConfig,
+    );
+
     return (await this.anthropicChat(
       INTRO_SYSTEM_PROMPT,
-      buildIntroPrompt(player, traits, background),
+      buildIntroPrompt(player, traits, background, traitRules),
       300,
       'intro',
     )) ?? '';
   }
 
   async personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null> {
+    const [traitConfig, eventMetaConfig] = await Promise.all([
+      this.getTraitConfig(),
+      this.getEventMeta(),
+    ]);
+    const traitRules = buildTraitRulesForPlayer(
+      traits.map((t) => t.id),
+      traitConfig,
+    );
+    const narrativeMeta = getEventNarrativeMeta(event);
+    const eventMeta = resolveNarrativeMeta(
+      event.type,
+      event.id,
+      narrativeMeta ? [narrativeMeta] : undefined,
+      eventMetaConfig,
+    );
+
     const text = await this.anthropicChat(
       PERSONALIZE_SYSTEM_PROMPT,
-      buildPersonalizePrompt(player, traits, event),
+      buildPersonalizePrompt(player, traits, event, traitRules, eventMeta),
       600,
       'personalizeEvent',
     );
@@ -363,9 +446,13 @@ class AnthropicNarrator implements AiService {
   }
 
   async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
+    const traitConfig = await this.getTraitConfig();
+    const traitRules = player.traits
+      ? buildTraitRulesForPlayer(player.traits, traitConfig)
+      : [];
     const text = await this.anthropicChat(
-      PERSONALIZE_SYSTEM_PROMPT,
-      buildSocialFeedPrompt(player, recentHistory, leaderboard),
+      SOCIAL_SYSTEM_PROMPT,
+      buildSocialFeedPrompt(player, recentHistory, leaderboard, traitRules),
       500,
       'simulateSocialFeed',
     );
@@ -378,12 +465,29 @@ class AnthropicNarrator implements AiService {
 
 class OpenAINarrator implements AiService {
   readonly active = true;
+  private traitConfigPromise?: Promise<TraitNarrativeConfig>;
+  private eventMetaPromise?: Promise<EventNarrativeMetaConfig>;
+
   constructor(
     private apiKey: string,
     private model: string,
     private baseUrl: string,
     private logger?: LlmLogger,
   ) {}
+
+  private async getTraitConfig(): Promise<TraitNarrativeConfig> {
+    if (!this.traitConfigPromise) {
+      this.traitConfigPromise = loadTraitNarrativeConfig();
+    }
+    return this.traitConfigPromise;
+  }
+
+  private async getEventMeta(): Promise<EventNarrativeMetaConfig> {
+    if (!this.eventMetaPromise) {
+      this.eventMetaPromise = loadEventNarrativeMeta();
+    }
+    return this.eventMetaPromise;
+  }
 
   private async *chatStream(systemPrompt: string, userPrompt: string, maxTokens: number, method: string): AsyncGenerator<string> {
     const t0 = Date.now();
@@ -456,12 +560,20 @@ class OpenAINarrator implements AiService {
   }
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500, false, 'narrate');
+    const traitConfig = await this.getTraitConfig();
+    const traitRules = input.player.traits
+      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
+      : [];
+    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 500, false, 'narrate');
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
   async *narrateStream(input: NarrativePromptInput): AsyncGenerator<string> {
-    yield* this.chatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input), 500, 'narrateStream');
+    const traitConfig = await this.getTraitConfig();
+    const traitRules = input.player.traits
+      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
+      : [];
+    yield* this.chatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 500, 'narrateStream');
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
@@ -469,9 +581,15 @@ class OpenAINarrator implements AiService {
   }
 
   async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
+    const traitConfig = await this.getTraitConfig();
+    const traitRules = buildTraitRulesForPlayer(
+      traits.map((t) => t.id),
+      traitConfig,
+    );
+
     return (await this.chat(
       INTRO_SYSTEM_PROMPT,
-      buildIntroPrompt(player, traits, background),
+      buildIntroPrompt(player, traits, background, traitRules),
       300,
       false,
       'intro',
@@ -479,9 +597,25 @@ class OpenAINarrator implements AiService {
   }
 
   async personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null> {
+    const [traitConfig, eventMetaConfig] = await Promise.all([
+      this.getTraitConfig(),
+      this.getEventMeta(),
+    ]);
+    const traitRules = buildTraitRulesForPlayer(
+      traits.map((t) => t.id),
+      traitConfig,
+    );
+    const narrativeMeta = getEventNarrativeMeta(event);
+    const eventMeta = resolveNarrativeMeta(
+      event.type,
+      event.id,
+      narrativeMeta ? [narrativeMeta] : undefined,
+      eventMetaConfig,
+    );
+
     const text = await this.chat(
       PERSONALIZE_SYSTEM_PROMPT,
-      buildPersonalizePrompt(player, traits, event),
+      buildPersonalizePrompt(player, traits, event, traitRules, eventMeta),
       600,
       true,
       'personalizeEvent',
@@ -512,9 +646,13 @@ class OpenAINarrator implements AiService {
   }
 
   async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
+    const traitConfig = await this.getTraitConfig();
+    const traitRules = player.traits
+      ? buildTraitRulesForPlayer(player.traits, traitConfig)
+      : [];
     const text = await this.chat(
-      PERSONALIZE_SYSTEM_PROMPT,
-      buildSocialFeedPrompt(player, recentHistory, leaderboard),
+      SOCIAL_SYSTEM_PROMPT,
+      buildSocialFeedPrompt(player, recentHistory, leaderboard, traitRules),
       500,
       false,
       'simulateSocialFeed',

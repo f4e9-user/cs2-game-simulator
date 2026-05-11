@@ -404,6 +404,20 @@ export interface ChoiceDef {
   failure: Outcome;
 }
 
+/**
+ * 事件级叙事覆写元数据。
+ * 用于覆盖事件类型默认的叙事语义，供 LLM Prompt 构建时注入精准的情感/冲突上下文。
+ * 所有字段均为可选，未指定时 fallback 到事件类型默认元数据。
+ */
+export interface EventNarrativeOverride {
+  eventId: string;
+  emotionTone?: string;
+  playerStance?: string;
+  conflictType?: string;
+  traitReactions?: Record<string, { emphasis: string[]; avoid: string[] }>;
+  narrativeConstraints?: string[];
+}
+
 export interface EventDef {
   id: string;
   type: EventType;
@@ -415,6 +429,7 @@ export interface EventDef {
   requireTags?: string[];
   forbidTags?: string[];
   choices: ChoiceDef[];
+  narrativeMeta?: EventNarrativeOverride;
 }
 
 export interface Env {

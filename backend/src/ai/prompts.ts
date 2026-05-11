@@ -1,5 +1,6 @@
 import type { Background, GameEventPublic, LeaderboardTeam, MatchStats, Player, RoundResult, Rival, Trait } from '../types.js';
 import { STAGE_LABELS } from '../engine/constants.js';
+import type { TraitNarrativeRule, EventNarrativeMeta } from './narrativeConfig.js';
 
 // ── Social Feed ─────────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ export function buildSocialFeedPrompt(
   player: Player,
   recentHistory: RoundResult[],
   leaderboard: LeaderboardTeam[],
+  traitRules?: TraitNarrativeRule[],
 ): string {
   const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
   const fameLabel = player.fame >= 80 ? '顶流' : player.fame >= 50 ? '知名选手' : player.fame >= 20 ? '有一定知名度' : '新人';
@@ -71,6 +73,11 @@ export function buildSocialFeedPrompt(
     '- 对手/媒体的帖子可以与主角无关，只反映 CS 世界的日常（赛事、训练营、转会期、排位等）',
     '- handle 格式：@英文小写昵称（不超过 15 字符）',
     '- 禁止出现数值、属性名、游戏机制词汇',
+    '',
+    '【主角特质映射到社媒】',
+    '主角拥有以下特质，社媒帖子应通过他人视角间接体现这些特质：',
+    `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore} → 队友/对手/媒体可能发的内容方向：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? '无'}`,
+    '注意：非 streamer 特质的主角不会自己发推。帖子的内容应反映他人对主角特质的观察和反应。',
     '',
     '严格输出 JSON 数组，不加任何其他内容：',
     '[{"author":"...","authorType":"rival","handle":"@...","content":"..."}]',
@@ -149,7 +156,10 @@ export interface NarrativePromptInput {
   matchStats?: MatchStats; // present for tournament-* events, triggers match narrative mode
 }
 
-export function buildNarrativePrompt(input: NarrativePromptInput): string {
+export function buildNarrativePrompt(
+  input: NarrativePromptInput,
+  traitRules?: TraitNarrativeRule[],
+): string {
   const { player, baseNarrative, eventTitle, choiceLabel, success, customAction, matchStats } = input;
   const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
   const outcomeLabel = success ? '胜利' : '失败';
@@ -181,8 +191,11 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
       '- 不要照搬"赛前状态参考"原文，只借鉴情绪基调',
       '- 禁止出现"手感""tilt""心态"等游戏机制词汇，改用自然语言描写',
       '- 禁止出现具体数值（分数、KDA、Rating）——数字已在数据卡展示，叙事只写氛围和感受',
+      '【人物特质上下文】',
+      `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}`).join('\n') ?? '无'}`,
+      '要求：让主角的反应贴合其特质内核，但不要写成心理分析报告。',
       '只输出叙事正文，不要解释，不要引号。',
-    ].join('\n');
+  ].join('\n');
   }
 
   // ── 自定义行动：完全重写叙事 ────────────────────────────────────
@@ -202,8 +215,11 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
       '- 结果方向不可更改：成功就是成功，失败就是失败',
       '- 输出 1-3 句中文叙事，口吻冷静写实，有画面感',
       '- 禁止出现属性名、数值、游戏机制词汇',
+      '【人物特质上下文】',
+      `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}`).join('\n') ?? '无'}`,
+      '要求：让主角的反应贴合其特质内核，但不要写成心理分析报告。',
       '只输出叙事正文，不要解释，不要引号。',
-    ].join('\n');
+  ].join('\n');
   }
 
   // ── 普通事件：风格润色 ───────────────────────────────────────────
@@ -216,6 +232,9 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
     `选择：${choiceLabel}`,
     `结果：${outcomeLabel}`,
     `原始描述：${baseNarrative}`,
+    '【人物特质上下文】',
+    `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}`).join('\n') ?? '无'}`,
+    '要求：让主角的反应贴合其特质内核，但不要写成心理分析报告。',
   ].join('\n');
 }
 
@@ -223,6 +242,7 @@ export function buildIntroPrompt(
   player: Player,
   traits: Trait[],
   background: Background,
+  traitRules?: TraitNarrativeRule[],
 ): string {
   const traitDescs = traits
     .map((t) => `${t.name}（${t.description}）`)
@@ -235,6 +255,8 @@ export function buildIntroPrompt(
     `选手名：${player.name}`,
     `出身背景：${background.name} —— ${background.description}`,
     `天赋特质：${traitDescs}`,
+    '【特质叙事指令】',
+    `${traitRules?.map(rule => `- ${rule.traitId}（${rule.emotionalCore}）：开局故事中让主角的第一次亮相就带有这种特质的影子。例如行为模式：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? ''}`,
     `只输出故事正文，不要标题，不要引号。`,
   ].join('\n');
 }
@@ -248,6 +270,8 @@ export function buildPersonalizePrompt(
   player: Player,
   traits: Trait[],
   event: GameEventPublic,
+  traitRules?: TraitNarrativeRule[],
+  eventMeta?: EventNarrativeMeta,
 ): string {
   const traitNames = traits.map((t) => t.name).join('、');
   const feel = player.volatile?.feel ?? 0;
@@ -268,6 +292,28 @@ export function buildPersonalizePrompt(
     `当前状态：${stressLabel}，名气 ${player.fame}，${feelLabel}`,
     `事件 narrative：${JSON.stringify(event.narrative)}`,
     `选项：\n${choicesJson}`,
+    '【特质叙事词典】',
+    '（以下是你必须严格遵循的特质定义，禁止凭特质名称自由联想）',
+    `${traitRules?.map(rule => `
+【特质：${rule.traitId}】
+- 情绪内核：${rule.emotionalCore}
+- 行为模式：${rule.behaviorPatterns.join('、')}
+- 绝对禁止：${rule.forbiddenMisreads.join('；')}
+${rule.stateInteractions && Object.keys(rule.stateInteractions).length > 0 ? `- 当前状态映射：${Object.entries(rule.stateInteractions).map(([k, v]) => `${k} → ${v}`).join('；')}` : ''}
+`).join('\n') ?? ''}`,
+    '',
+    '【事件语境】',
+    `${eventMeta ? `
+- 情感基调：${eventMeta.emotionTone}
+- 玩家立场：${eventMeta.playerStance}
+- 冲突类型：${eventMeta.conflictType}
+${eventMeta.narrativeConstraints?.length ? `- 叙事约束：${eventMeta.narrativeConstraints.join('；')}` : ''}
+` : ''}`,
+    '',
+    '【Negative Examples — 绝对禁止的方向】',
+    `${traitRules?.map(rule => rule.forbiddenMisreads.map(forbid => `- 错误：${forbid}`).join('\n')).join('\n') ?? ''}`,
+    '正确方向：叙事必须贴合上述特质内核和事件语境，让主角的反应符合其性格逻辑。',
+    '',
     '严格输出 JSON，格式：{"narrative":"...","choices":[{"id":"...","description":"..."}]}',
   ].join('\n');
 }

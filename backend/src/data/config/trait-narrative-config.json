@@ -1,0 +1,317 @@
+{
+  "scapegoat": {
+    "traitId": "scapegoat",
+    "behaviorPatterns": [
+      "习惯性承担不属于自己的责任",
+      "沉默比辩解更安全",
+      "输了先找自己的原因",
+      "队友的失误也会被自己揽过来"
+    ],
+    "forbiddenMisreads": [
+      "不要写成抱怨家人",
+      "不要写成甩锅给队友",
+      "不要写成心安理得接受帮助",
+      "不要写成对外发泄愤怒"
+    ],
+    "emotionalCore": "内疚与自责的循环，沉默是唯一的盔甲",
+    "stateInteractions": {
+      "feel_hot": "想证明自己值得被投资，不想辜负任何人",
+      "feel_cold": "觉得状态差是自己的错，不该拖累团队",
+      "stress_high": "默认所有压力都是自己造成的",
+      "fame_low": "觉得没人看好自己是正常的，因为自己确实不够好",
+      "fame_high": "名气越大越害怕露馅，觉得德不配位"
+    },
+    "eventTypeModifiers": {
+      "bailout": {
+        "emphasis": [
+          "被关怀时感到刺痛",
+          "觉得这钱不该由他们来填"
+        ],
+        "avoid": [
+          "不要写成抱怨家人添乱",
+          "禁止写成心安理得"
+        ]
+      }
+    }
+  },
+  "hothead": {
+    "traitId": "hothead",
+    "behaviorPatterns": [
+      "对不公和失误反应激烈",
+      "愤怒中反而更准",
+      "炸完后自己收拾残局",
+      "不是无理取闹，是容不下低级错误"
+    ],
+    "forbiddenMisreads": [
+      "不要写成对关心自己的人发火",
+      "不要写成无理取闹",
+      "不要写成毫无理由的暴躁",
+      "不要写成只会破坏团队气氛"
+    ],
+    "emotionalCore": "愤怒是信号，不是噪音——只是信号太强时会把所有人震聋",
+    "stateInteractions": {
+      "feel_hot": "准得可怕，但一点就炸",
+      "feel_cold": "更暴躁，因为连枪法都在背叛自己",
+      "stress_high": "濒临失控，一句话就能点燃",
+      "fame_low": "觉得全世界都在针对自己",
+      "fame_high": "不容许任何质疑，因为好不容易爬上来"
+    },
+    "eventTypeModifiers": {}
+  },
+  "tactical-mind": {
+    "traitId": "tactical-mind",
+    "behaviorPatterns": [
+      "遇事先拆解",
+      "脑子里自动跑 demo",
+      "队友还没开口就知道该怎么赢",
+      "把每一回合都当成棋局"
+    ],
+    "forbiddenMisreads": [
+      "不要写成书呆子",
+      "不要写成只会说不会打",
+      "不要写成脱离实际的空想家",
+      "不要写成对队友指手画脚"
+    ],
+    "emotionalCore": "世界是一套可以被拆解的系统，包括人心",
+    "stateInteractions": {
+      "feel_hot": "脑子转得比枪还快，预判像开挂",
+      "feel_cold": "开始过度分析，反而错失本能反应",
+      "stress_high": "试图用逻辑控制一切，包括自己的情绪",
+      "fame_low": "相信自己的判断，哪怕没人听",
+      "fame_high": "话语权在增加，但也更担心决策失误"
+    },
+    "eventTypeModifiers": {}
+  },
+  "fragile-star": {
+    "traitId": "fragile-star",
+    "behaviorPatterns": [
+      "枪法是神，心态是纸",
+      "赢时天神输时崩溃",
+      "赛后反复刷评论区",
+      "队友知道不能在他耳边叹气"
+    ],
+    "forbiddenMisreads": [
+      "不要写成摆烂",
+      "不要写成不在乎",
+      "不要写成故意搞心态",
+      "不要写成冷漠疏离"
+    ],
+    "emotionalCore": "才华和脆弱是同一枚硬币的两面",
+    "stateInteractions": {
+      "feel_hot": "觉得自己终于配得上天赋了",
+      "feel_cold": "开始怀疑一切，包括自己是否该打职业",
+      "stress_high": "濒临断裂，任何一个负面反馈都可能是最后一根稻草",
+      "fame_low": "觉得所有批评都是对的",
+      "fame_high": "名气像放大镜，每个失误都被全世界看见"
+    },
+    "eventTypeModifiers": {}
+  },
+  "arrogant": {
+    "traitId": "arrogant",
+    "behaviorPatterns": [
+      "输了是队友菜",
+      "赢了是自己强",
+      "复盘时第一个想换队友",
+      "教练找他？浪费时间"
+    ],
+    "forbiddenMisreads": [
+      "不要写成谦虚",
+      "不要写成自我反思",
+      "不要写成内心其实自卑",
+      "不要写成嘴硬心软"
+    ],
+    "emotionalCore": "自信到边界模糊，分不清能力和运气",
+    "stateInteractions": {
+      "feel_hot": "觉得自己是不可战胜的",
+      "feel_cold": "肯定是队友的问题",
+      "stress_high": "把压力转嫁给别人",
+      "fame_low": "觉得世界不识货",
+      "fame_high": "印证了——老子就是天才"
+    },
+    "eventTypeModifiers": {}
+  },
+  "introvert": {
+    "traitId": "introvert",
+    "behaviorPatterns": [
+      "人前僵硬",
+      "demo 前专注",
+      "一个人待着时研究对手到每一帧",
+      "安静的人脑子里从来不安静"
+    ],
+    "forbiddenMisreads": [
+      "不要写成冷漠",
+      "不要写成讨厌队友",
+      "不要写成不愿意沟通",
+      "不要写成对团队有敌意"
+    ],
+    "emotionalCore": "能量向内流动，在安静中积蓄爆发力",
+    "stateInteractions": {
+      "feel_hot": "沉浸在个人世界里，但输出惊人",
+      "feel_cold": "更想躲起来，拒绝任何社交",
+      "stress_high": "觉得所有社交都是消耗",
+      "fame_low": "乐得清净",
+      "fame_high": "名气成了新的社交负担"
+    },
+    "eventTypeModifiers": {}
+  },
+  "gambler": {
+    "traitId": "gambler",
+    "behaviorPatterns": [
+      "加注是生活方式",
+      "赢的时候觉得自己天下无敌",
+      "输了说下次一把回来",
+      "那把一直没来"
+    ],
+    "forbiddenMisreads": [
+      "不要写成理性计算",
+      "不要写成保守",
+      "不要写成深思熟虑",
+      "不要写成风险评估专家"
+    ],
+    "emotionalCore": "不 All-in 的人生不值得过——哪怕筹码是前途",
+    "stateInteractions": {
+      "feel_hot": "觉得自己手气正旺，要加注",
+      "feel_cold": "更想赌一把翻本",
+      "stress_high": "只有高风险才能对冲高压",
+      "fame_low": "没什么可输的",
+      "fame_high": "名气本身就是筹码"
+    },
+    "eventTypeModifiers": {}
+  },
+  "scene-kid": {
+    "traitId": "scene-kid",
+    "behaviorPatterns": [
+      "野路子出身",
+      "不服输的狠劲",
+      "从局域网杀到线上天梯",
+      "没有教练但有经验"
+    ],
+    "forbiddenMisreads": [
+      "不要写成自卑",
+      "不要写成向往正规训练",
+      "不要写成觉得自己是次等选手",
+      "不要写成渴望被体系认可"
+    ],
+    "emotionalCore": "泥地里长出来的草，比温室里的花更能扛风雨",
+    "stateInteractions": {
+      "feel_hot": "野性的直觉在燃烧",
+      "feel_cold": "用狠劲硬顶过去",
+      "stress_high": "高压只会激发斗志",
+      "fame_low": "本来就从零开始",
+      "fame_high": "证明野路子也能打职业"
+    },
+    "eventTypeModifiers": {}
+  },
+  "aim-god": {
+    "traitId": "aim-god",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "ice-cold": {
+    "traitId": "ice-cold",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "grinder": {
+    "traitId": "grinder",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "streamer-charm": {
+    "traitId": "streamer-charm",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "support-soul": {
+    "traitId": "support-soul",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "awper-instinct": {
+    "traitId": "awper-instinct",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "ranked-warrior": {
+    "traitId": "ranked-warrior",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "addicted": {
+    "traitId": "addicted",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "flashy": {
+    "traitId": "flashy",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "impatient": {
+    "traitId": "impatient",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "procrastinator": {
+    "traitId": "procrastinator",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "glass-wrist": {
+    "traitId": "glass-wrist",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "iron-body": {
+    "traitId": "iron-body",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  },
+  "night-owl": {
+    "traitId": "night-owl",
+    "behaviorPatterns": [],
+    "forbiddenMisreads": [],
+    "emotionalCore": "",
+    "stateInteractions": {},
+    "eventTypeModifiers": {}
+  }
+}

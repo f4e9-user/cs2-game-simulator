@@ -13,6 +13,24 @@ export const STRESS_EVENTS: EventDef[] = [
     difficulty: 1,
     weight: 0.5,
     requireTags: ['stressed'],
+    narrativeMeta: {
+      eventId: 'stress-insomnia',
+      emotionTone: '高压下的自我怀疑或对外爆发',
+      traitReactions: {
+        scapegoat: {
+          emphasis: ['把所有压力揽到自己身上', '失眠时反复 replay 自己的失误'],
+          avoid: ['不要写成向外发泄', '不要写成轻松化解'],
+        },
+        hothead: {
+          emphasis: ['愤怒爆发', '想找个人吵架'],
+          avoid: ['不要写成无缘无故的发火', '不要写成攻击队友'],
+        },
+        'tactical-mind': {
+          emphasis: ['试图用分析拆解压力源，但越分析越清醒'],
+          avoid: ['不要写成完全理性不受影响'],
+        },
+      },
+    },
     choices: [
       {
         id: 'meditation',

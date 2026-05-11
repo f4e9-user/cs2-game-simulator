@@ -14,6 +14,24 @@ export const REST_EVENTS: EventDef[] = [
     stages: ['rookie', 'youth'],
     difficulty: 1,
     weight: 1,
+    narrativeMeta: {
+      eventId: 'rest-physio-rookie',
+      emotionTone: '被迫暂停的焦躁与无力',
+      traitReactions: {
+        scapegoat: {
+          emphasis: ['觉得休息是在拖累团队进度', '康复期间也在想训练'],
+          avoid: ['不要写成享受休息', '不要写成理所当然'],
+        },
+        hothead: {
+          emphasis: ['对伤病或休息安排感到愤怒', '想提前结束休养'],
+          avoid: ['不要写成攻击医疗人员', '不要写成破坏康复计划'],
+        },
+        grinder: {
+          emphasis: ['休息时也想着训练计划', '身体在休息脑子在跑图'],
+          avoid: ['不要写成完全放松'],
+        },
+      },
+    },
     choices: [
       {
         id: 'full-rest',

@@ -13,6 +13,20 @@ export const BAILOUT_EVENTS: EventDef[] = [
     difficulty: 0,
     weight: 10,
     requireTags: ['needs-bailout'],
+    narrativeMeta: {
+      eventId: 'bailout-family-loan',
+      playerStance: '被动接受关怀但内心抗拒',
+      traitReactions: {
+        scapegoat: {
+          emphasis: ['电话那头的沉默让你更难受', '你知道这钱背后是担忧不是信任'],
+          avoid: ['不要写成家人在施舍', '不要写成你毫不在意'],
+        },
+        hothead: {
+          emphasis: ['想挂断电话但又舍不得', '愤怒于自己为什么要接电话'],
+          avoid: ['不要写成对电话那头大吼'],
+        },
+      },
+    },
     choices: [
       {
         id: 'accept-loan',
@@ -44,6 +58,24 @@ export const BAILOUT_EVENTS: EventDef[] = [
     difficulty: 0,
     weight: 10,
     requireTags: ['needs-bailout'],
+    narrativeMeta: {
+      eventId: 'bailout-family-gift',
+      emotionTone: '被关怀刺痛自尊',
+      traitReactions: {
+        scapegoat: {
+          emphasis: ['纸条上的字像一面镜子', '你觉得这钱不该由他们来填'],
+          avoid: ['绝对禁止写成抱怨家人添乱', '禁止写成心安理得'],
+        },
+        hothead: {
+          emphasis: ['想把红包连同自尊一起扔回去', '愤怒于自己的无能'],
+          avoid: ['不要写成对快递员发火'],
+        },
+        'tactical-mind': {
+          emphasis: ['脑子里已经开始计算怎么还这笔情'],
+          avoid: ['不要写成冷漠分析'],
+        },
+      },
+    },
     choices: [
       {
         id: 'take-gift',
@@ -74,6 +106,24 @@ export const BAILOUT_EVENTS: EventDef[] = [
     difficulty: 0,
     weight: 10,
     requireTags: ['needs-bailout'],
+    narrativeMeta: {
+      eventId: 'bailout-old-friend',
+      playerStance: '被旧识见证落魄',
+      traitReactions: {
+        scapegoat: {
+          emphasis: ['朋友的好意让你更难堪', '宁愿欠银行也不想欠人情'],
+          avoid: ['不要写成怀疑朋友动机', '不要写成理所当然'],
+        },
+        hothead: {
+          emphasis: ['愤怒于自己被看到了狼狈的样子', '自尊心在灼烧'],
+          avoid: ['不要写成对朋友发火'],
+        },
+        'tactical-mind': {
+          emphasis: ['分析这笔借款对关系的影响'],
+          avoid: ['不要写成只算利弊'],
+        },
+      },
+    },
     choices: [
       {
         id: 'borrow-friend',

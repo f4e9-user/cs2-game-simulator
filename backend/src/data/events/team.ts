@@ -9,6 +9,24 @@ export const TEAM_EVENTS: EventDef[] = [
       '新赛季队内调整：你和队友都想拿主 AWP 位。教练让你们自己先沟通一下。',
     stages: ['youth', 'second', 'pro'],
     difficulty: 2,
+    narrativeMeta: {
+      eventId: 'team-role-clash',
+      playerStance: '集体中的自我位置',
+      traitReactions: {
+        scapegoat: {
+          emphasis: ['默默承担团队失误', '队友犯错时先检讨自己'],
+          avoid: ['不要写成完全独立', '不要写成推卸责任'],
+        },
+        hothead: {
+          emphasis: ['对团队决策不满时会爆发', '会议桌上拍桌子'],
+          avoid: ['不要写成破坏团队氛围', '不要写成攻击队友'],
+        },
+        'tactical-mind': {
+          emphasis: ['分析团队动态和角色分配', '脑子里有团队关系图'],
+          avoid: ['不要写成指手画脚', '不要写成只说不做'],
+        },
+      },
+    },
     choices: [
       {
         id: 'stake-role',
