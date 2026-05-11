@@ -27,7 +27,6 @@ const METHOD_COLORS: Record<string, string> = {
   narrateStream: '#ff8a5c',
   summarize: '#3fb950',
   intro: '#58a6ff',
-  personalizeEvent: '#d2a8ff',
   judgeCustomAction: '#ffa657',
   validateJudgment: '#f0883e',
   simulateSocialFeed: '#79c0ff',

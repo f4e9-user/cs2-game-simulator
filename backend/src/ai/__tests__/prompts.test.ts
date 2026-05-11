@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildPersonalizePrompt,
   buildNarrativePrompt,
   buildIntroPrompt,
   buildSocialFeedPrompt,
@@ -8,12 +7,11 @@ import {
 import type {
   Player,
   Trait,
-  GameEventPublic,
   Background,
   RoundResult,
   LeaderboardTeam,
 } from '../../types.js';
-import type { TraitNarrativeRule, EventNarrativeMeta } from '../narrativeConfig.js';
+import type { TraitNarrativeRule } from '../narrativeConfig.js';
 
 function mockPlayer(overrides?: Partial<Player>): Player {
   return {
@@ -116,35 +114,6 @@ function mockTraitRules(): TraitNarrativeRule[] {
   ];
 }
 
-function mockEventMeta(): EventNarrativeMeta {
-  return {
-    eventType: 'bailout',
-    emotionTone: '被救济的自尊冲突',
-    playerStance: '被动接受关怀',
-    conflictType: '经济-自尊',
-    traitReactions: {
-      scapegoat: {
-        emphasis: ['被关怀时感到刺痛'],
-        avoid: ['不要写成心安理得'],
-      },
-    },
-    narrativeConstraints: ['禁止写成被施舍的愤怒'],
-  };
-}
-
-function mockEvent(): GameEventPublic {
-  return {
-    id: 'test-event',
-    type: 'life',
-    title: 'Test Event',
-    narrative: '这是一个测试事件。',
-    choices: [
-      { id: 'a', label: '选择A', description: '做A事情' },
-      { id: 'b', label: '选择B', description: '做B事情' },
-    ],
-  };
-}
-
 function mockTraits(): Trait[] {
   return [
     { id: 'scapegoat', name: '背锅侠', description: '习惯性承担责任', modifiers: { mentality: 2 }, tags: ['social'] },
@@ -162,44 +131,6 @@ function mockBackground(): Background {
     tags: [],
   };
 }
-
-describe('buildPersonalizePrompt', () => {
-  it('includes scapegoat negative example and emotional core', () => {
-    const prompt = buildPersonalizePrompt(
-      mockPlayer(),
-      mockTraits(),
-      mockEvent(),
-      mockTraitRules(),
-      mockEventMeta(),
-    );
-    expect(prompt).toContain('不要写成抱怨家人');
-    expect(prompt).toContain('内疚与自责的循环');
-    expect(prompt).toContain('被救济的自尊冲突');
-  });
-
-  it('works without optional params (backward compatibility)', () => {
-    const prompt = buildPersonalizePrompt(
-      mockPlayer(),
-      mockTraits(),
-      mockEvent(),
-    );
-    expect(prompt).toContain('全程使用第二人称');
-  });
-
-  it('includes both scapegoat and hothead forbidden misreads', () => {
-    const prompt = buildPersonalizePrompt(
-      mockPlayer(),
-      mockTraits(),
-      mockEvent(),
-      mockTraitRules(),
-      mockEventMeta(),
-    );
-    expect(prompt).toContain('scapegoat');
-    expect(prompt).toContain('hothead');
-    expect(prompt).toContain('不要写成抱怨家人');
-    expect(prompt).toContain('不要写成对关心自己的人发火');
-  });
-});
 
 describe('buildNarrativePrompt', () => {
   it('includes trait context in normal branch', () => {

@@ -20,7 +20,6 @@ import TransitionOverlay from '@/components/TransitionOverlay';
 import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { LoanModal } from '@/components/LoanModal';
-import { personalizeAsync } from '@/lib/personalizeAsync';
 import { useGameStore } from '@/store/gameStore';
 import type { Player, SocialPost, Teammate, Trait } from '@/lib/types';
 
@@ -174,8 +173,7 @@ export default function GamePage() {
       const res = await api.submitChoice(sessionId, choiceId, customAction, apiToken ?? undefined);
       applyChoiceResponse(res);
 
-      // personalizeEvent starts in the background via the useEffect above.
-      // Kick off narrative streaming in parallel (both run concurrently).
+      // Kick off narrative streaming in parallel.
       if (aiActive && apiToken) {
         const ctx = { cancelled: false };
         narrateCtxRef.current = ctx;
@@ -205,37 +203,12 @@ export default function GamePage() {
     }
   };
 
-  const handleEnterNextRound = async () => {
-    const eventIdBefore = currentEvent?.id;
+  const handleEnterNextRound = () => {
     setTransitioning(true);
-
-    try {
-      const personalized = await personalizeAsync(
-        () => api.personalizeEvent(sessionId, apiToken ?? undefined),
-        { retries: 1, timeout: 6000 },
-      );
-
-      if (useGameStore.getState().currentEvent?.id !== eventIdBefore) return;
-
-      if (personalized) {
-        setDisplayEvent((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            narrative: personalized.narrative,
-            choices: prev.choices.map((c) => {
-              const match = personalized.choices.find((p) => p.id === c.id);
-              return match ? { ...c, description: match.description } : c;
-            }),
-          };
-        });
-      }
-    } catch {
-      // Silent fallback: displayEvent remains default
-    } finally {
+    setTimeout(() => {
       setTransitioning(false);
       setActionsPhase(false);
-    }
+    }, 400);
   };
 
   if (!player && loading) {

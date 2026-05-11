@@ -5,22 +5,16 @@ import {
   buildIntroPrompt,
   buildJudgmentValidationPrompt,
   buildNarrativePrompt,
-  buildPersonalizePrompt,
   buildSocialFeedPrompt,
   buildSummaryPrompt,
   type CustomActionJudgment,
   type JudgmentValidation,
   type NarrativePromptInput,
-  type PersonalizedEvent,
   type SocialFeedPost,
 } from './prompts.js';
 import {
   buildTraitRulesForPlayer,
-  loadEventNarrativeMeta,
   loadTraitNarrativeConfig,
-  resolveNarrativeMeta,
-  type EventNarrativeOverride,
-  type EventNarrativeMetaConfig,
   type TraitNarrativeConfig,
 } from './narrativeConfig.js';
 
@@ -30,7 +24,6 @@ export interface AiService {
   narrateStream(input: NarrativePromptInput): AsyncIterable<string>;
   summarize(player: Player, history: RoundResult[], ending?: string): Promise<string>;
   intro(player: Player, traits: Trait[], background: Background): Promise<string>;
-  personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null>;
   judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null>;
   validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation>;
   simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]>;
@@ -104,24 +97,6 @@ function parseCustomActionJudgment(text: string | null): CustomActionJudgment | 
   }
 }
 
-function parsePersonalized(text: string | null, event: GameEventPublic): PersonalizedEvent | null {
-  if (!text) return null;
-  try {
-    // 有时 LLM 会在 JSON 外包一层 ```json ... ```
-    const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed = JSON.parse(clean) as PersonalizedEvent;
-    if (typeof parsed.narrative !== 'string' || !Array.isArray(parsed.choices)) return null;
-    // 确保每个 choice 有 id 且原事件存在该 id
-    const validIds = new Set(event.choices.map((c) => c.id));
-    const allValid = parsed.choices.every(
-      (c) => typeof c.id === 'string' && validIds.has(c.id) && typeof c.description === 'string',
-    );
-    return allValid ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
 function parseSocialFeed(text: string | null): SocialFeedPost[] {
   if (!text) return [];
   try {
@@ -143,10 +118,6 @@ function parseSocialFeed(text: string | null): SocialFeedPost[] {
   } catch {
     return [];
   }
-}
-
-function getEventNarrativeMeta(event: GameEventPublic): EventNarrativeOverride | undefined {
-  return (event as GameEventPublic & { narrativeMeta?: EventNarrativeOverride }).narrativeMeta;
 }
 
 const TEMPLATE_RIVAL_POSTS = [
@@ -259,10 +230,6 @@ class TemplateNarrator implements AiService {
     return `${player.name}，${background.description}这条路，没有人能替你走。`;
   }
 
-  async personalizeEvent(_player: Player, _traits: Trait[], _event: GameEventPublic): Promise<PersonalizedEvent | null> {
-    return null;
-  }
-
   async judgeCustomAction(_playerInput: string, _event: GameEventPublic, _player: Player): Promise<CustomActionJudgment | null> {
     return null;
   }
@@ -281,7 +248,6 @@ class TemplateNarrator implements AiService {
 class AnthropicNarrator implements AiService {
   readonly active = true;
   private traitConfigPromise?: Promise<TraitNarrativeConfig>;
-  private eventMetaPromise?: Promise<EventNarrativeMetaConfig>;
 
   constructor(private apiKey: string, private model: string, private logger?: LlmLogger) {}
 
@@ -290,13 +256,6 @@ class AnthropicNarrator implements AiService {
       this.traitConfigPromise = loadTraitNarrativeConfig();
     }
     return this.traitConfigPromise;
-  }
-
-  private async getEventMeta(): Promise<EventNarrativeMetaConfig> {
-    if (!this.eventMetaPromise) {
-      this.eventMetaPromise = loadEventNarrativeMeta();
-    }
-    return this.eventMetaPromise;
   }
 
   private anthropicBody(system: string, user: string, maxTokens: number, stream = false) {
@@ -399,32 +358,6 @@ class AnthropicNarrator implements AiService {
     )) ?? '';
   }
 
-  async personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null> {
-    const [traitConfig, eventMetaConfig] = await Promise.all([
-      this.getTraitConfig(),
-      this.getEventMeta(),
-    ]);
-    const traitRules = buildTraitRulesForPlayer(
-      traits.map((t) => t.id),
-      traitConfig,
-    );
-    const narrativeMeta = getEventNarrativeMeta(event);
-    const eventMeta = resolveNarrativeMeta(
-      event.type,
-      event.id,
-      narrativeMeta ? [narrativeMeta] : undefined,
-      eventMetaConfig,
-    );
-
-    const text = await this.anthropicChat(
-      PERSONALIZE_SYSTEM_PROMPT,
-      buildPersonalizePrompt(player, traits, event, traitRules, eventMeta),
-      600,
-      'personalizeEvent',
-    );
-    return parsePersonalized(text, event);
-  }
-
   async judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null> {
     const text = await this.anthropicChat(
       PERSONALIZE_SYSTEM_PROMPT,
@@ -466,7 +399,6 @@ class AnthropicNarrator implements AiService {
 class OpenAINarrator implements AiService {
   readonly active = true;
   private traitConfigPromise?: Promise<TraitNarrativeConfig>;
-  private eventMetaPromise?: Promise<EventNarrativeMetaConfig>;
 
   constructor(
     private apiKey: string,
@@ -480,13 +412,6 @@ class OpenAINarrator implements AiService {
       this.traitConfigPromise = loadTraitNarrativeConfig();
     }
     return this.traitConfigPromise;
-  }
-
-  private async getEventMeta(): Promise<EventNarrativeMetaConfig> {
-    if (!this.eventMetaPromise) {
-      this.eventMetaPromise = loadEventNarrativeMeta();
-    }
-    return this.eventMetaPromise;
   }
 
   private async *chatStream(systemPrompt: string, userPrompt: string, maxTokens: number, method: string): AsyncGenerator<string> {
@@ -594,33 +519,6 @@ class OpenAINarrator implements AiService {
       false,
       'intro',
     )) ?? '';
-  }
-
-  async personalizeEvent(player: Player, traits: Trait[], event: GameEventPublic): Promise<PersonalizedEvent | null> {
-    const [traitConfig, eventMetaConfig] = await Promise.all([
-      this.getTraitConfig(),
-      this.getEventMeta(),
-    ]);
-    const traitRules = buildTraitRulesForPlayer(
-      traits.map((t) => t.id),
-      traitConfig,
-    );
-    const narrativeMeta = getEventNarrativeMeta(event);
-    const eventMeta = resolveNarrativeMeta(
-      event.type,
-      event.id,
-      narrativeMeta ? [narrativeMeta] : undefined,
-      eventMetaConfig,
-    );
-
-    const text = await this.chat(
-      PERSONALIZE_SYSTEM_PROMPT,
-      buildPersonalizePrompt(player, traits, event, traitRules, eventMeta),
-      600,
-      true,
-      'personalizeEvent',
-    );
-    return parsePersonalized(text, event);
   }
 
   async judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null> {

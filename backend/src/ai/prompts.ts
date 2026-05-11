@@ -1,6 +1,6 @@
 import type { Background, GameEventPublic, LeaderboardTeam, MatchStats, Player, RoundResult, Rival, Trait } from '../types.js';
 import { STAGE_LABELS } from '../engine/constants.js';
-import type { TraitNarrativeRule, EventNarrativeMeta } from './narrativeConfig.js';
+import type { TraitNarrativeRule } from './narrativeConfig.js';
 
 // ── Social Feed ─────────────────────────────────────────────────────────────
 
@@ -258,63 +258,6 @@ export function buildIntroPrompt(
     '【特质叙事指令】',
     `${traitRules?.map(rule => `- ${rule.traitId}（${rule.emotionalCore}）：开局故事中让主角的第一次亮相就带有这种特质的影子。例如行为模式：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? ''}`,
     `只输出故事正文，不要标题，不要引号。控制在80-120字之间，确保句子完整。`,
-  ].join('\n');
-}
-
-export interface PersonalizedEvent {
-  narrative: string;
-  choices: Array<{ id: string; description: string }>;
-}
-
-export function buildPersonalizePrompt(
-  player: Player,
-  traits: Trait[],
-  event: GameEventPublic,
-  traitRules?: TraitNarrativeRule[],
-  eventMeta?: EventNarrativeMeta,
-): string {
-  const traitNames = traits.map((t) => t.name).join('、');
-  const feel = player.volatile?.feel ?? 0;
-  const feelLabel = feel >= 2 ? '手感火热' : feel <= -2 ? '手感冰冷' : '手感正常';
-  const stressLabel = player.stress >= 80 ? '压力极大' : player.stress >= 50 ? '压力偏高' : '压力正常';
-
-  const choicesJson = JSON.stringify(
-    event.choices.map((c) => ({ id: c.id, label: c.label, description: c.description })),
-    null,
-    2,
-  );
-
-  return [
-    '根据选手当前状态，把下面事件的 narrative 和每个选项的 description 改得更有个人色彩。',
-    '规则：全程使用第二人称"你"，禁止出现"我""他""她"或选手姓名作主语。禁止改变选项数量、选项 id、选项 label、事件类型或任何游戏机制含义。只改措辞和细节。',
-    `选手：${player.name}，阶段：${STAGE_LABELS[player.stage] ?? player.stage}`,
-    `特质：${traitNames || '无'}`,
-    `当前状态：${stressLabel}，名气 ${player.fame}，${feelLabel}`,
-    `事件 narrative：${JSON.stringify(event.narrative)}`,
-    `选项：\n${choicesJson}`,
-    '【特质叙事词典】',
-    '（以下是你必须严格遵循的特质定义，禁止凭特质名称自由联想）',
-    `${traitRules?.map(rule => `
-【特质：${rule.traitId}】
-- 情绪内核：${rule.emotionalCore}
-- 行为模式：${rule.behaviorPatterns.join('、')}
-- 绝对禁止：${rule.forbiddenMisreads.join('；')}
-${rule.stateInteractions && Object.keys(rule.stateInteractions).length > 0 ? `- 当前状态映射：${Object.entries(rule.stateInteractions).map(([k, v]) => `${k} → ${v}`).join('；')}` : ''}
-`).join('\n') ?? ''}`,
-    '',
-    '【事件语境】',
-    `${eventMeta ? `
-- 情感基调：${eventMeta.emotionTone}
-- 玩家立场：${eventMeta.playerStance}
-- 冲突类型：${eventMeta.conflictType}
-${eventMeta.narrativeConstraints?.length ? `- 叙事约束：${eventMeta.narrativeConstraints.join('；')}` : ''}
-` : ''}`,
-    '',
-    '【Negative Examples — 绝对禁止的方向】',
-    `${traitRules?.map(rule => rule.forbiddenMisreads.map(forbid => `- 错误：${forbid}`).join('\n')).join('\n') ?? ''}`,
-    '正确方向：叙事必须贴合上述特质内核和事件语境，让主角的反应符合其性格逻辑。',
-    '',
-    '严格输出 JSON，格式：{"narrative":"...","choices":[{"id":"...","description":"..."}]}',
   ].join('\n');
 }
 
