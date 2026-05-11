@@ -204,114 +204,338 @@
   },
   "aim-god": {
     "traitId": "aim-god",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "定位像磁铁吸附目标",
+      "对枪时眼睛比手还快",
+      "不需要解释为什么能中",
+      "天赋型选手，训练量未必最多"
+    ],
+    "forbiddenMisreads": [
+      "不要写成靠苦练出来的",
+      "不要写成对战术有深刻理解",
+      "不要写成谦虚低调",
+      "不要写成只靠反应速度"
+    ],
+    "emotionalCore": "瞄准是一种本能，不是选择",
+    "stateInteractions": {
+      "feel_hot": "准得不像人类，每一枪都像演示",
+      "feel_cold": "手感流失时会产生存在危机",
+      "stress_high": "压力越大，肌肉记忆越清醒",
+      "fame_low": "数据会说话，不需要名气证明",
+      "fame_high": "名气只是对他早已拥有的东西的确认"
+    },
     "eventTypeModifiers": {}
   },
   "ice-cold": {
     "traitId": "ice-cold",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "残局手稳得像刚开局",
+      "压力越大越清醒",
+      "赢了只喝水，不庆祝",
+      "把肾上腺素当燃料"
+    ],
+    "forbiddenMisreads": [
+      "不要写成冷漠无情",
+      "不要写成没有感情",
+      "不要写成对队友不关心",
+      "不要写成机器人"
+    ],
+    "emotionalCore": "冷静不是缺乏情绪，而是情绪被炼成了燃料",
+    "stateInteractions": {
+      "feel_hot": "热手状态下冷静得像在旁观自己打",
+      "feel_cold": "冷手也不慌，反正他从来不是靠手感",
+      "stress_high": "压力是他最熟悉的环境",
+      "fame_low": "不在乎别人看不看好",
+      "fame_high": "名气不会让他波动，喝水还是喝水"
+    },
     "eventTypeModifiers": {}
   },
   "grinder": {
     "traitId": "grinder",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "第一个上线最后一个离线",
+      "每天500个bot是底线",
+      "身体抗议但不回应",
+      "把量变当成唯一的信仰"
+    ],
+    "forbiddenMisreads": [
+      "不要写成天赋很高",
+      "不要写成轻松愉快",
+      "不要写成为了团队牺牲",
+      "不要写成效率很高"
+    ],
+    "emotionalCore": "汗水是他唯一相信的货币",
+    "stateInteractions": {
+      "feel_hot": "热手时觉得练习终于见效了",
+      "feel_cold": "更想加练，因为冷手说明练得不够",
+      "stress_high": "用训练量对抗焦虑",
+      "fame_low": "名气不重要，数据才重要",
+      "fame_high": "名气是副产品，训练才是本体"
+    },
     "eventTypeModifiers": {}
   },
   "streamer-charm": {
     "traitId": "streamer-charm",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "镜头一亮就换人格",
+      "弹幕越快打得越花",
+      "休息室里的气氛担当",
+      "赞助商和粉丝都爱他"
+    ],
+    "forbiddenMisreads": [
+      "不要写成虚荣浮夸",
+      "不要写成只在镜头前表演",
+      "不要写成对游戏不认真",
+      "不要写成内心空虚"
+    ],
+    "emotionalCore": "镜头是他的充电站，观众是他的肾上腺素",
+    "stateInteractions": {
+      "feel_hot": "热手加高弹幕，他是全场焦点",
+      "feel_cold": "用节目效果掩盖状态差",
+      "stress_high": "压力变成直播素材",
+      "fame_low": "小直播间里更能放得开",
+      "fame_high": "大舞台正是他该在的地方"
+    },
     "eventTypeModifiers": {}
   },
   "support-soul": {
     "traitId": "support-soul",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "记得队友每个位置偏好",
+      "拉枪线丢道具报残血",
+      "不在乎MVP",
+      "知道谁需要鼓励谁需要被骂醒"
+    ],
+    "forbiddenMisreads": [
+      "不要写成没有个人能力",
+      "不要写成软弱老好人",
+      "不要写成只为了别人而活",
+      "不要写成没有主见"
+    ],
+    "emotionalCore": "团队是一首交响乐，他自愿做那个不被听见的低音部",
+    "stateInteractions": {
+      "feel_hot": "热手时更想帮队友创造机会",
+      "feel_cold": "冷手时靠辅助贡献维持存在感",
+      "stress_high": "先稳定队友情绪再稳定自己",
+      "fame_low": "从不追求个人名气",
+      "fame_high": "名气大时更强调这是团队的功劳"
+    },
     "eventTypeModifiers": {}
   },
   "awper-instinct": {
     "traitId": "awper-instinct",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "说不清为什么架那个点",
+      "开镜瞬间就知道会中",
+      "时机距离全凭直觉",
+      "有些角度只有他能理解"
+    ],
+    "forbiddenMisreads": [
+      "不要写成只会死记硬背点位",
+      "不要写成靠反应速度",
+      "不要写成理性计算",
+      "不要写成新手运气"
+    ],
+    "emotionalCore": "狙击镜里看到的不是敌人，是命运的裂缝",
+    "stateInteractions": {
+      "feel_hot": "直觉像雷达全开，对手无处遁形",
+      "feel_cold": "手感不在但嗅觉还在",
+      "stress_high": "压力下反而更相信本能",
+      "fame_low": "不需要名气，一发入魂就够了",
+      "fame_high": "名气让对手更怕他的非常规位"
+    },
     "eventTypeModifiers": {}
   },
   "ranked-warrior": {
     "traitId": "ranked-warrior",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "天梯排名是唯一的简历",
+      "一个人杀穿五个是常态",
+      "觉得战术配合耽误发挥",
+      "路人局的神"
+    ],
+    "forbiddenMisreads": [
+      "不要写成团队型选手",
+      "不要写成战术素养高",
+      "不要写成谦虚好学",
+      "不要写成只打正式比赛"
+    ],
+    "emotionalCore": "他是一座孤岛，周围的海水叫配合",
+    "stateInteractions": {
+      "feel_hot": "杀疯了，但队友跟不上他的节奏",
+      "feel_cold": "觉得是队友拖累了自己的数据",
+      "stress_high": "压力变成单杀的执念",
+      "fame_low": "天梯分数比名气更真实",
+      "fame_high": "名气证明了他是路人王"
+    },
     "eventTypeModifiers": {}
   },
   "addicted": {
     "traitId": "addicted",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "一天12小时一周7天",
+      "吃饭睡觉都在电脑前",
+      "知道是废墟但关不掉",
+      "天梯排名是最好的"
+    ],
+    "forbiddenMisreads": [
+      "不要写成享受游戏乐趣",
+      "不要写成自律刻苦",
+      "不要写成有丰富社交",
+      "不要写成能随时停下来"
+    ],
+    "emotionalCore": "电脑屏幕是他唯一的窗户，外面是废墟",
+    "stateInteractions": {
+      "feel_hot": "停不下来，因为下一把可能更爽",
+      "feel_cold": "输多了更要打回来",
+      "stress_high": "高压下反而打得更久",
+      "fame_low": "只有排名不会背叛他",
+      "fame_high": "名气是另一个需要维护的账号"
+    },
     "eventTypeModifiers": {}
   },
   "flashy": {
     "traitId": "flashy",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "360度跳狙盲狙甩枪",
+      "操作填满十个集锦",
+      "胜率却不好看",
+      "华丽和有用是两回事"
+    ],
+    "forbiddenMisreads": [
+      "不要写成实用主义",
+      "不要写成为了赢而不择手段",
+      "不要写成低调沉稳",
+      "不要写成只在乎数据"
+    ],
+    "emotionalCore": "集锦是他的语言，但比赛从不用集锦说话",
+    "stateInteractions": {
+      "feel_hot": "热手时动作更夸张，集锦预定",
+      "feel_cold": "冷手时连花哨操作都做不出来",
+      "stress_high": "压力下更想秀，因为那是他唯一的安慰",
+      "fame_low": "没人关注所以更要吸引眼球",
+      "fame_high": "名气要求他一直表演"
+    },
     "eventTypeModifiers": {}
   },
   "impatient": {
     "traitId": "impatient",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "ECO局也不等",
+      "听到脚步就拉出去",
+      "需要肾上腺素",
+      "默认架枪不存在的"
+    ],
+    "forbiddenMisreads": [
+      "不要写成深思熟虑",
+      "不要写成沉着冷静",
+      "不要写成团队配合型",
+      "不要写成胆小怕事"
+    ],
+    "emotionalCore": "时间对他来说是敌人，静止比死亡更可怕",
+    "stateInteractions": {
+      "feel_hot": "热手时先手全中，像预言家",
+      "feel_cold": "冷手时先手全空，像送人头",
+      "stress_high": "压力下更急，因为忍耐已经耗尽",
+      "fame_low": "没人认识他，所以更要抢镜头",
+      "fame_high": "名气让他觉得自己必须带头"
+    },
     "eventTypeModifiers": {}
   },
   "procrastinator": {
     "traitId": "procrastinator",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "明天一定复盘说了17遍",
+      "训练计划完美执行空白",
+      "截止前夜奇迹完成",
+      "不是最好的方式但暂时没出事"
+    ],
+    "forbiddenMisreads": [
+      "不要写成自律高效",
+      "不要写成完全没有准备",
+      "不要写成对比赛不上心",
+      "不要写成懒惰不想赢"
+    ],
+    "emotionalCore": "deadline是他唯一信任的闹钟",
+    "stateInteractions": {
+      "feel_hot": "热手时觉得不练也行",
+      "feel_cold": "冷手时后悔没早点练",
+      "stress_high": "压力下把事情拖得更晚",
+      "fame_low": "名气低时拖延症更严重",
+      "fame_high": "名气是拖延的挡箭牌——反正有资本"
+    },
     "eventTypeModifiers": {}
   },
   "glass-wrist": {
     "traitId": "glass-wrist",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "枪法够打职业但手腕不同意",
+      "高强度训练后右手隐痛",
+      "医生说的休息翻译成落后",
+      "和身体打注定会输的仗"
+    ],
+    "forbiddenMisreads": [
+      "不要写成懒惰不想练",
+      "不要写成假装受伤",
+      "不要写成因为受伤而退役",
+      "不要写成寻求同情"
+    ],
+    "emotionalCore": "他的手想飞，手腕却上了锁",
+    "stateInteractions": {
+      "feel_hot": "热手时忘记疼痛，打完才崩溃",
+      "feel_cold": "冷手时怀疑是手腕拖累了自己",
+      "stress_high": "压力下咬牙硬撑，事后代价更大",
+      "fame_low": "没名气还要和伤病斗",
+      "fame_high": "名气越大越不敢让人知道自己疼"
+    },
     "eventTypeModifiers": {}
   },
   "iron-body": {
     "traitId": "iron-body",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "篮球足球游泳样样行",
+      "12小时天梯后还能跑5公里",
+      "伤病名单永远没他",
+      "身体是铁板不是血肉"
+    ],
+    "forbiddenMisreads": [
+      "不要写成只靠身体不练枪",
+      "不要写成头脑简单",
+      "不要写成运动比电竞重要",
+      "不要写成容易受伤"
+    ],
+    "emotionalCore": "身体是城堡，他从不让敌人攻进来",
+    "stateInteractions": {
+      "feel_hot": "热手时体能让他保持专注到深夜",
+      "feel_cold": "冷手时靠体能硬顶状态低谷",
+      "stress_high": "压力被汗水代谢掉",
+      "fame_low": "身体是他唯一确定的投资",
+      "fame_high": "名气大时身体是他持续输出的底牌"
+    },
     "eventTypeModifiers": {}
   },
   "night-owl": {
     "traitId": "night-owl",
-    "behaviorPatterns": [],
-    "forbiddenMisreads": [],
-    "emotionalCore": "",
-    "stateInteractions": {},
+    "behaviorPatterns": [
+      "下午三点训练赛像梦游",
+      "凌晨瞳孔开始发光",
+      "深夜服务器只剩他一个人",
+      "凌晨三点是他的时区"
+    ],
+    "forbiddenMisreads": [
+      "不要写成作息规律",
+      "不要写成白天状态好",
+      "不要写成故意熬夜博眼球",
+      "不要写成因为失眠而痛苦"
+    ],
+    "emotionalCore": "太阳落山后，他的灵魂才上线",
+    "stateInteractions": {
+      "feel_hot": "凌晨热手时像另一个次元来的",
+      "feel_cold": "白天冷手时困得握不住鼠标",
+      "stress_high": "压力下更依赖深夜的独处时间",
+      "fame_low": "深夜天梯是他唯一的舞台",
+      "fame_high": "名气改变不了生物钟，只能调整赛程"
+    },
     "eventTypeModifiers": {}
   }
 }
