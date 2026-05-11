@@ -394,7 +394,7 @@ class AnthropicNarrator implements AiService {
     return (await this.anthropicChat(
       INTRO_SYSTEM_PROMPT,
       buildIntroPrompt(player, traits, background, traitRules),
-      300,
+      500,
       'intro',
     )) ?? '';
   }
@@ -590,7 +590,7 @@ class OpenAINarrator implements AiService {
     return (await this.chat(
       INTRO_SYSTEM_PROMPT,
       buildIntroPrompt(player, traits, background, traitRules),
-      300,
+      500,
       false,
       'intro',
     )) ?? '';

@@ -245,7 +245,7 @@ export function buildIntroPrompt(
   traitRules?: TraitNarrativeRule[],
 ): string {
   const traitDescs = traits
-    .map((t) => `${t.name}（${t.description}）`)
+    .map((t) => t.name)
     .join('、');
   return [
     `为以下 CS2 新人选手写一段 80-120 字的中文故事开头，有画面感、有情绪。`,
@@ -257,7 +257,7 @@ export function buildIntroPrompt(
     `天赋特质：${traitDescs}`,
     '【特质叙事指令】',
     `${traitRules?.map(rule => `- ${rule.traitId}（${rule.emotionalCore}）：开局故事中让主角的第一次亮相就带有这种特质的影子。例如行为模式：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? ''}`,
-    `只输出故事正文，不要标题，不要引号。`,
+    `只输出故事正文，不要标题，不要引号。控制在80-120字之间，确保句子完整。`,
   ].join('\n');
 }
 
