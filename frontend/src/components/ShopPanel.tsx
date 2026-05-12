@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { Player, ShopItem } from '@/lib/types';
 import { formatMoney } from '@/lib/format';
+import { ShopConfirmModal } from './ShopConfirmModal';
+import { ShopResultModal } from './ShopResultModal';
 import { PawnConfirmModal } from './PawnConfirmModal';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -49,6 +51,18 @@ export function ShopPanel({
   const [error, setError] = useState<string | null>(null);
   const [showPawn, setShowPawn] = useState(false);
   const [recentBoughtId, setRecentBoughtId] = useState<string | null>(null);
+  const [confirmItem, setConfirmItem] = useState<ShopItem | null>(null);
+  const [resultData, setResultData] = useState<{
+    player: Player;
+    itemName: string;
+    shopNarrative?: string;
+    shopNarrativePositive?: boolean;
+    shopBuffLabelsAdded?: string[];
+    shopBuffLabelsRemoved?: string[];
+    shopTagsAdded?: string[];
+    shopTagsRemoved?: string[];
+  } | null>(null);
+  const [prevPlayerSnapshot, setPrevPlayerSnapshot] = useState<Player | null>(null);
 
   useEffect(() => {
     if (!recentBoughtId) return;
@@ -72,28 +86,53 @@ export function ShopPanel({
 
   const PERIPHERAL_PRICES = [30, 60, 100, 150];
 
-  const buy = async (itemId: string) => {
-    setBusyId(itemId);
+  const handleBuyClick = (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item || confirmItem || busyId) return;
+    setPrevPlayerSnapshot(player);
+    setConfirmItem(item);
     setError(null);
+  };
+
+  const handleCancelBuy = () => {
+    if (busyId) return;
+    setConfirmItem(null);
+    setPrevPlayerSnapshot(null);
+    setBusyId(null);
+    setError(null);
+  };
+
+  const handleConfirmBuy = async () => {
+    if (!confirmItem) return;
+    setError(null);
+    setBusyId(confirmItem.id);
     try {
-      const res = await api.buyShopItem(sessionId, itemId);
-      onPlayerUpdate(res.player);
-      onShopResult?.({
-        itemId,
-        itemName: res.itemName,
-        shopNarrative: res.shopNarrative,
-        shopNarrativePositive: res.shopNarrativePositive,
-        shopBuffLabelsAdded: res.shopBuffLabelsAdded,
-        shopBuffLabelsRemoved: res.shopBuffLabelsRemoved,
-        shopTagsAdded: res.shopTagsAdded,
-        shopTagsRemoved: res.shopTagsRemoved,
-      });
-      setRecentBoughtId(itemId);
+      const res = await api.buyShopItem(sessionId, confirmItem.id);
+      setResultData(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
       setBusyId(null);
     }
+  };
+
+  const handleCloseResult = () => {
+    if (!resultData || !prevPlayerSnapshot || !confirmItem) return;
+    onPlayerUpdate(resultData.player);
+    onShopResult?.({
+      itemId: confirmItem.id,
+      itemName: resultData.itemName,
+      shopNarrative: resultData.shopNarrative,
+      shopNarrativePositive: resultData.shopNarrativePositive,
+      shopBuffLabelsAdded: resultData.shopBuffLabelsAdded,
+      shopBuffLabelsRemoved: resultData.shopBuffLabelsRemoved,
+      shopTagsAdded: resultData.shopTagsAdded,
+      shopTagsRemoved: resultData.shopTagsRemoved,
+    });
+    setRecentBoughtId(confirmItem.id);
+    setResultData(null);
+    setPrevPlayerSnapshot(null);
+    setConfirmItem(null);
+    setBusyId(null);
   };
 
   const round = player.round;
@@ -228,8 +267,8 @@ export function ShopPanel({
                       <button
                         type="button"
                         className="ghost-button"
-                        disabled={!ok || busyId !== null}
-                        onClick={() => buy(item.id)}
+                        disabled={!ok || busyId !== null || confirmItem !== null}
+                        onClick={() => handleBuyClick(item.id)}
                         style={{ fontSize: 10, padding: '2px 8px' }}
                       >
                         {busyId === item.id
@@ -263,6 +302,31 @@ export function ShopPanel({
             onPlayerUpdate(updatedPlayer);
             setShowPawn(false);
           }}
+        />
+      )}
+
+      {confirmItem && !resultData && prevPlayerSnapshot && (
+        <ShopConfirmModal
+          item={confirmItem}
+          price={getDisplayPrice(confirmItem)}
+          player={player}
+          onConfirm={handleConfirmBuy}
+          onCancel={handleCancelBuy}
+        />
+      )}
+
+      {resultData && prevPlayerSnapshot && confirmItem && (
+        <ShopResultModal
+          itemName={resultData.itemName}
+          shopNarrative={resultData.shopNarrative}
+          shopNarrativePositive={resultData.shopNarrativePositive}
+          shopBuffLabelsAdded={resultData.shopBuffLabelsAdded}
+          shopBuffLabelsRemoved={resultData.shopBuffLabelsRemoved}
+          shopTagsAdded={resultData.shopTagsAdded}
+          shopTagsRemoved={resultData.shopTagsRemoved}
+          prevPlayer={prevPlayerSnapshot}
+          newPlayer={resultData.player}
+          onClose={handleCloseResult}
         />
       )}
 

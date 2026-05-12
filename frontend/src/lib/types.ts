@@ -265,6 +265,26 @@ export interface ActionResult {
 
 export type ShopCategory = 'consumable' | 'service' | 'equipment' | 'social';
 
+export interface ShopEffect {
+  fatigueDelta?: number;
+  stressDelta?: number;
+  feelReset?: boolean;
+  moneyDelta?: number;
+  constitutionDelta?: number;
+  mentalityDelta?: number;
+  fameDelta?: number;
+  buffAdd?: Buff;
+  buffRemoveId?: string;
+  tagRemove?: string;
+  tagAdd?: string;
+}
+
+export interface ShopNegativeEvent {
+  chance: number;
+  effect: ShopEffect;
+  narrative: string;
+}
+
 export interface ShopItem {
   id: string;
   name: string;
@@ -274,6 +294,8 @@ export interface ShopItem {
   cooldownRounds: number;
   requireFame?: number;
   requireStage?: Stage[];
+  effect?: ShopEffect;
+  negativeEvents?: ShopNegativeEvent[];
 }
 
 export interface Player extends DynamicState {

@@ -1,5 +1,6 @@
 import type { Background, Env, GameEventPublic, LeaderboardTeam, Player, RoundResult, Trait } from '../types.js';
 import { LlmLogger } from './logger.js';
+import { fetchWithRetry } from './fetchWithRetry.js';
 import {
   buildCustomActionJudgePrompt,
   buildIntroPrompt,
@@ -75,33 +76,43 @@ interface OpenAIChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
 }
 
-function parseJudgmentValidation(text: string | null): JudgmentValidation {
-  if (!text) return { valid: true }; // LLM 无响应时宽松放行
+type LlmLogPayload = Parameters<LlmLogger['log']>[0] & { error?: string };
+
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function logLlmEvent(logger: LlmLogger | undefined, entry: LlmLogPayload): Promise<void> | undefined {
+  return logger?.log(entry as Parameters<LlmLogger['log']>[0]);
+}
+
+function parseJudgmentValidation(text: string | null): { value: JudgmentValidation; parsed: boolean } {
+  if (!text) return { value: { valid: true }, parsed: false }; // LLM 无响应时宽松放行
   try {
     const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
     const parsed = JSON.parse(clean) as JudgmentValidation;
-    if (typeof parsed.valid !== 'boolean') return { valid: true };
-    return parsed;
+    if (typeof parsed.valid !== 'boolean') return { value: { valid: true }, parsed: false };
+    return { value: parsed, parsed: true };
   } catch {
-    return { valid: true };
+    return { value: { valid: true }, parsed: false };
   }
 }
 
-function parseCustomActionJudgment(text: string | null): CustomActionJudgment | null {
-  if (!text) return null;
+function parseCustomActionJudgment(text: string | null): { value: CustomActionJudgment | null; parsed: boolean } {
+  if (!text) return { value: null, parsed: false };
   try {
     const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
     const parsed = JSON.parse(clean) as CustomActionJudgment;
     const validQualities = new Set(['poor', 'ok', 'good', 'excellent']);
-    if (!validQualities.has(parsed.quality) || typeof parsed.narrative !== 'string') return null;
-    return parsed;
+    if (!validQualities.has(parsed.quality) || typeof parsed.narrative !== 'string') return { value: null, parsed: false };
+    return { value: parsed, parsed: true };
   } catch {
-    return null;
+    return { value: null, parsed: false };
   }
 }
 
-function parseSocialFeed(text: string | null): SocialFeedPost[] {
-  if (!text) return [];
+function parseSocialFeed(text: string | null): { value: SocialFeedPost[]; parsed: boolean } {
+  if (!text) return { value: [], parsed: false };
   try {
     const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
     const raw = JSON.parse(clean) as unknown;
@@ -109,17 +120,20 @@ function parseSocialFeed(text: string | null): SocialFeedPost[] {
     const arr: unknown = Array.isArray(raw)
       ? raw
       : (raw as Record<string, unknown>).posts ?? (raw as Record<string, unknown>).items ?? null;
-    if (!Array.isArray(arr)) return [];
+    if (!Array.isArray(arr)) return { value: [], parsed: false };
     const validTypes = new Set(['teammate', 'club', 'rival', 'media']);
-    return (arr as SocialFeedPost[]).filter(
-      (p) =>
-        typeof p.author === 'string' &&
-        typeof p.content === 'string' &&
-        typeof p.handle === 'string' &&
-        validTypes.has(p.authorType),
-    ).slice(0, 5);
+    return {
+      value: (arr as SocialFeedPost[]).filter(
+        (p) =>
+          typeof p.author === 'string' &&
+          typeof p.content === 'string' &&
+          typeof p.handle === 'string' &&
+          validTypes.has(p.authorType),
+      ).slice(0, 5),
+      parsed: true,
+    };
   } catch {
-    return [];
+    return { value: [], parsed: false };
   }
 }
 
@@ -188,7 +202,10 @@ function templateSocialFeed(player: Player, leaderboard: LeaderboardTeam[]): Soc
 
 // ── Shared SSE stream reader ─────────────────────────────────────
 
-async function* readSseStream(res: Response): AsyncGenerator<Record<string, unknown>> {
+async function* readSseStream(
+  res: Response,
+  onError?: (err: unknown) => Promise<void> | void,
+): AsyncGenerator<Record<string, unknown>> {
   if (!res.body) return;
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -205,7 +222,9 @@ async function* readSseStream(res: Response): AsyncGenerator<Record<string, unkn
       if (data === '[DONE]') return;
       try {
         yield JSON.parse(data) as Record<string, unknown>;
-      } catch {}
+      } catch (err) {
+        await onError?.(err);
+      }
     }
   }
 }
@@ -288,20 +307,43 @@ class AnthropicNarrator implements AiService {
     const t0 = Date.now();
     const chunks: string[] = [];
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: this.anthropicHeaders(),
         body: this.anthropicBody(system, user, maxTokens, true),
       });
       if (!res.ok) return;
-      for await (const ev of readSseStream(res)) {
+      for await (const ev of readSseStream(res, async (err) => {
+        await logLlmEvent(this.logger, {
+          method,
+          provider: 'anthropic',
+          model: this.model,
+          systemPrompt: system,
+          userPrompt: user,
+          response: chunks.join(''),
+          error: getErrorMessage(err),
+          latencyMs: Date.now() - t0,
+          stream: true,
+        });
+      })) {
         const e = ev as { type: string; delta?: { type: string; text?: string } };
         if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta' && e.delta.text) {
           chunks.push(e.delta.text);
           yield e.delta.text;
         }
       }
-    } catch {
+    } catch (err) {
+      await logLlmEvent(this.logger, {
+        method,
+        provider: 'anthropic',
+        model: this.model,
+        systemPrompt: system,
+        userPrompt: user,
+        response: null,
+        error: getErrorMessage(err),
+        latencyMs: Date.now() - t0,
+        stream: true,
+      });
     } finally {
       // waitUntil tracks this past stream close; without ctx it's best-effort
       this.logger?.log({ method, provider: 'anthropic', model: this.model, systemPrompt: system, userPrompt: user, response: chunks.join(''), latencyMs: Date.now() - t0, stream: true });
@@ -312,7 +354,7 @@ class AnthropicNarrator implements AiService {
     const t0 = Date.now();
     let response: string | null = null;
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: this.anthropicHeaders(),
         body: this.anthropicBody(system, user, maxTokens),
@@ -321,7 +363,18 @@ class AnthropicNarrator implements AiService {
       const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
       response = data.content?.find((c) => c.type === 'text')?.text?.trim() ?? null;
       return response;
-    } catch {
+    } catch (err) {
+      await logLlmEvent(this.logger, {
+        method,
+        provider: 'anthropic',
+        model: this.model,
+        systemPrompt: system,
+        userPrompt: user,
+        response: null,
+        error: getErrorMessage(err),
+        latencyMs: Date.now() - t0,
+        stream: false,
+      });
       return null;
     } finally {
       // Awaited here — this runs within the request so KV write completes reliably
@@ -375,23 +428,53 @@ class AnthropicNarrator implements AiService {
   }
 
   async judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null> {
+    const userPrompt = buildCustomActionJudgePrompt(playerInput, event, player);
     const text = await this.anthropicChat(
       PERSONALIZE_SYSTEM_PROMPT,
-      buildCustomActionJudgePrompt(playerInput, event, player),
+      userPrompt,
       150,
       'judgeCustomAction',
     );
-    return parseCustomActionJudgment(text);
+    const parsed = parseCustomActionJudgment(text);
+    if (text && !parsed.parsed) {
+      await logLlmEvent(this.logger, {
+        method: 'judgeCustomAction',
+        provider: 'anthropic',
+        model: this.model,
+        systemPrompt: PERSONALIZE_SYSTEM_PROMPT,
+        userPrompt,
+        response: text,
+        error: 'parse failed',
+        latencyMs: 0,
+        stream: false,
+      });
+    }
+    return parsed.value;
   }
 
   async validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation> {
+    const userPrompt = buildJudgmentValidationPrompt(playerInput, event, judgment);
     const text = await this.anthropicChat(
       PERSONALIZE_SYSTEM_PROMPT,
-      buildJudgmentValidationPrompt(playerInput, event, judgment),
+      userPrompt,
       80,
       'validateJudgment',
     );
-    return parseJudgmentValidation(text);
+    const parsed = parseJudgmentValidation(text);
+    if (text && !parsed.parsed) {
+      await logLlmEvent(this.logger, {
+        method: 'validateJudgment',
+        provider: 'anthropic',
+        model: this.model,
+        systemPrompt: PERSONALIZE_SYSTEM_PROMPT,
+        userPrompt,
+        response: text,
+        error: 'parse failed',
+        latencyMs: 0,
+        stream: false,
+      });
+    }
+    return parsed.value;
   }
 
   async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
@@ -399,14 +482,28 @@ class AnthropicNarrator implements AiService {
     const traitRules = player.traits
       ? buildTraitRulesForPlayer(player.traits, traitConfig)
       : [];
+    const userPrompt = buildSocialFeedPrompt(player, recentHistory, leaderboard, traitRules);
     const text = await this.anthropicChat(
       SOCIAL_SYSTEM_PROMPT,
-      buildSocialFeedPrompt(player, recentHistory, leaderboard, traitRules),
+      userPrompt,
       500,
       'simulateSocialFeed',
     );
     const posts = parseSocialFeed(text);
-    return posts.length > 0 ? posts : templateSocialFeed(player, leaderboard);
+    if (text && !posts.parsed) {
+      await logLlmEvent(this.logger, {
+        method: 'simulateSocialFeed',
+        provider: 'anthropic',
+        model: this.model,
+        systemPrompt: SOCIAL_SYSTEM_PROMPT,
+        userPrompt,
+        response: text,
+        error: 'parse failed',
+        latencyMs: 0,
+        stream: false,
+      });
+    }
+    return posts.value.length > 0 ? posts.value : templateSocialFeed(player, leaderboard);
   }
 }
 
@@ -434,7 +531,7 @@ class OpenAINarrator implements AiService {
     const t0 = Date.now();
     const chunks: string[] = [];
     try {
-      const res = await fetch(`${this.baseUrl}/chat/completions`, {
+      const res = await fetchWithRetry(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${this.apiKey}` },
         body: JSON.stringify({
@@ -448,7 +545,19 @@ class OpenAINarrator implements AiService {
         }),
       });
       if (!res.ok) return;
-      for await (const ev of readSseStream(res)) {
+      for await (const ev of readSseStream(res, async (err) => {
+        await logLlmEvent(this.logger, {
+          method,
+          provider: 'openai',
+          model: this.model,
+          systemPrompt,
+          userPrompt,
+          response: chunks.join(''),
+          error: getErrorMessage(err),
+          latencyMs: Date.now() - t0,
+          stream: true,
+        });
+      })) {
         const text = (ev as { choices?: Array<{ delta?: { content?: string } }> })
           .choices?.[0]?.delta?.content;
         if (typeof text === 'string' && text) {
@@ -456,7 +565,18 @@ class OpenAINarrator implements AiService {
           yield text;
         }
       }
-    } catch {
+    } catch (err) {
+      await logLlmEvent(this.logger, {
+        method,
+        provider: 'openai',
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        response: null,
+        error: getErrorMessage(err),
+        latencyMs: Date.now() - t0,
+        stream: true,
+      });
     } finally {
       this.logger?.log({ method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response: chunks.join(''), latencyMs: Date.now() - t0, stream: true });
     }
@@ -481,7 +601,7 @@ class OpenAINarrator implements AiService {
         ],
       };
       if (jsonMode) body.response_format = { type: 'json_object' };
-      const res = await fetch(`${this.baseUrl}/chat/completions`, {
+      const res = await fetchWithRetry(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -493,7 +613,18 @@ class OpenAINarrator implements AiService {
       const data = (await res.json()) as OpenAIChatResponse;
       response = data.choices?.[0]?.message?.content?.trim() ?? null;
       return response;
-    } catch {
+    } catch (err) {
+      await logLlmEvent(this.logger, {
+        method,
+        provider: 'openai',
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        response: null,
+        error: getErrorMessage(err),
+        latencyMs: Date.now() - t0,
+        stream: false,
+      });
       return null;
     } finally {
       await this.logger?.log({ method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response, latencyMs: Date.now() - t0, stream: false });
@@ -547,25 +678,55 @@ class OpenAINarrator implements AiService {
   }
 
   async judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null> {
+    const userPrompt = buildCustomActionJudgePrompt(playerInput, event, player);
     const text = await this.chat(
       PERSONALIZE_SYSTEM_PROMPT,
-      buildCustomActionJudgePrompt(playerInput, event, player),
+      userPrompt,
       150,
       true,
       'judgeCustomAction',
     );
-    return parseCustomActionJudgment(text);
+    const parsed = parseCustomActionJudgment(text);
+    if (text && !parsed.parsed) {
+      await logLlmEvent(this.logger, {
+        method: 'judgeCustomAction',
+        provider: 'openai',
+        model: this.model,
+        systemPrompt: PERSONALIZE_SYSTEM_PROMPT,
+        userPrompt,
+        response: text,
+        error: 'parse failed',
+        latencyMs: 0,
+        stream: false,
+      });
+    }
+    return parsed.value;
   }
 
   async validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation> {
+    const userPrompt = buildJudgmentValidationPrompt(playerInput, event, judgment);
     const text = await this.chat(
       PERSONALIZE_SYSTEM_PROMPT,
-      buildJudgmentValidationPrompt(playerInput, event, judgment),
+      userPrompt,
       80,
       true,
       'validateJudgment',
     );
-    return parseJudgmentValidation(text);
+    const parsed = parseJudgmentValidation(text);
+    if (text && !parsed.parsed) {
+      await logLlmEvent(this.logger, {
+        method: 'validateJudgment',
+        provider: 'openai',
+        model: this.model,
+        systemPrompt: PERSONALIZE_SYSTEM_PROMPT,
+        userPrompt,
+        response: text,
+        error: 'parse failed',
+        latencyMs: 0,
+        stream: false,
+      });
+    }
+    return parsed.value;
   }
 
   async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
@@ -573,15 +734,29 @@ class OpenAINarrator implements AiService {
     const traitRules = player.traits
       ? buildTraitRulesForPlayer(player.traits, traitConfig)
       : [];
+    const userPrompt = buildSocialFeedPrompt(player, recentHistory, leaderboard, traitRules);
     const text = await this.chat(
       SOCIAL_SYSTEM_PROMPT,
-      buildSocialFeedPrompt(player, recentHistory, leaderboard, traitRules),
+      userPrompt,
       500,
       false,
       'simulateSocialFeed',
     );
     const posts = parseSocialFeed(text);
-    return posts.length > 0 ? posts : templateSocialFeed(player, leaderboard);
+    if (text && !posts.parsed) {
+      await logLlmEvent(this.logger, {
+        method: 'simulateSocialFeed',
+        provider: 'openai',
+        model: this.model,
+        systemPrompt: SOCIAL_SYSTEM_PROMPT,
+        userPrompt,
+        response: text,
+        error: 'parse failed',
+        latencyMs: 0,
+        stream: false,
+      });
+    }
+    return posts.value.length > 0 ? posts.value : templateSocialFeed(player, leaderboard);
   }
 }
 

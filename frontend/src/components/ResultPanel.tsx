@@ -190,82 +190,94 @@ export function ResultPanel({
         </div>
       )}
 
-      {actionResults.length > 0 && (
+      {(actionResults.length > 0 || shopResults.length > 0) && (
         <div className="settlement-section">
-          <div className="settlement-section-title">本回合行动</div>
-          <div className="settlement-section-list">
-            {actionResults.map((entry, idx) => (
-                <div key={`${entry.result.actionId}-${idx}`} className="settlement-action-row">
-                <div className="settlement-row-head">
-                  <span className={`badge ${entry.result.success ? 'success' : 'danger'}`}>
-                    {entry.result.actionLabel}
-                  </span>
-                  <span className="settlement-row-meta">
-                    {entry.result.success ? '成功' : '失败'} · {entry.result.roll} vs {entry.result.dc}
-                  </span>
-                </div>
-                <div className="settlement-row-narrative">{entry.result.narrative}</div>
-                <div className="chips-row">
-                  {entry.result.feelChange !== 0 && (
-                    <span className={`chip ${entry.result.feelChange > 0 ? 'chip-up' : 'chip-down'}`}>
-                      {describeFeelChange(entry.result.feelChange)}
-                    </span>
-                  )}
-                  {entry.result.fatigueChange !== 0 && (
-                    <span className={`chip ${entry.result.fatigueChange > 0 ? 'chip-down' : 'chip-up'}`}>
-                      {describeFatigueChange(entry.result.fatigueChange)}
-                    </span>
-                  )}
-                  {entry.result.stressChange !== 0 && (
-                    <span className={`chip ${entry.result.stressChange > 0 ? 'chip-down' : 'chip-up'}`}>
-                      {describeStressChange(entry.result.stressChange)}
-                    </span>
-                  )}
-                  {entry.moneyChange !== 0 && (
-                    <span className={`chip ${entry.moneyChange > 0 ? 'chip-up' : 'chip-down'}`}>
-                      金钱 {entry.moneyChange > 0 ? '+' : ''}{entry.moneyChange}K
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="settlement-section-title">
+            {actionResults.length > 0 ? '本回合行动' : '商店购买'}
           </div>
-        </div>
-      )}
 
-      {shopResults.length > 0 && (
-        <div className="settlement-section">
-          <div className="settlement-section-title">商店购买</div>
-          <div className="settlement-section-list">
-            {shopResults.map((shop, idx) => {
-              const narrative = shopNarratives[shop.itemId] ?? shop.shopNarrative ?? '购买结果已记录。';
-              return (
-                <div key={`${shop.itemId}-${idx}`} className="settlement-shop-row">
-                  <div className="settlement-row-head">
-                    <span className="badge accent">{shop.itemName}</span>
-                    <span className="settlement-row-meta">
-                      {shop.shopNarrativePositive === false ? '波折' : '顺利'}
-                    </span>
+          {actionResults.length > 0 && (
+            <>
+              {shopResults.length > 0 && (
+                <div className="settlement-subsection-title">日常行动</div>
+              )}
+              <div className="settlement-section-list">
+                {actionResults.map((entry, idx) => (
+                  <div key={`${entry.result.actionId}-${idx}`} className="settlement-action-row">
+                    <div className="settlement-row-head">
+                      <span className={`badge ${entry.result.success ? 'success' : 'danger'}`}>
+                        {entry.result.actionLabel}
+                      </span>
+                      <span className="settlement-row-meta">
+                        {entry.result.success ? '成功' : '失败'} · {entry.result.roll} vs {entry.result.dc}
+                      </span>
+                    </div>
+                    <div className="settlement-row-narrative">{entry.result.narrative}</div>
+                    <div className="chips-row">
+                      {entry.result.feelChange !== 0 && (
+                        <span className={`chip ${entry.result.feelChange > 0 ? 'chip-up' : 'chip-down'}`}>
+                          {describeFeelChange(entry.result.feelChange)}
+                        </span>
+                      )}
+                      {entry.result.fatigueChange !== 0 && (
+                        <span className={`chip ${entry.result.fatigueChange > 0 ? 'chip-down' : 'chip-up'}`}>
+                          {describeFatigueChange(entry.result.fatigueChange)}
+                        </span>
+                      )}
+                      {entry.result.stressChange !== 0 && (
+                        <span className={`chip ${entry.result.stressChange > 0 ? 'chip-down' : 'chip-up'}`}>
+                          {describeStressChange(entry.result.stressChange)}
+                        </span>
+                      )}
+                      {entry.moneyChange !== 0 && (
+                        <span className={`chip ${entry.moneyChange > 0 ? 'chip-up' : 'chip-down'}`}>
+                          金钱 {entry.moneyChange > 0 ? '+' : ''}{entry.moneyChange}K
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="settlement-row-narrative">{narrative}</div>
-                  <div className="chips-row">
-                    {shop.shopBuffLabelsAdded?.map((label) => (
-                      <span key={`add-${label}`} className="chip chip-up">Buff +{label}</span>
-                    ))}
-                    {shop.shopBuffLabelsRemoved?.map((label) => (
-                      <span key={`rm-${label}`} className="chip chip-down">Buff -{label}</span>
-                    ))}
-                    {shop.shopTagsAdded?.map((label) => (
-                      <span key={`tag-add-${label}`} className="chip chip-up">标签 +{label}</span>
-                    ))}
-                    {shop.shopTagsRemoved?.map((label) => (
-                      <span key={`tag-rm-${label}`} className="chip chip-down">标签 -{label}</span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {shopResults.length > 0 && (
+            <>
+              {actionResults.length > 0 && (
+                <div className="settlement-subsection-title">商店行动</div>
+              )}
+              <div className="settlement-section-list">
+                {shopResults.map((shop, idx) => {
+                  const narrative = shopNarratives[shop.itemId] ?? shop.shopNarrative ?? '购买结果已记录。';
+                  return (
+                    <div key={`${shop.itemId}-${idx}`} className="settlement-shop-row">
+                      <div className="settlement-row-head">
+                        <span className="badge accent">{shop.itemName}</span>
+                        <span className="settlement-row-meta">
+                          {shop.shopNarrativePositive === false ? '波折' : '顺利'}
+                        </span>
+                      </div>
+                      <div className="settlement-row-narrative">{narrative}</div>
+                      <div className="chips-row">
+                        {shop.shopBuffLabelsAdded?.map((label) => (
+                          <span key={`add-${label}`} className="chip chip-up">Buff +{label}</span>
+                        ))}
+                        {shop.shopBuffLabelsRemoved?.map((label) => (
+                          <span key={`rm-${label}`} className="chip chip-down">Buff -{label}</span>
+                        ))}
+                        {shop.shopTagsAdded?.map((label) => (
+                          <span key={`tag-add-${label}`} className="chip chip-up">标签 +{label}</span>
+                        ))}
+                        {shop.shopTagsRemoved?.map((label) => (
+                          <span key={`tag-rm-${label}`} className="chip chip-down">标签 -{label}</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
 
