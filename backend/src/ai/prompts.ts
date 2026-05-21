@@ -4,7 +4,7 @@ import type { TraitNarrativeRule } from './narrativeConfig.js';
 
 // ── Social Feed ─────────────────────────────────────────────────────────────
 
-export type SocialPostAuthorType = 'teammate' | 'club' | 'rival' | 'media';
+export type SocialPostAuthorType = 'teammate' | 'club' | 'rival' | 'media' | 'star' | 'industry' | 'fan';
 
 export interface SocialFeedPost {
   author: string;
@@ -21,6 +21,15 @@ export function buildSocialFeedPrompt(
 ): string {
   const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
   const fameLabel = player.fame >= 80 ? '顶流' : player.fame >= 50 ? '知名选手' : player.fame >= 20 ? '有一定知名度' : '新人';
+
+  // 赛季背景
+  const seasonPhase = (() => {
+    const w = player.week ?? player.round;
+    if (w <= 12) return '赛季初期，各队磨合新阵容';
+    if (w <= 24) return '赛季中段，积分争夺白热化';
+    if (w <= 36) return '季后赛资格争夺关键期';
+    return '转会窗口临近，队伍人心浮动';
+  })();
 
   // 玩家自身信息
   const playerTeamLine = player.team
@@ -52,23 +61,34 @@ export function buildSocialFeedPrompt(
 
   const worldTeams = [topTeams, rivals].filter(Boolean).join('；另有对手：');
 
+  // 行业明星选手
+  const starPlayers = 's1mple_legacy、ZywOo_beast、m0NESY_ace、sh1ro_sniper、ropz_clutch、NiKo_rifle、device_awp、karrigan_igl';
+
   return [
     '你是 CS2 职业电竞世界的社交媒体模拟引擎。',
     '这是一个完整的电竞生态——无论玩家是否有战队，世界上的其他战队和选手都在持续活动。',
-    '请生成 4 条不同角色发布的中文短帖子，模拟 X（推特）上真实电竞人的日常推文。',
+    '请生成 5-6 条不同角色发布的中文短帖子，模拟 X（推特）上真实电竞人的日常推文。',
     '',
     `【主角】${player.name}，${stageLabel}阶段，${fameLabel}`,
     playerTeamLine,
     teammateLine,
     '',
+    `【赛季背景】${seasonPhase}`,
+    '',
     `【当前活跃的其他战队】${worldTeams || '（生成世界战队）'}`,
+    '',
+    `【行业明星选手】${starPlayers} —— 这些是圈内顶流选手，拥有大量粉丝`,
+    '',
+    '【其他活跃账号】解说（如@cs_analyst, @caster_liu）、粉丝号（如@cs2_fanpage, @esports_news）、圈内人士',
     '',
     '【主角近期战绩】',
     recentSummary,
     '',
     '【发帖要求】',
-    '- 4 条帖子来自不同角色，覆盖尽量多的 authorType（teammate / club / rival / media）',
-    '- 若主角暂无队友/俱乐部，改为让排行榜战队、对手、媒体发帖——世界不会因为一个新人的缺席而沉默',
+    '- 生成 5-6 条帖子，覆盖尽量多的 authorType（teammate / club / rival / media / star / industry / fan）',
+    '- 每条帖子来自不同账号，handle 各不相同，不得重复上一回合出现过的 handle',
+    '- 至少包含 1 条行业明星选手（star）的帖子',
+    '- 若主角暂无队友/俱乐部，改为让排行榜战队、对手、媒体、明星选手发帖——世界不会因为一个新人的缺席而沉默',
     '- 内容贴合近期战绩或 CS2 赛季氛围，口语化，可加 emoji，每条 20-55 字',
     '- 对手/媒体的帖子可以与主角无关，只反映 CS 世界的日常（赛事、训练营、转会期、排位等）',
     '- handle 格式：@英文小写昵称（不超过 15 字符）',

@@ -121,7 +121,7 @@ function parseSocialFeed(text: string | null): { value: SocialFeedPost[]; parsed
       ? raw
       : (raw as Record<string, unknown>).posts ?? (raw as Record<string, unknown>).items ?? null;
     if (!Array.isArray(arr)) return { value: [], parsed: false };
-    const validTypes = new Set(['teammate', 'club', 'rival', 'media']);
+    const validTypes = new Set(['teammate', 'club', 'rival', 'media', 'star', 'industry', 'fan']);
     return {
       value: (arr as SocialFeedPost[]).filter(
         (p) =>
@@ -144,6 +144,13 @@ const TEMPLATE_RIVAL_POSTS = [
   '赛季快结束了，接下来才是真正的考验 🎯',
 ];
 
+const TEMPLATE_MEDIA_OUTLETS = [
+  { author: 'CS2 电竞速报', handle: '@cs2daily' },
+  { author: '电子竞技周刊', handle: '@esports_weekly' },
+  { author: '转会雷达', handle: '@transfer_radar' },
+  { author: '赛事内幕', handle: '@match_insider' },
+];
+
 const TEMPLATE_MEDIA_POSTS = [
   '本赛季冒出不少新面孔，职业圈的新陈代谢越来越快 👀',
   '下周大赛开幕，这批种子队的状态都不错，好戏在后头 🏆',
@@ -151,12 +158,46 @@ const TEMPLATE_MEDIA_POSTS = [
   '今日训练局直播破了平台纪录，CS2 热度持续上升 📈',
 ];
 
+const TEMPLATE_STAR_HANDLES = [
+  { author: 's1mple', handle: '@s1mple_legacy' },
+  { author: 'ZywOo', handle: '@zywoo_beast' },
+  { author: 'm0NESY', handle: '@m0nesy_ace' },
+  { author: 'sh1ro', handle: '@sh1ro_sniper' },
+  { author: 'ropz', handle: '@ropz_clutch' },
+  { author: 'NiKo', handle: '@niko_rifle' },
+];
+
+const TEMPLATE_STAR_POSTS = [
+  '刚拿到新外设，手感起飞 🎮',
+  '训练赛打了个 30-8，状态不错 🔥',
+  '感谢粉丝们的支持，决赛见 💪',
+  '转会期快开始了，有些队伍动作不小 👀',
+  '新地图池还要适应，老图细节不能丢 📋',
+  '刚打完一场高质量训练赛，学到很多 📝',
+];
+
+const TEMPLATE_INDUSTRY_HANDLES = [
+  { author: 'CS分析师老李', handle: '@cs_analyst' },
+  { author: '解说小刘', handle: '@caster_liu' },
+  { author: '圈内老炮', handle: '@insider_guru' },
+  { author: '电竞观察室', handle: '@esports_observe' },
+];
+
+const TEMPLATE_INDUSTRY_POSTS = [
+  '本周赛事预测：A队阵容深度占优，但B队个人能力更强 🏆',
+  '新赛季观赛数据又创新高，CS2 生态越来越健康 📈',
+  '某顶级选手合约即将到期，多队已经在试探 👀',
+  '训练室探访：看看职业选手的一天是怎么过的 🎥',
+];
+
 function templateSocialFeed(player: Player, leaderboard: LeaderboardTeam[]): SocialFeedPost[] {
   const posts: SocialFeedPost[] = [];
+  const r = player.round;
 
-  // 队友帖（有队伍时）
+  // 队友帖（有队伍时，轮流展示不同队友）
   if (player.roster && player.roster.length > 0) {
-    const tm = player.roster[0]!;
+    const tmIdx = r % player.roster.length;
+    const tm = player.roster[tmIdx]!;
     posts.push({
       author: tm.name,
       authorType: 'teammate',
@@ -175,26 +216,54 @@ function templateSocialFeed(player: Player, leaderboard: LeaderboardTeam[]): Soc
     });
   }
 
-  // 排行榜上的其他战队（对手发推，世界始终在运转）
-  const worldTeams = leaderboard.filter((t) => !t.isPlayer).slice(0, 4);
-  const rivalTeam = player.rivals?.[0] ?? worldTeams[0];
-  if (rivalTeam) {
-    const idx = player.round % TEMPLATE_RIVAL_POSTS.length;
+  // 对手帖：轮转使用 player.rivals 和 leaderboard 队伍
+  const worldTeams = leaderboard.filter((t) => !t.isPlayer).slice(0, 6);
+  const rivalPool = (player.rivals && player.rivals.length > 0)
+    ? player.rivals
+    : worldTeams;
+  if (rivalPool.length > 0) {
+    const rivalIdx = r % rivalPool.length;
+    const rivalTeam = rivalPool[rivalIdx]!;
+    const contentIdx = r % TEMPLATE_RIVAL_POSTS.length;
     posts.push({
       author: rivalTeam.name,
       authorType: 'rival',
       handle: `@${rivalTeam.tag.toLowerCase()}`,
-      content: TEMPLATE_RIVAL_POSTS[idx]!,
+      content: TEMPLATE_RIVAL_POSTS[contentIdx]!,
     });
   }
 
-  // 媒体帖（始终存在，无论玩家有无队伍）
-  const mediaIdx = (player.round + 1) % TEMPLATE_MEDIA_POSTS.length;
+  // 明星选手帖（每轮轮转一位不同明星）
+  const starIdx = r % TEMPLATE_STAR_HANDLES.length;
+  const star = TEMPLATE_STAR_HANDLES[starIdx]!;
+  const starContentIdx = (r + 2) % TEMPLATE_STAR_POSTS.length;
   posts.push({
-    author: 'CS2 电竞速报',
+    author: star.author,
+    authorType: 'star',
+    handle: star.handle,
+    content: TEMPLATE_STAR_POSTS[starContentIdx]!,
+  });
+
+  // 圈内/解说帖（轮转不同人士）
+  const industryIdx = r % TEMPLATE_INDUSTRY_HANDLES.length;
+  const industry = TEMPLATE_INDUSTRY_HANDLES[industryIdx]!;
+  const industryContentIdx = (r + 3) % TEMPLATE_INDUSTRY_POSTS.length;
+  posts.push({
+    author: industry.author,
+    authorType: 'industry',
+    handle: industry.handle,
+    content: TEMPLATE_INDUSTRY_POSTS[industryContentIdx]!,
+  });
+
+  // 媒体帖（轮转不同媒体账号）
+  const outletIdx = r % TEMPLATE_MEDIA_OUTLETS.length;
+  const outlet = TEMPLATE_MEDIA_OUTLETS[outletIdx]!;
+  const mediaContentIdx = (r + 1) % TEMPLATE_MEDIA_POSTS.length;
+  posts.push({
+    author: outlet.author,
     authorType: 'media',
-    handle: '@cs2daily',
-    content: TEMPLATE_MEDIA_POSTS[mediaIdx]!,
+    handle: outlet.handle,
+    content: TEMPLATE_MEDIA_POSTS[mediaContentIdx]!,
   });
 
   return posts;

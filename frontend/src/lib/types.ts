@@ -465,7 +465,7 @@ export interface ChoiceResponse {
 }
 
 // ── 社区动态 ───────────────────────────────────────────────────
-export type SocialPostAuthorType = 'teammate' | 'club' | 'rival' | 'media';
+export type SocialPostAuthorType = 'teammate' | 'club' | 'rival' | 'media' | 'star' | 'industry' | 'fan';
 
 export interface SocialPost {
   author: string;

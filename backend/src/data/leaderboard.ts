@@ -2,9 +2,52 @@ import type { LeaderboardTeam, Player } from '../types.js';
 import { generateRivals, type Rival } from './rivals.js';
 
 const FILLER_TEAM_COUNT = 10;
+const PLAYER_NAMES = [
+  'Kova', 'Blitz', 'Raze', 'Frost', 'Viper', 'Oni', 'Specter', 'Mirage',
+  'Wraith', 'Phoenix', 'Nova_Star', 'Zenith_Ace', 'Helix_Core', 'Volt_Surge',
+  'Echo_Beam', 'Cinder_Flare', 'Pixel_Drift', 'Frostline_Ice', 'Phantom_Ghost',
+  'Vortex_Spin', 'Oblivion_Dusk', 'Blackbird_Night', 'Reverb_Sound',
+  'Onyx_Stone', 'Spectre_Shade',
+] as const;
+
 
 // Build the initial leaderboard for a new session: player's team + rivals
 // (already generated) + several filler teams. All start at 0 points.
+
+// Deterministic hash for seeding player assignments from team name.
+function hashString(s: string): number {
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) {
+    hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+// Pick 1-2 deterministic player names for a team based on its name hash.
+function pickPlayersForTeam(teamName: string): string[] {
+  const hash = hashString(teamName);
+  const count = 1 + (hash % 2); // 1 or 2 players
+  const players: string[] = [];
+  const used = new Set<string>();
+
+  let seed = hash;
+  for (let i = 0; i < count; i++) {
+    seed = ((seed * 1103515245 + 12345) >>> 0); // LCG
+    const index = seed % PLAYER_NAMES.length;
+    const name = PLAYER_NAMES[index]!;
+    if (!used.has(name)) {
+      used.add(name);
+      players.push(name);
+    }
+  }
+
+  if (players.length === 0) {
+    players.push(PLAYER_NAMES[hash % PLAYER_NAMES.length]!);
+  }
+
+  return players;
+}
+
 export function buildLeaderboard(player: Player): LeaderboardTeam[] {
   const all: LeaderboardTeam[] = [];
 
@@ -28,6 +71,7 @@ export function buildLeaderboard(player: Player): LeaderboardTeam[] {
       region: r.region,
       points: rndPoints(0, 8),
       isPlayer: false,
+      players: pickPlayersForTeam(r.name),
     });
   }
 
@@ -42,6 +86,7 @@ export function buildLeaderboard(player: Player): LeaderboardTeam[] {
       region: f.region,
       points: rndPoints(0, 12),
       isPlayer: false,
+      players: pickPlayersForTeam(f.name),
     });
   }
 

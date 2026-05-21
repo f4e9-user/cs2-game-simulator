@@ -93,6 +93,7 @@ export interface LeaderboardTeam {
   region: string;
   points: number;
   isPlayer: boolean;
+  players?: string[]; // Key player handles for social feed
 }
 
 export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
