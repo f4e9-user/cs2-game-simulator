@@ -138,10 +138,10 @@ function parseSocialFeed(text: string | null): { value: SocialFeedPost[]; parsed
 }
 
 const TEMPLATE_RIVAL_POSTS = [
-  '训练营最后一天，状态调得不错，就等开赛了 🔥',
-  '排位又是一条连胜，感觉这个版本我们吃透了 😤',
-  '和队友刚复盘完昨天的比赛，细节还得抠 📋',
-  '赛季快结束了，接下来才是真正的考验 🎯',
+  '训练营最后一天，就等正式开赛了，感谢大家的支持 🔥',
+  '本周战绩不错，继续磨合新阵容，下一场见真章 😤',
+  '赛季末冲刺阶段，每一场都不容有失 🎯',
+  '感谢赞助商一路相伴，新周边即将上线，敬请期待 👕',
 ];
 
 const TEMPLATE_MEDIA_OUTLETS = [
@@ -154,7 +154,7 @@ const TEMPLATE_MEDIA_OUTLETS = [
 const TEMPLATE_MEDIA_POSTS = [
   '本赛季冒出不少新面孔，职业圈的新陈代谢越来越快 👀',
   '下周大赛开幕，这批种子队的状态都不错，好戏在后头 🏆',
-  '转会窗口流言满天飞，圈内消息人士称多支队伍在接触自由人 📰',
+  '转会流言不断，多支队伍正在私下接触选手 📰',
   '今日训练局直播破了平台纪录，CS2 热度持续上升 📈',
 ];
 
@@ -171,7 +171,7 @@ const TEMPLATE_STAR_POSTS = [
   '刚拿到新外设，手感起飞 🎮',
   '训练赛打了个 30-8，状态不错 🔥',
   '感谢粉丝们的支持，决赛见 💪',
-  '转会期快开始了，有些队伍动作不小 👀',
+  '最近转会流言很多，市场挺活跃的 👀',
   '新地图池还要适应，老图细节不能丢 📋',
   '刚打完一场高质量训练赛，学到很多 📝',
 ];
@@ -206,13 +206,21 @@ function templateSocialFeed(player: Player, leaderboard: LeaderboardTeam[]): Soc
     });
   }
 
+const TEMPLATE_CLUB_POSTS = [
+  '战队本周训练圆满收尾，感谢球迷们一如既往的支持 ❤️',
+  '新周边即将上架，记得关注官方商城 👕',
+  '下周大赛预告，全员已就位，敬请期待 🏆',
+  '感谢合作伙伴的持续支持，我们将继续全力以赴 🤝',
+];
+
   // 俱乐部官号
   if (player.team) {
+    const clubIdx = r % TEMPLATE_CLUB_POSTS.length;
     posts.push({
       author: player.team.name,
       authorType: 'club',
       handle: `@${player.team.tag.toLowerCase()}`,
-      content: '战队本周训练圆满收尾，感谢球迷们一如既往的支持 ❤️',
+      content: TEMPLATE_CLUB_POSTS[clubIdx]!,
     });
   }
 
