@@ -49,7 +49,7 @@ export const BASE_STATS: Stats = {
   experience: 0,
   money: 0,
   mentality: 0,
-  constitution: 3, // 基础体能底线：所有人都有基本的身体素质，不花属性点
+  constitution: 0, // 基础体能底线：所有人都有基本的身体素质，不花属性点
 };
 
 export const POINT_POOL = 12;

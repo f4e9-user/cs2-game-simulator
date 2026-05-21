@@ -387,7 +387,7 @@ class AnthropicNarrator implements AiService {
     const traitRules = input.player.traits
       ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
       : [];
-    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 500, 'narrate');
+    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, 'narrate');
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
@@ -396,7 +396,7 @@ class AnthropicNarrator implements AiService {
     const traitRules = input.player.traits
       ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
       : [];
-    yield* this.anthropicChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 500, 'narrateStream');
+    yield* this.anthropicChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, 'narrateStream');
   }
 
   async narrateShopPurchase(input: ShopNarrativeInput): Promise<string> {
@@ -422,7 +422,7 @@ class AnthropicNarrator implements AiService {
     return (await this.anthropicChat(
       INTRO_SYSTEM_PROMPT,
       buildIntroPrompt(player, traits, background, traitRules),
-      500,
+      1200,
       'intro',
     )) ?? '';
   }
@@ -636,7 +636,7 @@ class OpenAINarrator implements AiService {
     const traitRules = input.player.traits
       ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
       : [];
-    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 500, false, 'narrate');
+    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, false, 'narrate');
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
@@ -645,7 +645,7 @@ class OpenAINarrator implements AiService {
     const traitRules = input.player.traits
       ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
       : [];
-    yield* this.chatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 500, 'narrateStream');
+    yield* this.chatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, 'narrateStream');
   }
 
   async narrateShopPurchase(input: ShopNarrativeInput): Promise<string> {
@@ -671,7 +671,7 @@ class OpenAINarrator implements AiService {
     return (await this.chat(
       INTRO_SYSTEM_PROMPT,
       buildIntroPrompt(player, traits, background, traitRules),
-      500,
+      1200,
       false,
       'intro',
     )) ?? '';

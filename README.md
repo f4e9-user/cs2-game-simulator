@@ -107,7 +107,6 @@ cs2-game-simulator/
 基础规则：
 
 - 开局可分配点数：`12`
-- `constitution` 默认底线为 `3`
 - `money` 不参与成长衰减曲线
 
 ### 派生属性
