@@ -21,86 +21,103 @@ export function buildSocialFeedPrompt(
 ): string {
   const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
   const fameLabel = player.fame >= 80 ? '顶流' : player.fame >= 50 ? '知名选手' : player.fame >= 20 ? '有一定知名度' : '新人';
+  const w = player.week ?? player.round;
 
-  // 赛季背景
   const seasonPhase = (() => {
-    const w = player.week ?? player.round;
-    if (w <= 12) return '赛季初期，各队磨合新阵容';
-    if (w <= 24) return '赛季中段，积分争夺白热化';
-    if (w <= 36) return '季后赛资格争夺关键期';
-    return '转会窗口临近，队伍人心浮动';
+    if (w <= 12) return '赛季初期，各队磨合新阵容，IEM 卡托维兹刚打完，社区还在回味';
+    if (w <= 24) return '赛季中段，积分争夺白热化，Major 预选赛开打';
+    if (w <= 36) return '季后赛资格争夺关键期，BLAST 春季决赛临近';
+    return '休赛期临近，转会流言满天飞，阵容重组暗流涌动';
   })();
 
-  // 玩家自身信息
   const playerTeamLine = player.team
-    ? `所属俱乐部：${player.team.name}（${player.team.tag}）`
-    : '当前无俱乐部（独立选手/练习生）';
+    ? `主角：${player.name}，${player.team.name}（${player.team.tag}）${stageLabel}阶段，${fameLabel}`
+    : `主角：${player.name}，自由选手/练习生，${stageLabel}阶段，${fameLabel}`;
 
   const teammateLine = player.roster && player.roster.length > 0
-    ? `队友：${player.roster.slice(0, 3).map((tm) => `${tm.name}（${tm.role}）`).join('、')}`
-    : '暂无正式队友';
+    ? `队友：${player.roster.map((tm) => `${tm.name}（${tm.role}）`).join('、')}`
+    : '';
 
-  // 近期战绩
-  const recentSummary = recentHistory.slice(-4).map((r) => {
-    const outcome = r.success ? '✓' : '✗';
-    const preview = r.narrative.length > 40 ? r.narrative.slice(0, 40) + '…' : r.narrative;
-    return `${outcome} 【${r.eventTitle}】${preview}`;
-  }).join('\n') || '（尚无战绩记录）';
+  const recentSummary = recentHistory.slice(-3).map((r) => {
+    const outcome = r.success ? '赢' : '输';
+    const preview = r.narrative.length > 30 ? r.narrative.slice(0, 30) + '…' : r.narrative;
+    return `[${outcome}] ${r.eventTitle} — ${preview}`;
+  }).join('\n') || '暂无近期战绩';
 
-  // 世界场景：排行榜顶队 + 对手（无论玩家有没有队伍，世界都在运转）
-  const topTeams = leaderboard
+  const worldTeams = leaderboard
     .filter((t) => !t.isPlayer)
-    .slice(0, 4)
-    .map((t) => `${t.name}（${t.tag}，${t.region}）`)
+    .slice(0, 6)
+    .map((t) => {
+      const players = t.players?.slice(0, 2).join('/') ?? '';
+      return `${t.name}(${t.tag})${players ? ' 选手:' + players : ''}`;
+    })
     .join('、');
 
   const rivals = (player.rivals ?? [])
     .slice(0, 3)
-    .map((r: Rival) => `${r.name}（${r.tag}，${r.region}）`)
+    .map((r: Rival) => `${r.name}(${r.tag})`)
     .join('、');
 
-  const worldTeams = [topTeams, rivals].filter(Boolean).join('；另有对手：');
-
-  // 行业明星选手
-  const starPlayers = 's1mple_legacy、ZywOo_beast、m0NESY_ace、sh1ro_sniper、ropz_clutch、NiKo_rifle、device_awp、karrigan_igl';
-
   return [
-    '你是 CS2 职业电竞世界的社交媒体模拟引擎。',
-    '这是一个完整的电竞生态——无论玩家是否有战队，世界上的其他战队和选手都在持续活动。',
-    '请生成 5-6 条不同角色发布的中文短帖子，模拟 X（推特）上真实电竞人的日常推文。',
+    '你是一个极度活跃的 CS2 职业电竞 Twitter/X 用户。你不是在写新闻稿，你是在刷推特——每条帖子要像真实的人随手发的日常动态。',
     '',
-    `【主角】${player.name}，${stageLabel}阶段，${fameLabel}`,
+    '【当前世界状态】',
+    `赛季：第${w}周 — ${seasonPhase}`,
+    `活跃战队：${worldTeams || '(多个职业战队)'}`
+      + (rivals ? `；主角对手：${rivals}` : ''),
+    '',
     playerTeamLine,
     teammateLine,
     '',
-    `【赛季背景】${seasonPhase}`,
-    '',
-    `【当前活跃的其他战队】${worldTeams || '（生成世界战队）'}`,
-    '',
-    `【行业明星选手】${starPlayers} —— 这些是圈内顶流选手，拥有大量粉丝`,
-    '',
-    '【其他活跃账号】解说（如@cs_analyst, @caster_liu）、粉丝号（如@cs2_fanpage, @esports_news）、圈内人士',
-    '',
-    '【主角近期战绩】',
+    '【主角最近干了什么】',
     recentSummary,
     '',
-    '【发帖要求】',
-    '- 生成 5-6 条帖子，覆盖尽量多的 authorType（teammate / club / rival / media / star / industry / fan）',
-    '- 每条帖子来自不同账号，handle 各不相同，不得重复上一回合出现过的 handle',
-    '- 至少包含 1 条行业明星选手（star）的帖子',
-    '- 若主角暂无队友/俱乐部，改为让排行榜战队、对手、媒体、明星选手发帖——世界不会因为一个新人的缺席而沉默',
-    '- 内容贴合近期战绩或 CS2 赛季氛围，口语化，可加 emoji，每条 20-55 字',
-    '- 对手/媒体的帖子可以与主角无关，只反映 CS 世界的日常（赛事、训练营、转会期、排位等）',
-    '- handle 格式：@英文小写昵称（不超过 15 字符）',
-    '- 禁止出现数值、属性名、游戏机制词汇',
+    '【你要模拟的角色池 —— 每次从这些身份里挑 5-6 个不同的人发帖】',
     '',
-    '【主角特质映射到社媒】',
-    '主角拥有以下特质，社媒帖子应通过他人视角间接体现这些特质：',
-    `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore} → 队友/对手/媒体可能发的内容方向：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? '无'}`,
-    '注意：非 streamer 特质的主角不会自己发推。帖子的内容应反映他人对主角特质的观察和反应。',
+    '1) teammate（队友）—— 第一人称，像兄弟聊天：',
+    '  例："跟 [主角] 练了一晚上 AK 急停，他进步肉眼可见 💪"',
+    '  例："今晚训练赛被对面狙麻了，需要咖啡续命 ☕"',
+    '',
+    '2) club（俱乐部官方号）—— "我们"、官宣口吻，但不死板：',
+    '  例："我们拿下了本周训练赛全胜，下周 Major 预选见真章 🏆 #战队名"',
+    '  例："新周边上线，选手同款鼠标垫，限量 100 个 👕"',
+    '',
+    '3) rival（对手战队官方号）—— 第三方视角，可带挑衅：',
+    '  例："下周的对手名单里有 [主角战队名]，已经研究过他们的 demos 了 🔍"',
+    '  例："训练赛 16-2，状态火热。谁想碰一碰？😤"',
+    '',
+    '4) star（行业明星选手）—— 第一人称，大佬日常，不care小透明：',
+    '  可用明星：s1mple(@s1mple_legacy)、ZywOo(@zywoo_beast)、m0NESY(@m0nesy_ace)、ropz(@ropz_clutch)、NiKo(@niko_rifle)、device(@device_awp)、karrigan(@karrigan_igl)、sh1ro(@sh1ro_sniper)',
+    '  例："新鼠标到了，今晚排位试试手感 🎮"',
+    '  例："看到社区在讨论 AK 还是 M4，我的答案永远是：看地图 📍"',
+    '  例："训练基地网络炸了，全员去网吧练习，梦回 2015 😂"',
+    '',
+    '5) media（媒体号）—— 报道/爆料口吻，可带悬念：',
+    '  例："独家：某顶级战队正在试训一名东欧小将，预计下周官宣 👀"',
+    '  例："HLTV 本周排名更新，FaZe 重回前三，Spirit 跌出前五 📊"',
+    '',
+    '6) industry（解说/分析师/圈内人士）—— 专业但轻松，像饭局聊天：',
+    '  例："昨晚那场 Inferno 的 B 点回防，我愿称之为本赛季最佳战术配合 🧠"',
+    '  例："有人说现在 AWP 太弱了，我说：是你站位太常规了 🎯"',
+    '',
+    '7) fan（粉丝/社区号）—— 热情、八卦、偶尔毒奶：',
+    '  例："[主角名] 今天手感太好了，预言他下周 Major 预选 1.3 rating 起步 🔮"',
+    '  例："有没有人觉得新 Ancient 的 A 点太窄了？道具根本铺不开 😤"',
+    '',
+    '【生成规则】',
+    '- 生成 5-6 条帖子，每条来自不同 handle（绝不重复同一账号）',
+    '- authorType 尽量多样，至少包含 1 条 star + 1 条 media/industry',
+    '- 内容要像真人随手刷推，口语化，带 emoji，20-55 字',
+    '- 可以提到主角（用主角名字），也可以完全无关——真实推特不会人人都聊你',
+    '- 可以提到 CS2 真实元素：地图(Inferno/Mirage/Nuke/Ancient/Anubis)、武器(AK/M4/AWP/沙鹰)、赛事(Major/IEM/BLAST)、梗(eco/ clutch/ tilt/ 手枪局/ 1vX)',
+    '- 俱乐部和对手战队用第三人称/官宣口吻，选手用第一人称',
+    '- 禁止出现：属性名、数值、游戏机制词汇（如"成长"、"压力值"、"疲劳"）',
+    '',
+    '【主角特质映射】',
+    `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}。他人视角可能这样聊：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? '无特殊特质'}`,
     '',
     '严格输出 JSON 数组，不加任何其他内容：',
-    '[{"author":"...","authorType":"rival","handle":"@...","content":"..."}]',
+    '[{"author":"...","authorType":"star","handle":"@...","content":"..."}]',
   ].join('\n');
 }
 
