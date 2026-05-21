@@ -1,0 +1,24 @@
+name = "cs2-sim-backend"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# D1 binding — replace database_id with the id from `wrangler d1 create cs2-sim-db`.
+[[d1_databases]]
+binding = "DB"
+database_name = "cs2-sim-db"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# KV binding — replace id with `wrangler kv namespace create CS2_KV` output.
+[[kv_namespaces]]
+binding = "KV"
+id = "00000000000000000000000000000000"
+
+# Optional: LLM keys. Leave unset to use the template fallback narrator.
+[vars]
+AI_PROVIDER = "none"   # "none" | "anthropic" | "openai"
+# AI_MODEL    = "gpt-4o-mini"                    # openai 默认; anthropic 用 claude-haiku-4-5-20251001
+# AI_BASE_URL = "https://api.openai.com/v1"      # 可换 DeepSeek / Qwen / 本地 Ollama endpoint
+#
+# 密钥通过 wrangler secret 设置，不要写在这里：
+#   wrangler secret put OPENAI_API_KEY
+#   wrangler secret put ANTHROPIC_API_KEY

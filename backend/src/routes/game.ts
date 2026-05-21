@@ -33,6 +33,7 @@ import {
 import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
+import type { SocialFeedPost } from '../ai/prompts.js';
 import type { ClubTier, Env, MatchStats, PlayerTeam, Stats } from '../types.js';
 
 function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
@@ -777,26 +778,41 @@ app.get('/game/:sessionId/social-feed', async (c) => {
     return c.json({ error: '无效的 API Token' }, 401);
   }
 
-  // KV 缓存：同一回合内容不变，直接返回
-  const cacheKey = `social:${id}:r${session.player.round}`;
+  const allKey = `social:${id}:all`;
+  const roundKey = `social:${id}:r${session.player.round}`;
+  const MAX_FEED_LENGTH = 20;
+
+  let allPosts: SocialFeedPost[] = [];
   try {
-    const cached = await c.env.KV.get(cacheKey);
-    if (cached) return c.json({ posts: JSON.parse(cached) });
-  } catch { /* KV 不可用时跳过缓存 */ }
+    const allCached = await c.env.KV.get(allKey);
+    if (allCached) allPosts = JSON.parse(allCached) as SocialFeedPost[];
+  } catch { }
+
+  let roundGenerated = false;
+  try {
+    const roundCached = await c.env.KV.get(roundKey);
+    if (roundCached) roundGenerated = true;
+  } catch { }
+
+  if (roundGenerated) {
+    return c.json({ posts: allPosts });
+  }
 
   const ai = makeAiService(c.env, c.executionCtx);
-  const posts = await ai.simulateSocialFeed(
+  const newPosts = await ai.simulateSocialFeed(
     session.player,
     session.history.slice(-5),
     session.leaderboard,
   );
 
-  // 写入 KV，TTL 12 小时（同回合内复用，跨回合自动过期）
-  try {
-    await c.env.KV.put(cacheKey, JSON.stringify(posts), { expirationTtl: 43200 });
-  } catch { /* 忽略写失败 */ }
+  const merged = [...newPosts, ...allPosts].slice(0, MAX_FEED_LENGTH);
 
-  return c.json({ posts });
+  try {
+    await c.env.KV.put(allKey, JSON.stringify(merged), { expirationTtl: 43200 });
+    await c.env.KV.put(roundKey, '1', { expirationTtl: 43200 });
+  } catch { }
+
+  return c.json({ posts: merged });
 });
 
 // 流式叙事：choice 端点不再等待 LLM，前端拿到结果后调这里做流式渲染
