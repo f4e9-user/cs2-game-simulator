@@ -95,7 +95,9 @@ export function buildSocialFeedPrompt(
 
   rolePoolLines.push(
     '3) rival（对手战队官方号）—— 第三方视角，可带挑衅',
-    `  例："下周的对手名单里有 ${hasTeam ? playerTeamName : topTeamA}，已经研究过他们的 demos 了 🔍"`,
+    hasTeam
+      ? `  例："下周的对手名单里有 ${playerTeamName}，已经研究过他们的 demos 了 🔍"`
+      : `  例："${topTeamA} vs ${topTeamB} 下周见，demo 已经看了三遍了 😤"`,
     '',
     '4) star（行业明星选手）—— 第一人称，大佬日常',
     '  可用：s1mple(@s1mple_legacy)、ZywOo(@zywoo_beast)、m0NESY(@m0nesy_ace)、ropz(@ropz_clutch)、NiKo(@niko_rifle)、device(@device_awp)、karrigan(@karrigan_igl)、sh1ro(@sh1ro_sniper)',
