@@ -576,7 +576,7 @@ class AnthropicNarrator implements AiService {
     const text = await this.anthropicChat(
       SOCIAL_SYSTEM_PROMPT,
       userPrompt,
-      500,
+      1000,
       'simulateSocialFeed',
     );
     const posts = parseSocialFeed(text);
@@ -843,7 +843,7 @@ class OpenAINarrator implements AiService {
     const text = await this.chat(
       SOCIAL_SYSTEM_PROMPT,
       userPrompt,
-      500,
+      1000,
       false,
       'simulateSocialFeed',
     );
