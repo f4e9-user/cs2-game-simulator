@@ -205,7 +205,7 @@ export type ForcedMatchResult = 'win' | 'loss';
 
 export interface Loan {
   id: string;
-  source: 'bank' | 'friend';
+  source?: 'bank' | 'friend';
   principal: number;
   interestRate: number;
   remainingPrincipal: number;

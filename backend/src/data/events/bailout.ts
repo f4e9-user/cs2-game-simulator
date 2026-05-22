@@ -297,7 +297,6 @@ export const BAILOUT_EVENTS: EventDef[] = [
       '妈妈在电话那头说不出话来。爸爸接过去，声音很轻："你妈确诊了，医生说要尽快手术，手术费大概要 80K。家里实在拿不出来……你看能不能想想办法。"电话挂了，你一个人坐在那里，久久没动。',
     stages: ALL_STAGES,
     difficulty: 1,
-    weight: 50,
     requireTags: ['needs-family-crisis'],
     choices: [
       {
@@ -329,7 +328,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
         success: {
           narrative: '你放下了电话。你告诉自己：这件事已经超出你的能力范围了。某扇门就这样永远关上了——不是解脱，是一种更沉的东西。职业生涯继续，但某些东西不一样了。',
           feelDelta: -2.0,
-          stressDelta: -5,
+          stressDelta: 3,
           tagAdds: ['abandoned-family'],
         },
         failure: {

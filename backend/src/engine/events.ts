@@ -176,18 +176,14 @@ function stateWeight(e: EventDef, player: Player): number {
   if (player.stress >= 60 && e.requireTags?.includes('stressed')) w *= 2;
   // Force broadcast events to dominate when in Major aftermath.
   if (e.requireTags?.includes('major-broadcast')) w *= 5;
-  // 赌徒特质 → 赌狗/上头类饰品事件权重翻倍
-  if (e.id.startsWith('skin-gamble-')) {
-    const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
-    if (traitTags.includes('gambler')) w *= 2;
-  }
   // 饰品事件状态联动权重修正
   if (e.id.startsWith('skin-scam-')) {
-    // 被骗/被钓鱼过 → 诈骗类事件权重降低（长了见识，警惕性提升）
     if (player.tags.includes('scammed') || player.tags.includes('phished')) w *= 0.4;
   }
   if (e.id.startsWith('skin-gamble-')) {
-    // 赌博螺旋标签 → 赌狗类事件权重进一步提升（越陷越深）
+    const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
+    // gambler 特质 × gambling-spiral 标签可叠加（×2 × ×1.5 = ×3.0），越陷越深
+    if (traitTags.includes('gambler')) w *= 2;
     if (player.tags.includes('gambling-spiral')) w *= 1.5;
   }
   if (e.id.startsWith('skin-gray-')) {
@@ -204,7 +200,7 @@ function stateWeight(e: EventDef, player: Player): number {
     w *= 0.3;
   }
   // abandoned-family 在 pro 阶段：媒体类事件权重大幅提升（旧事随时可能被曝光）
-  if (e.type === 'media' && player.stage === 'pro' && player.tags.includes('abandoned-family')) w *= 2.5;
+  if (e.id === 'media-abandoned-family' && player.stage === 'pro' && player.tags.includes('abandoned-family')) w *= 2.5;
   // guilt-spiral 标签：压力类事件权重提升（内疚导致心理更脆弱）
   if (e.type === 'stress' && player.tags.includes('guilt-spiral')) w *= 1.5;
   // 自由人时 tryout 类事件权重提升（申请战队需求）
@@ -303,15 +299,15 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     if (restPool.length > 0) return weightedPick(restPool, rng, () => 1);
   }
 
-  // 赛事隔离：进行中的赛事优先级最高，阻断晋级事件和随机事件
-  if (player.pendingMatch) {
-    return buildTournamentPrepEvent(player.pendingMatch);
-  }
-
-  // 家人危机：最高优先级注入，阻断其他随机事件
+  // 家人危机：最高优先级注入，即使在赛事期间也必须面对
   if (synthTags.has('needs-family-crisis')) {
     const crisisEvent = pool.find((e) => e.id === 'family-crisis-illness');
     return crisisEvent ?? null;
+  }
+
+  // 赛事隔离：阻断晋级事件和随机事件
+  if (player.pendingMatch) {
+    return buildTournamentPrepEvent(player.pendingMatch);
   }
 
   // 破产恢复：持续破产且冷却结束时，直接注入家人/朋友救济事件
@@ -321,7 +317,8 @@ export function pickEvent(ctx: EventContext): EventDef | null {
         e.type === 'bailout' &&
         e.stages.includes(player.stage) &&
         !recentEventIds.includes(e.id) &&
-        !e.requireTags?.some((t) => !synthTags.has(t)),
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
     );
     if (bailoutPool.length > 0) return weightedPick(bailoutPool, rng, (e) => stateWeight(e, player));
   }
@@ -353,7 +350,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     if (!e.stages.includes(player.stage)) return false;
     if (recentEventIds.includes(e.id)) return false;
     if (e.requireTags?.some((t) => !synthTags.has(t))) return false;
-    if (e.forbidTags?.some((t) => realTags.has(t))) return false;
+    if (e.forbidTags?.some((t) => synthTags.has(t))) return false;
     return true;
   });
 

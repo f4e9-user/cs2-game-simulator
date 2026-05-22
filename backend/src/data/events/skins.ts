@@ -449,10 +449,10 @@ export const SKIN_GAMBLE_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '「最后一箱」说了十遍。天快亮了，余额只剩个零头。你盯着屏幕，脑子一片空白。',
-          moneyDelta: -40,
+          moneyDelta: -30,
           feelDelta: -1.0,
           stressDelta: 5,
-          tiltDelta: 2,
+          tiltDelta: 1,
           tagAdds: ['gambling-spiral'],
         },
       },

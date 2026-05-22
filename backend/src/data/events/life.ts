@@ -29,6 +29,7 @@ export const LIFE_EVENTS: EventDef[] = [
           feelDelta: 0.5,
           dailyGrowth: 'mentality',
           tagAdds: ['guilt-processed'],
+          tagRemoves: ['guilt-spiral'],
         },
         failure: {
           narrative: '你试着直面，结果越想越难受。那天的电话声一遍遍在脑子里转，你整夜没睡，训练的时候也在想这件事。',
@@ -52,6 +53,7 @@ export const LIFE_EVENTS: EventDef[] = [
           narrative: '你把那扇门关上，回到战术分析里去。今晚没再想，但你知道它还在那里。',
           stressDelta: 1,
           tagAdds: ['guilt-processed'],
+          tagRemoves: ['guilt-spiral'],
         },
         failure: {
           narrative: '你以为自己压住了，但梦里又看到了那个场景。早上起来眼眶是红的，说不清是做梦还是哭了。',

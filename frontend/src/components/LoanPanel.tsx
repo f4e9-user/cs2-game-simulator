@@ -106,7 +106,7 @@ export function LoanPanel({ sessionId, player, onPlayerUpdate }: Props) {
     activeFriendLoan ||
     canBorrowBank ||
     canBorrowFriend ||
-    creditScore < 100;
+    (player.stage !== 'rookie' && creditScore < 100);
 
   if (!showPanel) return null;
 

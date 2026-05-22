@@ -961,10 +961,6 @@ export function applyChoice(
     }
   }
 
-  const recoveryEffects: string[] = [];
-  processRecoverySystems(nextPlayer, eventDef.id, recoveryEffects, choiceDef.id);
-  passiveEffects.push(...recoveryEffects);
-
   if (
     eventDef.id.startsWith('bailout-team-') &&
     !choiceDef.id.startsWith('refuse-') &&
@@ -986,6 +982,7 @@ export function applyChoice(
   }
 
   // 月薪入账：每 4 回合结算一次，入队后从 salaryTracker.lastPayRound 起算
+  // 必须在 processRecoverySystems 之前结算，确保到期的家人危机检查能看到当回合薪资
   if (nextPlayer.team && nextPlayer.salaryTracker) {
     if (
       nextPlayer.salaryTracker.salaryRestoreRound &&
@@ -1012,6 +1009,10 @@ export function applyChoice(
       passiveEffects.push(`月薪入账 +${nextPlayer.team.monthlySalary}K`);
     }
   }
+
+  const recoveryEffects: string[] = [];
+  processRecoverySystems(nextPlayer, eventDef.id, recoveryEffects, choiceDef.id);
+  passiveEffects.push(...recoveryEffects);
 
   if (!nextPlayer.team && nextPlayer.roster) {
     nextPlayer.roster = null;
