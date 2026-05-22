@@ -204,12 +204,7 @@ function stateWeight(e: EventDef, player: Player): number {
     w *= 0.3;
   }
   // abandoned-family 在 pro 阶段：媒体类事件权重大幅提升（旧事随时可能被曝光）
-  if (
-    e.type === 'media' &&
-    player.stage === 'pro' &&
-    player.tags.includes('abandoned-family') &&
-    !player.tags.includes('reconciled-family')
-  ) w *= 2.5;
+  if (e.type === 'media' && player.stage === 'pro' && player.tags.includes('abandoned-family')) w *= 2.5;
   // guilt-spiral 标签：压力类事件权重提升（内疚导致心理更脆弱）
   if (e.type === 'stress' && player.tags.includes('guilt-spiral')) w *= 1.5;
   // 自由人时 tryout 类事件权重提升（申请战队需求）

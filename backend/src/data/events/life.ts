@@ -11,7 +11,7 @@ export const LIFE_EVENTS: EventDef[] = [
     difficulty: 0,
     weight: 0.25,
     requireTags: ['abandoned-family'],
-    forbidTags: ['reconciled-family', 'guilt-processed'],
+    forbidTags: ['guilt-processed'],
     choices: [
       {
         id: 'confront-memory',

@@ -11,7 +11,7 @@ export const MEDIA_EVENTS: EventDef[] = [
     difficulty: 1,
     weight: 0.4,
     requireTags: ['abandoned-family'],
-    forbidTags: ['reconciled-family', 'media-abandoned-handled'],
+    forbidTags: ['media-abandoned-handled'],
     choices: [
       {
         id: 'stay-silent',
@@ -50,11 +50,11 @@ export const MEDIA_EVENTS: EventDef[] = [
           traitPenalties: { ego: 3, solo: 2 },
         },
         success: {
-          narrative: '你发了一段文字，没有辩解，只是如实说了当年的处境和无力感。评论区有人沉默，有人选择原谅。家人通过中间人联系了你——那扇门，也许还没有完全关死。',
+          narrative: '你发了一段文字，没有辩解，只是如实说了当年的处境。评论区有人选择接受，但有更多人说「说出来又怎样」。名气受损，但话题比沉默收得更快一些。',
           fameDelta: -15,
           stressDelta: -3,
           feelDelta: -0.5,
-          tagAdds: ['reconciled-family', 'media-abandoned-handled'],
+          tagAdds: ['media-abandoned-handled'],
         },
         failure: {
           narrative: '道歉被解读成公关稿，「太晚了」「装什么呢」的声音铺天盖地。你真诚的部分没有人看到，看到的只有狼狈。赞助商减少了合作频次。',
