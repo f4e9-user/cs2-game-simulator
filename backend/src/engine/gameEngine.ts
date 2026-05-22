@@ -244,18 +244,20 @@ export function processLoanRepayment(player: Player, effects?: string[]): void {
   }
 }
 
-function processRecoverySystems(player: Player, eventId: string, effects?: string[]): void {
+function processRecoverySystems(player: Player, eventId: string, effects?: string[], choiceId?: string): void {
   processLoanRepayment(player, effects);
 
   const isTeamBailout = eventId.startsWith('bailout-team-');
   const isFamilyBailout = !isTeamBailout && eventId.startsWith('bailout-');
+  // refuse-* 选项：玩家主动拒绝救济，设短冷却（5 回合后再次提供），不重置破产计数
+  const isRefusal = choiceId?.startsWith('refuse-') ?? false;
 
   if (isTeamBailout) {
-    player.teamBailoutCooldown = 24;
-    player.consecutiveBrokeRounds = 0;
+    player.teamBailoutCooldown = isRefusal ? 5 : 24;
+    if (!isRefusal) player.consecutiveBrokeRounds = 0;
   } else if (isFamilyBailout) {
-    player.bailoutCooldown = 24;
-    player.consecutiveBrokeRounds = 0;
+    player.bailoutCooldown = isRefusal ? 5 : 24;
+    if (!isRefusal) player.consecutiveBrokeRounds = 0;
   }
 
   if (!isFamilyBailout && (player.bailoutCooldown ?? 0) > 0) {
@@ -882,11 +884,12 @@ export function applyChoice(
   }
 
   const recoveryEffects: string[] = [];
-  processRecoverySystems(nextPlayer, eventDef.id, recoveryEffects);
+  processRecoverySystems(nextPlayer, eventDef.id, recoveryEffects, choiceDef.id);
   passiveEffects.push(...recoveryEffects);
 
   if (
     eventDef.id.startsWith('bailout-team-') &&
+    !choiceDef.id.startsWith('refuse-') &&
     nextPlayer.team &&
     nextPlayer.salaryTracker &&
     !nextPlayer.salaryTracker.salaryRestoreRound

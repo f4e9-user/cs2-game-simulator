@@ -8,7 +8,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
     type: 'bailout',
     title: '父母的电话',
     narrative:
-      '妈妈打来电话，问你最近过得怎么样。你犹豫了一下，还是说了实话。电话那头沉默了很久，然后爸爸接过电话，说：“先把日子过下去，别硬撑。”',
+      '妈妈打来电话，问你最近过得怎么样。你犹豫了一下，还是说了实话。电话那头沉默了很久，然后爸爸接过电话，说："先把日子过下去，别硬撑。"',
     stages: ALL_STAGES,
     difficulty: 0,
     weight: 10,
@@ -31,7 +31,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
       {
         id: 'accept-loan',
         label: '接受家里的周转',
-        description: '先把这一关撑过去。',
+        description: '先把这一关撑过去，后面慢慢想办法还回去。',
         check: { primary: 'mentality', dc: 4 },
         success: {
           narrative: '家里给你转来一笔周转金。虽然你知道这钱要记在心里，但至少今晚不用再盯着余额发呆。',
@@ -40,10 +40,27 @@ export const BAILOUT_EVENTS: EventDef[] = [
           fameDelta: -3,
         },
         failure: {
-          narrative: '你嘴上说着“我自己能扛”，但最后还是收下了这笔钱。电话挂断后，你的压力反而更重了。',
+          narrative: '你嘴上说着"我自己能扛"，但最后还是收下了这笔钱。电话挂断后，你的压力反而更重了。',
           moneyDelta: 20,
           stressDelta: 2,
           fameDelta: -2,
+        },
+      },
+      {
+        id: 'refuse-loan',
+        label: '谢谢，我自己能撑过去',
+        description: '不想让家里担心，也不想欠这份人情。',
+        check: { primary: 'mentality', dc: 8, traitBonuses: { steady: 2, ego: 1 }, traitPenalties: { support: 1, fragile: 1 } },
+        success: {
+          narrative: '你说了声"没事，我有办法"，然后挂了电话。深吸一口气，没有退路，但也不想用这种方式过这道坎。',
+          stressDelta: 2,
+          feelDelta: 0.5,
+          dailyGrowth: 'mentality',
+        },
+        failure: {
+          narrative: '你说了"我没事"，挂了电话，然后盯着账户发呆。这种倔强让你压力更大——你清楚自己根本没有办法。',
+          stressDelta: 5,
+          feelDelta: -0.5,
         },
       },
     ],
@@ -53,7 +70,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
     type: 'bailout',
     title: '家里寄来的红包',
     narrative:
-      '一个熟悉的快递到了，里面是家里塞给你的现金和一句手写纸条：“先顾好自己，比赛以后再说。”',
+      '一个熟悉的快递到了，里面是家里塞给你的现金和一句手写纸条："先顾好自己，比赛以后再说。"',
     stages: ALL_STAGES,
     difficulty: 0,
     weight: 10,
@@ -80,7 +97,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
       {
         id: 'take-gift',
         label: '收下这份心意',
-        description: '先解决眼前的窟窿。',
+        description: '先解决眼前的窟窿，这份情记着就行。',
         check: { primary: 'mentality', dc: 3 },
         success: {
           narrative: '你把红包收进口袋，心里却沉了一下。钱能解燃眉之急，但欠下的是一份人情。',
@@ -94,6 +111,23 @@ export const BAILOUT_EVENTS: EventDef[] = [
           fameDelta: -1,
         },
       },
+      {
+        id: 'refuse-gift',
+        label: '把红包寄回去',
+        description: '再难也不想接受这份援助——靠自己扛过去。',
+        check: { primary: 'mentality', dc: 7, traitBonuses: { steady: 1, ego: 1 }, traitPenalties: { support: 1 } },
+        success: {
+          narrative: '你把红包放回箱子，附了一张纸条："我会想办法的，不用担心。"心里有点轻，有点沉。',
+          stressDelta: 1,
+          feelDelta: 0.5,
+          dailyGrowth: 'mentality',
+        },
+        failure: {
+          narrative: '你想寄回去，但最后只是把箱子搁到一边。不好意思退，也不甘心收，两头都不是。这种悬着的感觉更难熬。',
+          stressDelta: 4,
+          feelDelta: -0.5,
+        },
+      },
     ],
   },
   {
@@ -101,7 +135,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
     type: 'bailout',
     title: '老朋友出手',
     narrative:
-      '一个很久没联系的老朋友突然发消息：“我听说你最近有点难。钱不多，先拿着，别跟我客气。”',
+      '一个很久没联系的老朋友突然发消息："我听说你最近有点难。钱不多，先拿着，别跟我客气。"',
     stages: ALL_STAGES,
     difficulty: 0,
     weight: 10,
@@ -128,7 +162,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
       {
         id: 'borrow-friend',
         label: '记下这份情',
-        description: '先渡过难关。',
+        description: '先渡过难关，以后有机会再还这份人情。',
         check: { primary: 'experience', dc: 5 },
         success: {
           narrative: '你收下了这笔钱，也记下了这次帮忙。老朋友的手伸过来时，你确实没那么孤单了。',
@@ -143,6 +177,24 @@ export const BAILOUT_EVENTS: EventDef[] = [
           fameDelta: -4,
         },
       },
+      {
+        id: 'refuse-friend',
+        label: '拒绝，自己的事自己扛',
+        description: '不想让朋友看到自己落魄，这种钱不想接。',
+        check: { primary: 'mentality', dc: 8, traitBonuses: { ego: 2, solo: 1 }, traitPenalties: { support: 1, selfless: 1 } },
+        success: {
+          narrative: '你回消息说"没那么严重，谢了"。对方没再追问。心里有些释然，也有些不是滋味——但这是你自己的选择。',
+          stressDelta: 2,
+          feelDelta: 0.5,
+          dailyGrowth: 'mentality',
+        },
+        failure: {
+          narrative: '你拒绝了，然后把手机扔到床上。孤立无援的感觉比破产更难受，这份倔强今晚让你付出了代价。',
+          stressDelta: 5,
+          feelDelta: -1.0,
+          tiltDelta: 1,
+        },
+      },
     ],
   },
   {
@@ -150,7 +202,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
     type: 'bailout',
     title: '经理的应急垫款',
     narrative:
-      '训练结束后，战队经理把你叫到办公室。他没有绕弯子：“我知道你最近现金流断了，队里先给你一笔应急资金，但接下来三个月工资要打八折。”',
+      '训练结束后，战队经理把你叫到办公室。他没有绕弯子："我知道你最近现金流断了，队里先给你一笔应急资金，但接下来三个月工资要打八折。"',
     stages: ['youth', 'second'],
     difficulty: 0,
     weight: 10,
@@ -170,6 +222,22 @@ export const BAILOUT_EVENTS: EventDef[] = [
           narrative: '你接受了垫款，但也感觉自己在队里欠下了一份难说出口的人情。钱到账了，压力却没有完全消失。',
           moneyDelta: 20,
           stressDelta: 5,
+        },
+      },
+      {
+        id: 'refuse-team-emergency',
+        label: '谢谢，我自己想办法',
+        description: '接受垫款会影响在队里的地位，宁可自己扛。',
+        check: { primary: 'mentality', dc: 9, traitBonuses: { steady: 2, ego: 1 }, traitPenalties: { fragile: 1 } },
+        success: {
+          narrative: '你婉拒了经理，说三个月薪资不需要下调，自己能扛过去。经理点了点头："有困难随时来找我。"这份坚持，也许在队里多了一份说不清的分量。',
+          stressDelta: 3,
+          dailyGrowth: 'mentality',
+        },
+        failure: {
+          narrative: '你拒绝了，经理有点意外，但没有勉强。走出办公室，你不确定自己是不是做了对的决定——钱的问题并没有因为你的倔强消失。',
+          stressDelta: 6,
+          feelDelta: -0.5,
         },
       },
     ],
@@ -199,6 +267,23 @@ export const BAILOUT_EVENTS: EventDef[] = [
           narrative: '协议流程比你想象得更难堪，几层审批之后，款项少了一截。你还是签了，因为眼前没有更好的办法。',
           moneyDelta: 40,
           stressDelta: 15,
+        },
+      },
+      {
+        id: 'refuse-salary-advance',
+        label: '不签，不想背这个包袱',
+        description: '十二周薪资打折换来的周转，代价太大了。',
+        check: { primary: 'mentality', dc: 8, traitBonuses: { steady: 2, grinder: 1 }, traitPenalties: { impulsive: 1 } },
+        success: {
+          narrative: '你退回了协议，决定自己扛过这关。财务表情有点惊讶，但也没再追。这个决定意味着接下来一段时间要更紧，但薪资不会被动手脚。',
+          stressDelta: 3,
+          dailyGrowth: 'mentality',
+        },
+        failure: {
+          narrative: '你说不签，但脑子里转了半天也没找到别的出路。最后既后悔拒绝，又拉不下脸回头——悬在这里更难受。',
+          stressDelta: 6,
+          feelDelta: -0.5,
+          tiltDelta: 1,
         },
       },
     ],
