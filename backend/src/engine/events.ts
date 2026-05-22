@@ -1,4 +1,4 @@
-import { EVENT_POOL, PROMOTION_EVENTS, getEventById } from '../data/events/index.js';
+import { PROMOTION_EVENTS, getEventById, getEventRegistry } from '../data/events/index.js';
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
 import { CLUBS } from '../data/clubs.js';
@@ -253,6 +253,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   const { player, recentEventIds, rng } = ctx;
   const realTags = new Set(player.tags);
   const synthTags = new Set([...player.tags, ...dynamicTags(player)]);
+  const pool = getEventRegistry().getAll();
 
   if (player.forceNextEvent) {
     const forcedEvent = getEventById(player.forceNextEvent);
@@ -260,7 +261,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   }
 
   if ((player.restRounds ?? 0) > 0) {
-    const restPool = EVENT_POOL.filter((e) => e.type === 'rest');
+    const restPool = pool.filter((e) => e.type === 'rest');
     if (restPool.length > 0) return weightedPick(restPool, rng, () => 1);
   }
 
@@ -271,7 +272,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
 
   // 破产恢复：持续破产且冷却结束时，直接注入家人/朋友救济事件
   if (synthTags.has('needs-bailout') || synthTags.has('needs-team-bailout')) {
-    const bailoutPool = EVENT_POOL.filter(
+    const bailoutPool = pool.filter(
       (e) =>
         e.type === 'bailout' &&
         e.stages.includes(player.stage) &&
@@ -293,7 +294,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   // 面试优先：interview-ready 时直接注入对应面试事件，不参与随机池竞争
   // 即使找不到匹配事件也返回 null，确保面试期间不插入任何随机事件
   if (synthTags.has('interview-ready')) {
-    const interviewEvent = EVENT_POOL.find(
+    const interviewEvent = pool.find(
       (e) =>
         e.requireTags?.includes('interview-ready') &&
         e.stages.includes(player.stage) &&
@@ -302,7 +303,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     return interviewEvent ?? null;
   }
 
-  const eligible = EVENT_POOL.filter((e) => {
+  const eligible = pool.filter((e) => {
     if (e.type === 'rest') return false;
     if (e.type === 'routine') return false; // 日常行动改为行动面板，不再随机出现
     if (!e.stages.includes(player.stage)) return false;
@@ -313,7 +314,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   });
 
   if (eligible.length === 0) {
-    const fallback = EVENT_POOL.filter(
+    const fallback = pool.filter(
       (e) => e.type !== 'rest' && e.type !== 'routine' && e.stages.includes(player.stage),
     );
     if (fallback.length === 0) return null;

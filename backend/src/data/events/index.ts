@@ -92,11 +92,11 @@ export function getEventById(id: string): EventDef | undefined {
     if (!t || !Number.isInteger(stageIndex)) return undefined;
     return synthesizeMatchEvent(t, stageIndex);
   }
-  return EVENT_POOL.find((e) => e.id === id);
+  return registry.getAll().find((e) => e.id === id);
 }
 
 export function eventsByType(type: EventType): EventDef[] {
-  return registry.getByType(type);
+  return registry.getAll().filter((e) => e.type === type);
 }
 
 export function getEventRegistry(): EventRegistry {

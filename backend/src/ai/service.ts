@@ -129,7 +129,7 @@ function parseSocialFeed(text: string | null): { value: SocialFeedPost[]; parsed
           typeof p.content === 'string' &&
           typeof p.handle === 'string' &&
           validTypes.has(p.authorType),
-      ).slice(0, 5),
+      ).slice(0, 6),
       parsed: true,
     };
   } catch {
