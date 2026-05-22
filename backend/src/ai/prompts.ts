@@ -44,6 +44,24 @@ export function buildSocialFeedPrompt(
     return `[${outcome}] ${r.eventTitle} — ${preview}`;
   }).join('\n') || '暂无近期战绩';
 
+  // 检测最近一场赛事结果
+  const lastMatch = [...recentHistory].reverse().find((r) => r.eventId.startsWith('tournament-'));
+  let matchReport = '';
+  let matchHeat = 0; // 0=无赛事, 1=B级一般报道, 2=A/S级知名媒体报道, 3=Major全网报道
+  if (lastMatch) {
+    const title = lastMatch.eventTitle;
+    const isMajor = title.includes('Major') || title.includes('major');
+    const isTopTier = title.includes('S级') || title.includes('IEM') || title.includes('BLAST') || title.includes('S-');
+    matchHeat = isMajor ? 3 : isTopTier ? 2 : 1;
+    const ms = lastMatch.matchStats;
+    const teamName = player.team?.name ?? player.name;
+    const result = lastMatch.success ? '夺冠/晋级' : '出局/落败';
+    const perf = ms
+      ? `个人数据 ${ms.kills}/${ms.deaths}/${ms.assists} KDA，Rating ${ms.rating.toFixed(2)}，爆头率 ${Math.round(ms.headshotRate * 100)}%`
+      : '';
+    matchReport = `${teamName} 在「${title}」${result}${perf ? ' — ' + perf : ''}`;
+  }
+
   const worldTeamsRaw = leaderboard.filter((t) => !t.isPlayer);
   const worldTeamNames = worldTeamsRaw
     .slice(0, 6)
@@ -75,6 +93,16 @@ export function buildSocialFeedPrompt(
     '',
     '【主角最近干了什么】',
     recentSummary,
+    ...(matchReport ? [
+      '',
+      '【最近赛事结果 —— 必须基于以下真实数据发帖，不得编造】',
+      matchReport,
+      matchHeat === 3
+        ? '【赛事热度：Major 级别 —— 所有媒体都在报道，几乎所有角色都会提到这场赛事】'
+        : matchHeat === 2
+          ? '【赛事热度：A/S 级 —— 知名媒体和圈内人士会报道，一般粉丝也会讨论】'
+          : '【赛事热度：B/C 级 —— 一般媒体报道，圈内人士偶尔提及】',
+    ] : []),
     '',
     '【你要模拟的角色池 —— 每次从这些身份里挑 5-6 个不同的人发帖】',
     '',
