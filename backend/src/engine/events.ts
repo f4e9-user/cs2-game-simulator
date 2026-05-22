@@ -169,6 +169,28 @@ function stateWeight(e: EventDef, player: Player): number {
     const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
     if (traitTags.includes('gambler')) w *= 2;
   }
+  // 饰品事件状态联动权重修正
+  if (e.id.startsWith('skin-scam-')) {
+    // 被骗/被钓鱼过 → 诈骗类事件权重降低（长了见识，警惕性提升）
+    if (player.tags.includes('scammed') || player.tags.includes('phished')) w *= 0.4;
+  }
+  if (e.id.startsWith('skin-gamble-')) {
+    // 赌博螺旋标签 → 赌狗类事件权重进一步提升（越陷越深）
+    if (player.tags.includes('gambling-spiral')) w *= 1.5;
+  }
+  if (e.id.startsWith('skin-gray-')) {
+    // 灰色接触记录 → 边缘类事件概率联动
+    if (player.tags.includes('dirty-money')) w *= 1.5;
+    if (player.tags.includes('clean-record')) w *= 0.5;
+  }
+  if (e.id.startsWith('skin-social-')) {
+    // 已建立社交圈 → 饰品社交事件更容易触发
+    if (player.tags.includes('social-circle')) w *= 1.3;
+  }
+  if (e.id.startsWith('skin-market-') && (player.stats.money ?? 0) <= 1) {
+    // 几乎破产时抑制市场投机事件（无本金可操作）
+    w *= 0.3;
+  }
   // 自由人时 tryout 类事件权重提升（申请战队需求）
   if (!player.team && e.type === 'tryout') w *= 1.5;
   // 有战队时 team 类事件权重提升
