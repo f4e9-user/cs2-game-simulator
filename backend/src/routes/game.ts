@@ -34,7 +34,7 @@ import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
 import type { SocialFeedPost } from '../ai/prompts.js';
-import type { ClubTier, Env, MatchStats, PlayerTeam, Stats } from '../types.js';
+import type { ClubTier, Env, EventDef, MatchStats, PlayerTeam, Stats } from '../types.js';
 
 function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
   if (!required) return true;
@@ -191,10 +191,23 @@ app.post('/game/:sessionId/choice', async (c) => {
   }
 
   try {
+    let aiEvents: EventDef[] | undefined;
+    try {
+      const cached = await c.env.KV.get(`ai-events:${id}`);
+      if (cached) {
+        const parsed = JSON.parse(cached) as unknown[];
+        aiEvents = parsed.filter((e): e is EventDef => {
+          if (!e || typeof e !== 'object') return false;
+          const ev = e as Record<string, unknown>;
+          return typeof ev.id === 'string' && typeof ev.type === 'string';
+        });
+      }
+    } catch {}
+
     // 面试 post-handler 需要 clubId，但 applyChoice 内部会清空 pendingApplication
     // 提前保存，供下方生成入队邀请时使用
     const preChoicePendingApplication = session.player.pendingApplication;
-    const { session: updated, result } = applyChoice(session, choiceId, customRollBonus);
+    const { session: updated, result } = applyChoice(session, choiceId, customRollBonus, aiEvents);
 
     // 自由行动时：用自定义行动作为叙事重写依据，不拼接默认叙事
     if (customNarrativePrefix) {
@@ -284,6 +297,20 @@ app.post('/game/:sessionId/choice', async (c) => {
     );
 
     await storage.sessions.save(updated);
+
+    if (ai.active && updated.status === 'active') {
+      c.executionCtx?.waitUntil(
+        (async () => {
+          try {
+            const generated = await ai.generateEvents(updated.player, updated.history);
+            if (generated && generated.length > 0) {
+              await c.env.KV.put(`ai-events:${id}`, JSON.stringify(generated), { expirationTtl: 43200 });
+            }
+          } catch {
+          }
+        })(),
+      );
+    }
 
     return c.json({
       result,

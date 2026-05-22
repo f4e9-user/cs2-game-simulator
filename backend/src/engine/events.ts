@@ -9,6 +9,7 @@ export interface EventContext {
   recentEventIds: string[];
   rng: () => number;
   leaderboard?: LeaderboardTeam[];
+  aiEvents?: EventDef[];
 }
 
 function dynamicTags(player: Player): string[] {
@@ -250,10 +251,10 @@ export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
 }
 
 export function pickEvent(ctx: EventContext): EventDef | null {
-  const { player, recentEventIds, rng } = ctx;
+  const { player, recentEventIds, rng, aiEvents } = ctx;
   const realTags = new Set(player.tags);
   const synthTags = new Set([...player.tags, ...dynamicTags(player)]);
-  const pool = getEventRegistry().getAll();
+  const pool = [...getEventRegistry().getAll(), ...(aiEvents ?? [])];
 
   if (player.forceNextEvent) {
     const forcedEvent = getEventById(player.forceNextEvent);

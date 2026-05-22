@@ -526,6 +526,7 @@ export function applyChoice(
   session: GameSession,
   choiceId: string,
   rollBonus = 0,
+  aiEvents?: EventDef[],
 ): ApplyChoiceResult {
   if (session.status !== 'active') throw new Error('session is not active');
   if (!session.currentEvent) throw new Error('no pending event on this session');
@@ -1284,7 +1285,7 @@ export function applyChoice(
       const t = getTournament(pm.tournamentId);
       if (t) return synthesizeMatchEvent(t, pm.stageIndex);
     }
-    return pickEvent({ player: nextPlayer, recentEventIds: recent, rng, leaderboard });
+    return pickEvent({ player: nextPlayer, recentEventIds: recent, rng, leaderboard, aiEvents });
   })();
 
   if (nextPlayer.forceNextEvent && nextEventDef?.id === nextPlayer.forceNextEvent) {
@@ -1351,6 +1352,7 @@ export interface ApplyActionResult {
 export function applyAction(
   session: GameSession,
   actionId: string,
+  aiEvents?: EventDef[],
 ): ApplyActionResult {
   if (session.status !== 'active') throw new Error('session is not active');
 
@@ -1754,7 +1756,7 @@ export function pawnItem(
 }
 
 // ── 战队申请 ──────────────────────────────────────────────────
-import type { ClubTier, PendingApplication, PlayerTeam, Stage, TeamOffer } from '../types.js';
+import type { ClubTier, EventDef, PendingApplication, PlayerTeam, Stage, TeamOffer } from '../types.js';
 
 export function applyClubRequest(
   session: GameSession,
