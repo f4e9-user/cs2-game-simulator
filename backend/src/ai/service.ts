@@ -20,13 +20,7 @@ import {
   loadTraitNarrativeConfig,
   type TraitNarrativeConfig,
 } from './narrativeConfig.js';
-import {
-  buildContentGuardPrompt,
-  CONTENT_GUARD_SYSTEM_PROMPT,
-  parseContentGuardVerdict,
-  quickCheck,
-  type ContentGuardVerdict,
-} from './contentGuard.js';
+import { quickCheck } from './contentGuard.js';
 
 export interface AiService {
   readonly active: boolean;
@@ -359,7 +353,7 @@ abstract class BaseLlmNarrator implements AiService {
   readonly active = true;
   private traitConfigPromise?: Promise<TraitNarrativeConfig>;
 
-  constructor(protected logger?: LlmLogger, protected ctx?: WaitUntilCtx) {}
+  constructor(protected logger?: LlmLogger) {}
 
   protected async getTraitConfig(): Promise<TraitNarrativeConfig> {
     if (!this.traitConfigPromise) {
@@ -378,53 +372,16 @@ abstract class BaseLlmNarrator implements AiService {
   protected abstract doChat(systemPrompt: string, userPrompt: string, maxTokens: number, jsonMode: boolean, method: string): Promise<string | null>;
   protected abstract doChatStream(systemPrompt: string, userPrompt: string, maxTokens: number, method: string): AsyncGenerator<string>;
 
-  /**
-   * ContentGuard Agent — two-tier content validation.
-   *
-   * Tier 1 (always): zero-cost regex against mechanic variable leaks.
-   * Tier 2 (custom-action paths only): LLM worldview + injection check.
-   *
-   * Fails open: any LLM/parse error returns ok:true to avoid blocking legit content.
-   */
-  protected async guardContent(
-    text: string,
-    playerName: string,
-    hasCustomInput: boolean,
-  ): Promise<ContentGuardVerdict> {
-    const quick = quickCheck(text);
-    if (!quick.ok) return quick;
-
-    if (!hasCustomInput) return { ok: true };
-
-    const userPrompt = buildContentGuardPrompt(text, playerName, true);
-    const raw = await this.doChat(CONTENT_GUARD_SYSTEM_PROMPT, userPrompt, 80, true, 'contentGuard');
-    return parseContentGuardVerdict(raw);
-  }
-
   async narrate(input: NarrativePromptInput): Promise<string> {
     const traitRules = await this.buildTraitRules(input.player);
     const text = await this.doChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, false, 'narrate');
     if (!text || text.length === 0) return input.baseNarrative;
-    // ContentGuard: synchronous — blocks bad content before it reaches the caller.
-    // Custom actions get full Tier-1 + Tier-2 check; standard paths get Tier-1 only.
-    const verdict = await this.guardContent(text, input.player.name, !!input.customAction);
-    return verdict.ok ? text : input.baseNarrative;
+    return quickCheck(text).ok ? text : input.baseNarrative;
   }
 
   async *narrateStream(input: NarrativePromptInput): AsyncGenerator<string> {
     const traitRules = await this.buildTraitRules(input.player);
-    const chunks: string[] = [];
-    for await (const chunk of this.doChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, 'narrateStream')) {
-      chunks.push(chunk);
-      yield chunk;
-    }
-    // ContentGuard: background audit via waitUntil — does NOT block the stream.
-    // Violations are logged to KV through the existing doChat logger.
-    if (this.ctx && chunks.length > 0) {
-      this.ctx.waitUntil(
-        this.guardContent(chunks.join(''), input.player.name, !!input.customAction).catch(() => undefined),
-      );
-    }
+    yield* this.doChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, 'narrateStream');
   }
 
   async narrateShopPurchase(input: ShopNarrativeInput): Promise<string> {
@@ -513,8 +470,8 @@ abstract class BaseLlmNarrator implements AiService {
 // ── Anthropic ────────────────────────────────────────────────────
 
 class AnthropicNarrator extends BaseLlmNarrator {
-  constructor(private apiKey: string, private model: string, logger?: LlmLogger, ctx?: WaitUntilCtx) {
-    super(logger, ctx);
+  constructor(private apiKey: string, private model: string, logger?: LlmLogger) {
+    super(logger);
   }
 
   protected getProviderName(): string { return 'anthropic'; }
@@ -594,8 +551,8 @@ class AnthropicNarrator extends BaseLlmNarrator {
 // ── OpenAI-compatible ────────────────────────────────────────────
 
 class OpenAINarrator extends BaseLlmNarrator {
-  constructor(private apiKey: string, private model: string, private baseUrl: string, logger?: LlmLogger, ctx?: WaitUntilCtx) {
-    super(logger, ctx);
+  constructor(private apiKey: string, private model: string, private baseUrl: string, logger?: LlmLogger) {
+    super(logger);
   }
 
   protected getProviderName(): string { return 'openai'; }
@@ -680,13 +637,13 @@ export function makeAiService(env: Env, ctx?: WaitUntilCtx): AiService {
 
   if (provider === 'anthropic' && env.ANTHROPIC_API_KEY) {
     const model = env.AI_MODEL ?? 'claude-haiku-4-5-20251001';
-    return new AnthropicNarrator(env.ANTHROPIC_API_KEY, model, logger, ctx);
+    return new AnthropicNarrator(env.ANTHROPIC_API_KEY, model, logger);
   }
 
   if (provider === 'openai' && env.OPENAI_API_KEY) {
     const model = env.AI_MODEL ?? 'gpt-4o-mini';
     const baseUrl = (env.AI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, '');
-    return new OpenAINarrator(env.OPENAI_API_KEY, model, baseUrl, logger, ctx);
+    return new OpenAINarrator(env.OPENAI_API_KEY, model, baseUrl, logger);
   }
 
   return new TemplateNarrator();
