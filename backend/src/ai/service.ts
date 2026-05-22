@@ -383,25 +383,19 @@ class AnthropicNarrator implements AiService {
   private async *anthropicChatStream(system: string, user: string, maxTokens: number, method: string): AsyncGenerator<string> {
     const t0 = Date.now();
     const chunks: string[] = [];
+    let streamError: string | undefined;
     try {
       const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: this.anthropicHeaders(),
         body: this.anthropicBody(system, user, maxTokens, true),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        streamError = await res.text().catch(() => `HTTP ${res.status}`);
+        return;
+      }
       for await (const ev of readSseStream(res, async (err) => {
-        await logLlmEvent(this.logger, {
-          method,
-          provider: 'anthropic',
-          model: this.model,
-          systemPrompt: system,
-          userPrompt: user,
-          response: chunks.join(''),
-          error: getErrorMessage(err),
-          latencyMs: Date.now() - t0,
-          stream: true,
-        });
+        streamError = getErrorMessage(err);
       })) {
         const e = ev as { type: string; delta?: { type: string; text?: string } };
         if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta' && e.delta.text) {
@@ -410,35 +404,57 @@ class AnthropicNarrator implements AiService {
         }
       }
     } catch (err) {
+      streamError = getErrorMessage(err);
+    } finally {
       await logLlmEvent(this.logger, {
         method,
         provider: 'anthropic',
         model: this.model,
         systemPrompt: system,
         userPrompt: user,
-        response: null,
-        error: getErrorMessage(err),
+        response: chunks.join(''),
+        error: streamError,
         latencyMs: Date.now() - t0,
         stream: true,
       });
-    } finally {
-      // waitUntil tracks this past stream close; without ctx it's best-effort
-      this.logger?.log({ method, provider: 'anthropic', model: this.model, systemPrompt: system, userPrompt: user, response: chunks.join(''), latencyMs: Date.now() - t0, stream: true });
     }
   }
 
   private async anthropicChat(system: string, user: string, maxTokens: number, method: string): Promise<string | null> {
     const t0 = Date.now();
-    let response: string | null = null;
     try {
       const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: this.anthropicHeaders(),
         body: this.anthropicBody(system, user, maxTokens),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => `HTTP ${res.status}`);
+        await logLlmEvent(this.logger, {
+          method,
+          provider: 'anthropic',
+          model: this.model,
+          systemPrompt: system,
+          userPrompt: user,
+          response: null,
+          error: errorBody,
+          latencyMs: Date.now() - t0,
+          stream: false,
+        });
+        return null;
+      }
       const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-      response = data.content?.find((c) => c.type === 'text')?.text?.trim() ?? null;
+      const response = data.content?.find((c) => c.type === 'text')?.text?.trim() ?? null;
+      await logLlmEvent(this.logger, {
+        method,
+        provider: 'anthropic',
+        model: this.model,
+        systemPrompt: system,
+        userPrompt: user,
+        response,
+        latencyMs: Date.now() - t0,
+        stream: false,
+      });
       return response;
     } catch (err) {
       await logLlmEvent(this.logger, {
@@ -453,9 +469,6 @@ class AnthropicNarrator implements AiService {
         stream: false,
       });
       return null;
-    } finally {
-      // Awaited here — this runs within the request so KV write completes reliably
-      await this.logger?.log({ method, provider: 'anthropic', model: this.model, systemPrompt: system, userPrompt: user, response, latencyMs: Date.now() - t0, stream: false });
     }
   }
 
@@ -607,6 +620,7 @@ class OpenAINarrator implements AiService {
   private async *chatStream(systemPrompt: string, userPrompt: string, maxTokens: number, method: string): AsyncGenerator<string> {
     const t0 = Date.now();
     const chunks: string[] = [];
+    let streamError: string | undefined;
     try {
       const res = await fetchWithRetry(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
@@ -621,19 +635,12 @@ class OpenAINarrator implements AiService {
           ],
         }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        streamError = await res.text().catch(() => `HTTP ${res.status}`);
+        return;
+      }
       for await (const ev of readSseStream(res, async (err) => {
-        await logLlmEvent(this.logger, {
-          method,
-          provider: 'openai',
-          model: this.model,
-          systemPrompt,
-          userPrompt,
-          response: chunks.join(''),
-          error: getErrorMessage(err),
-          latencyMs: Date.now() - t0,
-          stream: true,
-        });
+        streamError = getErrorMessage(err);
       })) {
         const text = (ev as { choices?: Array<{ delta?: { content?: string } }> })
           .choices?.[0]?.delta?.content;
@@ -643,19 +650,19 @@ class OpenAINarrator implements AiService {
         }
       }
     } catch (err) {
+      streamError = getErrorMessage(err);
+    } finally {
       await logLlmEvent(this.logger, {
         method,
         provider: 'openai',
         model: this.model,
         systemPrompt,
         userPrompt,
-        response: null,
-        error: getErrorMessage(err),
+        response: chunks.join(''),
+        error: streamError,
         latencyMs: Date.now() - t0,
         stream: true,
       });
-    } finally {
-      this.logger?.log({ method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response: chunks.join(''), latencyMs: Date.now() - t0, stream: true });
     }
   }
 
@@ -667,7 +674,6 @@ class OpenAINarrator implements AiService {
     method = 'unknown',
   ): Promise<string | null> {
     const t0 = Date.now();
-    let response: string | null = null;
     try {
       const body: Record<string, unknown> = {
         model: this.model,
@@ -686,9 +692,33 @@ class OpenAINarrator implements AiService {
         },
         body: JSON.stringify(body),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => `HTTP ${res.status}`);
+        await logLlmEvent(this.logger, {
+          method,
+          provider: 'openai',
+          model: this.model,
+          systemPrompt,
+          userPrompt,
+          response: null,
+          error: errorBody,
+          latencyMs: Date.now() - t0,
+          stream: false,
+        });
+        return null;
+      }
       const data = (await res.json()) as OpenAIChatResponse;
-      response = data.choices?.[0]?.message?.content?.trim() ?? null;
+      const response = data.choices?.[0]?.message?.content?.trim() ?? null;
+      await logLlmEvent(this.logger, {
+        method,
+        provider: 'openai',
+        model: this.model,
+        systemPrompt,
+        userPrompt,
+        response,
+        latencyMs: Date.now() - t0,
+        stream: false,
+      });
       return response;
     } catch (err) {
       await logLlmEvent(this.logger, {
@@ -703,8 +733,6 @@ class OpenAINarrator implements AiService {
         stream: false,
       });
       return null;
-    } finally {
-      await this.logger?.log({ method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response, latencyMs: Date.now() - t0, stream: false });
     }
   }
 

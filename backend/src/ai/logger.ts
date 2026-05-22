@@ -7,6 +7,7 @@ export interface LlmLogEntry {
   systemPrompt: string;
   userPrompt: string;
   response: string | null;
+  error?: string;
   latencyMs: number;
   stream: boolean;
 }
