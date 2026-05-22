@@ -80,6 +80,53 @@ export function buildSocialFeedPrompt(
   const playerTeamTag = player.team?.tag ?? 'PLY';
   const rivalName = (player.rivals ?? [])[0]?.name ?? topTeamA;
 
+  const hasTeam = !!player.team;
+  const hasRecentMatch = !!lastMatch;
+
+  const rolePoolLines: string[] = [];
+
+  if (hasTeam) {
+    rolePoolLines.push(
+      '1) teammate（队友）—— 第一人称，像兄弟聊天',
+      `  例："跟 ${player.name} 练了一晚上 AK 急停，他进步肉眼可见 💪"`,
+      '',
+      '2) club（俱乐部官方号）—— "我们"、官宣口吻，但不死板',
+      `  例："我们${playerTeamName}拿下了本周训练赛全胜，下周 Major 预选见真章 🏆 #${playerTeamTag}"`,
+    );
+  }
+
+  rolePoolLines.push(
+    '3) rival（对手战队官方号）—— 第三方视角，可带挑衅',
+    `  例："下周的对手名单里有 ${playerTeamName}，已经研究过他们的 demos 了 🔍"`,
+    '',
+    '4) star（行业明星选手）—— 第一人称，大佬日常',
+    '  可用：s1mple(@s1mple_legacy)、ZywOo(@zywoo_beast)、m0NESY(@m0nesy_ace)、ropz(@ropz_clutch)、NiKo(@niko_rifle)、device(@device_awp)、karrigan(@karrigan_igl)、sh1ro(@sh1ro_sniper)',
+    `  例："刚看完 ${topTeamA} vs ${topTeamB} 的录像，B 点回防那个烟雾太漂亮了 🧠"`,
+    '',
+    '5) media（媒体号）—— 报道/爆料口吻，可带悬念',
+    `  例："HLTV 本周排名更新，${topTeamA} 重回前三，${topTeamB} 跌出前五 📊"`,
+    '',
+    '6) industry（解说/分析师/圈内人士）—— 专业但轻松',
+    `  例："昨晚那场 ${topTeamA} vs ${topTeamB} 的 Inferno B 点回防，我愿称之为本赛季最佳战术配合 🧠"`,
+  );
+
+  if (hasTeam && hasRecentMatch) {
+    rolePoolLines.push(
+      '',
+      '7) fan（粉丝/社区号）—— 热情、八卦、偶尔毒奶',
+      `  例："${player.name} 今天手感太好了，预言他下周 Major 预选 1.3 rating 起步 🔮"`,
+    );
+  }
+
+  const contentFocusInstruction =
+    !hasTeam && hasRecentMatch
+      ? '主角是无名新人但最近参加了赛事。最多 1 条 media/industry/star 以第三方观察口吻提到主角赛事表现（如"某新秀在XX赛发挥亮眼"），其余必须聊其他内容。禁止出现粉丝、队友、俱乐部视角。'
+      : hasTeam && hasRecentMatch
+        ? '最近有赛事结果，可以围绕主角和赛事发帖，但最多 2 条提到主角，其余必须聊其他内容'
+        : hasTeam
+          ? '最近没有赛事，禁止围绕主角发帖。内容必须是：其他战队的动态、行业八卦、地图/武器讨论、赛事预告、日常吐槽等'
+          : '主角是无名新人，禁止围绕主角发帖。内容必须是：顶级战队动态、行业八卦、地图/武器讨论、赛事预告、日常吐槽等。粉丝和俱乐部此时不可能讨论一个无名练习生';
+
   return [
     '你是一个极度活跃的 CS2 职业电竞 Twitter/X 用户。你不是在写新闻稿，你是在刷推特——每条帖子要像真实的人随手发的日常动态。',
     '',
@@ -104,47 +151,21 @@ export function buildSocialFeedPrompt(
           : '【赛事热度：B/C 级 —— 一般媒体报道，圈内人士偶尔提及】',
     ] : []),
     '',
-    '【你要模拟的角色池 —— 每次从这些身份里挑 5-6 个不同的人发帖】',
+    '【角色池 —— 每次挑 5-6 个不同的人发帖】',
     '',
-    '1) teammate（队友）—— 第一人称，像兄弟聊天：',
-    `  例："跟 ${player.name} 练了一晚上 AK 急停，他进步肉眼可见 💪"`,
-    '  例："今晚训练赛被对面狙麻了，需要咖啡续命 ☕"',
+    ...rolePoolLines,
     '',
-    '2) club（俱乐部官方号）—— "我们"、官宣口吻，但不死板：',
-    `  例："我们${playerTeamName}拿下了本周训练赛全胜，下周 Major 预选见真章 🏆 #${playerTeamTag}"`,
-    '  例："新周边上线，选手同款鼠标垫，限量 100 个 👕"',
+    '【规则】',
+    '- 生成 5-6 条，每条来自不同 handle',
+    '- authorType 尽量多样，至少 1 条 star + 1 条 media/industry',
+    '- 口语化，带 emoji，20-55 字',
+    '- 可用 CS2 元素：地图(Inferno/Mirage/Nuke/Ancient/Anubis)、武器(AK/M4/AWP/沙鹰)、赛事(Major/IEM/BLAST)、梗(eco/clutch/手枪局/1vX)',
+    '- 俱乐部用第三人称/官宣口吻，选手用第一人称',
+    '- 禁止出现属性名、数值、游戏机制词（"成长"/"压力值"/"疲劳"）',
+    '- **绝对禁止** "A队""B队""某队""对手"等代称。战队名必须用【当前世界状态】中的具体名字（如 ' + topTeamA + '、' + topTeamB + '）。不知道就不提，只聊赛事/地图/个人感受。',
     '',
-    '3) rival（对手战队官方号）—— 第三方视角，可带挑衅：',
-    `  例："下周的对手名单里有 ${playerTeamName}，已经研究过他们的 demos 了 🔍"`,
-    `  例："${rivalName} 这周状态火热，已经五连胜了。谁想碰一碰？😤"`,
-    '',
-    '4) star（行业明星选手）—— 第一人称，大佬日常，不care小透明：',
-    '  可用明星：s1mple(@s1mple_legacy)、ZywOo(@zywoo_beast)、m0NESY(@m0nesy_ace)、ropz(@ropz_clutch)、NiKo(@niko_rifle)、device(@device_awp)、karrigan(@karrigan_igl)、sh1ro(@sh1ro_sniper)',
-    '  例："新鼠标到了，今晚排位试试手感 🎮"',
-    '  例："看到社区在讨论 AK 还是 M4，我的答案永远是：看地图 📍"',
-    `  例："刚看完 ${topTeamA} vs ${topTeamB} 的录像，B 点回防那个烟雾太漂亮了 🧠"`,
-    '',
-    '5) media（媒体号）—— 报道/爆料口吻，可带悬念：',
-    `  例："独家：${topTeamC} 正在试训一名东欧小将，预计下周官宣 👀"`,
-    `  例："HLTV 本周排名更新，${topTeamA} 重回前三，${topTeamB} 跌出前五 📊"`,
-    '',
-    '6) industry（解说/分析师/圈内人士）—— 专业但轻松，像饭局聊天：',
-    `  例："昨晚那场 ${topTeamA} vs ${topTeamB} 的 Inferno B 点回防，我愿称之为本赛季最佳战术配合 🧠"`,
-    '  例："有人说现在 AWP 太弱了，我说：是你站位太常规了 🎯"',
-    '',
-    '7) fan（粉丝/社区号）—— 热情、八卦、偶尔毒奶：',
-    `  例："${player.name} 今天手感太好了，预言他下周 Major 预选 1.3 rating 起步 🔮"`,
-    '  例："有没有人觉得新 Ancient 的 A 点太窄了？道具根本铺不开 😤"',
-    '',
-    '【生成规则】',
-    '- 生成 5-6 条帖子，每条来自不同 handle（绝不重复同一账号）',
-    '- authorType 尽量多样，至少包含 1 条 star + 1 条 media/industry',
-    '- 内容要像真人随手刷推，口语化，带 emoji，20-55 字',
-    '- 可以提到主角（用主角名字），也可以完全无关——真实推特不会人人都聊你',
-    '- 可以提到 CS2 真实元素：地图(Inferno/Mirage/Nuke/Ancient/Anubis)、武器(AK/M4/AWP/沙鹰)、赛事(Major/IEM/BLAST)、梗(eco/ clutch/ tilt/ 手枪局/ 1vX)',
-    '- 俱乐部和对手战队用第三人称/官宣口吻，选手用第一人称',
-    '- 禁止出现：属性名、数值、游戏机制词汇（如"成长"、"压力值"、"疲劳"）',
-    '- **绝对禁止**使用"A队""B队""某队""某顶级战队""对手"等代称。提到战队时必须使用上面【当前世界状态】列出的具体战队名（如 ' + topTeamA + '、' + topTeamB + ' 等）。如果不知道具体名字，就不提战队名，只聊赛事/地图/个人感受。',
+    '【发帖方向限制 —— 必须遵守】',
+    contentFocusInstruction,
     '',
     '【主角特质映射】',
     `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}。他人视角可能这样聊：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? '无特殊特质'}`,

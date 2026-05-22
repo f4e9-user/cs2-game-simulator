@@ -346,191 +346,67 @@ class TemplateNarrator implements AiService {
   }
 }
 
-// ── Anthropic ────────────────────────────────────────────────────
+// ── Shared LLM base ──────────────────────────────────────────────
 
-class AnthropicNarrator implements AiService {
+abstract class BaseLlmNarrator implements AiService {
   readonly active = true;
   private traitConfigPromise?: Promise<TraitNarrativeConfig>;
 
-  constructor(private apiKey: string, private model: string, private logger?: LlmLogger) {}
+  constructor(protected logger?: LlmLogger) {}
 
-  private async getTraitConfig(): Promise<TraitNarrativeConfig> {
+  protected async getTraitConfig(): Promise<TraitNarrativeConfig> {
     if (!this.traitConfigPromise) {
       this.traitConfigPromise = loadTraitNarrativeConfig();
     }
     return this.traitConfigPromise;
   }
 
-  private anthropicBody(system: string, user: string, maxTokens: number, stream = false) {
-    return JSON.stringify({
-      model: this.model,
-      max_tokens: maxTokens,
-      stream,
-      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content: user }],
-    });
+  protected async buildTraitRules(player: Player): Promise<ReturnType<typeof buildTraitRulesForPlayer>> {
+    const traitConfig = await this.getTraitConfig();
+    return player.traits ? buildTraitRulesForPlayer(player.traits, traitConfig) : [];
   }
 
-  private anthropicHeaders() {
-    return {
-      'content-type': 'application/json',
-      'x-api-key': this.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'prompt-caching-2024-07-31',
-    };
-  }
-
-  private async *anthropicChatStream(system: string, user: string, maxTokens: number, method: string): AsyncGenerator<string> {
-    const t0 = Date.now();
-    const chunks: string[] = [];
-    let streamError: string | undefined;
-    try {
-      const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: this.anthropicHeaders(),
-        body: this.anthropicBody(system, user, maxTokens, true),
-      });
-      if (!res.ok) {
-        streamError = await res.text().catch(() => `HTTP ${res.status}`);
-        return;
-      }
-      for await (const ev of readSseStream(res, async (err) => {
-        streamError = getErrorMessage(err);
-      })) {
-        const e = ev as { type: string; delta?: { type: string; text?: string } };
-        if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta' && e.delta.text) {
-          chunks.push(e.delta.text);
-          yield e.delta.text;
-        }
-      }
-    } catch (err) {
-      streamError = getErrorMessage(err);
-    } finally {
-      await logLlmEvent(this.logger, {
-        method,
-        provider: 'anthropic',
-        model: this.model,
-        systemPrompt: system,
-        userPrompt: user,
-        response: chunks.join(''),
-        error: streamError,
-        latencyMs: Date.now() - t0,
-        stream: true,
-      });
-    }
-  }
-
-  private async anthropicChat(system: string, user: string, maxTokens: number, method: string): Promise<string | null> {
-    const t0 = Date.now();
-    try {
-      const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: this.anthropicHeaders(),
-        body: this.anthropicBody(system, user, maxTokens),
-      });
-      if (!res.ok) {
-        const errorBody = await res.text().catch(() => `HTTP ${res.status}`);
-        await logLlmEvent(this.logger, {
-          method,
-          provider: 'anthropic',
-          model: this.model,
-          systemPrompt: system,
-          userPrompt: user,
-          response: null,
-          error: errorBody,
-          latencyMs: Date.now() - t0,
-          stream: false,
-        });
-        return null;
-      }
-      const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-      const response = data.content?.find((c) => c.type === 'text')?.text?.trim() ?? null;
-      await logLlmEvent(this.logger, {
-        method,
-        provider: 'anthropic',
-        model: this.model,
-        systemPrompt: system,
-        userPrompt: user,
-        response,
-        latencyMs: Date.now() - t0,
-        stream: false,
-      });
-      return response;
-    } catch (err) {
-      await logLlmEvent(this.logger, {
-        method,
-        provider: 'anthropic',
-        model: this.model,
-        systemPrompt: system,
-        userPrompt: user,
-        response: null,
-        error: getErrorMessage(err),
-        latencyMs: Date.now() - t0,
-        stream: false,
-      });
-      return null;
-    }
-  }
+  protected abstract getProviderName(): string;
+  protected abstract getModel(): string;
+  protected abstract doChat(systemPrompt: string, userPrompt: string, maxTokens: number, jsonMode: boolean, method: string): Promise<string | null>;
+  protected abstract doChatStream(systemPrompt: string, userPrompt: string, maxTokens: number, method: string): AsyncGenerator<string>;
 
   async narrate(input: NarrativePromptInput): Promise<string> {
-    const traitConfig = await this.getTraitConfig();
-    const traitRules = input.player.traits
-      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
-      : [];
-    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, 'narrate');
+    const traitRules = await this.buildTraitRules(input.player);
+    const text = await this.doChat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, false, 'narrate');
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
   async *narrateStream(input: NarrativePromptInput): AsyncGenerator<string> {
-    const traitConfig = await this.getTraitConfig();
-    const traitRules = input.player.traits
-      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
-      : [];
-    yield* this.anthropicChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, 'narrateStream');
+    const traitRules = await this.buildTraitRules(input.player);
+    yield* this.doChatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, 'narrateStream');
   }
 
   async narrateShopPurchase(input: ShopNarrativeInput): Promise<string> {
-    const traitConfig = await this.getTraitConfig();
-    const traitRules = input.player.traits
-      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
-      : [];
-    const text = await this.anthropicChat(NARRATIVE_SYSTEM_PROMPT, buildShopNarrativePrompt(input, traitRules), 300, 'narrateShopPurchase');
+    const traitRules = await this.buildTraitRules(input.player);
+    const text = await this.doChat(NARRATIVE_SYSTEM_PROMPT, buildShopNarrativePrompt(input, traitRules), 300, false, 'narrateShopPurchase');
     return text && text.length > 0 ? text : input.baseNarrative;
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
-    return (await this.anthropicChat(SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt(player, history, ending), 300, 'summarize')) ?? '';
+    return (await this.doChat(SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt(player, history, ending), 300, false, 'summarize')) ?? '';
   }
 
   async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
     const traitConfig = await this.getTraitConfig();
-    const traitRules = buildTraitRulesForPlayer(
-      traits.map((t) => t.id),
-      traitConfig,
-    );
-
-    return (await this.anthropicChat(
-      INTRO_SYSTEM_PROMPT,
-      buildIntroPrompt(player, traits, background, traitRules),
-      1200,
-      'intro',
-    )) ?? '';
+    const traitRules = buildTraitRulesForPlayer(traits.map((t) => t.id), traitConfig);
+    return (await this.doChat(INTRO_SYSTEM_PROMPT, buildIntroPrompt(player, traits, background, traitRules), 1200, false, 'intro')) ?? '';
   }
 
   async judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null> {
     const userPrompt = buildCustomActionJudgePrompt(playerInput, event, player);
-    const text = await this.anthropicChat(
-      PERSONALIZE_SYSTEM_PROMPT,
-      userPrompt,
-      150,
-      'judgeCustomAction',
-    );
+    const text = await this.doChat(PERSONALIZE_SYSTEM_PROMPT, userPrompt, 150, true, 'judgeCustomAction');
     const parsed = parseCustomActionJudgment(text);
     if (text && !parsed.parsed) {
       await logLlmEvent(this.logger, {
         method: 'judgeCustomAction',
-        provider: 'anthropic',
-        model: this.model,
+        provider: this.getProviderName(),
+        model: this.getModel(),
         systemPrompt: PERSONALIZE_SYSTEM_PROMPT,
         userPrompt,
         response: text,
@@ -544,18 +420,13 @@ class AnthropicNarrator implements AiService {
 
   async validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation> {
     const userPrompt = buildJudgmentValidationPrompt(playerInput, event, judgment);
-    const text = await this.anthropicChat(
-      PERSONALIZE_SYSTEM_PROMPT,
-      userPrompt,
-      80,
-      'validateJudgment',
-    );
+    const text = await this.doChat(PERSONALIZE_SYSTEM_PROMPT, userPrompt, 80, true, 'validateJudgment');
     const parsed = parseJudgmentValidation(text);
     if (text && !parsed.parsed) {
       await logLlmEvent(this.logger, {
         method: 'validateJudgment',
-        provider: 'anthropic',
-        model: this.model,
+        provider: this.getProviderName(),
+        model: this.getModel(),
         systemPrompt: PERSONALIZE_SYSTEM_PROMPT,
         userPrompt,
         response: text,
@@ -568,23 +439,15 @@ class AnthropicNarrator implements AiService {
   }
 
   async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
-    const traitConfig = await this.getTraitConfig();
-    const traitRules = player.traits
-      ? buildTraitRulesForPlayer(player.traits, traitConfig)
-      : [];
+    const traitRules = await this.buildTraitRules(player);
     const userPrompt = buildSocialFeedPrompt(player, recentHistory, leaderboard, traitRules);
-    const text = await this.anthropicChat(
-      SOCIAL_SYSTEM_PROMPT,
-      userPrompt,
-      1000,
-      'simulateSocialFeed',
-    );
+    const text = await this.doChat(SOCIAL_SYSTEM_PROMPT, userPrompt, 1500, false, 'simulateSocialFeed');
     const posts = parseSocialFeed(text);
     if (text && !posts.parsed) {
       await logLlmEvent(this.logger, {
         method: 'simulateSocialFeed',
-        provider: 'anthropic',
-        model: this.model,
+        provider: this.getProviderName(),
+        model: this.getModel(),
         systemPrompt: SOCIAL_SYSTEM_PROMPT,
         userPrompt,
         response: text,
@@ -597,27 +460,130 @@ class AnthropicNarrator implements AiService {
   }
 }
 
-// ── OpenAI-compatible ────────────────────────────────────────────
+// ── Anthropic ────────────────────────────────────────────────────
 
-class OpenAINarrator implements AiService {
-  readonly active = true;
-  private traitConfigPromise?: Promise<TraitNarrativeConfig>;
-
-  constructor(
-    private apiKey: string,
-    private model: string,
-    private baseUrl: string,
-    private logger?: LlmLogger,
-  ) {}
-
-  private async getTraitConfig(): Promise<TraitNarrativeConfig> {
-    if (!this.traitConfigPromise) {
-      this.traitConfigPromise = loadTraitNarrativeConfig();
-    }
-    return this.traitConfigPromise;
+class AnthropicNarrator extends BaseLlmNarrator {
+  constructor(private apiKey: string, private model: string, logger?: LlmLogger) {
+    super(logger);
   }
 
-  private async *chatStream(systemPrompt: string, userPrompt: string, maxTokens: number, method: string): AsyncGenerator<string> {
+  protected getProviderName(): string { return 'anthropic'; }
+  protected getModel(): string { return this.model; }
+
+  private buildBody(system: string, user: string, maxTokens: number, stream = false) {
+    return JSON.stringify({
+      model: this.model,
+      max_tokens: maxTokens,
+      stream,
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: user }],
+    });
+  }
+
+  private getHeaders() {
+    return {
+      'content-type': 'application/json',
+      'x-api-key': this.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
+    };
+  }
+
+  protected async doChat(systemPrompt: string, userPrompt: string, maxTokens: number, _jsonMode: boolean, method: string): Promise<string | null> {
+    const t0 = Date.now();
+    try {
+      const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: this.buildBody(systemPrompt, userPrompt, maxTokens),
+      });
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => `HTTP ${res.status}`);
+        await logLlmEvent(this.logger, { method, provider: 'anthropic', model: this.model, systemPrompt, userPrompt, response: null, error: errorBody, latencyMs: Date.now() - t0, stream: false });
+        return null;
+      }
+      const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+      const response = data.content?.find((c) => c.type === 'text')?.text?.trim() ?? null;
+      await logLlmEvent(this.logger, { method, provider: 'anthropic', model: this.model, systemPrompt, userPrompt, response, latencyMs: Date.now() - t0, stream: false });
+      return response;
+    } catch (err) {
+      await logLlmEvent(this.logger, { method, provider: 'anthropic', model: this.model, systemPrompt, userPrompt, response: null, error: getErrorMessage(err), latencyMs: Date.now() - t0, stream: false });
+      return null;
+    }
+  }
+
+  protected async *doChatStream(systemPrompt: string, userPrompt: string, maxTokens: number, method: string): AsyncGenerator<string> {
+    const t0 = Date.now();
+    const chunks: string[] = [];
+    let streamError: string | undefined;
+    try {
+      const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: this.buildBody(systemPrompt, userPrompt, maxTokens, true),
+      });
+      if (!res.ok) {
+        streamError = await res.text().catch(() => `HTTP ${res.status}`);
+        return;
+      }
+      for await (const ev of readSseStream(res, async (err) => { streamError = getErrorMessage(err); })) {
+        const e = ev as { type: string; delta?: { type: string; text?: string } };
+        if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta' && e.delta.text) {
+          chunks.push(e.delta.text);
+          yield e.delta.text;
+        }
+      }
+    } catch (err) {
+      streamError = getErrorMessage(err);
+    } finally {
+      await logLlmEvent(this.logger, { method, provider: 'anthropic', model: this.model, systemPrompt, userPrompt, response: chunks.join(''), error: streamError, latencyMs: Date.now() - t0, stream: true });
+    }
+  }
+}
+
+// ── OpenAI-compatible ────────────────────────────────────────────
+
+class OpenAINarrator extends BaseLlmNarrator {
+  constructor(private apiKey: string, private model: string, private baseUrl: string, logger?: LlmLogger) {
+    super(logger);
+  }
+
+  protected getProviderName(): string { return 'openai'; }
+  protected getModel(): string { return this.model; }
+
+  protected async doChat(systemPrompt: string, userPrompt: string, maxTokens: number, jsonMode: boolean, method: string): Promise<string | null> {
+    const t0 = Date.now();
+    try {
+      const body: Record<string, unknown> = {
+        model: this.model,
+        max_tokens: maxTokens,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      };
+      if (jsonMode) body.response_format = { type: 'json_object' };
+      const res = await fetchWithRetry(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${this.apiKey}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => `HTTP ${res.status}`);
+        await logLlmEvent(this.logger, { method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response: null, error: errorBody, latencyMs: Date.now() - t0, stream: false });
+        return null;
+      }
+      const data = (await res.json()) as OpenAIChatResponse;
+      const response = data.choices?.[0]?.message?.content?.trim() ?? null;
+      await logLlmEvent(this.logger, { method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response, latencyMs: Date.now() - t0, stream: false });
+      return response;
+    } catch (err) {
+      await logLlmEvent(this.logger, { method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response: null, error: getErrorMessage(err), latencyMs: Date.now() - t0, stream: false });
+      return null;
+    }
+  }
+
+  protected async *doChatStream(systemPrompt: string, userPrompt: string, maxTokens: number, method: string): AsyncGenerator<string> {
     const t0 = Date.now();
     const chunks: string[] = [];
     let streamError: string | undefined;
@@ -639,11 +605,8 @@ class OpenAINarrator implements AiService {
         streamError = await res.text().catch(() => `HTTP ${res.status}`);
         return;
       }
-      for await (const ev of readSseStream(res, async (err) => {
-        streamError = getErrorMessage(err);
-      })) {
-        const text = (ev as { choices?: Array<{ delta?: { content?: string } }> })
-          .choices?.[0]?.delta?.content;
+      for await (const ev of readSseStream(res, async (err) => { streamError = getErrorMessage(err); })) {
+        const text = (ev as { choices?: Array<{ delta?: { content?: string } }> }).choices?.[0]?.delta?.content;
         if (typeof text === 'string' && text) {
           chunks.push(text);
           yield text;
@@ -652,216 +615,8 @@ class OpenAINarrator implements AiService {
     } catch (err) {
       streamError = getErrorMessage(err);
     } finally {
-      await logLlmEvent(this.logger, {
-        method,
-        provider: 'openai',
-        model: this.model,
-        systemPrompt,
-        userPrompt,
-        response: chunks.join(''),
-        error: streamError,
-        latencyMs: Date.now() - t0,
-        stream: true,
-      });
+      await logLlmEvent(this.logger, { method, provider: 'openai', model: this.model, systemPrompt, userPrompt, response: chunks.join(''), error: streamError, latencyMs: Date.now() - t0, stream: true });
     }
-  }
-
-  private async chat(
-    systemPrompt: string,
-    userPrompt: string,
-    maxTokens: number,
-    jsonMode = false,
-    method = 'unknown',
-  ): Promise<string | null> {
-    const t0 = Date.now();
-    try {
-      const body: Record<string, unknown> = {
-        model: this.model,
-        max_tokens: maxTokens,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      };
-      if (jsonMode) body.response_format = { type: 'json_object' };
-      const res = await fetchWithRetry(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const errorBody = await res.text().catch(() => `HTTP ${res.status}`);
-        await logLlmEvent(this.logger, {
-          method,
-          provider: 'openai',
-          model: this.model,
-          systemPrompt,
-          userPrompt,
-          response: null,
-          error: errorBody,
-          latencyMs: Date.now() - t0,
-          stream: false,
-        });
-        return null;
-      }
-      const data = (await res.json()) as OpenAIChatResponse;
-      const response = data.choices?.[0]?.message?.content?.trim() ?? null;
-      await logLlmEvent(this.logger, {
-        method,
-        provider: 'openai',
-        model: this.model,
-        systemPrompt,
-        userPrompt,
-        response,
-        latencyMs: Date.now() - t0,
-        stream: false,
-      });
-      return response;
-    } catch (err) {
-      await logLlmEvent(this.logger, {
-        method,
-        provider: 'openai',
-        model: this.model,
-        systemPrompt,
-        userPrompt,
-        response: null,
-        error: getErrorMessage(err),
-        latencyMs: Date.now() - t0,
-        stream: false,
-      });
-      return null;
-    }
-  }
-
-  async narrate(input: NarrativePromptInput): Promise<string> {
-    const traitConfig = await this.getTraitConfig();
-    const traitRules = input.player.traits
-      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
-      : [];
-    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, false, 'narrate');
-    return text && text.length > 0 ? text : input.baseNarrative;
-  }
-
-  async *narrateStream(input: NarrativePromptInput): AsyncGenerator<string> {
-    const traitConfig = await this.getTraitConfig();
-    const traitRules = input.player.traits
-      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
-      : [];
-    yield* this.chatStream(NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt(input, traitRules), 1200, 'narrateStream');
-  }
-
-  async narrateShopPurchase(input: ShopNarrativeInput): Promise<string> {
-    const traitConfig = await this.getTraitConfig();
-    const traitRules = input.player.traits
-      ? buildTraitRulesForPlayer(input.player.traits, traitConfig)
-      : [];
-    const text = await this.chat(NARRATIVE_SYSTEM_PROMPT, buildShopNarrativePrompt(input, traitRules), 300, false, 'narrateShopPurchase');
-    return text && text.length > 0 ? text : input.baseNarrative;
-  }
-
-  async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
-    return (await this.chat(SUMMARY_SYSTEM_PROMPT, buildSummaryPrompt(player, history, ending), 300, false, 'summarize')) ?? '';
-  }
-
-  async intro(player: Player, traits: Trait[], background: Background): Promise<string> {
-    const traitConfig = await this.getTraitConfig();
-    const traitRules = buildTraitRulesForPlayer(
-      traits.map((t) => t.id),
-      traitConfig,
-    );
-
-    return (await this.chat(
-      INTRO_SYSTEM_PROMPT,
-      buildIntroPrompt(player, traits, background, traitRules),
-      1200,
-      false,
-      'intro',
-    )) ?? '';
-  }
-
-  async judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null> {
-    const userPrompt = buildCustomActionJudgePrompt(playerInput, event, player);
-    const text = await this.chat(
-      PERSONALIZE_SYSTEM_PROMPT,
-      userPrompt,
-      150,
-      true,
-      'judgeCustomAction',
-    );
-    const parsed = parseCustomActionJudgment(text);
-    if (text && !parsed.parsed) {
-      await logLlmEvent(this.logger, {
-        method: 'judgeCustomAction',
-        provider: 'openai',
-        model: this.model,
-        systemPrompt: PERSONALIZE_SYSTEM_PROMPT,
-        userPrompt,
-        response: text,
-        error: 'parse failed',
-        latencyMs: 0,
-        stream: false,
-      });
-    }
-    return parsed.value;
-  }
-
-  async validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation> {
-    const userPrompt = buildJudgmentValidationPrompt(playerInput, event, judgment);
-    const text = await this.chat(
-      PERSONALIZE_SYSTEM_PROMPT,
-      userPrompt,
-      80,
-      true,
-      'validateJudgment',
-    );
-    const parsed = parseJudgmentValidation(text);
-    if (text && !parsed.parsed) {
-      await logLlmEvent(this.logger, {
-        method: 'validateJudgment',
-        provider: 'openai',
-        model: this.model,
-        systemPrompt: PERSONALIZE_SYSTEM_PROMPT,
-        userPrompt,
-        response: text,
-        error: 'parse failed',
-        latencyMs: 0,
-        stream: false,
-      });
-    }
-    return parsed.value;
-  }
-
-  async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
-    const traitConfig = await this.getTraitConfig();
-    const traitRules = player.traits
-      ? buildTraitRulesForPlayer(player.traits, traitConfig)
-      : [];
-    const userPrompt = buildSocialFeedPrompt(player, recentHistory, leaderboard, traitRules);
-    const text = await this.chat(
-      SOCIAL_SYSTEM_PROMPT,
-      userPrompt,
-      1000,
-      false,
-      'simulateSocialFeed',
-    );
-    const posts = parseSocialFeed(text);
-    if (text && !posts.parsed) {
-      await logLlmEvent(this.logger, {
-        method: 'simulateSocialFeed',
-        provider: 'openai',
-        model: this.model,
-        systemPrompt: SOCIAL_SYSTEM_PROMPT,
-        userPrompt,
-        response: text,
-        error: 'parse failed',
-        latencyMs: 0,
-        stream: false,
-      });
-    }
-    return posts.value.length > 0 ? posts.value : templateSocialFeed(player, leaderboard);
   }
 }
 
