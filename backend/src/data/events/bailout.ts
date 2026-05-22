@@ -316,6 +316,31 @@ export const BAILOUT_EVENTS: EventDef[] = [
           tiltDelta: 1,
         },
       },
+      {
+        id: 'abandon-family',
+        label: '我没有这个能力——这件事超出了我的范围',
+        description: '放弃筹款。危机以另一种方式结束，但烙印永久留下。',
+        check: {
+          primary: 'mentality',
+          dc: 10,
+          traitBonuses: { ego: 2, solo: 2, steady: 1 },
+          traitPenalties: { selfless: 3, support: 2, fragile: 1 },
+        },
+        success: {
+          narrative: '你放下了电话。你告诉自己：这件事已经超出你的能力范围了。某扇门就这样永远关上了——不是解脱，是一种更沉的东西。职业生涯继续，但某些东西不一样了。',
+          feelDelta: -2.0,
+          stressDelta: -5,
+          tagAdds: ['abandoned-family'],
+        },
+        failure: {
+          narrative: '你试着说服自己这不是你的事，但那个声音一直在脑子里转。你没办法睡着，没办法认真训练，没办法假装什么都没发生过。职业继续了，但你的状态已经不是你的了。',
+          feelDelta: -3.0,
+          stressDelta: 8,
+          tiltDelta: 2,
+          fatigueDelta: 20,
+          tagAdds: ['abandoned-family', 'guilt-spiral'],
+        },
+      },
     ],
   },
 ];

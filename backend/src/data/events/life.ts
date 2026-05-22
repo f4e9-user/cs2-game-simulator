@@ -2,9 +2,71 @@ import type { EventDef } from '../../types.js';
 
 export const LIFE_EVENTS: EventDef[] = [
   {
+    id: 'life-guilt-haunts',
+    type: 'life',
+    title: '那件事又浮上来了',
+    narrative:
+      '深夜，你忽然想起那个电话。你告诉自己当时没有选择，但这个解释越来越难说服你自己。',
+    stages: ['rookie', 'youth', 'second', 'pro'],
+    difficulty: 0,
+    weight: 0.25,
+    requireTags: ['abandoned-family'],
+    forbidTags: ['reconciled-family', 'guilt-processed'],
+    choices: [
+      {
+        id: 'confront-memory',
+        label: '直面这段记忆',
+        description: '不压制它，承认它的重量。',
+        check: {
+          primary: 'mentality',
+          dc: 11,
+          traitBonuses: { steady: 2, selfless: 1 },
+          traitPenalties: { ego: 2, volatile: 1 },
+        },
+        success: {
+          narrative: '你没有试着逃开。你想了很久，那段记忆还是很沉，但你不再用「当时没有办法」来说服自己了。这种诚实让你好受了一点点。',
+          stressDelta: -3,
+          feelDelta: 0.5,
+          dailyGrowth: 'mentality',
+          tagAdds: ['guilt-processed'],
+        },
+        failure: {
+          narrative: '你试着直面，结果越想越难受。那天的电话声一遍遍在脑子里转，你整夜没睡，训练的时候也在想这件事。',
+          stressDelta: 6,
+          feelDelta: -1.0,
+          fatigueDelta: 20,
+          tiltDelta: 1,
+        },
+      },
+      {
+        id: 'suppress-memory',
+        label: '压下去，专注眼前',
+        description: '有些事想多了只会乱分寸，先把它关掉。',
+        check: {
+          primary: 'mentality',
+          dc: 8,
+          traitBonuses: { ego: 2, solo: 1, steady: 1 },
+          traitPenalties: { selfless: 1 },
+        },
+        success: {
+          narrative: '你把那扇门关上，回到战术分析里去。今晚没再想，但你知道它还在那里。',
+          stressDelta: 1,
+          tagAdds: ['guilt-processed'],
+        },
+        failure: {
+          narrative: '你以为自己压住了，但梦里又看到了那个场景。早上起来眼眶是红的，说不清是做梦还是哭了。',
+          stressDelta: 4,
+          feelDelta: -0.5,
+          fatigueDelta: 15,
+        },
+      },
+    ],
+  },
+  {
     id: 'life-family-call',
     type: 'life',
     title: '凌晨三点的家里来电',
+    forbidTags: ['abandoned-family'],
     narrative:
       '训练到凌晨三点，手机震动：家人问你「还在打游戏吗？到底什么时候回家？」',
     stages: ['rookie', 'youth', 'second', 'pro'],
