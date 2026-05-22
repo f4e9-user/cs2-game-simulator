@@ -44,13 +44,10 @@ export function buildSocialFeedPrompt(
     return `[${outcome}] ${r.eventTitle} — ${preview}`;
   }).join('\n') || '暂无近期战绩';
 
-  const worldTeams = leaderboard
-    .filter((t) => !t.isPlayer)
+  const worldTeamsRaw = leaderboard.filter((t) => !t.isPlayer);
+  const worldTeamNames = worldTeamsRaw
     .slice(0, 6)
-    .map((t) => {
-      const players = t.players?.slice(0, 2).join('/') ?? '';
-      return `${t.name}(${t.tag})${players ? ' 选手:' + players : ''}`;
-    })
+    .map((t) => `${t.name}(${t.tag})`)
     .join('、');
 
   const rivals = (player.rivals ?? [])
@@ -58,12 +55,19 @@ export function buildSocialFeedPrompt(
     .map((r: Rival) => `${r.name}(${r.tag})`)
     .join('、');
 
+  const topTeamA = worldTeamsRaw[0]?.name ?? 'NovaX';
+  const topTeamB = worldTeamsRaw[1]?.name ?? 'PixelForce';
+  const topTeamC = worldTeamsRaw[2]?.name ?? 'ZenithDynasty';
+  const playerTeamName = player.team?.name ?? (player.name || '主角战队');
+  const playerTeamTag = player.team?.tag ?? 'PLY';
+  const rivalName = (player.rivals ?? [])[0]?.name ?? topTeamA;
+
   return [
     '你是一个极度活跃的 CS2 职业电竞 Twitter/X 用户。你不是在写新闻稿，你是在刷推特——每条帖子要像真实的人随手发的日常动态。',
     '',
     '【当前世界状态】',
     `赛季：第${w}周 — ${seasonPhase}`,
-    `活跃战队：${worldTeams || '(多个职业战队)'}`
+    `活跃战队：${worldTeamNames || '(多个职业战队)'}`
       + (rivals ? `；主角对手：${rivals}` : ''),
     '',
     playerTeamLine,
@@ -75,33 +79,33 @@ export function buildSocialFeedPrompt(
     '【你要模拟的角色池 —— 每次从这些身份里挑 5-6 个不同的人发帖】',
     '',
     '1) teammate（队友）—— 第一人称，像兄弟聊天：',
-    '  例："跟 [主角] 练了一晚上 AK 急停，他进步肉眼可见 💪"',
+    `  例："跟 ${player.name} 练了一晚上 AK 急停，他进步肉眼可见 💪"`,
     '  例："今晚训练赛被对面狙麻了，需要咖啡续命 ☕"',
     '',
     '2) club（俱乐部官方号）—— "我们"、官宣口吻，但不死板：',
-    '  例："我们拿下了本周训练赛全胜，下周 Major 预选见真章 🏆 #战队名"',
+    `  例："我们${playerTeamName}拿下了本周训练赛全胜，下周 Major 预选见真章 🏆 #${playerTeamTag}"`,
     '  例："新周边上线，选手同款鼠标垫，限量 100 个 👕"',
     '',
     '3) rival（对手战队官方号）—— 第三方视角，可带挑衅：',
-    '  例："下周的对手名单里有 [主角战队名]，已经研究过他们的 demos 了 🔍"',
-    '  例："训练赛 16-2，状态火热。谁想碰一碰？😤"',
+    `  例："下周的对手名单里有 ${playerTeamName}，已经研究过他们的 demos 了 🔍"`,
+    `  例："${rivalName} 这周状态火热，已经五连胜了。谁想碰一碰？😤"`,
     '',
     '4) star（行业明星选手）—— 第一人称，大佬日常，不care小透明：',
     '  可用明星：s1mple(@s1mple_legacy)、ZywOo(@zywoo_beast)、m0NESY(@m0nesy_ace)、ropz(@ropz_clutch)、NiKo(@niko_rifle)、device(@device_awp)、karrigan(@karrigan_igl)、sh1ro(@sh1ro_sniper)',
     '  例："新鼠标到了，今晚排位试试手感 🎮"',
     '  例："看到社区在讨论 AK 还是 M4，我的答案永远是：看地图 📍"',
-    '  例："训练基地网络炸了，全员去网吧练习，梦回 2015 😂"',
+    `  例："刚看完 ${topTeamA} vs ${topTeamB} 的录像，B 点回防那个烟雾太漂亮了 🧠"`,
     '',
     '5) media（媒体号）—— 报道/爆料口吻，可带悬念：',
-    '  例："独家：某顶级战队正在试训一名东欧小将，预计下周官宣 👀"',
-    '  例："HLTV 本周排名更新，FaZe 重回前三，Spirit 跌出前五 📊"',
+    `  例："独家：${topTeamC} 正在试训一名东欧小将，预计下周官宣 👀"`,
+    `  例："HLTV 本周排名更新，${topTeamA} 重回前三，${topTeamB} 跌出前五 📊"`,
     '',
     '6) industry（解说/分析师/圈内人士）—— 专业但轻松，像饭局聊天：',
-    '  例："昨晚那场 Inferno 的 B 点回防，我愿称之为本赛季最佳战术配合 🧠"',
+    `  例："昨晚那场 ${topTeamA} vs ${topTeamB} 的 Inferno B 点回防，我愿称之为本赛季最佳战术配合 🧠"`,
     '  例："有人说现在 AWP 太弱了，我说：是你站位太常规了 🎯"',
     '',
     '7) fan（粉丝/社区号）—— 热情、八卦、偶尔毒奶：',
-    '  例："[主角名] 今天手感太好了，预言他下周 Major 预选 1.3 rating 起步 🔮"',
+    `  例："${player.name} 今天手感太好了，预言他下周 Major 预选 1.3 rating 起步 🔮"`,
     '  例："有没有人觉得新 Ancient 的 A 点太窄了？道具根本铺不开 😤"',
     '',
     '【生成规则】',
@@ -112,6 +116,7 @@ export function buildSocialFeedPrompt(
     '- 可以提到 CS2 真实元素：地图(Inferno/Mirage/Nuke/Ancient/Anubis)、武器(AK/M4/AWP/沙鹰)、赛事(Major/IEM/BLAST)、梗(eco/ clutch/ tilt/ 手枪局/ 1vX)',
     '- 俱乐部和对手战队用第三人称/官宣口吻，选手用第一人称',
     '- 禁止出现：属性名、数值、游戏机制词汇（如"成长"、"压力值"、"疲劳"）',
+    '- **绝对禁止**使用"A队""B队""某队""某顶级战队""对手"等代称。提到战队时必须使用上面【当前世界状态】列出的具体战队名（如 ' + topTeamA + '、' + topTeamB + ' 等）。如果不知道具体名字，就不提战队名，只聊赛事/地图/个人感受。',
     '',
     '【主角特质映射】',
     `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}。他人视角可能这样聊：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? '无特殊特质'}`,
