@@ -134,6 +134,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
     id: 'bailout-old-friend',
     type: 'bailout',
     title: '老朋友出手',
+    forbidTags: ['low-credit'],
     narrative:
       '一个很久没联系的老朋友突然发消息："我听说你最近有点难。钱不多，先拿着，别跟我客气。"',
     stages: ALL_STAGES,
@@ -283,6 +284,35 @@ export const BAILOUT_EVENTS: EventDef[] = [
           narrative: '你说不签，但脑子里转了半天也没找到别的出路。最后既后悔拒绝，又拉不下脸回头——悬在这里更难受。',
           stressDelta: 6,
           feelDelta: -0.5,
+          tiltDelta: 1,
+        },
+      },
+    ],
+  },
+  {
+    id: 'family-crisis-illness',
+    type: 'bailout',
+    title: '家人需要手术费',
+    narrative:
+      '妈妈在电话那头说不出话来。爸爸接过去，声音很轻："你妈确诊了，医生说要尽快手术，手术费大概要 80K。家里实在拿不出来……你看能不能想想办法。"电话挂了，你一个人坐在那里，久久没动。',
+    stages: ALL_STAGES,
+    difficulty: 1,
+    weight: 50,
+    requireTags: ['needs-family-crisis'],
+    choices: [
+      {
+        id: 'accept-crisis',
+        label: '我来想办法，给我 4 个回合',
+        description: '4 回合内凑够 80K，钱会自动结清，危机解除。凑不够则生涯结束。',
+        check: { primary: 'mentality', dc: 6, traitBonuses: { steady: 2 }, traitPenalties: { fragile: 2, volatile: 1 } },
+        success: {
+          narrative: '你深吸一口气，告诉爸爸："给我一点时间，我想办法。"电话挂了，你盯着账户上那个数字——80K，四个回合。你不知道从哪里开始，但你知道自己必须开始。',
+          stressDelta: 5,
+        },
+        failure: {
+          narrative: '你愣了很久，什么也没说出来，只是答应下来。电话挂了，压力像一块石头压在胸口。你不知道从哪里开始，但你知道这是你最难的一关。',
+          stressDelta: 10,
+          feelDelta: -1.0,
           tiltDelta: 1,
         },
       },

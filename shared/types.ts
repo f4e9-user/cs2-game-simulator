@@ -79,6 +79,7 @@ export type ForcedMatchResult = 'win' | 'loss';
 
 export interface Loan {
   id: string;
+  source: 'bank' | 'friend';
   principal: number;
   interestRate: number;
   remainingPrincipal: number;
@@ -86,6 +87,11 @@ export interface Loan {
   dueRound: number;
   paid: boolean;
   defaulted: boolean;
+}
+
+export interface PendingFamilyCrisis {
+  amountNeeded: number;
+  deadlineRound: number;
 }
 
 export interface SalaryTracker {
@@ -120,6 +126,9 @@ export interface DynamicState {
   bailoutCooldown: number;
   teamBailoutCooldown: number;
   consecutiveBrokeRounds: number;
+  creditScore: number;
+  familyBailoutCount: number;
+  pendingFamilyCrisis?: PendingFamilyCrisis;
 }
 
 // A tournament the player has signed up for. Resolves when (year, month) match.

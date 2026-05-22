@@ -173,6 +173,11 @@ export const api = {
       `/api/game/${sessionId}/loan`,
       { method: 'POST', body: JSON.stringify({ amount }) },
     ),
+  takeFriendLoan: (sessionId: string, amount: number) =>
+    request<{ player: Player; loan: Loan }>(
+      `/api/game/${sessionId}/friend-loan`,
+      { method: 'POST', body: JSON.stringify({ amount }) },
+    ),
   pawnItem: (sessionId: string, itemId: string) =>
     request<{ player: Player; pawnValue: number }>(
       `/api/game/${sessionId}/pawn`,

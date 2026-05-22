@@ -91,6 +91,18 @@ function dynamicTags(player: Player): string[] {
     out.push('rival-match-pressure');
   }
 
+  // ── 信用值 tag ────────────────────────────────────────────────
+  if ((player.creditScore ?? 100) < 50) out.push('low-credit');
+
+  // ── 家人危机触发 tag ──────────────────────────────────────────
+  const familyCrisisCd = player.tagExpiry?.['family-crisis-cd'];
+  const familyCrisisTriggerable =
+    (player.familyBailoutCount ?? 0) >= 3 &&
+    (player.creditScore ?? 100) < 60 &&
+    !player.pendingFamilyCrisis &&
+    (!familyCrisisCd || player.round >= familyCrisisCd);
+  if (familyCrisisTriggerable) out.push('needs-family-crisis');
+
   // ── 破产救济 tag ───────────────────────────────────────────────
   const bailoutReady =
     (player.stats.money ?? 0) <= 0 &&
@@ -290,6 +302,12 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   // 赛事隔离：进行中的赛事优先级最高，阻断晋级事件和随机事件
   if (player.pendingMatch) {
     return buildTournamentPrepEvent(player.pendingMatch);
+  }
+
+  // 家人危机：最高优先级注入，阻断其他随机事件
+  if (synthTags.has('needs-family-crisis')) {
+    const crisisEvent = pool.find((e) => e.id === 'family-crisis-illness');
+    return crisisEvent ?? null;
   }
 
   // 破产恢复：持续破产且冷却结束时，直接注入家人/朋友救济事件

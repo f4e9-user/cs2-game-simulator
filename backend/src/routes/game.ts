@@ -8,6 +8,7 @@ import {
   applyChoice,
   applyClubRequest,
   applyForLoan,
+  applyFriendLoan,
   applyShopPurchase,
   computeTraitMods,
   createSession,
@@ -634,6 +635,33 @@ app.post('/game/:sessionId/loan', async (c) => {
     const result = applyForLoan(session.player, amount);
     if (!result.success || !result.loan) {
       return c.json({ error: result.message ?? '贷款申请失败' }, 400);
+    }
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player: session.player, loan: result.loan });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+// 朋友借款端点（无息，8 回合还款，需信用值 ≥ 50）
+app.post('/game/:sessionId/friend-loan', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { amount } = body ?? {};
+  if (!Number.isInteger(amount)) {
+    return c.json({ error: 'amount 必须是整数' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const result = applyFriendLoan(session.player, amount);
+    if (!result.success || !result.loan) {
+      return c.json({ error: result.message ?? '朋友借款申请失败' }, 400);
     }
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
