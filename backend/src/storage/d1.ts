@@ -37,6 +37,21 @@ function migrateSession(session: GameSession): GameSession {
   if (!('forceNextEvent' in p)) p['forceNextEvent'] = null;
   if (!('forceMatchResult' in p)) p['forceMatchResult'] = null;
   if (!('salaryTracker' in p)) p['salaryTracker'] = null;
+  if (!('creditScore' in p)) p['creditScore'] = 100;
+  if (!('familyBailoutCount' in p)) p['familyBailoutCount'] = 0;
+
+  // Validate pendingFamilyCrisis to prevent a tampered session payload from
+  // giving free money (negative amountNeeded) or triggering an instant game-over
+  const crisis = p['pendingFamilyCrisis'] as Record<string, unknown> | null | undefined;
+  if (crisis != null) {
+    const { amountNeeded, deadlineRound } = crisis;
+    if (
+      typeof amountNeeded !== 'number' || amountNeeded <= 0 ||
+      typeof deadlineRound !== 'number' || deadlineRound <= 0 || !Number.isInteger(deadlineRound)
+    ) {
+      p['pendingFamilyCrisis'] = undefined;
+    }
+  }
 
   // Ensure apiToken exists (sessions created before apiToken was added)
   if (!session.apiToken) {

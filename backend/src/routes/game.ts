@@ -650,7 +650,7 @@ app.post('/game/:sessionId/friend-loan', async (c) => {
   const id = c.req.param('sessionId');
   const body = await c.req.json().catch(() => ({}));
   const { amount } = body ?? {};
-  if (!Number.isInteger(amount) || (amount - 10) % 5 !== 0) {
+  if (!Number.isInteger(amount) || amount < 10 || amount > 30 || (amount - 10) % 5 !== 0) {
     return c.json({ error: 'amount 必须是 10-30 之间的 5 的倍数' }, 400);
   }
 

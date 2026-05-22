@@ -329,7 +329,7 @@ function processRecoverySystems(player: Player, eventId: string, effects?: strin
       player.pendingFamilyCrisis = undefined;
       player.creditScore = Math.min(100, (player.creditScore ?? 100) + 10);
       if (!player.tagExpiry) player.tagExpiry = {};
-      player.tagExpiry['family-crisis-cd'] = player.round + 9999;
+      player.tagExpiry['family-crisis-cd'] = Number.MAX_SAFE_INTEGER;
       effects?.push(`家人手术费到位 -${crisis.amountNeeded}K（危机解除，信用值+10）`);
     }
     // 如果钱不够，checkEnding 会处理生涯结束
@@ -954,7 +954,7 @@ export function applyChoice(
 
   // 家人危机事件触发：无论哪种选择都设永久 CD 防止重复触发
   if (eventDef.id === 'family-crisis-illness' && !nextPlayer.pendingFamilyCrisis) {
-    nextPlayer.tagExpiry = { ...(nextPlayer.tagExpiry ?? {}), 'family-crisis-cd': nextPlayer.round + 9999 };
+    nextPlayer.tagExpiry = { ...(nextPlayer.tagExpiry ?? {}), 'family-crisis-cd': Number.MAX_SAFE_INTEGER };
     if (choiceDef.id !== 'abandon-family') {
       nextPlayer.pendingFamilyCrisis = { amountNeeded: 80, deadlineRound: nextPlayer.round + 4 };
       passiveEffects.push('危机倒计时：4 回合内筹集 80K 手术费，否则职业生涯结束');
