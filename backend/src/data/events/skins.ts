@@ -84,7 +84,7 @@ export const SKIN_SCAM_EVENTS: EventDef[] = [
     type: 'life',
     title: '好友被盗号了？',
     narrative:
-      'Steam 上一个很久没联系的好友突然改了名换了头像，全套换成职业选手风格，上来就找你借刀。',
+      'Steam 上一个很久没联系的好友突然改了名换了头像，全套换成职业选手风格，上来就找你借刀。语气很熟，但你们好像已经一年多没说过话了。',
     stages: ALL,
     difficulty: 0,
     weight: 0.4,
@@ -92,7 +92,7 @@ export const SKIN_SCAM_EVENTS: EventDef[] = [
       {
         id: 'check-profile',
         label: '看一下对方资料再决定',
-        description: '小心驶得万年船。',
+        description: '好友天数、账号等级，稍微看一眼就能辨别。',
         check: {
           primary: 'experience',
           secondary: 'intelligence',
@@ -101,11 +101,37 @@ export const SKIN_SCAM_EVENTS: EventDef[] = [
           traitPenalties: { ego: 2, support: 1 },
         },
         success: {
-          narrative: '你发现对方的好友天数只有 3 天，而且账号等级对不上。真好友不会这样。',
+          narrative: '你发现对方的好友天数只有 3 天，账号等级也对不上。真好友不会这样——这是个骗子，举报拉黑。',
           dailyGrowth: 'experience',
+          feelDelta: 0.5,
         },
         failure: {
-          narrative: '你说「都是兄弟，拿去吧」。然后好友就被删了，刀也没了。',
+          narrative: '你没细看就说「都是兄弟，拿去吧」。然后好友就被删了，刀也没了。',
+          moneyDelta: -50,
+          feelDelta: -0.5,
+          stressDelta: 2,
+          tagAdds: ['scammed'],
+          dailyGrowth: 'experience',
+        },
+      },
+      {
+        id: 'call-real-friend',
+        label: '换个渠道打电话确认',
+        description: '如果是真的他，接个电话一秒就能验证。',
+        check: {
+          primary: 'experience',
+          dc: 6,
+          traitBonuses: { support: 2, streetwise: 1 },
+          traitPenalties: { solo: 2, shy: 1 },
+        },
+        success: {
+          narrative: '你拨了对方手机，真好友接了：「我没找你借刀，账号被盗了！」你把截图转给他并举报了骗子。',
+          dailyGrowth: 'experience',
+          feelDelta: 0.5,
+          tagAdds: ['social-circle'],
+        },
+        failure: {
+          narrative: '对方没接，你想「可能在训练」，最后还是把刀借出去了。然后对方秒下线。刀没了，朋友也尴尬了。',
           moneyDelta: -50,
           feelDelta: -0.5,
           stressDelta: 2,
@@ -377,7 +403,7 @@ export const SKIN_GAMBLE_EVENTS: EventDef[] = [
     type: 'life',
     title: '输麻了，开箱回血',
     narrative:
-      '今天比赛输得很难看。你坐在电脑前不想说话，手指不自觉地打开了开箱页面。',
+      '今天比赛输得很难看。你坐在电脑前不想说话，手指不自觉地打开了开箱页面。输了几万块伤害，开两箱好像也不算什么。',
     stages: ALL,
     difficulty: 0,
     weight: 0.4,
@@ -385,7 +411,7 @@ export const SKIN_GAMBLE_EVENTS: EventDef[] = [
       {
         id: 'lock-account',
         label: '锁掉余额，出去走走',
-        description: '最止损的方式。',
+        description: '负面情绪最强的时候做的决定往往最差，先出去再说。',
         check: {
           primary: 'mentality',
           dc: 12,
@@ -393,12 +419,36 @@ export const SKIN_GAMBLE_EVENTS: EventDef[] = [
           traitPenalties: { gambler: 3, risky: 2, obsessed: 1, impulsive: 1 },
         },
         success: {
-          narrative: '你硬是把账号切了出去，出门走了二十分钟。回来的时候平静了很多。',
+          narrative: '你硬是把账号切了出去，出门走了二十分钟。回来的时候平静了很多。那股冲劲过去了。',
           dailyGrowth: 'mentality',
           stressDelta: -2,
         },
         failure: {
           narrative: '「今天运气不会一直差吧？」结果会的。输完比赛输钱，心态直接崩穿地心。',
+          moneyDelta: -30,
+          feelDelta: -1.0,
+          stressDelta: 5,
+          tiltDelta: 1,
+          tagAdds: ['gambling-spiral'],
+        },
+      },
+      {
+        id: 'set-a-limit',
+        label: '就开三箱，绝对不超',
+        description: '设个心理限制，发泄一下再停手。',
+        check: {
+          primary: 'mentality',
+          dc: 9,
+          traitBonuses: { steady: 2 },
+          traitPenalties: { gambler: 3, obsessed: 2, impulsive: 1 },
+        },
+        success: {
+          narrative: '你真的只开了三箱，全是垃圾。但你硬生生关掉了页面。亏得不多，心态没崩穿。',
+          moneyDelta: -10,
+          stressDelta: -1,
+        },
+        failure: {
+          narrative: '「最后一箱」说了十遍。天快亮了，余额只剩个零头。你盯着屏幕，脑子一片空白。',
           moneyDelta: -30,
           feelDelta: -1.0,
           stressDelta: 5,
@@ -430,12 +480,12 @@ export const SKIN_GAMBLE_EVENTS: EventDef[] = [
           traitPenalties: { obsessed: 2, gambler: 1, impulsive: 1 },
         },
         success: {
-          narrative: '你拉了三个月的历史走势图，发现目前已经是高点。关了电脑睡觉，第二天果然跌了。',
+          narrative: '你拉了三个月的历史走势图，发现目前已经是高点。不仅没买，还把手里囤的存货挂单出了。第二天果然跌了，落袋为安。',
           moneyDelta: 20,
-          dailyGrowth: 'mentality',
+          dailyGrowth: 'intelligence',
         },
         failure: {
-          narrative: '你全仓买入。第二天醒来价格跌了 20%。',
+          narrative: '你没看走势就全仓买入。第二天醒来价格跌了 20%，亏得一脸懵。',
           moneyDelta: -20,
           feelDelta: -0.5,
           stressDelta: 2,
@@ -724,15 +774,15 @@ export const SKIN_MARKET_EVENTS: EventDef[] = [
     type: 'life',
     title: 'Major 贴纸热',
     narrative:
-      '圈子里在传某个选手的 Major 贴纸要起飞——他这届打得太好了，贴纸可能要绝版。',
+      '圈子里在传某个选手的 Major 贴纸要起飞——他这届打得太好了，贴纸可能要绝版。价格已经开始微微抬头。',
     stages: ALL,
     difficulty: 0,
     weight: 0.35,
     choices: [
       {
         id: 'research-first',
-        label: '查查历史数据再动手',
-        description: '调研是投资的第一步。',
+        label: '查查历史数据再小仓入场',
+        description: '调研是投资第一步，数据说话。',
         check: {
           primary: 'intelligence',
           secondary: 'experience',
@@ -741,13 +791,37 @@ export const SKIN_MARKET_EVENTS: EventDef[] = [
           traitPenalties: { gambler: 1, impulsive: 1 },
         },
         success: {
-          narrative: '你发现这选手的贴纸存量确实不大，在小涨之前入了十几张。Major 结束后翻了。',
+          narrative: '你查了存量和近期交易频次，确认信号可靠，在小涨之前入了十几张。Major 结束后果然翻了。',
           moneyDelta: 20,
-          dailyGrowth: 'mentality',
+          dailyGrowth: 'intelligence',
         },
         failure: {
-          narrative: '你跟风买了一堆，结果那个选手小组赛就回家了，贴纸跌回原价。',
+          narrative: '你跟风买了一堆，结果那个选手小组赛就回家了，贴纸跌回原价。数据没看仔细。',
           moneyDelta: -20,
+        },
+      },
+      {
+        id: 'bulk-buy-stickers',
+        label: '判断他必火，重仓押注',
+        description: '感觉这选手状态神，大量囤货赌他走到最后。',
+        check: {
+          primary: 'experience',
+          secondary: 'mentality',
+          dc: 13,
+          traitBonuses: { streetwise: 2, tactical: 1 },
+          traitPenalties: { gambler: 2, impulsive: 2 },
+        },
+        success: {
+          narrative: '你押对了——这选手这届打得飞起，贴纸翻了好几倍。重仓出货，赚到了真金白银。',
+          moneyDelta: 50,
+          fameDelta: 2,
+        },
+        failure: {
+          narrative: '你押重仓，结果这选手四分之一决赛就淘汰了。贴纸砸手里，清仓亏出血。',
+          moneyDelta: -40,
+          feelDelta: -0.5,
+          stressDelta: 3,
+          tagAdds: ['gambling-spiral'],
         },
       },
     ],
@@ -902,7 +976,7 @@ export const SKIN_GRAY_EVENTS: EventDef[] = [
     type: 'life',
     title: '急出，低价',
     narrative:
-      '有人私聊你出一把刀，价格只有市场价的六折。说是「急出，今天就要」。',
+      '有人私聊你出一把刀，价格只有市场价的六折。说是「急出，今天就要」。六折的刀……你有点心动。',
     stages: ALL,
     difficulty: 0,
     weight: 0.3,
@@ -910,7 +984,7 @@ export const SKIN_GRAY_EVENTS: EventDef[] = [
       {
         id: 'verify-item',
         label: '先查来源再决定',
-        description: '太便宜的往往有问题。',
+        description: '六折必有猫腻，花两分钟查交易记录。',
         check: {
           primary: 'experience',
           secondary: 'intelligence',
@@ -921,6 +995,7 @@ export const SKIN_GRAY_EVENTS: EventDef[] = [
         success: {
           narrative: '你查了交易记录，发现这把刀来自一个近期被盗的账号。放弃交易并举报了。',
           dailyGrowth: 'experience',
+          feelDelta: 0.5,
         },
         failure: {
           narrative: '你贪便宜收了。三天后账号被 Valve 冻结——赃物牵连，你的账号也跟着遭殃。',
@@ -928,6 +1003,31 @@ export const SKIN_GRAY_EVENTS: EventDef[] = [
           feelDelta: -1.0,
           tiltDelta: 1,
           stressDelta: 4,
+          tagAdds: ['scammed'],
+          dailyGrowth: 'experience',
+        },
+      },
+      {
+        id: 'grab-it',
+        label: '六折的刀，先拿下再说',
+        description: '机不可失，管它来源不来源。',
+        check: {
+          primary: 'mentality',
+          dc: 12,
+          traitBonuses: { steady: 2 },
+          traitPenalties: { gambler: 2, impulsive: 3, risky: 1 },
+        },
+        success: {
+          narrative: '你买了，但越想越不对，主动把来源截图发给了 Steam 官方申诉。Valve 把刀冻结，退了你钱——侥幸没受牵连，但出了身冷汗。',
+          dailyGrowth: 'experience',
+          stressDelta: 2,
+        },
+        failure: {
+          narrative: '你爽快地收了。三天后账号被限制——赃物牵连，库存冻结，申诉周期漫长。训练状态全崩了。',
+          moneyDelta: -50,
+          feelDelta: -1.0,
+          tiltDelta: 1,
+          stressDelta: 5,
           tagAdds: ['scammed'],
           dailyGrowth: 'experience',
         },
@@ -974,31 +1074,51 @@ export const SKIN_GRAY_EVENTS: EventDef[] = [
     type: 'life',
     title: '余额套利教学',
     narrative:
-      '有人教你一套「倒余额套利」的方法：低价收礼品卡换余额，再等折扣期买入卖出。',
+      '有人教你一套「倒余额套利」的方法：低价收礼品卡换余额，再等折扣期买入卖出。听起来稳赚，但操作窗口很短，细节很多。',
     stages: ALL,
     difficulty: 0,
     weight: 0.35,
     choices: [
       {
         id: 'try-arbitrage',
-        label: '试一下',
-        description: '套利理论上是稳的。',
+        label: '研究一下，试试看',
+        description: '搞清楚逻辑再动手，套利理论上是稳的。',
         check: {
-          primary: 'money',
-          secondary: 'intelligence',
+          primary: 'intelligence',
+          secondary: 'experience',
           dc: 7,
           traitBonuses: { tactical: 2, streetwise: 1 },
-          traitPenalties: { steady: 1 },
+          traitPenalties: { impulsive: 1 },
         },
         success: {
-          narrative: '操作了一轮，扣掉手续费净赚了 15%。钱不多但稳定。',
+          narrative: '你把流程摸熟了，操作了一轮，扣掉手续费净赚了 15%。钱不多但稳定，心里有数了。',
           moneyDelta: 20,
           fatigueDelta: 8,
+          dailyGrowth: 'intelligence',
         },
         failure: {
-          narrative: '市场价在你操作期间波动了，加上手续费反而亏了一点。',
+          narrative: '你没搞清楚汇率窗口，市场价在操作期间波动了，加上手续费反而小亏。',
           moneyDelta: -10,
           fatigueDelta: 5,
+        },
+      },
+      {
+        id: 'skip-too-tedious',
+        label: '算了，太麻烦',
+        description: '搞这些折腾时间精力，还不如多打两把天梯。',
+        check: {
+          primary: 'mentality',
+          dc: 4,
+          traitBonuses: { steady: 2, grinder: 1 },
+        },
+        success: {
+          narrative: '你想了想，时间成本太高，利润又不稳定。继续打你的天梯。精力留在刀刃上。',
+          fatigueDelta: -5,
+          dailyGrowth: 'mentality',
+        },
+        failure: {
+          narrative: '你拒绝了，但后来发现那几天价格差确实不小，白白错过了一波稳定收益，心里有点后悔。',
+          feelDelta: -0.5,
         },
       },
     ],
@@ -1008,10 +1128,11 @@ export const SKIN_GRAY_EVENTS: EventDef[] = [
     type: 'life',
     title: '黑市库存截图',
     narrative:
-      '你被拉进一个群，有人发了大量库存截图——全是热门高价值皮肤，但来源标记「不可查」。',
+      '你被拉进一个群，有人发了大量库存截图——全是热门高价值皮肤，但来源标记「不可查」。群里气氛诡异，没人解释这些东西从哪来。',
     stages: ALL,
     difficulty: 0,
     weight: 0.25,
+    forbidTags: ['clean-record'],
     choices: [
       {
         id: 'leave-immediately',
@@ -1347,7 +1468,7 @@ export const SKIN_EPIC_EVENTS: EventDef[] = [
     type: 'life',
     title: '捡了个大漏',
     narrative:
-      '你之前随手低价收的一个冷门皮肤，今天发现价格暴涨了十几倍。群里都在@你。',
+      '你之前随手低价收的一个冷门皮肤，今天发现价格暴涨了十几倍。群里都在@你，有人开始问「出不出」。',
     stages: ALL,
     difficulty: 0,
     weight: 0.1,
@@ -1356,13 +1477,13 @@ export const SKIN_EPIC_EVENTS: EventDef[] = [
       {
         id: 'cash-out',
         label: '出了，落袋为安',
-        description: '赚到的才是真的。',
+        description: '赚到口袋里的才是真的，别等到高位回调。',
         check: {
           primary: 'mentality',
           dc: 5,
         },
         success: {
-          narrative: '你挂了一个低于市场价一点的价格，瞬间被秒。这笔钱够你换一套好装备了。',
+          narrative: '你挂了一个低于市场价一点的价格，瞬间被秒。这笔钱够你换一套好装备了，群里有人夸你「出得漂亮」。',
           moneyDelta: 60,
           feelDelta: 1,
           fameDelta: 2,
@@ -1370,10 +1491,37 @@ export const SKIN_EPIC_EVENTS: EventDef[] = [
           tagCooldowns: { 'epic-bargain-cd': 48 },
         },
         failure: {
-          narrative: '你犹豫了一下没出，第二天价格跌回去了一半。虽然还是赚了，但没赚到最多。',
+          narrative: '你下单手抖了一下，挂高了价，一直没人接。等你回过神来价格已经开始回调了——最终出手，赚了但少赚了不少。',
           moneyDelta: 30,
           feelDelta: 0.5,
           fameDelta: 1,
+          tagCooldowns: { 'epic-bargain-cd': 48 },
+        },
+      },
+      {
+        id: 'hold-for-more',
+        label: '再等等，感觉还能涨',
+        description: '涨势没停，也许还有上行空间？',
+        check: {
+          primary: 'intelligence',
+          secondary: 'experience',
+          dc: 12,
+          traitBonuses: { tactical: 3, steady: 1, streetwise: 1 },
+          traitPenalties: { gambler: 2, impulsive: 1 },
+        },
+        success: {
+          narrative: '你判断对了，这个皮肤又涨了两天才见顶。你在高点附近挂单，出手大赚。市场感确实有。',
+          moneyDelta: 80,
+          feelDelta: 1,
+          fameDelta: 3,
+          dailyGrowth: 'intelligence',
+          tagCooldowns: { 'epic-bargain-cd': 48 },
+        },
+        failure: {
+          narrative: '你拿着没动，结果第二天价格开始回调，跌得比你预期快多了。追悔莫及，最后出手赚的远不如当时出手多。',
+          moneyDelta: 20,
+          feelDelta: -0.5,
+          stressDelta: 2,
           tagCooldowns: { 'epic-bargain-cd': 48 },
         },
       },
