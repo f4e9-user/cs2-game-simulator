@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useGameStore } from '@/store/gameStore';
 import type { Player, ShopItem } from '@/lib/types';
 import { formatMoney } from '@/lib/format';
 import { ShopConfirmModal } from './ShopConfirmModal';
@@ -45,6 +46,7 @@ export function ShopPanel({
   enabled = true,
   disabledReason,
 }: Props) {
+  const apiToken = useGameStore((s) => s.apiToken);
   const [items, setItems] = useState<ShopItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export function ShopPanel({
     setError(null);
     setBusyId(confirmItem.id);
     try {
-      const res = await api.buyShopItem(sessionId, confirmItem.id);
+      const res = await api.buyShopItem(sessionId, confirmItem.id, apiToken ?? undefined);
       setResultData(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

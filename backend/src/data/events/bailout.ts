@@ -48,6 +48,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
       },
       {
         id: 'refuse-loan',
+        isRefusal: true,
         label: '谢谢，我自己能撑过去',
         description: '不想让家里担心，也不想欠这份人情。',
         check: { primary: 'mentality', dc: 8, traitBonuses: { steady: 2, ego: 1 }, traitPenalties: { support: 1, fragile: 1 } },
@@ -113,6 +114,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
       },
       {
         id: 'refuse-gift',
+        isRefusal: true,
         label: '把红包寄回去',
         description: '再难也不想接受这份援助——靠自己扛过去。',
         check: { primary: 'mentality', dc: 7, traitBonuses: { steady: 1, ego: 1 }, traitPenalties: { support: 1 } },
@@ -180,6 +182,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
       },
       {
         id: 'refuse-friend',
+        isRefusal: true,
         label: '拒绝，自己的事自己扛',
         description: '不想让朋友看到自己落魄，这种钱不想接。',
         check: { primary: 'mentality', dc: 8, traitBonuses: { ego: 2, solo: 1 }, traitPenalties: { support: 1, selfless: 1 } },
@@ -227,6 +230,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
       },
       {
         id: 'refuse-team-emergency',
+        isRefusal: true,
         label: '谢谢，我自己想办法',
         description: '接受垫款会影响在队里的地位，宁可自己扛。',
         check: { primary: 'mentality', dc: 9, traitBonuses: { steady: 2, ego: 1 }, traitPenalties: { fragile: 1 } },
@@ -272,6 +276,7 @@ export const BAILOUT_EVENTS: EventDef[] = [
       },
       {
         id: 'refuse-salary-advance',
+        isRefusal: true,
         label: '不签，不想背这个包袱',
         description: '十二周薪资打折换来的周转，代价太大了。',
         check: { primary: 'mentality', dc: 8, traitBonuses: { steady: 2, grinder: 1 }, traitPenalties: { impulsive: 1 } },

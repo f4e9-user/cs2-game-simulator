@@ -108,21 +108,23 @@ export const api = {
     }, apiToken),
   listTournaments: (sessionId: string) =>
     request<TournamentsResponse>(`/api/game/${sessionId}/tournaments`),
-  signup: (sessionId: string, tournamentId: string) =>
+  signup: (sessionId: string, tournamentId: string, apiToken?: string) =>
     request<{ pendingMatch: NonNullable<Player['pendingMatch']>; player: Player }>(
       `/api/game/${sessionId}/signup`,
       { method: 'POST', body: JSON.stringify({ tournamentId }) },
+      apiToken,
     ),
-  withdraw: (sessionId: string) =>
+  withdraw: (sessionId: string, apiToken?: string) =>
     request<{ player: Player; penalties: string[] }>(`/api/game/${sessionId}/withdraw`, {
       method: 'POST',
-    }),
-  submitAction: (sessionId: string, actionId: string) =>
+    }, apiToken),
+  submitAction: (sessionId: string, actionId: string, apiToken?: string) =>
     request<{ actionResult: ActionResult; player: Player }>(
       `/api/game/${sessionId}/action`,
       { method: 'POST', body: JSON.stringify({ actionId }) },
+      apiToken,
     ),
-  buyShopItem: (sessionId: string, itemId: string) =>
+  buyShopItem: (sessionId: string, itemId: string, apiToken?: string) =>
     request<{
       player: Player;
       itemName: string;
@@ -135,6 +137,7 @@ export const api = {
     }>(
       `/api/game/${sessionId}/shop`,
       { method: 'POST', body: JSON.stringify({ itemId }) },
+      apiToken,
     ),
   narrateShop: (
     sessionId: string,
@@ -150,38 +153,43 @@ export const api = {
     request<{ items: ShopItem[] }>('/api/game/meta/shop'),
   listClubs: () =>
     request<{ clubs: Club[] }>('/api/game/meta/clubs'),
-  applyClub: (sessionId: string, clubId: string) =>
+  applyClub: (sessionId: string, clubId: string, apiToken?: string) =>
     request<{ player: Player }>(
       `/api/game/${sessionId}/apply-club`,
       { method: 'POST', body: JSON.stringify({ clubId }) },
+      apiToken,
     ),
-  respondOffer: (sessionId: string, accept: boolean) =>
+  respondOffer: (sessionId: string, accept: boolean, apiToken?: string) =>
     request<{ player: Player; leaderboard?: LeaderboardTeam[] }>(
       `/api/game/${sessionId}/team-response`,
       { method: 'POST', body: JSON.stringify({ accept }) },
+      apiToken,
     ),
-  leaveTeam: (sessionId: string) =>
-    request<{ player: Player }>(`/api/game/${sessionId}/leave-team`, { method: 'POST' }),
+  leaveTeam: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player }>(`/api/game/${sessionId}/leave-team`, { method: 'POST' }, apiToken),
   getIntro: (sessionId: string, apiToken?: string) =>
     request<{ intro: string }>(`/api/game/${sessionId}/intro`, {}, apiToken),
   getSummary: (sessionId: string, apiToken?: string) =>
     request<{ summary: string; ending?: string }>(`/api/game/${sessionId}/summary`, {}, apiToken),
   getSocialFeed: (sessionId: string, apiToken?: string) =>
     request<{ posts: SocialPost[] }>(`/api/game/${sessionId}/social-feed`, {}, apiToken),
-  takeLoan: (sessionId: string, amount: number) =>
+  takeLoan: (sessionId: string, amount: number, apiToken?: string) =>
     request<{ player: Player; loan: Loan }>(
       `/api/game/${sessionId}/loan`,
       { method: 'POST', body: JSON.stringify({ amount }) },
+      apiToken,
     ),
-  takeFriendLoan: (sessionId: string, amount: number) =>
+  takeFriendLoan: (sessionId: string, amount: number, apiToken?: string) =>
     request<{ player: Player; loan: Loan }>(
       `/api/game/${sessionId}/friend-loan`,
       { method: 'POST', body: JSON.stringify({ amount }) },
+      apiToken,
     ),
-  pawnItem: (sessionId: string, itemId: string) =>
+  pawnItem: (sessionId: string, itemId: string, apiToken?: string) =>
     request<{ player: Player; pawnValue: number }>(
       `/api/game/${sessionId}/pawn`,
       { method: 'POST', body: JSON.stringify({ itemId }) },
+      apiToken,
     ),
   narrateStream: async (
     sessionId: string,

@@ -402,6 +402,7 @@ export interface ChoiceDef {
   id: string;
   label: string;
   description: string;
+  isRefusal?: boolean;
   check: {
     primary: StatKey;
     secondary?: StatKey;

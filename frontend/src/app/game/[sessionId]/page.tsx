@@ -545,7 +545,7 @@ export default function GamePage() {
           onAccept={async () => {
             setLoading(true);
             try {
-              const res = await api.respondOffer(sessionId, true);
+              const res = await api.respondOffer(sessionId, true, apiToken ?? undefined);
               setPlayer(res.player);
               if (res.leaderboard) setLeaderboard(res.leaderboard);
               clearOffer();
@@ -558,7 +558,7 @@ export default function GamePage() {
           onDecline={async () => {
             setLoading(true);
             try {
-              const res = await api.respondOffer(sessionId, false);
+              const res = await api.respondOffer(sessionId, false, apiToken ?? undefined);
               setPlayer(res.player);
               clearOffer();
             } catch (e) {

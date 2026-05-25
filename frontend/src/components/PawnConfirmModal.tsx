@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import { useGameStore } from '@/store/gameStore';
 import { formatMoney } from '@/lib/format';
 import type { Player } from '@/lib/types';
 
@@ -52,6 +53,7 @@ function getPawnableItems(player: Player): PawnableItem[] {
 }
 
 export function PawnConfirmModal({ sessionId, player, onClose }: Props) {
+  const apiToken = useGameStore((s) => s.apiToken);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +66,7 @@ export function PawnConfirmModal({ sessionId, player, onClose }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.pawnItem(sessionId, selected);
+      const res = await api.pawnItem(sessionId, selected, apiToken ?? undefined);
       onClose(res.player);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
