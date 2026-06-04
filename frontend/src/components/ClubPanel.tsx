@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { useGameStore } from '@/store/gameStore';
 import type { Club, Player } from '@/lib/types';
 
 const TIER_LABELS: Record<string, string> = {
@@ -78,6 +79,7 @@ interface Props {
 }
 
 export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props) {
+  const apiToken = useGameStore((s) => s.apiToken);
   const [clubs, setClubs] = useState<Club[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +113,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
     setLoading(true);
     setError(null);
     try {
-      const res = await api.applyClub(sessionId, clubId);
+      const res = await api.applyClub(sessionId, clubId, apiToken ?? undefined);
       onPlayerUpdate(res.player);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -124,7 +126,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
     setLoading(true);
     setError(null);
     try {
-      const res = await api.leaveTeam(sessionId);
+      const res = await api.leaveTeam(sessionId, apiToken ?? undefined);
       setConfirmLeave(false);
       onPlayerUpdate(res.player);
     } catch (e) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useGameStore } from '@/store/gameStore';
 import type { PendingMatch, Player, Tournament } from '@/lib/types';
 import type { ClubTier } from '@/lib/types';
 import {
@@ -92,6 +93,7 @@ interface Props {
 }
 
 export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
+  const apiToken = useGameStore((s) => s.apiToken);
   const [open, setOpen] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +119,7 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
     setBusyId(tournamentId);
     setError(null);
     try {
-      const res = await api.signup(sessionId, tournamentId);
+      const res = await api.signup(sessionId, tournamentId, apiToken ?? undefined);
       onPlayerUpdate(res.player);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -130,7 +132,7 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
     setBusyId('withdraw');
     setError(null);
     try {
-      const res = await api.withdraw(sessionId);
+      const res = await api.withdraw(sessionId, apiToken ?? undefined);
       onPlayerUpdate(res.player);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

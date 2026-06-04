@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import { useGameStore } from '@/store/gameStore';
 import type { ActionResult, Player, Stage } from '@/lib/types';
 
 const ACTIONS = [
@@ -163,6 +164,7 @@ export function ActionResultCard({ result, moneyChange }: { result: ActionResult
 export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActionResult, disabledReason }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const apiToken = useGameStore((s) => s.apiToken);
 
   const ap = player.actionPoints ?? 0;
 
@@ -176,7 +178,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
     setError(null);
     const prevMoney = player.stats.money;
     try {
-      const res = await api.submitAction(sessionId, actionId);
+      const res = await api.submitAction(sessionId, actionId, apiToken ?? undefined);
       const moneyChange = res.actionResult.newStats.money - prevMoney;
       onActionResult?.(res.actionResult, moneyChange);
       onPlayerUpdate(res.player);

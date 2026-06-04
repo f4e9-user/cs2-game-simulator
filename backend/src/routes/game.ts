@@ -47,12 +47,29 @@ function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier 
 
 const app = new Hono<{ Bindings: Env }>();
 
-// AI 路由鉴权：校验请求头携带的 apiToken 是否与 session 匹配
+// 校验请求头携带的 apiToken 是否与 session 匹配
 function validateApiToken(authHeader: string | undefined, sessionToken: string): boolean {
   if (!authHeader) return false;
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
   return token === sessionToken;
 }
+
+// 所有 session 状态变更路由统一鉴权中间件
+// 排除 /start（session 刚创建，还没有 token）和 GET 请求（只读）
+app.use('/game/:sessionId/*', async (c, next) => {
+  if (c.req.method === 'GET') return next();
+  const path = new URL(c.req.url).pathname;
+  if (path.endsWith('/start') || path.endsWith('/intro')) return next();
+
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
+    return c.json({ error: '无效的 API Token' }, 401);
+  }
+  return next();
+});
 
 app.get('/health', (c) => {
   const ai = makeAiService(c.env, c.executionCtx);

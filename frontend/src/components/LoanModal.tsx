@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import { useGameStore } from '@/store/gameStore';
 import { formatMoney } from '@/lib/format';
 import type { Player } from '@/lib/types';
 
@@ -22,6 +23,7 @@ const LOAN_DURATION = 4;
 const AMOUNT_OPTIONS = [20, 40, 60, 80, 100];
 
 export function LoanModal({ open, onClose, sessionId, player, onPlayerUpdate }: Props) {
+  const apiToken = useGameStore((s) => s.apiToken);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [borrowAmount, setBorrowAmount] = useState(LOAN_MIN);
@@ -36,7 +38,7 @@ export function LoanModal({ open, onClose, sessionId, player, onPlayerUpdate }: 
     setBusy(true);
     setError(null);
     try {
-      const res = await api.takeLoan(sessionId, borrowAmount);
+      const res = await api.takeLoan(sessionId, borrowAmount, apiToken ?? undefined);
       onPlayerUpdate(res.player);
       onClose();
     } catch (e) {

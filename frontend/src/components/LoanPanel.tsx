@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import { useGameStore } from '@/store/gameStore';
 import { formatMoney } from '@/lib/format';
 import type { Loan, Player } from '@/lib/types';
 
@@ -45,6 +46,7 @@ function CreditBar({ score }: { score: number }) {
 }
 
 export function LoanPanel({ sessionId, player, onPlayerUpdate }: Props) {
+  const apiToken = useGameStore((s) => s.apiToken);
   const [busyBank, setBusyBank] = useState(false);
   const [busyFriend, setBusyFriend] = useState(false);
   const [errorBank, setErrorBank] = useState<string | null>(null);
@@ -78,7 +80,7 @@ export function LoanPanel({ sessionId, player, onPlayerUpdate }: Props) {
     setBusyBank(true);
     setErrorBank(null);
     try {
-      const res = await api.takeLoan(sessionId, bankAmount);
+      const res = await api.takeLoan(sessionId, bankAmount, apiToken ?? undefined);
       onPlayerUpdate(res.player);
     } catch (e) {
       setErrorBank(e instanceof Error ? e.message : String(e));
@@ -91,7 +93,7 @@ export function LoanPanel({ sessionId, player, onPlayerUpdate }: Props) {
     setBusyFriend(true);
     setErrorFriend(null);
     try {
-      const res = await api.takeFriendLoan(sessionId, friendAmount);
+      const res = await api.takeFriendLoan(sessionId, friendAmount, apiToken ?? undefined);
       onPlayerUpdate(res.player);
     } catch (e) {
       setErrorFriend(e instanceof Error ? e.message : String(e));
