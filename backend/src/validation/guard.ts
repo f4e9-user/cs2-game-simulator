@@ -20,12 +20,15 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
+const ALLOWED_CHECK_STATS = new Set(['intelligence', 'agility', 'experience', 'money', 'mentality', 'constitution']);
+const ALLOWED_STAT_CHANGES = new Set(['intelligence', 'agility', 'experience', 'mentality', 'constitution']);
+const ALLOWED_AI_EVENT_TYPES = new Set(['life', 'media', 'stress', 'rival', 'team']);
+
 function isValidStatChanges(v: unknown): boolean {
   if (!isObject(v)) return false;
-  const allowed = new Set(['intelligence', 'agility', 'experience', 'money', 'mentality', 'constitution']);
   for (const [k, val] of Object.entries(v)) {
-    if (!allowed.has(k)) return false;
-    if (!isNumber(val) || val < -5 || val > 5) return false;
+    if (!ALLOWED_STAT_CHANGES.has(k)) return false;
+    if (!isNumber(val) || val < -3 || val > 3) return false;
   }
   return true;
 }
@@ -37,13 +40,12 @@ function isValidChoice(v: unknown): v is ChoiceDef {
   if (!isString(c.label) || c.label.length === 0 || c.label.length > 30) return false;
   if (c.description !== undefined && (!isString(c.description) || c.description.length > 100)) return false;
 
-  if (c.check !== undefined) {
-    const chk = c.check;
-    if (!isObject(chk)) return false;
-    if (!isString(chk.primary)) return false;
-    if (!isNumber(chk.dc) || chk.dc < 0 || chk.dc > 20) return false;
-    if (chk.traitBonuses !== undefined && !isObject(chk.traitBonuses)) return false;
-  }
+  if (!isObject(c.check)) return false;
+  const chk = c.check as Record<string, unknown>;
+  if (!isString(chk.primary) || !ALLOWED_CHECK_STATS.has(chk.primary)) return false;
+  if (chk.secondary !== undefined && (!isString(chk.secondary) || !ALLOWED_CHECK_STATS.has(chk.secondary))) return false;
+  if (!isNumber(chk.dc) || chk.dc < 0 || chk.dc > 20) return false;
+  if (chk.traitBonuses !== undefined && !isObject(chk.traitBonuses)) return false;
 
   const outcomeFields = ['success', 'failure'] as const;
   for (const f of outcomeFields) {
@@ -55,17 +57,13 @@ function isValidChoice(v: unknown): v is ChoiceDef {
     if (o.stressDelta !== undefined && (!isNumber(o.stressDelta) || o.stressDelta < -20 || o.stressDelta > 20)) return false;
     if (o.fatigueDelta !== undefined && (!isNumber(o.fatigueDelta) || o.fatigueDelta < -50 || o.fatigueDelta > 50)) return false;
     if (o.feelDelta !== undefined && (!isNumber(o.feelDelta) || o.feelDelta < -3 || o.feelDelta > 3)) return false;
+    if (o.tiltDelta !== undefined && (!isNumber(o.tiltDelta) || o.tiltDelta < -3 || o.tiltDelta > 3)) return false;
+    if (o.fameDelta !== undefined && (!isNumber(o.fameDelta) || o.fameDelta < -20 || o.fameDelta > 20)) return false;
+    if (o.moneyDelta !== undefined && (!isNumber(o.moneyDelta) || o.moneyDelta < -20 || o.moneyDelta > 20)) return false;
   }
 
   return true;
 }
-
-const ALLOWED_EVENT_TYPES = new Set([
-  'training', 'ranked', 'team', 'tryout', 'match',
-  'media', 'life', 'bailout', 'betting', 'cheat',
-  'rest', 'stress', 'rival', 'broadcast', 'daily',
-  'chains', 'skins', 'agent',
-]);
 
 const ALLOWED_STAGES = new Set(['rookie', 'youth', 'second', 'pro', 'retired']);
 
@@ -73,8 +71,8 @@ export function isValidAiEvent(v: unknown): v is EventDef {
   if (!isObject(v)) return false;
   const e = v as Record<string, unknown>;
 
-  if (!isString(e.id) || !e.id.startsWith('ai-')) return false;
-  if (!isString(e.type) || !ALLOWED_EVENT_TYPES.has(e.type)) return false;
+  if (!isString(e.id) || !/^ai-[a-z0-9-]+$/.test(e.id)) return false;
+  if (!isString(e.type) || !ALLOWED_AI_EVENT_TYPES.has(e.type)) return false;
   if (!isString(e.title) || e.title.length === 0 || e.title.length > 40) return false;
   if (!isString(e.narrative) || e.narrative.length < 10 || e.narrative.length > 300) return false;
 

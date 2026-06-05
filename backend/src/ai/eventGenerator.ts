@@ -75,12 +75,17 @@ export function buildEventGenPrompt(input: AiEventGenInput): string {
     recentSummary,
     '',
     '【设计要求】',
-    '- 生成 2-3 个事件，每个事件必须包含：id, type, title, narrative, stages, difficulty, choices(2-4个，每个有 success 和 failure)',
+    '- 生成 2-3 个事件，每个事件必须包含：id, type, title, narrative, stages, difficulty, choices(2-4个)',
     `- type 必须是以下之一：life / media / stress / rival / team`,
     '- stages 必须包含当前阶段',
     '- difficulty 范围 0-10',
     '- narrative 使用第二人称"你"，20-120字',
-    '- choices 的 narrative 使用第二人称"你"，5-80字',
+    '- 每个 choice 必须包含：id, label, description, check, success, failure',
+    '- choices 的 description 是按钮说明，5-80字，必须使用第二人称"你"',
+    '- success / failure 的 narrative 使用第二人称"你"，5-80字',
+    '- 每个 choice 必须包含 check 字段，格式为 {"primary": "属性名", "dc": 数字}',
+    '- primary 可选属性：intelligence / agility / experience / money / mentality / constitution',
+    '- dc 范围 4-16',
     '- statChanges 中单个属性变化绝对值不超过 3',
     '- stressDelta 范围 -10 到 10',
     '- fatigueDelta 范围 -20 到 20',
@@ -89,23 +94,156 @@ export function buildEventGenPrompt(input: AiEventGenInput): string {
     '- id 必须以 ai- 开头，后面接小写字母和连字符',
     '',
     '严格输出 JSON 数组，不加任何其他内容：',
-    '[{"id":"ai-example","type":"life","title":"...","narrative":"...","stages":["rookie"],"difficulty":3,"choices":[{"id":"c1","label":"...","success":{"narrative":"...","statChanges":{"mentality":1}},"failure":{"narrative":"...","statChanges":{"stressDelta":2}}}]}]',
+    '[{"id":"ai-example","type":"life","title":"...","narrative":"...","stages":["rookie"],"difficulty":3,"choices":[{"id":"c1","label":"...","description":"...","check":{"primary":"mentality","dc":8},"success":{"narrative":"...","statChanges":{"mentality":1}},"failure":{"narrative":"...","stressDelta":2}}]}]',
   ].join('\n');
 }
 
 export function extractJsonArray(text: string | null): unknown[] | null {
   if (!text) return null;
+  const clean = stripCodeFence(text.trim());
+  return parseJsonArrayCandidate(clean) ??
+    parseEmbeddedJson(clean, '[') ??
+    parseEmbeddedJson(clean, '{');
+}
+
+function stripCodeFence(text: string): string {
+  return text
+    .replace(/^```(?:json|javascript|js)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+}
+
+function parseJsonArrayCandidate(text: string, depth = 0): unknown[] | null {
+  if (depth > 2) return null;
   try {
-    const clean = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
-    const raw = JSON.parse(clean) as unknown;
-    return Array.isArray(raw) ? raw : null;
+    const raw = JSON.parse(text) as unknown;
+    if (isEventLikeArray(raw)) return raw;
+    if (typeof raw === 'string') return parseJsonArrayCandidate(stripCodeFence(raw.trim()), depth + 1);
+    if (raw && typeof raw === 'object') {
+      const obj = raw as Record<string, unknown>;
+      const arr = obj.events ?? obj.items ?? obj.data ?? obj.result;
+      if (isEventLikeArray(arr)) return arr;
+      if (typeof arr === 'string') return parseJsonArrayCandidate(stripCodeFence(arr.trim()), depth + 1);
+      if (isEventLikeObject(obj)) return [obj];
+    }
+    return null;
   } catch {
     return null;
   }
 }
 
+function isEventLikeArray(v: unknown): v is unknown[] {
+  return Array.isArray(v) && v.length > 0 && v.every(isEventLikeObject);
+}
+
+function isEventLikeObject(v: unknown): v is Record<string, unknown> {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const obj = v as Record<string, unknown>;
+  return typeof obj.id === 'string' &&
+    typeof obj.type === 'string' &&
+    typeof obj.title === 'string' &&
+    typeof obj.narrative === 'string' &&
+    Array.isArray(obj.stages) &&
+    Array.isArray(obj.choices);
+}
+
+function parseEmbeddedJson(text: string, opener: '[' | '{'): unknown[] | null {
+  const closer = opener === '[' ? ']' : '}';
+  for (let start = text.indexOf(opener); start >= 0; start = text.indexOf(opener, start + 1)) {
+    const candidate = readBalancedJson(text, start, opener, closer);
+    if (!candidate) continue;
+    const parsed = parseJsonArrayCandidate(candidate);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function readBalancedJson(text: string, start: number, opener: '[' | '{', closer: ']' | '}'): string | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === opener) depth += 1;
+    if (ch === closer) {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 export function parseAiEvents(text: string | null): { valid: EventDef[]; invalid: unknown[] } {
   const raw = extractJsonArray(text);
   if (!raw) return { valid: [], invalid: [] };
-  return validateAiEvents(raw);
+  const patched = raw.map((item) => {
+    if (item && typeof item === 'object' && Array.isArray((item as Record<string, unknown>).choices)) {
+      const patchedItem = { ...(item as Record<string, unknown>) };
+      patchedItem.choices = ((item as Record<string, unknown>).choices as unknown[]).map((c) => {
+        if (!c || typeof c !== 'object') return c;
+        const patchedChoice = { ...(c as Record<string, unknown>) };
+        if (!patchedChoice.check) {
+          patchedChoice.check = { primary: 'mentality', dc: 8 };
+        }
+        if (typeof patchedChoice.description !== 'string' && typeof patchedChoice.label === 'string') {
+          patchedChoice.description = patchedChoice.label;
+        }
+        patchedChoice.success = normalizeOutcome(patchedChoice.success);
+        patchedChoice.failure = normalizeOutcome(patchedChoice.failure);
+        return patchedChoice;
+      });
+      return patchedItem;
+    }
+    return item;
+  });
+  return validateAiEvents(patched);
+}
+
+function normalizeOutcome(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const outcome = { ...(value as Record<string, unknown>) };
+  const rawStatChanges = outcome.statChanges;
+  if (!rawStatChanges || typeof rawStatChanges !== 'object' || Array.isArray(rawStatChanges)) {
+    return outcome;
+  }
+
+  const statChanges = { ...(rawStatChanges as Record<string, unknown>) };
+  moveNumericField(statChanges, outcome, 'stressDelta');
+  moveNumericField(statChanges, outcome, 'fatigueDelta');
+  moveNumericField(statChanges, outcome, 'feelDelta');
+  moveNumericField(statChanges, outcome, 'tiltDelta');
+  moveNumericField(statChanges, outcome, 'fameDelta');
+  moveNumericField(statChanges, outcome, 'moneyDelta');
+  if (typeof statChanges.money === 'number' && outcome.moneyDelta === undefined) {
+    outcome.moneyDelta = statChanges.money;
+    delete statChanges.money;
+  }
+
+  if (Object.keys(statChanges).length > 0) {
+    outcome.statChanges = statChanges;
+  } else {
+    delete outcome.statChanges;
+  }
+  return outcome;
+}
+
+function moveNumericField(from: Record<string, unknown>, to: Record<string, unknown>, key: string): void {
+  if (typeof from[key] === 'number' && to[key] === undefined) {
+    to[key] = from[key];
+    delete from[key];
+  }
 }

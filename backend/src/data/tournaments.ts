@@ -1,13 +1,11 @@
 import type { ChoiceDef, ClubTier, EventDef, Stage, StatDelta } from '../types.js';
 
+interface MatchReward {
+  money: number;
+  experience: number;
+}
+
 export type TournamentTier =
-  | 'netcafe'
-  | 'city'
-  | 'platform'
-  | 'secondary-league'
-  | 'development-league'
-  | 'tier2'
-  | 'tier1'
   | 'b'
   | 'a'
   | 's-open'
@@ -51,10 +49,7 @@ export interface TournamentStage {
   rewardShareOnEarlyExit: number;
 }
 
-// Default stage progressions by "depth": small tourneys are 1 stage, Major is 6.
-const ONE_STAGE: TournamentStage[] = [
-  { name: '决赛', difficultyBonus: 0, rewardShareOnEarlyExit: 0.4 },
-];
+// Default stage progressions by "depth": small tourneys are 2 stages, Major is 6.
 const TWO_STAGE: TournamentStage[] = [
   { name: '入围赛', difficultyBonus: -1, rewardShareOnEarlyExit: 0.2 },
   { name: '决赛', difficultyBonus: 1, rewardShareOnEarlyExit: 0.5 },
@@ -174,190 +169,6 @@ function milestone(
 ): QualificationMilestone {
   return { stageIndex, label, rewards, requireWin };
 }
-
-const LEGACY_TOURNAMENTS: Tournament[] = [
-  {
-    id: 't-netcafe',
-    tier: 'netcafe',
-    name: '本地网吧赛',
-    displayName: '本地网吧赛',
-    description: '街边网吧的小型 BO1，奖金不多但能涨经验。',
-    stages: ['rookie'],
-    progressionTier: 'b',
-    entryType: 'direct_signup',
-    brand: 'Open Cup',
-    subtype: 'local_open',
-    year: 0,
-    teamRequirement: null,
-    signupWeeks: 'always',
-    reward: { money: 10, experience: 2, fame: 1, points: 1 },
-    baseDifficulty: 1,
-    difficulty: 1,
-    bracket: ONE_STAGE,
-  },
-  {
-    id: 't-city',
-    tier: 'city',
-    name: '城市公开赛',
-    displayName: '城市公开赛',
-    description: '区域办的周末赛，混着主播和路人队。',
-    stages: ['rookie', 'youth'],
-    progressionTier: 'b',
-    entryType: 'direct_signup',
-    brand: 'City Masters',
-    subtype: 'city_open',
-    year: 0,
-    teamRequirement: null,
-    signupWeeks: [10, 22, 34, 46],
-    reward: { money: 25, experience: 2, fame: 2, points: 2 },
-    baseDifficulty: 2,
-    difficulty: 2,
-    bracket: TWO_STAGE,
-  },
-  {
-    id: 't-platform',
-    tier: 'platform',
-    name: '平台赛 (Faceit/ESEA)',
-    displayName: '平台赛 (Faceit/ESEA)',
-    description: '线上分级赛事，输赢直接体现在 ELO 上。',
-    stages: ['rookie', 'youth', 'second'],
-    progressionTier: 'b',
-    entryType: 'direct_signup',
-    brand: 'Faceit Proving Series',
-    subtype: 'platform_series',
-    year: 0,
-    teamRequirement: null,
-    signupWeeks: 'always',
-    reward: { money: 25, experience: 3, fame: 2, points: 2 },
-    baseDifficulty: 2,
-    difficulty: 2,
-    bracket: TWO_STAGE,
-  },
-  {
-    id: 't-secondary',
-    tier: 'secondary-league',
-    name: '次级联赛',
-    displayName: '次级联赛',
-    description: '俱乐部青训队的常规联赛。',
-    stages: ['youth', 'second'],
-    progressionTier: 'b',
-    entryType: 'direct_signup',
-    brand: 'Academy League',
-    subtype: 'academy_league',
-    year: 0,
-    teamRequirement: 'youth',
-    fameRequired: 6,
-    signupWeeks: [6, 18, 30, 42],
-    reward: { money: 40, experience: 4, fame: 4, points: 4 },
-    baseDifficulty: 3,
-    difficulty: 3,
-    bracket: TWO_STAGE,
-  },
-  {
-    id: 't-development',
-    tier: 'development-league',
-    name: '发展联赛',
-    displayName: '发展联赛',
-    description: '介于次级和职业之间，赢了能直接被一线队签下。',
-    stages: ['youth', 'second'],
-    progressionTier: 'a',
-    entryType: 'direct_signup',
-    brand: 'ESL Challenger League',
-    subtype: 'challenger_league',
-    year: 0,
-    teamRequirement: 'semi-pro',
-    fameRequired: 12,
-    signupWeeks: [14, 38],
-    reward: { money: 55, experience: 5, fame: 6, points: 6 },
-    baseDifficulty: 3,
-    difficulty: 3,
-    bracket: FOUR_STAGE,
-  },
-  {
-    id: 't-tier2',
-    tier: 'tier2',
-    name: 'Tier 2 邀请赛',
-    displayName: 'Tier 2 邀请赛',
-    description: '小型职业邀请赛，混着新晋职业队。',
-    stages: ['second', 'pro'],
-    progressionTier: 'a',
-    entryType: 'direct_signup',
-    brand: 'CCT',
-    subtype: 'tier2_invite',
-    year: 0,
-    teamRequirement: 'pro',
-    fameRequired: 18,
-    pointsRequired: 5,
-    signupWeeks: [10, 22, 34, 46],
-    reward: { money: 70, experience: 5, fame: 8, points: 8, stressDelta: 1 },
-    baseDifficulty: 4,
-    difficulty: 4,
-    bracket: FOUR_STAGE,
-  },
-  {
-    id: 't-tier1',
-    tier: 'tier1',
-    name: 'Tier 1 国际邀请赛',
-    displayName: 'Tier 1 国际邀请赛',
-    description: '一线职业队互锤的赛季级邀请赛。',
-    stages: ['pro'],
-    progressionTier: 's-main',
-    entryType: 'invite',
-    brand: 'ESL Pro League',
-    subtype: 'tier1_invite',
-    year: 0,
-    teamRequirement: 'pro',
-    fameRequired: 30,
-    pointsRequired: 15,
-    signupWeeks: [8, 20, 32, 44],
-    reward: { money: 110, experience: 6, fame: 14, points: 14, stressDelta: 2 },
-    baseDifficulty: 4,
-    difficulty: 4,
-    bracket: FOUR_STAGE,
-  },
-  {
-    id: 't-s-class',
-    tier: 's-class',
-    name: 'S 级赛事',
-    displayName: 'S 级赛事',
-    description: '顶级邀请赛，赢一次能让你被记住一年。',
-    stages: ['pro'],
-    progressionTier: 's-main',
-    entryType: 'invite',
-    brand: 'IEM',
-    subtype: 's_class',
-    year: 0,
-    teamRequirement: 'top',
-    fameRequired: 45,
-    pointsRequired: 25,
-    signupWeeks: [12, 36],
-    reward: { money: 84, experience: 6, fame: 20, points: 22, stressDelta: 3 },
-    baseDifficulty: 5,
-    difficulty: 5,
-    bracket: SIX_STAGE,
-  },
-  {
-    id: 't-major',
-    tier: 'major',
-    name: 'Major 大赛',
-    displayName: 'Major 大赛',
-    description: '一年两届的桂冠赛，赢了就是写入历史。',
-    stages: ['pro'],
-    progressionTier: 'major',
-    entryType: 'invite',
-    brand: 'Major',
-    subtype: 'major',
-    year: 0,
-    teamRequirement: 'top',
-    fameRequired: 35,
-    pointsRequired: 30,
-    signupWeeks: [22, 46],
-    reward: { money: 120, experience: 8, fame: 30, points: 30, stressDelta: 4 },
-    baseDifficulty: 5,
-    difficulty: 5,
-    bracket: SIX_STAGE,
-  },
-];
 
 function buildYearTournaments(year: number): Tournament[] {
   const cached = YEAR_CACHE.get(year);
@@ -625,11 +436,9 @@ function buildYearTournaments(year: number): Tournament[] {
 
 export function getTournament(id: string): Tournament | undefined {
   const generatedYear = /^y(\d+)-/.exec(id)?.[1];
-  if (generatedYear) {
-    const year = Number(generatedYear);
-    return buildYearTournaments(year).find((t) => t.id === id);
-  }
-  return LEGACY_TOURNAMENTS.find((t) => t.id === id);
+  if (!generatedYear) return undefined;
+  const year = Number(generatedYear);
+  return buildYearTournaments(year).find((t) => t.id === id);
 }
 
 // --- Stage-contextual match decision system ---
@@ -644,9 +453,9 @@ function getPhase(stageIndex: number, isFinal: boolean): StagePhase {
 }
 
 function getTierGroup(tier: TournamentTier): TierGroup {
-  if (tier === 'netcafe' || tier === 'city' || tier === 'platform' || tier === 'b') return 'rookie';
-  if (tier === 'secondary-league' || tier === 'development-league' || tier === 'a') return 'circuit';
-  if (tier === 'tier2' || tier === 'tier1' || tier === 's-open' || tier === 's-closed') return 'pro';
+  if (tier === 'b') return 'rookie';
+  if (tier === 'a') return 'circuit';
+  if (tier === 's-open' || tier === 's-closed') return 'pro';
   return 'elite';
 }
 
@@ -674,10 +483,10 @@ const STAGE_NARRATIVES: Record<StagePhase, Record<TierGroup, string>> = {
 function buildOpeningChoices(
   diff: number,
   isFinal: boolean,
-  winReward: StatDelta,
+  winReward: MatchReward,
   winFame: number,
   winStress: number,
-  lossReward: StatDelta,
+  lossReward: MatchReward,
   lossFame: number,
   lossStress: number,
   advanceNote: string,
@@ -696,7 +505,11 @@ function buildOpeningChoices(
       },
       success: {
         narrative: '分析到位，开局就打出了针对性压制，对面措手不及。' + advanceNote,
-        statChanges: { ...winReward, intelligence: (winReward.intelligence ?? 0) + 1 },
+        statChanges: {
+          experience: winReward.experience,
+          intelligence: 1,
+        },
+        moneyDelta: winReward.money,
         fameDelta: Math.floor(winFame * 0.9),
         stressDelta: winStress - 1,
         pointsDelta: 1,
@@ -704,7 +517,8 @@ function buildOpeningChoices(
       },
       failure: {
         narrative: '对面提前有应对方案，你们的战术被逐一拆解。',
-        statChanges: lossReward,
+        statChanges: { experience: lossReward.experience },
+        moneyDelta: lossReward.money,
         fameDelta: lossFame,
         stressDelta: lossStress,
       },
@@ -722,14 +536,16 @@ function buildOpeningChoices(
       },
       success: {
         narrative: isFinal ? winNarrative : '手感在线，开局个人数据领先，队伍节奏也上来了。' + advanceNote,
-        statChanges: winReward,
+        statChanges: { experience: winReward.experience },
+        moneyDelta: winReward.money,
         fameDelta: winFame,
         stressDelta: winStress,
         tagAdds: isFinal ? ['tournament-winner', 'highlight-clip'] : [],
       },
       failure: {
         narrative: '状态没跟上预期，关键枪被对面压住，开局就落入被动。',
-        statChanges: lossReward,
+        statChanges: { experience: lossReward.experience },
+        moneyDelta: lossReward.money,
         fameDelta: lossFame,
         stressDelta: lossStress,
       },
@@ -749,15 +565,16 @@ function buildOpeningChoices(
           : '节奏稳住，对面没找到破绽，晋级。' + advanceNote,
         statChanges: {
           experience: Math.max(1, Math.floor((winReward.experience ?? 1) * 0.8)),
-          money: Math.max(0, Math.floor((winReward.money ?? 0) * 0.8)),
         },
+        moneyDelta: Math.max(0, Math.floor((winReward.money ?? 0) * 0.8)),
         fameDelta: Math.floor(winFame * 0.7),
         stressDelta: 0,
         tagAdds: isFinal ? ['tournament-winner'] : [],
       },
       failure: {
         narrative: '保守过头，被对面找到节奏咬住，最终没能翻身。',
-        statChanges: { ...lossReward, money: 0 },
+        statChanges: { experience: lossReward.experience ?? 0 },
+        moneyDelta: 0,
         fameDelta: -1,
         stressDelta: Math.max(1, lossStress - 1),
       },
@@ -768,10 +585,10 @@ function buildOpeningChoices(
 function buildCrunchChoices(
   diff: number,
   isFinal: boolean,
-  winReward: StatDelta,
+  winReward: MatchReward,
   winFame: number,
   winStress: number,
-  lossReward: StatDelta,
+  lossReward: MatchReward,
   lossFame: number,
   lossStress: number,
   advanceNote: string,
@@ -791,9 +608,9 @@ function buildCrunchChoices(
       success: {
         narrative: '队友接住了你让的枪，打出了名场面。积分板上差距拉开了。' + advanceNote,
         statChanges: {
-          experience: Math.max(1, Math.floor((winReward.experience ?? 1) * 0.8)),
-          money: Math.max(0, Math.floor((winReward.money ?? 0) * 0.5)),
+          experience: Math.max(1, Math.floor(winReward.experience * 0.8)),
         },
+        moneyDelta: Math.max(0, Math.floor(winReward.money * 0.5)),
         fameDelta: Math.floor(winFame * 0.8),
         stressDelta: -2,
         pointsDelta: 2,
@@ -801,7 +618,11 @@ function buildCrunchChoices(
       },
       failure: {
         narrative: '队友没接住，你空枪被打爆，资源白让了这局白给了。',
-        statChanges: { ...lossReward, mentality: (lossReward.mentality ?? 0) - 1 },
+        statChanges: {
+          experience: lossReward.experience,
+          mentality: -1,
+        },
+        moneyDelta: lossReward.money,
         fameDelta: lossFame - 1,
         stressDelta: lossStress + 2,
       },
@@ -819,14 +640,22 @@ function buildCrunchChoices(
       },
       success: {
         narrative: '你咬牙撑过去，收掉了几个关键枪，耳麦里队友在喊你。' + advanceNote,
-        statChanges: { ...winReward, constitution: (winReward.constitution ?? 0) - 1 },
+        statChanges: {
+          experience: winReward.experience,
+          constitution: -1,
+        },
+        moneyDelta: winReward.money,
         fameDelta: winFame + 2,
         stressDelta: -1,
         tagAdds: isFinal ? ['tournament-winner', 'highlight-clip'] : [],
       },
       failure: {
         narrative: '身体在关键回合突然加重，发挥受影响拖累了全队。',
-        statChanges: { ...lossReward, constitution: (lossReward.constitution ?? 0) - 2 },
+        statChanges: {
+          experience: lossReward.experience,
+          constitution: -2,
+        },
+        moneyDelta: lossReward.money,
         fameDelta: lossFame,
         stressDelta: lossStress + 2,
         injuryRestRounds: 1,
@@ -845,14 +674,19 @@ function buildCrunchChoices(
       },
       success: {
         narrative: '临场应变打乱了对手的预判，你们的反击打得漂亮。' + advanceNote,
-        statChanges: { ...winReward, intelligence: (winReward.intelligence ?? 0) + 1 },
+        statChanges: {
+          experience: winReward.experience,
+          intelligence: 1,
+        },
+        moneyDelta: winReward.money,
         fameDelta: winFame,
         stressDelta: winStress,
         tagAdds: isFinal ? ['tournament-winner'] : [],
       },
       failure: {
         narrative: '临场换战术执行太仓促，队员之间信号混乱，被对面抓住破绽。',
-        statChanges: lossReward,
+        statChanges: { experience: lossReward.experience },
+        moneyDelta: lossReward.money,
         fameDelta: lossFame,
         stressDelta: lossStress,
       },
@@ -862,9 +696,9 @@ function buildCrunchChoices(
 
 function buildFinaleChoices(
   diff: number,
-  winReward: StatDelta,
+  winReward: MatchReward,
   winFame: number,
-  lossReward: StatDelta,
+  lossReward: MatchReward,
   lossFame: number,
   lossStress: number,
   winNarrative: string,
@@ -884,10 +718,11 @@ function buildFinaleChoices(
       success: {
         narrative: '你打出了本届最高光时刻，全场爆发欢呼声。' + winNarrative,
         statChanges: {
-          ...winReward,
-          agility: (winReward.agility ?? 0) + 1,
-          mentality: (winReward.mentality ?? 0) + 1,
+          experience: winReward.experience,
+          agility: 1,
+          mentality: 1,
         },
+        moneyDelta: winReward.money,
         fameDelta: winFame + 5,
         stressDelta: -3,
         pointsDelta: 2,
@@ -895,7 +730,11 @@ function buildFinaleChoices(
       },
       failure: {
         narrative: '压力在决赛把你压垮了，手开始颤，回合走不出去。',
-        statChanges: { ...lossReward, mentality: (lossReward.mentality ?? 0) - 2 },
+        statChanges: {
+          experience: lossReward.experience,
+          mentality: -2,
+        },
+        moneyDelta: lossReward.money,
         fameDelta: lossFame - 1,
         stressDelta: lossStress + 5,
       },
@@ -913,14 +752,19 @@ function buildFinaleChoices(
       },
       success: {
         narrative: '你保持住了情绪，稳健走完全程，对手急了你没急。' + winNarrative,
-        statChanges: winReward,
+        statChanges: { experience: winReward.experience },
+        moneyDelta: winReward.money,
         fameDelta: winFame,
         stressDelta: -3,
         tagAdds: ['tournament-winner'],
       },
       failure: {
         narrative: '决赛心理关没过，越想放松越紧张，最终输在心态上。',
-        statChanges: { ...lossReward, mentality: (lossReward.mentality ?? 0) - 1 },
+        statChanges: {
+          experience: lossReward.experience,
+          mentality: -1,
+        },
+        moneyDelta: lossReward.money,
         fameDelta: lossFame,
         stressDelta: lossStress + 3,
       },
@@ -937,14 +781,21 @@ function buildFinaleChoices(
       },
       success: {
         narrative: '体系打得行云流水，对手的反应比你们慢了半步。' + winNarrative,
-        statChanges: { ...winReward, intelligence: (winReward.intelligence ?? 0) + 1 },
+        statChanges: {
+          experience: winReward.experience,
+          intelligence: 1,
+        },
+        moneyDelta: winReward.money,
         fameDelta: winFame,
         stressDelta: 0,
         tagAdds: ['tournament-winner'],
       },
       failure: {
         narrative: '体系被提前读透，临场没有 plan B，被人追过去。',
-        statChanges: { ...lossReward, experience: (lossReward.experience ?? 0) + 1 },
+        statChanges: {
+          experience: lossReward.experience + 1,
+        },
+        moneyDelta: lossReward.money,
         fameDelta: lossFame + 1,
         stressDelta: lossStress,
       },

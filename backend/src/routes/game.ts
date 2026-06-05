@@ -34,6 +34,7 @@ import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
 import type { SocialFeedPost } from '../ai/prompts.js';
+import { validateAiEvents } from '../validation/guard.js';
 import type { ClubTier, Env, EventDef, MatchStats, PlayerTeam, Stats } from '../types.js';
 
 function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
@@ -196,11 +197,8 @@ app.post('/game/:sessionId/choice', async (c) => {
       const cached = await c.env.KV.get(`ai-events:${id}`);
       if (cached) {
         const parsed = JSON.parse(cached) as unknown[];
-        aiEvents = parsed.filter((e): e is EventDef => {
-          if (!e || typeof e !== 'object') return false;
-          const ev = e as Record<string, unknown>;
-          return typeof ev.id === 'string' && typeof ev.type === 'string';
-        });
+        const { valid } = validateAiEvents(Array.isArray(parsed) ? parsed : []);
+        aiEvents = valid;
       }
     } catch {}
 
@@ -208,6 +206,9 @@ app.post('/game/:sessionId/choice', async (c) => {
     // 提前保存，供下方生成入队邀请时使用
     const preChoicePendingApplication = session.player.pendingApplication;
     const { session: updated, result } = applyChoice(session, choiceId, customRollBonus, aiEvents);
+    const pendingAiEventDef = updated.currentEvent?.id.startsWith('ai-')
+      ? aiEvents?.find((e) => e.id === updated.currentEvent!.id)
+      : undefined;
 
     // 自由行动时：用自定义行动作为叙事重写依据，不拼接默认叙事
     if (customNarrativePrefix) {
@@ -299,17 +300,43 @@ app.post('/game/:sessionId/choice', async (c) => {
     await storage.sessions.save(updated);
 
     if (ai.active && updated.status === 'active') {
-      c.executionCtx?.waitUntil(
-        (async () => {
-          try {
-            const generated = await ai.generateEvents(updated.player, updated.history);
-            if (generated && generated.length > 0) {
-              await c.env.KV.put(`ai-events:${id}`, JSON.stringify(generated), { expirationTtl: 43200 });
-            }
-          } catch {
+      const refreshAiEvents = async () => {
+        const key = `ai-events:${id}`;
+        const preservePendingAiEvent = async () => {
+          if (pendingAiEventDef) {
+            await c.env.KV.put(key, JSON.stringify([pendingAiEventDef]), { expirationTtl: 43200 });
           }
-        })(),
-      );
+        };
+        const writeMergedAiEvents = async (generated: EventDef[]) => {
+          const merged = [
+            ...(pendingAiEventDef ? [pendingAiEventDef] : []),
+            ...generated.filter((e) => e.id !== pendingAiEventDef?.id),
+          ];
+          await c.env.KV.put(key, JSON.stringify(merged), { expirationTtl: 43200 });
+        };
+
+        try {
+          const generated = await ai.generateEvents(updated.player, updated.history);
+          if (generated && generated.length > 0) {
+            await writeMergedAiEvents(generated);
+          } else {
+            await preservePendingAiEvent();
+          }
+        } catch (err) {
+          console.warn('[AI events] refresh failed:', err);
+          try {
+            await preservePendingAiEvent();
+          } catch (preserveErr) {
+            console.warn('[AI events] preserve pending event failed:', preserveErr);
+          }
+        }
+      };
+
+      if (c.executionCtx) {
+        c.executionCtx.waitUntil(refreshAiEvents());
+      } else {
+        await refreshAiEvents();
+      }
     }
 
     return c.json({

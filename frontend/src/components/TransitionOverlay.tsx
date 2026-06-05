@@ -2,9 +2,15 @@
 
 interface TransitionOverlayProps {
   visible: boolean;
+  title?: string;
+  subtitle?: string;
 }
 
-export default function TransitionOverlay({ visible }: TransitionOverlayProps) {
+export default function TransitionOverlay({
+  visible,
+  title = '正在生成叙事...',
+  subtitle = '请稍候，系统正在处理你的选择',
+}: TransitionOverlayProps) {
   if (!visible) return null;
 
   return (
@@ -43,7 +49,15 @@ export default function TransitionOverlay({ visible }: TransitionOverlayProps) {
           letterSpacing: '0.04em',
         }}
       >
-        正在生成个性化剧情...
+        {title}
+      </span>
+      <span
+        style={{
+          fontSize: 12,
+          color: 'var(--fg-3)',
+        }}
+      >
+        {subtitle}
       </span>
       <style>{`
         @keyframes spin {

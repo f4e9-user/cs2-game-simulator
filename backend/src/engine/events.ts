@@ -207,8 +207,9 @@ export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
             label: '赛前情报',
             actionTag: 'match',
             growthKey: 'intelligence',
-            multiplier: 1.15,
+            growthMultiplier: 1.15,
             remainingUses: 2,
+            consumeOn: 'growth',
           },
         },
         failure: {
@@ -314,6 +315,11 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     return true;
   });
 
+  const aiEligible = eligible.filter((e) => e.id.startsWith('ai-'));
+  if (aiEligible.length > 0 && rng() < 0.6) {
+    return weightedPick(aiEligible, rng, (e) => stateWeight(e, player));
+  }
+
   if (eligible.length === 0) {
     const fallback = pool.filter(
       (e) => e.type !== 'rest' && e.type !== 'routine' && e.stages.includes(player.stage),
@@ -375,15 +381,16 @@ export function toPublicEvent(
     if (transferTarget) t = substituteTransferTarget(t, transferTarget);
     return t;
   };
+  const subMaybe = (s?: string) => (typeof s === 'string' ? sub(s) : '');
   return {
     id: e.id,
     type: e.type,
-    title: sub(e.title),
-    narrative: sub(e.narrative),
+    title: subMaybe(e.title),
+    narrative: subMaybe(e.narrative),
     choices: e.choices.map((c) => ({
       id: c.id,
-      label: sub(c.label),
-      description: sub(c.description),
+      label: subMaybe(c.label),
+      description: subMaybe(c.description),
     })),
   };
 }

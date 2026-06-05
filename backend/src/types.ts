@@ -24,7 +24,19 @@ export interface Buff {
   label: string;
   actionTag: string;    // 'training' | 'ranked' | 'all'
   growthKey?: StatKey;  // 受益的属性 key
-  multiplier: number;   // e.g. 1.3 = +30%
+  growthMultiplier?: number;   // e.g. 1.3 = +30%
+  fatigueGainMultiplier?: number; // 仅作用于正向疲劳增量
+  stressGainMultiplier?: number;  // 仅作用于正向压力增量
+  remainingUses: number;
+  consumeOn?: 'growth' | 'fatigue' | 'stress' | 'any';
+  /** @deprecated Use growthMultiplier instead. */
+  multiplier?: number;
+}
+
+export interface RoundCombo {
+  id: string;
+  label: string;
+  sourceActionId: string;
   remainingUses: number;
 }
 
@@ -47,6 +59,13 @@ export type EventType =
   | 'betting'
   | 'cheat'
   | 'rest'
+  | 'stress'
+  | 'rival'
+  | 'broadcast'
+  | 'daily'
+  | 'chains'
+  | 'skins'
+  | 'agent'
   | 'routine'; // 每日行动（天梯/训练/休息/度假）
 
 export interface Trait {
@@ -223,6 +242,7 @@ export interface DynamicState {
   bailoutCooldown: number;
   teamBailoutCooldown: number;
   consecutiveBrokeRounds: number;
+  roundCombos: RoundCombo[];
 }
 
 export interface ActionResult {
@@ -240,6 +260,8 @@ export interface ActionResult {
   growthAmount?: number;
   newStats: Stats;
   newVolatile: { feel: number; tilt: number; fatigue: number };
+  comboTriggeredLabels?: string[];
+  comboAddedLabels?: string[];
 }
 
 export interface Player extends DynamicState {
@@ -298,7 +320,7 @@ export interface GameEventPublic {
   choices: ChoicePublic[];
 }
 
-export type StatDelta = Partial<Stats>;
+export type StatDelta = Partial<Omit<Stats, 'money'>>;
 
 export interface MatchStats {
   kills: number;
@@ -356,6 +378,17 @@ export interface GameSession {
   createdAt: string;
   updatedAt: string;
   leaderboard: LeaderboardTeam[];
+}
+
+export interface SessionSummary {
+  id: string;
+  name: string;
+  stage: Stage;
+  round: number;
+  status: SessionStatus;
+  ending: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // --- Internal-only engine types ---

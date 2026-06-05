@@ -15,7 +15,7 @@ import {
   type ShopNarrativeInput,
   type SocialFeedPost,
 } from './prompts.js';
-import { analyzeEventGaps, buildEventGenPrompt, parseAiEvents } from './eventGenerator.js';
+import { analyzeEventGaps, buildEventGenPrompt, extractJsonArray, parseAiEvents } from './eventGenerator.js';
 import {
   buildTraitRulesForPlayer,
   loadTraitNarrativeConfig,
@@ -525,7 +525,26 @@ abstract class BaseLlmNarrator implements AiService {
       true,
       'generateEvents',
     );
+    const jsonArrayFound = extractJsonArray(text) !== null;
     const { valid, invalid } = parseAiEvents(text);
+    if (this.logger) {
+      await this.logger.log({
+        method: 'generateEventsParsed',
+        provider: this.getProviderName(),
+        model: this.getModel(),
+        systemPrompt: '',
+        userPrompt: prompt,
+        response: JSON.stringify({
+          jsonArrayFound,
+          validCount: valid.length,
+          invalidCount: invalid.length,
+          validIds: valid.map((e) => e.id),
+        }),
+        error: valid.length === 0 ? 'no valid AI events after parsing/validation' : undefined,
+        latencyMs: 0,
+        stream: false,
+      });
+    }
     if (invalid.length > 0 && this.logger) {
       await this.logger.log({
         method: 'generateEventsInvalid',

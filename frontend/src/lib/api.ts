@@ -8,6 +8,7 @@ import type {
   Loan,
   MatchStats,
   Player,
+  SessionSummary,
   RollTraitsResponse,
   ShopItem,
   SocialPost,
@@ -101,6 +102,19 @@ export const api = {
     }),
   getSession: (sessionId: string) =>
     request<GameSession>(`/api/game/${sessionId}`),
+  listDebugSessions: (limit = 200) =>
+    request<{ sessions: SessionSummary[]; total: number }>(`/api/debug/sessions?limit=${limit}`),
+  getDebugAiStatus: () =>
+    request<{ provider: string; model: string | null; active: boolean; kvBound: boolean }>('/api/debug/ai-status'),
+  getDebugAiEvents: (sessionId: string) =>
+    request<{ events: unknown[]; message?: string; validCount?: number; invalidCount?: number }>(`/api/debug/ai-events/${sessionId}`),
+  updateDebugSession: (sessionId: string, body: Record<string, unknown>) =>
+    request<{ player: Player }>(`/api/debug/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  writeDebugTestLog: () =>
+    request<{ ok: boolean; message: string }>('/api/debug/llm-logs/test', { method: 'POST' }),
   submitChoice: (sessionId: string, choiceId: string, customAction?: string, apiToken?: string) =>
     request<ChoiceResponse>(`/api/game/${sessionId}/choice`, {
       method: 'POST',

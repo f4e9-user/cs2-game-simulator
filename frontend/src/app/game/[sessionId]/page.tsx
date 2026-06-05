@@ -74,6 +74,7 @@ export default function GamePage() {
   const [shopResults, setShopResults] = useState<SettlementShopResult[]>([]);
   const [shopNarratives, setShopNarratives] = useState<Record<string, string>>({});
   const [settlementLoading, setSettlementLoading] = useState(false);
+  const [choiceSubmitting, setChoiceSubmitting] = useState(false);
 
   const [streamingNarrative, setStreamingNarrative] = useState<string | null>(null);
   const [isNarrating, setIsNarrating] = useState(false);
@@ -108,6 +109,7 @@ export default function GamePage() {
         setSettlementLoading(false);
         setStreamingNarrative(null);
         setIsNarrating(false);
+        setChoiceSubmitting(false);
         clearLastResult();
 
         // 用 session.apiToken 触发 intro（fire-and-forget，不阻塞主流程）
@@ -189,17 +191,21 @@ export default function GamePage() {
       setStreamingNarrative(null);
       setSettlementLoading(false);
       setIsNarrating(false);
+      setChoiceSubmitting(false);
       clearLastResult();
     }, 400);
   };
 
   const pickChoice = async (choiceId: string, customAction?: string) => {
+    if (loading || choiceSubmitting) return;
+
     // Cancel any in-flight narrative stream from a previous choice
     if (narrateCtxRef.current) narrateCtxRef.current.cancelled = true;
     setStreamingNarrative(null);
     setIsNarrating(false);
 
     setLoading(true);
+    setChoiceSubmitting(true);
     setError(null);
     try {
       const res = await api.submitChoice(sessionId, choiceId, customAction, apiToken ?? undefined);
@@ -277,6 +283,7 @@ export default function GamePage() {
       setSettlementLoading(false);
     } finally {
       setLoading(false);
+      setChoiceSubmitting(false);
     }
   };
 
@@ -330,7 +337,13 @@ export default function GamePage() {
     <div className={`hud-root${isCritical ? ' stress-critical' : ''}${shaking ? ' stress-shaking' : ''}`}>
       {/* 压力临界红框警告 */}
       {isCritical && <div className="stress-critical-overlay" />}
-      {transitioning && <TransitionOverlay visible />}
+      {(transitioning || choiceSubmitting) && (
+        <TransitionOverlay
+          visible
+          title={choiceSubmitting ? '正在生成叙事...' : '正在切换回合...'}
+          subtitle={choiceSubmitting ? '请稍候，系统正在处理你的选择' : '请稍候，回合正在切换'}
+        />
+      )}
 
       {/* Top bar */}
       <HudTopBar player={player} leaderboard={leaderboard} />
@@ -437,13 +450,13 @@ export default function GamePage() {
                       </div>
                     ) : phase === 'settlement' ? (
                       lastResult ? null : <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>结算中…</div>
-                    ) : currentEvent ? (
+                    ) : phase === 'event' && currentEvent ? (
                       <>
                         <EventCard event={currentEvent} />
                         <div style={{ marginTop: 8, marginBottom: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
                           选择行动
                         </div>
-                        <ChoiceList choices={currentEvent.choices} disabled={loading} aiActive={aiActive} onPick={pickChoice} />
+                        <ChoiceList choices={currentEvent.choices} disabled={loading || choiceSubmitting} aiActive={aiActive} onPick={pickChoice} />
                       </>
                     ) : (
                       <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>等待下一回合…</div>

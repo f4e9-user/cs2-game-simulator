@@ -151,8 +151,9 @@ export const DAILY_EVENTS: EventDef[] = [
             id: 'pre-match-analysis',
             label: '赛前分析加成',
             actionTag: 'match',
-            multiplier: 1.2,
+            growthMultiplier: 1.2,
             remainingUses: 2,
+            consumeOn: 'growth',
           },
         },
         failure: {
@@ -246,8 +247,9 @@ export const DAILY_EVENTS: EventDef[] = [
             id: 'self-study',
             label: '自主研究加成',
             actionTag: 'training',
-            multiplier: 1.15,
+            growthMultiplier: 1.15,
             remainingUses: 2,
+            consumeOn: 'growth',
           },
         },
         failure: {

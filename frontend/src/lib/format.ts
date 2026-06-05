@@ -106,6 +106,13 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   rest: '强制休养',
   routine: '每日行动',
   bailout: '救济',
+  stress: '压力',
+  rival: '对手',
+  broadcast: '赛事广播',
+  daily: '日常',
+  chains: '连锁事件',
+  skins: '饰品',
+  agent: '经纪人',
 };
 
 // ── 被动效果标签 ──────────────────────────────────────────────
@@ -250,9 +257,20 @@ export function describeTournamentStress(v: number): string {
 }
 
 export function describeBuffAdded(buff: Buff): string {
-  const target = buff.growthKey ? STAT_GROWTH_NAMES[buff.growthKey] : '成长';
-  const pct = Math.round((buff.multiplier - 1) * 100);
-  return `获得「${buff.label}」· ${target}效率 +${pct}% (${buff.remainingUses}次)`;
+  const effects: string[] = [];
+  const growthMultiplier = buff.growthMultiplier ?? buff.multiplier;
+  if (growthMultiplier && growthMultiplier !== 1) {
+    const target = buff.growthKey ? STAT_GROWTH_NAMES[buff.growthKey] : '成长';
+    effects.push(`${target}效率 ${growthMultiplier >= 1 ? '+' : ''}${Math.round((growthMultiplier - 1) * 100)}%`);
+  }
+  if (buff.fatigueGainMultiplier && buff.fatigueGainMultiplier !== 1) {
+    effects.push(`疲劳增长 ${Math.round((buff.fatigueGainMultiplier - 1) * 100)}%`);
+  }
+  if (buff.stressGainMultiplier && buff.stressGainMultiplier !== 1) {
+    effects.push(`压力增长 ${Math.round((buff.stressGainMultiplier - 1) * 100)}%`);
+  }
+  const detail = effects.length > 0 ? `· ${effects.join('，')}` : '';
+  return `获得「${buff.label}」${detail} (${buff.remainingUses}次)`;
 }
 
 export function formatDelta(value: number): string {
