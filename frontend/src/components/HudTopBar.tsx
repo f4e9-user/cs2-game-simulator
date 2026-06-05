@@ -18,21 +18,36 @@ const BUFF_ICONS: Record<string, string> = {
 };
 
 function buffDetail(buff: Buff): { effect: string; scope: string } {
-  const pct = Math.round(Math.abs(buff.multiplier - 1) * 100);
-  const dir = buff.multiplier >= 1 ? '+' : '-';
-  let effect = '';
+  const effects: string[] = [];
+  const growthMultiplier = buff.growthMultiplier ?? buff.multiplier;
   if (buff.growthKey) {
     const keyLabel: Record<string, string> = {
       agility: '敏捷', intelligence: '智力', experience: '经验',
       mentality: '心态', constitution: '体能',
     };
-    effect = `${keyLabel[buff.growthKey] ?? buff.growthKey} 成长效率 ${dir}${pct}%`;
-  } else if (buff.multiplier !== 1) {
-    effect = `效率 ${dir}${pct}%`;
+    if (growthMultiplier && growthMultiplier !== 1) {
+      const pct = Math.round(Math.abs(growthMultiplier - 1) * 100);
+      const dir = growthMultiplier >= 1 ? '+' : '-';
+      effects.push(`${keyLabel[buff.growthKey] ?? buff.growthKey} 成长效率 ${dir}${pct}%`);
+    }
+  } else if (growthMultiplier && growthMultiplier !== 1) {
+    const pct = Math.round(Math.abs(growthMultiplier - 1) * 100);
+    const dir = growthMultiplier >= 1 ? '+' : '-';
+    effects.push(`成长效率 ${dir}${pct}%`);
+  }
+  if (buff.fatigueGainMultiplier && buff.fatigueGainMultiplier !== 1) {
+    const pct = Math.round(Math.abs(buff.fatigueGainMultiplier - 1) * 100);
+    const dir = buff.fatigueGainMultiplier < 1 ? '-' : '+';
+    effects.push(`疲劳增长 ${dir}${pct}%`);
+  }
+  if (buff.stressGainMultiplier && buff.stressGainMultiplier !== 1) {
+    const pct = Math.round(Math.abs(buff.stressGainMultiplier - 1) * 100);
+    const dir = buff.stressGainMultiplier < 1 ? '-' : '+';
+    effects.push(`压力增长 ${dir}${pct}%`);
   }
   const scopeLabel: Record<string, string> = { all: '所有行动', ranked: '天梯', training: '训练' };
   const scope = scopeLabel[buff.actionTag] ?? buff.actionTag;
-  return { effect, scope };
+  return { effect: effects.join('；'), scope };
 }
 
 interface Props {

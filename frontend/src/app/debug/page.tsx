@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface LlmLogEntry {
@@ -256,6 +257,11 @@ export default function LlmDebugPage() {
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#8b949e' }}>
             查看最近 100 条 LLM 调用的 prompt / response
           </p>
+          <div style={{ marginTop: 10 }}>
+            <Link href="/debug/sessions" className="ghost-button" style={{ display: 'inline-flex' }}>
+              会话总览
+            </Link>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <label style={{ fontSize: 13, color: '#8b949e', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>

@@ -11,6 +11,11 @@ interface Props {
 export function ChoiceList({ choices, disabled, aiActive, onPick }: Props) {
   const [customText, setCustomText] = useState('');
 
+  const handlePick = (choiceId: string, customAction?: string) => {
+    if (disabled) return;
+    onPick(choiceId, customAction);
+  };
+
   const submitCustom = () => {
     const text = customText.trim();
     if (!text || disabled) return;
@@ -26,7 +31,7 @@ export function ChoiceList({ choices, disabled, aiActive, onPick }: Props) {
           type="button"
           className="cs-choice"
           disabled={disabled}
-          onClick={() => onPick(c.id)}
+          onClick={() => handlePick(c.id)}
         >
           <span className="cs-choice-num">{i + 1}</span>
           <div className="cs-choice-label">{c.label}</div>

@@ -14,12 +14,13 @@ import {
 } from '../data/leaderboard.js';
 import { getEventById } from '../data/events/index.js';
 import { TRAITS, getTrait } from '../data/traits.js';
-import { ACTIONS, getAction } from '../data/actions.js';
+import { ACTIONS, getAction, type ActionDef, type ComboConsume } from '../data/actions.js';
 import { getShopItem, SHOP_ITEMS } from '../data/shop.js';
 import { CLUBS, getClub, clubsForStage, PRIZE_SPLIT } from '../data/clubs.js';
 import type {
   ActionResult,
   Buff,
+  ChoiceDef,
   Club,
   GameEventPublic,
   GameSession,
@@ -28,6 +29,7 @@ import type {
   Outcome,
   PendingDeparture,
   Player,
+  RoundCombo,
   RoundResult,
   StatDelta,
   StatKey,
@@ -45,8 +47,6 @@ import {
   FAME_MIN,
   FATIGUE_MAX,
   FATIGUE_MIN,
-  FATIGUE_STRESS_MULTIPLIER,
-  FATIGUE_STRESS_THRESHOLD,
   FEEL_CAP_DEFAULT,
   FEEL_CAP_MAX,
   FEEL_CAP_MIN,
@@ -73,17 +73,12 @@ import {
   TILT_MIN,
   growthFactor,
   passiveStressFromMentality,
-  fatigueMult,
-  stressMult,
-  FATIGUE_DELTA_FLOOR_ROUTINE,
-  FATIGUE_DELTA_FLOOR_EVENT,
-  STRESS_DELTA_FLOOR_ROUTINE,
-  STRESS_DELTA_FLOOR_EVENT,
 } from './constants.js';
 import { buildTournamentPrepEvent, pickEvent, ROLE_STAT_REQUIREMENT, substituteRivals, substituteTeammates, toPublicEvent } from './events.js';
 import { checkTournamentPromotion } from './stages.js';
 import { applyDelta, applyGrowth, clampStats, makeRng, resolveChoice, stageIndex, translateStatDelta } from './resolver.js';
 import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
+import { applyStateDeltaModifiers, consumeTriggeredBuffs } from './stateModifiers.js';
 import {
   addQualificationRewardsByOwner,
   clearTeamQualifications,
@@ -128,6 +123,69 @@ function clampFatigue(v: number): number {
 
 function clampMoney(v: number): number {
   return Math.max(0, Math.min(MONEY_MAX, Math.round(v)));
+}
+
+function matchingActionCombos(player: Player, actionDef: ActionDef): ComboConsume[] {
+  const active = new Set((player.roundCombos ?? [])
+    .filter((combo) => combo.remainingUses > 0)
+    .map((combo) => combo.id));
+  return (actionDef.comboConsumes ?? []).filter((combo) => active.has(combo.id));
+}
+
+function comboTempBuffs(combos: ComboConsume[], actionTag: string): Buff[] {
+  return combos
+    .filter((combo) =>
+      combo.effects.growthMultiplier !== undefined ||
+      combo.effects.fatigueGainMultiplier !== undefined ||
+      combo.effects.stressGainMultiplier !== undefined,
+    )
+    .map((combo) => ({
+      id: `combo-${combo.id}`,
+      label: combo.label,
+      actionTag,
+      growthKey: combo.effects.growthKey,
+      growthMultiplier: combo.effects.growthMultiplier,
+      fatigueGainMultiplier: combo.effects.fatigueGainMultiplier,
+      stressGainMultiplier: combo.effects.stressGainMultiplier,
+      remainingUses: 1,
+      consumeOn: 'any',
+    }));
+}
+
+function sumComboEffect(combos: ComboConsume[], key: 'feelDelta' | 'tiltDelta' | 'fatigueDelta' | 'stressDelta'): number {
+  return combos.reduce((sum, combo) => sum + (combo.effects[key] ?? 0), 0);
+}
+
+function consumeRoundCombos(roundCombos: RoundCombo[], consumedIds: Set<string>): RoundCombo[] {
+  return roundCombos
+    .map((combo) =>
+      consumedIds.has(combo.id)
+        ? { ...combo, remainingUses: combo.remainingUses - 1 }
+        : combo,
+    )
+    .filter((combo) => combo.remainingUses > 0);
+}
+
+function addOpenedCombos(
+  roundCombos: RoundCombo[],
+  actionDef: ActionDef,
+  actionId: string,
+  success: boolean,
+): RoundCombo[] {
+  const out = [...roundCombos];
+  const existing = new Set(out.map((combo) => combo.id));
+  for (const combo of actionDef.comboOpens ?? []) {
+    if (combo.requireSuccess && !success) continue;
+    if (existing.has(combo.id)) continue;
+    out.push({
+      id: combo.id,
+      label: combo.label,
+      sourceActionId: actionId,
+      remainingUses: 1,
+    });
+    existing.add(combo.id);
+  }
+  return out;
 }
 
 export function rollRandomTraits(count = 3): Trait[] {
@@ -414,6 +472,7 @@ export function initPlayer(input: InitInput): Player {
     tierChampionships: {},
     promotionPending: null,
     promotionCooldown: 0,
+    roundCombos: [],
   };
 }
 
@@ -462,6 +521,11 @@ export function createSession(player: Player, rngSeed: number): GameSession {
 }
 
 // Build a synthetic ResolveResult from a match simulation, bypassing d20.
+interface MatchReward {
+  money: number;
+  experience: number;
+}
+
 function buildMatchResolveResult(
   player: Player,
   sim: MatchSimResult,
@@ -475,10 +539,10 @@ function buildMatchResolveResult(
   const lossShare = stage.rewardShareOnEarlyExit;
 
   // Reward calculation mirrors old synthesizeMatchEvent logic
-  const winReward: StatDelta = isFinal
+  const winReward: MatchReward = isFinal
     ? { money: r.money, experience: r.experience }
     : { money: Math.max(0, Math.floor(r.money / 4)), experience: Math.max(1, Math.floor(r.experience / 4)) };
-  const lossReward: StatDelta = {
+  const lossReward: MatchReward = {
     money: Math.max(0, Math.floor(r.money * lossShare)),
     experience: Math.max(1, Math.floor(r.experience * lossShare)),
   };
@@ -488,20 +552,21 @@ function buildMatchResolveResult(
   const winStressDelta = isFinal ? (r.stressDelta ?? 0) : 0;
   const lossStressDelta = (r.stressDelta ?? 1) + 2;
 
-  const statChanges: StatDelta = won ? winReward : lossReward;
-
   // 奖金分成：签约战队后俱乐部从奖金抽成
   const playerShare = player.team
     ? (PRIZE_SPLIT[player.team.tier] ?? 1.0)
     : 1.0;
-  if (player.team && playerShare < 1.0 && statChanges.money) {
-    statChanges.money = Math.round((statChanges.money as number) * playerShare);
-  }
+  const rawMoney = won ? (winReward.money ?? 0) : (lossReward.money ?? 0);
+  const moneyDelta = player.team && playerShare < 1.0
+    ? Math.round(rawMoney * playerShare)
+    : rawMoney;
 
   // Apply stat changes via translateStatDelta for consistency
-  const legacy = translateStatDelta(statChanges);
+  const legacy = translateStatDelta({
+    experience: won ? (winReward.experience ?? 0) : (lossReward.experience ?? 0),
+  });
   let nextStats = { ...player.stats };
-  nextStats.money = clampMoney(nextStats.money + legacy.moneyDelta);
+  nextStats.money = clampMoney(nextStats.money + moneyDelta);
 
   let growthApplied = 0;
   let growthKey: StatKey | undefined;
@@ -525,7 +590,9 @@ function buildMatchResolveResult(
 
   const chosenOutcome: Outcome = {
     narrative: sim.summary,
-    statChanges,
+    statChanges: {
+      experience: won ? (winReward.experience ?? 0) : (lossReward.experience ?? 0),
+    },
     feelDelta: sim.feelDelta,
     tiltDelta: sim.tiltDelta,
     fatigueDelta: sim.fatigueDelta,
@@ -554,7 +621,7 @@ function buildMatchResolveResult(
     feelDelta: sim.feelDelta,
     tiltDelta: sim.tiltDelta,
     fatigueDelta: sim.fatigueDelta,
-    moneyDelta: legacy.moneyDelta,
+    moneyDelta,
     growthApplied,
     growthKey,
   };
@@ -596,11 +663,13 @@ export function applyChoice(
   session: GameSession,
   choiceId: string,
   rollBonus = 0,
+  aiEvents?: EventDef[],
 ): ApplyChoiceResult {
   if (session.status !== 'active') throw new Error('session is not active');
   if (!session.currentEvent) throw new Error('no pending event on this session');
 
   const eventDef = getEventById(session.currentEvent.id) ??
+    aiEvents?.find((e) => e.id === session.currentEvent!.id) ??
     // Dynamically-generated prep events aren't in EVENT_POOL — reconstruct from pendingMatch
     (session.currentEvent.id.startsWith('tourney-prep-') && session.player.pendingMatch
       ? buildTournamentPrepEvent(session.player.pendingMatch)
@@ -660,21 +729,7 @@ export function applyChoice(
   let growthSpent = (session.player.growthSpent ?? 0) + outcome.growthApplied;
   if (growthSpent > GROWTH_CAP) growthSpent = GROWTH_CAP;
 
-  // ── Buff 消耗 & 新增 ──
-  let buffs: Buff[] = (session.player.buffs ?? []).map((b) => {
-    if (
-      outcome.growthKey &&
-      (b.actionTag === 'all' || b.actionTag === eventDef.type) &&
-      outcome.growthApplied > 0
-    ) {
-      return { ...b, remainingUses: b.remainingUses - 1 };
-    }
-    return b;
-  }).filter((b) => b.remainingUses > 0);
-
-  if (outcome.chosenOutcome.buffAdd) {
-    buffs = [...buffs, outcome.chosenOutcome.buffAdd];
-  }
+  const existingBuffs = session.player.buffs ?? [];
 
   // ── 破产处理（money 仍在 stats 中）──
   let brokeStressBump = 0;
@@ -703,37 +758,36 @@ export function applyChoice(
     ? outcome.chosenOutcome.fameDelta * 1.2
     : outcome.chosenOutcome.fameDelta;
 
-  // 体能梯度：高体能减少疲劳增量，仅作用于正值，设下限
-  const isRoutine = eventDef.type === 'routine';
+  const stateContext = {
+    actionTag: eventDef.type,
+    source: eventDef.type === 'routine'
+      ? 'routine' as const
+      : eventDef.type === 'match'
+        ? 'match' as const
+        : 'event' as const,
+  };
   const fatigueDeltaBase = dramaAmplify ? outcome.fatigueDelta * 1.2 : outcome.fatigueDelta;
-  let fatigueDeltaRaw = fatigueDeltaBase;
-  if (fatigueDeltaBase > 0) {
-    const floor = isRoutine ? FATIGUE_DELTA_FLOOR_ROUTINE : FATIGUE_DELTA_FLOOR_EVENT;
-    fatigueDeltaRaw = Math.max(
-      Math.round(fatigueDeltaBase * fatigueMult(statsAfterGrowth.constitution)),
-      floor,
-    );
+  let stressDeltaBase = 0;
+  let stressFromFailure = false;
+  if (typeof stressDeltaRaw === 'number' && stressDeltaRaw !== 0) {
+    stressDeltaBase = stressDeltaRaw * STRESS_SCALE;
+  } else if (!outcome.success) {
+    stressDeltaBase = IMPLICIT_FAILURE_STRESS;
+    stressFromFailure = true;
   }
 
-  // 疲劳放大系数（高疲劳时压力增益更强）
-  const fatigueFactor =
-    volatile.fatigue >= FATIGUE_STRESS_THRESHOLD ? FATIGUE_STRESS_MULTIPLIER : 1;
-
-  // 心态梯度：高心态减少压力增量，仅作用于正值，设下限
-  const mentalityFactor = stressMult(statsAfterGrowth.mentality);
-  const stressFloor = isRoutine ? STRESS_DELTA_FLOOR_ROUTINE : STRESS_DELTA_FLOOR_EVENT;
-
-  if (typeof stressDeltaRaw === 'number' && stressDeltaRaw !== 0) {
-    const raw = stressDeltaRaw * STRESS_SCALE;
-    if (raw > 0) {
-      stress = clampStress(stress + Math.max(raw * mentalityFactor * fatigueFactor, stressFloor));
-    } else {
-      stress = clampStress(stress + raw);
-    }
-  } else if (!outcome.success) {
-    stress = clampStress(
-      stress + Math.max(IMPLICIT_FAILURE_STRESS * mentalityFactor * fatigueFactor, stressFloor),
-    );
+  const modifierPlayer = { ...session.player, stats: statsAfterGrowth, buffs: existingBuffs };
+  const modifiedState = applyStateDeltaModifiers(
+    modifierPlayer,
+    { fatigueDelta: fatigueDeltaBase, stressDelta: stressDeltaBase },
+    stateContext,
+  );
+  passiveEffects.push(...modifiedState.passiveEffects);
+  const fatigueDeltaRaw = modifiedState.fatigueDelta;
+  if (stressDeltaBase !== 0) {
+    stress = clampStress(stress + modifiedState.stressDelta);
+  }
+  if (stressFromFailure) {
     passiveEffects.push('stress-from-failure');
   }
   if (fameDeltaRaw) {
@@ -747,8 +801,26 @@ export function applyChoice(
     passiveEffects.push(mentalityStress > 0 ? 'stress-from-anxiety' : 'stress-decay-mentality');
   }
   if (brokeStressBump > 0) {
-    stress = clampStress(stress + brokeStressBump * fatigueFactor);
+    const brokeState = applyStateDeltaModifiers(
+      modifierPlayer,
+      { fatigueDelta: 0, stressDelta: brokeStressBump },
+      { actionTag: 'life', source: 'event' },
+    );
+    stress = clampStress(stress + brokeState.stressDelta);
+    passiveEffects.push(...brokeState.passiveEffects);
+    modifiedState.stressReduced = modifiedState.stressReduced || brokeState.stressReduced;
     passiveEffects.push('stress-from-broke');
+  }
+
+  let buffs: Buff[] = consumeTriggeredBuffs(existingBuffs, stateContext, {
+    growthApplied: outcome.growthApplied > 0,
+    growthKey: outcome.growthKey,
+    fatigueReduced: modifiedState.fatigueReduced,
+    stressReduced: modifiedState.stressReduced,
+  });
+
+  if (outcome.chosenOutcome.buffAdd) {
+    buffs = [...buffs, outcome.chosenOutcome.buffAdd];
   }
 
   // ── 状态系统更新（feel / tilt / fatigue）──
@@ -914,6 +986,7 @@ export function applyChoice(
     year: nextYear,
     week: nextWeek,
     actionPoints: nextActionPoints,
+    roundCombos: [],
     shopCooldowns: nextShopCooldowns,
     qualificationSlots: nextQualificationSlots,
     teamQualificationSlots: nextTeamQualificationSlots,
@@ -922,10 +995,9 @@ export function applyChoice(
   };
 
   // ── 明星/老将 tag 检查与首次获得奖励 ─────────────────────────────
-  // veteran tag：顶级赛事（s-main/s-class/major）累计参加 4 场即可获得
+  // veteran tag：顶级赛事（s-main/major）累计参加 4 场即可获得
   const topParticipations =
     (nextPlayer.tierParticipations?.['s-main'] ?? 0) +
-    (nextPlayer.tierParticipations?.['s-class'] ?? 0) +
     (nextPlayer.tierParticipations?.['major'] ?? 0);
   if (topParticipations >= 4 && !nextTags.includes('veteran')) {
     nextTags.push('veteran');
@@ -1245,11 +1317,10 @@ export function applyChoice(
         }
 
         // 明星选手判定：Major ≥1 / S级正赛 ≥3
-        // 新赛制只产生 s-main / major 冠军记录；s-class / tier1 为旧存档兼容，新游戏不会触发
         const tc = nextPlayer.tierChampionships;
         const isStar =
           (tc['major'] ?? 0) >= 1 ||
-          (tc['s-main'] ?? tc['s-class'] ?? 0) >= 3;
+          (tc['s-main'] ?? 0) >= 3;
         if (isStar && !nextPlayer.tags.includes('star-player')) {
           nextPlayer.tags = dedupe([...nextPlayer.tags, 'star-player']);
           nextPlayer.stats = { ...nextPlayer.stats, experience: nextPlayer.stats.experience + 1 };
@@ -1365,7 +1436,7 @@ export function applyChoice(
       const t = getTournament(pm.tournamentId);
       if (t) return synthesizeMatchEvent(t, pm.stageIndex);
     }
-    return pickEvent({ player: nextPlayer, recentEventIds: recent, rng, leaderboard });
+    return pickEvent({ player: nextPlayer, recentEventIds: recent, rng, leaderboard, aiEvents });
   })();
 
   if (nextPlayer.forceNextEvent && nextEventDef?.id === nextPlayer.forceNextEvent) {
@@ -1440,6 +1511,7 @@ export interface ApplyActionResult {
 export function applyAction(
   session: GameSession,
   actionId: string,
+  aiEvents?: EventDef[],
 ): ApplyActionResult {
   if (session.status !== 'active') throw new Error('session is not active');
 
@@ -1466,6 +1538,16 @@ export function applyAction(
   const rng = makeRng(
     hashString(session.id) ^ ((session.player.round * 1000 + ap) * 2654435761),
   );
+  const consumedCombos = matchingActionCombos(session.player, actionDef);
+  const consumedComboIds = new Set(consumedCombos.map((combo) => combo.id));
+  const comboBuffs = comboTempBuffs(consumedCombos, actionDef.eventType);
+  const comboFeelDelta = sumComboEffect(consumedCombos, 'feelDelta');
+  const comboTiltDelta = sumComboEffect(consumedCombos, 'tiltDelta');
+  const comboFatigueDelta = sumComboEffect(consumedCombos, 'fatigueDelta');
+  const comboStressDelta = sumComboEffect(consumedCombos, 'stressDelta');
+  const comboPlayer: Player = comboBuffs.length > 0
+    ? { ...session.player, buffs: [...(session.player.buffs ?? []), ...comboBuffs] }
+    : session.player;
 
   // Build synthetic EventDef + ChoiceDef compatible with resolveChoice
   const syntheticEvent = {
@@ -1488,7 +1570,7 @@ export function applyAction(
   };
 
   const outcome = resolveChoice({
-    player: session.player,
+    player: comboPlayer,
     event: syntheticEvent as Parameters<typeof resolveChoice>[0]['event'],
     choice: syntheticEvent.choices[0]! as Parameters<typeof resolveChoice>[0]['choice'],
     traits,
@@ -1497,36 +1579,46 @@ export function applyAction(
 
   const volatile = session.player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
   const actionFeelCap = session.player.feelCap ?? FEEL_CAP_DEFAULT;
-  const feel = clampFeel(volatile.feel + outcome.feelDelta, actionFeelCap);
-  const tilt = clampTilt(volatile.tilt + outcome.tiltDelta);
-  const fatigue = clampFatigue(volatile.fatigue + outcome.fatigueDelta);
+  const feel = clampFeel(volatile.feel + outcome.feelDelta + comboFeelDelta, actionFeelCap);
+  const tilt = clampTilt(volatile.tilt + outcome.tiltDelta + comboTiltDelta);
 
   let stress = session.player.stress ?? 0;
   const explicitStress = outcome.chosenOutcome.stressDelta;
-  if (typeof explicitStress === 'number' && explicitStress !== 0) {
-    stress = clampStress(stress + explicitStress * STRESS_SCALE);
+  const stressDeltaBase = typeof explicitStress === 'number' ? explicitStress * STRESS_SCALE : 0;
+  const stateContext = { actionTag: actionDef.eventType, source: 'routine' as const };
+  const modifiedState = applyStateDeltaModifiers(
+    { ...comboPlayer, stats: outcome.nextStats },
+    { fatigueDelta: outcome.fatigueDelta, stressDelta: stressDeltaBase },
+    stateContext,
+  );
+  const fatigue = clampFatigue(volatile.fatigue + modifiedState.fatigueDelta + comboFatigueDelta);
+  const totalStressDelta = modifiedState.stressDelta + comboStressDelta;
+  if (totalStressDelta !== 0) {
+    stress = clampStress(stress + totalStressDelta);
   }
 
   let growthSpent = (session.player.growthSpent ?? 0) + outcome.growthApplied;
   if (growthSpent > GROWTH_CAP) growthSpent = GROWTH_CAP;
 
-  // Consume buffs if growth applied
-  let buffs: Buff[] = (session.player.buffs ?? []).map((b) => {
-    if (
-      outcome.growthKey &&
-      (b.actionTag === 'all' || b.actionTag === actionDef.eventType) &&
-      outcome.growthApplied > 0
-    ) {
-      return { ...b, remainingUses: b.remainingUses - 1 };
-    }
-    return b;
-  }).filter((b) => b.remainingUses > 0);
+  let buffs: Buff[] = consumeTriggeredBuffs(session.player.buffs ?? [], stateContext, {
+    growthApplied: outcome.growthApplied > 0,
+    growthKey: outcome.growthKey,
+    fatigueReduced: modifiedState.fatigueReduced,
+    stressReduced: modifiedState.stressReduced,
+  });
 
   if (outcome.chosenOutcome.buffAdd) {
     buffs = [...buffs, outcome.chosenOutcome.buffAdd];
   }
 
   const newVolatile = { feel, tilt, fatigue };
+  const consumedRoundCombos = consumeRoundCombos(session.player.roundCombos ?? [], consumedComboIds);
+  const roundCombos = addOpenedCombos(
+    consumedRoundCombos,
+    actionDef,
+    actionId,
+    outcome.success,
+  );
 
   const nextPlayer: Player = {
     ...session.player,
@@ -1536,6 +1628,7 @@ export function applyAction(
     growthSpent,
     stress,
     actionPoints: ap - actionDef.apCost,
+    roundCombos,
   };
 
   const actionResult: ActionResult = {
@@ -1553,6 +1646,10 @@ export function applyAction(
     growthAmount: outcome.growthApplied > 0 ? outcome.growthApplied : undefined,
     newStats: outcome.nextStats,
     newVolatile,
+    comboTriggeredLabels: consumedCombos.map((combo) => combo.label),
+    comboAddedLabels: roundCombos
+      .filter((combo) => !consumedRoundCombos.some((before) => before.id === combo.id))
+      .map((combo) => combo.label),
   };
 
   return { actionResult, player: nextPlayer };
@@ -1648,8 +1745,9 @@ export function applyShopPurchase(
           label: '顶级外设',
           actionTag: 'ranked',
           growthKey: 'agility',
-          multiplier: 1.2,
+          growthMultiplier: 1.2,
           remainingUses: 9999,
+          consumeOn: 'growth',
         });
         shopNarrative += '，外设已达满级，获得固定增益：天梯敏捷成长 +20%';
       }
@@ -1843,7 +1941,7 @@ export function pawnItem(
 }
 
 // ── 战队申请 ──────────────────────────────────────────────────
-import type { ClubTier, PendingApplication, PlayerTeam, Stage, TeamOffer } from '../types.js';
+import type { ClubTier, EventDef, PendingApplication, PlayerTeam, Stage, TeamOffer } from '../types.js';
 
 export function applyClubRequest(
   session: GameSession,

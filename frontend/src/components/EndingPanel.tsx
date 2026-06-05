@@ -7,13 +7,6 @@ const TIER_LABELS: Record<string, string> = {
   a: 'A 级赛事',
   's-qualifier': 'S 级预选',
   's-main': 'S 级正赛',
-  netcafe: '网吧杯',
-  city: '城市赛',
-  platform: '平台赛',
-  'secondary-league': '二级联赛',
-  'development-league': '发展联赛',
-  tier2: 'Tier 2',
-  tier1: 'Tier 1',
   's-class': 'S 级联赛',
   major: 'Major',
 };
@@ -21,16 +14,9 @@ const TIER_LABELS: Record<string, string> = {
 const TIER_ORDER = [
   'major',
   's-main',
+  's-class',
   'a',
   'b',
-  's-class',
-  'tier1',
-  'tier2',
-  'development-league',
-  'secondary-league',
-  'platform',
-  'city',
-  'netcafe',
 ];
 
 const CORE_STATS = [

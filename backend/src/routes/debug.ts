@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { getEventById } from '../data/events/index.js';
 import { LlmLogger } from '../ai/logger.js';
 import { makeStorage } from '../storage/index.js';
+import { validateAiEvents } from '../validation/guard.js';
 import type {
   ClubTier,
   Env,
@@ -90,12 +91,12 @@ app.post('/debug/:sessionId', async (c) => {
     return c.json({ error: 'pendingMatch 结构无效' }, 400);
   }
   if (forceNextEvent !== undefined) {
-    if (typeof forceNextEvent !== 'string' || !getEventById(forceNextEvent)) {
+    if (forceNextEvent !== null && (typeof forceNextEvent !== 'string' || !getEventById(forceNextEvent))) {
       return c.json({ error: 'forceNextEvent 无效' }, 400);
     }
   }
   if (forceMatchResult !== undefined) {
-    if (typeof forceMatchResult !== 'string' || !FORCED_MATCH_RESULTS.includes(forceMatchResult as ForcedMatchResult)) {
+    if (forceMatchResult !== null && (typeof forceMatchResult !== 'string' || !FORCED_MATCH_RESULTS.includes(forceMatchResult as ForcedMatchResult))) {
       return c.json({ error: 'forceMatchResult 必须为 win 或 loss' }, 400);
     }
   }
@@ -118,8 +119,8 @@ app.post('/debug/:sessionId', async (c) => {
   if (round !== undefined) session.player.round = round;
   if (consecutiveLosses !== undefined) session.player.consecutiveLosses = consecutiveLosses;
   if (pendingMatch !== undefined) session.player.pendingMatch = pendingMatch;
-  if (forceNextEvent !== undefined) session.player.forceNextEvent = forceNextEvent;
-  if (forceMatchResult !== undefined) session.player.forceMatchResult = forceMatchResult;
+  if (forceNextEvent !== undefined) session.player.forceNextEvent = forceNextEvent === null ? null : forceNextEvent;
+  if (forceMatchResult !== undefined) session.player.forceMatchResult = forceMatchResult === null ? null : forceMatchResult;
 
   if (session.player.team) {
     if (teamMonthlySalary !== undefined) session.player.team.monthlySalary = teamMonthlySalary;
@@ -130,6 +131,15 @@ app.post('/debug/:sessionId', async (c) => {
   await storage.sessions.save(session);
 
   return c.json({ player: session.player });
+});
+
+app.get('/debug/sessions', async (c) => {
+  if (!isLocalDebugRequest(c.req.url)) return c.json({ error: 'not found' }, 404);
+
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '200', 10) || 200, 500);
+  const storage = makeStorage(c.env);
+  const sessions = await storage.sessions.list(limit);
+  return c.json({ sessions, total: sessions.length });
 });
 
 // ── LLM log endpoints (local-only) ───────────────────────────────
@@ -182,6 +192,25 @@ app.get('/debug/ai-status', (c) => {
     active,
     kvBound: !!c.env.KV,
   });
+});
+
+app.get('/debug/ai-events/:sessionId', async (c) => {
+  if (!isLocalDebugRequest(c.req.url)) return c.json({ error: 'not found' }, 404);
+
+  const id = c.req.param('sessionId');
+  try {
+    const cached = await c.env.KV.get(`ai-events:${id}`);
+    if (!cached) return c.json({ events: [], message: 'KV 中无此 session 的 AI 事件' });
+    const parsed = JSON.parse(cached) as unknown[];
+    const { valid, invalid } = validateAiEvents(Array.isArray(parsed) ? parsed : []);
+    return c.json({
+      events: parsed,
+      validCount: valid.length,
+      invalidCount: invalid.length,
+    });
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
 });
 
 export default app;

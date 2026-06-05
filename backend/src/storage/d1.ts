@@ -1,9 +1,9 @@
-import type { GameSession } from '../types.js';
+import type { GameSession, SessionSummary } from '../types.js';
 
 // Migrate legacy session data after loading from storage.
 // Handles schema changes that would otherwise silently produce undefined/NaN.
 function migrateSession(session: GameSession): GameSession {
-  const p = session.player as Record<string, unknown>;
+  const p = session.player as unknown as Record<string, unknown>;
 
   // weeklySalary → monthlySalary (renamed; multiply by 4 to approximate monthly)
   const team = p['team'] as Record<string, unknown> | null;
@@ -55,7 +55,7 @@ function migrateSession(session: GameSession): GameSession {
 
   // Ensure apiToken exists (sessions created before apiToken was added)
   if (!session.apiToken) {
-    (session as Record<string, unknown>)['apiToken'] = `legacy-${session.id}`;
+    (session as unknown as Record<string, unknown>)['apiToken'] = `legacy-${session.id}`;
   }
 
   return session;
@@ -63,6 +63,29 @@ function migrateSession(session: GameSession): GameSession {
 
 export class SessionRepo {
   constructor(private db: D1Database) {}
+
+  async list(limit = 100): Promise<SessionSummary[]> {
+    const rows = await this.db
+      .prepare(
+        `SELECT id, name, stage, round, status, ending, created_at, updated_at
+         FROM sessions
+         ORDER BY updated_at DESC
+         LIMIT ?`,
+      )
+      .bind(limit)
+      .all<SessionSummary & { created_at: string; updated_at: string }>();
+
+    return (rows.results ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      stage: row.stage,
+      round: row.round,
+      status: row.status,
+      ending: row.ending ?? null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
 
   async save(session: GameSession): Promise<void> {
     const data = JSON.stringify(session);

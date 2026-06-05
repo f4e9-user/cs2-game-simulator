@@ -1,21 +1,29 @@
 # CS2 电竞选手人生模拟器
 
-一个以 `CS2` 职业生涯为主题的文字冒险 + 数值模拟项目。
+一个以 `CS2` 职业生涯为主题的文字冒险 + 数值模拟项目。玩家从新人开局，抽取特质、分配竞技属性，通过日常行动、随机事件、商店、战队申请、贷款、赛事报名和比赛结算推进生涯。
+
+项目当前是前后端分离实现：
 
 - 前端：`Next.js 15` + `React 18` + `Zustand` + `TypeScript`
 - 后端：`Cloudflare Workers` + `Hono` + `D1` + `KV`
-- AI：可选接入 `Anthropic / OpenAI / Workers AI`，未配置时使用模板叙事兜底
+- AI：可选接入 `OpenAI` / `Anthropic`，未配置时使用模板叙事兜底
 
-项目当前已经包含：
+---
 
-- 开局抽特质与属性分配
-- 日常行动系统
-- 随机事件池
-- 商店系统
-- 战队申请 / 入队 / 离队
-- 多层级赛事报名与结算
-- 战队积分榜
-- 生涯结局面板
+## 当前已实现
+
+- 新局创建：随机 3 个特质，可重抽 1 次，并在特质底线之上分配竞技属性点；资金不参与开局分配
+- 核心数值：五个竞技属性、资金、压力、名气、AP、手感、疲劳、tilt、成长上限
+- 回合推进：事件选择、自由行动判定、日常行动、行动 Combo、被动压力和恢复结算
+- 随机事件：训练、天梯、战队、试训、赛事、媒体、生活、救助、博彩、作弊、休养、对手、经纪人等事件池
+- 战队系统：申请、面试、Offer、接受/拒绝、主动离队、合同与薪资
+- 阵容系统：队友角色、个性、数值、协同、信任和离队相关事件
+- 赛事系统：报名窗口、资格门票、战队门槛、积分门槛、多阶段推进、弃赛惩罚
+- 比赛模拟：根据枪法、经验、心态、手感、疲劳、tilt、团队协同计算胜率和个人数据，并结算比赛疲劳/压力
+- 经济系统：商店、装备、成长 Buff、疲劳/压力倍率 Buff、冷却、贷款、还款、违约、典当
+- 社交系统：AI 或模板生成 X 风格动态
+- 调试页：本地查看 LLM 日志、AI 状态、写入测试日志
+- 生涯结束：结局和总结面板
 
 ---
 
@@ -24,39 +32,50 @@
 ```text
 cs2-game-simulator/
 ├── README.md
+├── docs/
+│   ├── action-combo-design.md
+│   ├── game-design-improvement-notes.md
+│   ├── roster-system-design.md
+│   ├── social-system-design.md
+│   ├── state-multiplier-implementation-plan.md
+│   ├── team-system-design.md
+│   └── transfer-system-design.md
 ├── shared/
 │   └── types.ts
 ├── backend/
 │   ├── package.json
 │   ├── schema.sql
-│   ├── wrangler.toml
+│   ├── wrangler.toml.local
 │   └── src/
 │       ├── index.ts
-│       ├── types.ts
 │       ├── routes/
-│       │   └── game.ts
+│       │   ├── game.ts
+│       │   └── debug.ts
 │       ├── engine/
-│       │   ├── constants.ts
-│       │   ├── resolver.ts
+│       │   ├── gameEngine.ts
 │       │   ├── events.ts
-│       │   ├── stages.ts
+│       │   ├── matchSimulator.ts
 │       │   ├── qualification.ts
-│       │   └── gameEngine.ts
+│       │   ├── resolver.ts
+│       │   ├── stateModifiers.ts
+│       │   ├── stages.ts
+│       │   └── synergy.ts
 │       ├── data/
 │       │   ├── actions.ts
-│       │   ├── shop.ts
-│       │   ├── clubs.ts
-│       │   ├── tournaments.ts
-│       │   ├── leaderboard.ts
-│       │   ├── traits.ts
 │       │   ├── backgrounds.ts
-│       │   ├── rivals.ts
+│       │   ├── clubs.ts
+│       │   ├── leaderboard.ts
+│       │   ├── roster.ts
+│       │   ├── shop.ts
+│       │   ├── tournaments.ts
+│       │   ├── traits.ts
 │       │   └── events/
+│       ├── ai/
 │       ├── storage/
-│       └── ai/
+│       └── validation/
 └── frontend/
     ├── package.json
-    ├── .env.example
+    ├── next.config.mjs
     └── src/
         ├── app/
         ├── components/
@@ -66,21 +85,136 @@ cs2-game-simulator/
 
 说明：
 
-- `shared/types.ts` 是共享领域类型源文件
-- `backend/src/types.ts` 和 `frontend/src/lib/types.ts` 是手动同步镜像
-- 当前不是 monorepo 构建体系，前后端分别运行和部署
+- `backend/src/types.ts` 是后端实际使用的领域类型。
+- `frontend/src/lib/types.ts` 是前端镜像类型。
+- `shared/types.ts` 保留为共享类型参考文件，但当前不是自动生成链路，改类型时需要手动同步。
+- `docs/` 里是系统设计文档，README 只描述当前代码已经接线的能力。
 
 ---
 
-## 当前玩法总览
+## 本地开发
+
+### 1. 安装依赖
+
+```bash
+cd backend
+npm install
+
+cd ../frontend
+npm install
+```
+
+### 2. 准备 Worker 配置
+
+仓库里提供了 `backend/wrangler.toml.local` 作为本地配置模板。实际运行 `wrangler dev` 时需要有 `backend/wrangler.toml`。
+
+```bash
+cd backend
+cp wrangler.toml.local wrangler.toml
+```
+
+然后按需替换：
+
+- `database_id`
+- `kv namespace id`
+- `[vars]` 中的 AI 配置
+
+AI 密钥不要写进 `wrangler.toml`，使用 Wrangler secret：
+
+```bash
+wrangler secret put OPENAI_API_KEY
+wrangler secret put ANTHROPIC_API_KEY
+```
+
+未配置 AI 时，`AI_PROVIDER = "none"`，项目仍可运行。
+
+### 3. 初始化本地 D1
+
+```bash
+cd backend
+npm run db:init:local
+```
+
+### 4. 启动后端
+
+```bash
+cd backend
+npm run dev
+```
+
+默认地址：
+
+```text
+http://127.0.0.1:8787
+```
+
+健康检查：
+
+```text
+http://127.0.0.1:8787/api/health
+```
+
+### 5. 启动前端
+
+创建 `frontend/.env.local`：
+
+```bash
+NEXT_PUBLIC_API_BASE=http://127.0.0.1:8787
+```
+
+启动：
+
+```bash
+cd frontend
+npm run dev
+```
+
+默认访问：
+
+```text
+http://localhost:3000
+```
+
+调试页：
+
+```text
+http://localhost:3000/debug
+```
+
+---
+
+## 运行脚本
+
+后端：
+
+- `npm run dev`：启动 Cloudflare Worker 本地开发服务
+- `npm run deploy`：部署 Worker
+- `npm run db:init:local`：初始化本地 D1
+- `npm run db:init:remote`：初始化远端 D1
+- `npm run typecheck`：TypeScript 检查
+- `npm run test`：运行 Vitest
+
+前端：
+
+- `npm run dev`：启动 Next.js 开发服务
+- `npm run build`：构建前端
+- `npm run start`：启动生产构建
+- `npm run lint`：运行 Next lint
+- `npm run typecheck`：TypeScript 检查
+
+---
+
+## 玩法模型
 
 ### 生涯阶段
 
-当前阶段顺序：
+当前正式阶段链路：
 
-`rookie -> youth -> second -> pro -> retired`
+```text
+rookie -> youth -> second -> pro -> retired
+```
 
-对应展示名：
+对应含义：
 
 - `rookie`：路人新人
 - `youth`：青训
@@ -88,14 +222,11 @@ cs2-game-simulator/
 - `pro`：职业队
 - `retired`：退役
 
-说明：
-
-- `pro` 是当前竞技生涯的终点阶段
-- `star` / `veteran` 现在是叙事标签方向，不再是正式阶段
+`rookie -> youth` 主要依赖成功加入战队；`youth -> second -> pro` 主要依赖赛事参与、战队条件和晋级叙事事件。
 
 ### 核心属性
 
-后端核心属性为 `0-20` 区间：
+玩家有五个竞技属性和一个经济属性。竞技属性通常在 `0-20` 区间，资金上限单独更高：
 
 - `intelligence`：智力
 - `agility`：敏捷
@@ -104,188 +235,61 @@ cs2-game-simulator/
 - `mentality`：心态
 - `constitution`：体能
 
-基础规则：
+开局先抽取 3 个特质，特质会影响属性底线和标签；然后在底线之上分配 `POINT_POOL` 点。当前 `POINT_POOL = 12`，只分配到 `intelligence`、`agility`、`experience`、`mentality`、`constitution` 五个竞技属性；`money` 不参与开局分配。
 
-- 开局可分配点数：`12`
-- `money` 不参与成长衰减曲线
+### 高频状态
 
-### 派生属性
+除核心属性外，玩家还有一组高频状态：
 
-前端主要展示四项派生值：
+- `stress`：压力，`0-100`
+- `fame`：名气
+- `actionPoints`：本回合可用 AP
+- `volatile.feel`：手感，默认 `-3 ~ +3`
+- `volatile.tilt`：心态波动，`0 ~ 3`
+- `volatile.fatigue`：疲劳，`0 ~ 100`
 
-- 枪法：由 `agility + experience` 换算
-- 决策：由 `intelligence + experience` 换算
-- 稳定性：由 `mentality` 换算
-- 续航：由 `constitution` 换算
+这些状态会被行动、事件、比赛、商店、贷款、战队合同和被动结算持续影响。
 
-当前公式：
+### 成长和 Buff
 
-- 枪法：`(agility * 0.7 + experience * 0.3) / 20 * 100`
-- 决策：`(intelligence * 0.7 + experience * 0.3) / 20 * 100`
-- 稳定性：`mentality / 20 * 100`
-- 续航：`constitution / 20 * 100`
+成长结算集中在 `backend/src/engine/resolver.ts` 和 `backend/src/engine/gameEngine.ts`。
 
-### volatile 状态
+核心规则：
 
-玩家有一套高频波动状态：
+- 属性越高，成长越慢。
+- 生涯总成长有上限，当前 `GROWTH_CAP = 30`。
+- `money` 不计入成长上限。
+- Buff 可按行动标签、成长属性和剩余次数影响成长倍率；成长 Buff 只提升成长速度，不会突破 `GROWTH_CAP`。
+- 疲劳和压力正向增量会经过统一状态倍率系统：体能影响疲劳增长，心态影响压力增长，特质和 Buff 可以进一步修正倍率。
 
-- `feel`：手感，范围 `-3 ~ +3`
-- `tilt`：心态波动，范围 `0 ~ 3`
-- `fatigue`：疲劳，范围 `0 ~ 100`
+### 日常行动
 
-它们会被：
+日常行动定义在 `backend/src/data/actions.ts`，接口为 `POST /api/game/:sessionId/action`。
 
-- 日常行动影响
-- 随机事件影响
-- 商店商品影响
-- 比赛与失败连锁影响
+当前行动包括：
 
-### 成长系统
+- 打天梯
+- 系统训练
+- 休息一天
+- 度假断网
+- 健身锻炼
+- 冥想静心
+- 心理训练
 
-核心成长采用：
-
-- 属性越高，成长越慢
-- 生涯总成长上限 `GROWTH_CAP = 30`
-- `money` 不计入成长上限
-
-当前成长倍率：
-
-| 当前属性 | 成长倍率 |
-| --- | --- |
-| `< 5` | `1.0` |
-| `< 10` | `0.7` |
-| `< 15` | `0.4` |
-| `>= 15` | `0.15` |
-
-### Buff 系统
-
-Buff 作用于成长结算，核心字段包括：
-
-- `actionTag`：作用范围，如 `training` / `ranked` / `match` / `all`
-- `growthKey`：可选，限定只增益某个成长属性
-- `multiplier`：成长倍率
-- `remainingUses`：剩余生效次数
-
-当前实现里，Buff 需要同时满足：
-
-- `actionTag` 匹配当前行动或事件类型
-- 若配置了 `growthKey`，还必须匹配当前成长属性
-
-### 压力与体能规则
-
-- `stress` 范围为 `0-100`
-- 压力过高会持续累积崩溃风险
-- `constitution` 会影响正向疲劳增量倍率
-- 低体能时，日常和事件更容易把人拖进受伤或强制休养
-
-当前关键公式：
-
-- 心态被动压力：
-  - `mentality >= 14` -> `stress -8`
-  - `mentality >= 10` -> `stress -5`
-  - `mentality >= 6` -> `stress -2`
-  - `mentality <= 4` -> `stress +4`
-  - `mentality <= 2` -> `stress +8`
-- 疲劳阈值放大：`fatigue >= 70` 时，正向压力增量乘以 `1.4`
-- 体能对正向疲劳增量倍率：
-  - `constitution >= 15` -> `0.30`
-  - `constitution >= 11` -> `0.55`
-  - `constitution >= 7` -> `0.85`
-  - `constitution >= 4` -> `1.35`
-  - 否则 `1.60`
-
-### 事件与行动判定公式
-
-普通事件和日常行动默认使用同一套检定结构：
-
-- `attack = d20 + primary * 2 + secondary + traitBonuses - traitPenalties`
-- `dc = choice.dc + event.difficulty * 2 + floor(stageIndex / 2)`
-
-补充规则：
-
-- 如果失败且该选项没有显式 `stressDelta`，会吃到默认失败压力
-- 老事件里的 `stressDelta` 会按 `STRESS_SCALE = 5` 映射到 `0-100` 压力系统
-- `money` 作为副属性参与检定时，会先换算成 `round(money / 2)`
+行动会消耗 AP，并可能改变成长、压力、疲劳、手感、tilt 和叙事结果。正向疲劳/压力增量会套用属性、特质和 Buff 倍率；恢复类负向增量不被倍率削弱。
 
 ---
 
-## 日常行动
+## 核心系统
 
-当前日常行动定义在 `backend/src/data/actions.ts`。
+### 事件系统
 
-现有 7 个行动：
+事件池入口：
 
-- `打天梯`
-- `系统训练`
-- `休息一天`
-- `度假断网`
-- `健身锻炼`
-- `冥想静心`
-- `心理训练`
+- `backend/src/engine/events.ts`
+- `backend/src/data/events/index.ts`
 
-特点：
-
-- 每个行动消耗 `AP`
-- 成功与失败都会有不同的叙事和状态结算
-- 部分行动会带来核心成长
-- 商店 Buff 会对对应行动的成长结算生效
-
----
-
-## 商店系统
-
-商品定义在 `backend/src/data/shop.ts`，前端面板在 `frontend/src/components/ShopPanel.tsx`。
-
-当前商店分为四类：
-
-- `consumable`：消耗品
-- `service`：服务
-- `equipment`：装备
-- `social`：社交
-
-当前重点商品包括：
-
-- 恢复类：`energy-drink`、`meal-kit`、`painkiller`、`massage-therapy`
-- 训练类：`aim-coach`、`tactical-review`
-- 装备类：`pro-peripherals`、`ergo-chair`、`wrist-brace`
-- 社交类：`team-dinner`、`fan-meetup`、`pr-interview`
-- 经纪人系统：`hire-agent`、`fire-agent`
-
-商店规则：
-
-- 商品可配置 `priceMoney`
-- 商品可配置 `cooldownRounds`
-- 商品可配置 `requireStage` / `requireFame`
-- 商品可带负面事件
-- 商品可添加或移除 `Buff`
-- 商品可添加或移除 `tag`
-
-### 经纪人系统
-
-经纪人是当前商店里最特殊的一类长期服务：
-
-- `签约经纪人`：仅 `second / pro` 可购买
-- 购买后添加 `has-agent` 标签
-- 购买后添加长期 Buff：`经纪团队`
-- 已签约时，商店同位置改为 `解雇经纪人`
-- 解约会移除对应 Buff 与标签
-
-签约 / 解约弹窗现在会明确显示：
-
-- 获得的 Buff
-- 移除的 Buff
-- 添加的标签
-- 移除的标签
-
----
-
-## 随机事件系统
-
-事件池入口：`backend/src/engine/events.ts`
-
-总事件注册：`backend/src/data/events/index.ts`
-
-当前事件来源包括：
+事件来源包括：
 
 - `training`
 - `ranked`
@@ -294,6 +298,7 @@ Buff 作用于成长结算，核心字段包括：
 - `match`
 - `media`
 - `life`
+- `bailout`
 - `betting`
 - `cheat`
 - `rest`
@@ -305,316 +310,207 @@ Buff 作用于成长结算，核心字段包括：
 - `skins`
 - `agent`
 
-核心机制：
+事件会按阶段、标签、最近事件、压力、疲劳、报名状态、面试状态、强制休养和调试强制事件进行筛选或加权。LLM 开启时，后端还会根据近期历史生成临时 AI 事件，并通过 `backend/src/validation/guard.ts` 做结构校验。
 
-- 事件会按玩家阶段筛选
-- 会按 `requireTags` / `forbidTags` 筛选
-- 会参考最近事件去重
-- 会根据玩家状态动态加权
-- 特殊状态下会强插特定事件
+### 自由行动
 
-例如：
+`POST /api/game/:sessionId/choice` 支持 `customAction`。开启 AI 后，后端会：
 
-- 强制休养期间只会进入 `rest` 事件池
-- 已报名赛事时，会优先进入赛前准备事件
-- 面试中的玩家，会被强插面试相关事件
+1. 用 LLM 评价玩家自定义行动质量。
+2. 把质量映射成检定加成。
+3. 再用二次校验确认判定是否合理。
+4. 不通过时静默降级为普通选项结算。
 
-### 经纪人事件池
+自由行动需要携带创建 session 时返回的 `apiToken`。
 
-当玩家拥有 `has-agent` 标签时，会进入经纪人专属事件池。
+### 商店和经济
 
-当前已接入的事件包括：
+商店定义在 `backend/src/data/shop.ts`，购买接口为 `POST /api/game/:sessionId/shop`。
 
-- `agent-brand-deal`
-- `agent-media-training`
-- `agent-overbooking`
-- `agent-pr-slip`
+商店支持：
 
-这些事件：
+- 价格
+- 阶段门槛
+- 名气门槛
+- 冷却
+- 正负面叙事
+- 添加或移除 Buff
+- 添加或移除 tag
+- 装备拥有状态
 
-- 有正向，也有负向
-- 会通过 `agent-event-cd` 冷却标签防止连续刷出
-- 主要影响 `名气 / 资金 / 压力 / 疲劳`
+经济相关接口：
 
----
+- `POST /api/game/:sessionId/loan`：申请贷款
+- `POST /api/game/:sessionId/pawn`：典当装备
 
-## 战队与晋级
+贷款规则在 `applyForLoan` 和 `processLoanRepayment` 中：青训以后可借，单笔 `20K-100K`，12 回合后按 10% 利息还款；违约会降低名气并添加转会禁止标签。
 
-### 俱乐部系统
+### 战队和阵容
+
+战队定义在 `backend/src/data/clubs.ts`，阵容定义在 `backend/src/data/roster.ts`。
 
 玩家可以：
 
 - 申请俱乐部
-- 收到面试 / 回应类事件
-- 获取入队邀请
-- 接受或拒绝战队 Offer
+- 等待回应或面试
+- 获取入队 Offer
+- 接受或拒绝 Offer
 - 主动离队
-- 被剧情或连败链路影响离队
+- 经历合同、挖角、被踢、续约等事件
 
-相关核心路由：
+战队会影响：
 
-- `POST /game/:sessionId/apply-club`
-- `POST /game/:sessionId/team-response`
-- `POST /game/:sessionId/leave-team`
+- 月薪
+- 赛事资格
+- 战队积分榜
+- 资格门票归属
+- 队友协同
+- 比赛胜率
+- 社交动态
 
-### 晋级系统
+### 赛事和比赛模拟
 
-当前晋级逻辑在 `backend/src/engine/stages.ts`。
+赛事定义在 `backend/src/data/tournaments.ts`，报名与弃赛接口在 `backend/src/routes/game.ts`，比赛模拟在 `backend/src/engine/matchSimulator.ts`。
 
-规则分两段：
+赛事支持：
 
-- `rookie -> youth`：不是赛事门槛，核心依赖申请战队并成功入队
-- `youth -> second -> pro`：依赖赛事参与与夺冠条件，满足后注入晋级叙事事件
-
-当前正式竞技晋级到 `pro` 为止。
-
----
-
-## 赛事系统
-
-赛事定义在 `backend/src/data/tournaments.ts`，核心报名与赛程逻辑在 `backend/src/routes/game.ts` 和 `backend/src/engine/gameEngine.ts`。
-
-当前支持：
-
-- 周窗口报名
+- 报名周窗口
+- 阶段门槛
 - 名气门槛
-- 战队积分门槛
 - 战队等级门槛
-- 资格门票消耗与返还
-- 多阶段赛事推进
+- 战队积分门槛
+- 个人或战队资格门票
+- 多阶段 bracket 推进
 - 赛前准备事件
 - 弃赛惩罚
 
-### 赛事胜负判定
+比赛胜率主要看：
 
-正式比赛不走普通 `d20` 检定，而是走独立的数值模拟，核心代码在 `backend/src/engine/matchSimulator.ts`。
+- 枪法：`agility` + `experience`
+- 稳定：`mentality`
+- 即时状态：`feel`、`fatigue`、`tilt`
+- 团队加成：队友数值、角色协同、特质协同、`teamTrust`
 
-比赛先计算玩家侧的 `effectiveAim`：
+比赛还会结算比分、击杀、死亡、助攻、爆头率、rating、名气、积分和资格奖励。
 
-- `aimBase = (agility * 0.7 + experience * 0.3) / 20 * 100`
-- `decisionBase = (intelligence * 0.7 + experience * 0.3) / 20 * 100`
-- `feelEffect = feel * 3`
-- `fatigueDebuff = max(0, (fatigue - 60) * 0.2)`
-- `tiltDebuff = tilt * 3`
-- `teamBonus = rawTeamBonus + synergyBonus + trustModifier`
-- `effectiveAim = clamp(aimBase + feelEffect - fatigueDebuff - tiltDebuff + teamBonus, 5, 99)`
+当前比赛个人数据按每回合贡献生成：
 
-对手强度用赛事难度换算：
+- 比分：根据胜率和强弱差生成 `13:x` 或 `x:13`，强弱差越大越容易大比分，爆冷局通常更接近。
+- K/D/A：先计算每回合击杀率 `KPR`、死亡率 `DPR`、助攻率 `APR`，再乘以总回合数生成个人数据；不再用固定击杀/死亡下限抬高短局样本。
+- 爆头率：先按枪法、手感和随机波动生成爆头概率，再由实际击杀数生成爆头击杀，最后反推 `HS%`。
+- Rating：使用每回合贡献模型，综合 `KPR`、`DPR`、`APR`、`HS%`、决策和胜负修正；不会只因为小样本 `K/D` 较高就给出正常 rating。
 
-- `enemyAim = clamp(25 + effectiveDifficulty * 8, 20, 90)`
-- `effectiveDifficulty = tournament.baseDifficulty + bracketStage.difficultyBonus`
+### AI 叙事
 
-最终胜率公式：
+AI 服务入口是 `backend/src/ai/service.ts`。当前能力包括：
 
-- `aimAdv = effectiveAim - enemyAim`
-- `stabilityBonus = (mentality / 20 - 0.5) * 0.08`
-- `winProb = clamp(0.5 + aimAdv / 60 + stabilityBonus, 0.05, 0.95)`
-- 然后用 `rng() < winProb` 判定胜负
+- 开场故事
+- 事件叙事润色
+- 流式叙事
+- 商店购买叙事
+- 生涯总结
+- 自由行动判定
+- 自由行动判定校验
+- 社交动态
+- 临时事件生成
 
-### 哪些属性会影响赛事胜负
-
-直接影响比赛胜率的核心属性有：
-
-- `agility`
-  - 影响 `aimBase`
-  - 也影响爆头率 `headshotRate`
-  - 是比赛里最直接的枪法属性
-- `experience`
-  - 同时参与 `aimBase` 与 `decisionBase`
-  - 让枪法和决策都更稳定
-- `intelligence`
-  - 影响 `decisionBase`
-  - 虽然不直接进入 `winProb` 主体，但会影响 `rating` 叙事表现与部分赛事事件选择
-- `mentality`
-  - 直接进入 `stabilityBonus`
-  - 心态越高，基础胜率越稳
-- `constitution`
-  - 不直接进入 `winProb`
-  - 但会通过疲劳系统影响长期比赛和连续作战表现
-
-直接影响比赛即时表现的非核心状态有：
-
-- `feel`
-  - 直接加到 `effectiveAim`
-- `fatigue`
-  - 通过 `fatigueDebuff` 直接削弱 `effectiveAim`
-- `tilt`
-  - 通过 `tiltDebuff` 直接削弱 `effectiveAim`
-
-团队相关加成也会影响比赛：
-
-- `rosterTeamBonus`
-  - 来自队友敏捷总和
-  - 公式：`floor(sum(teammate.agility) / 4 / 4)`
-- `synergyBonus`
-  - 来自阵容角色和 trait 协同
-  - 例如 `IGL + tactical`、`AWPer + aimer`、多 `support` 协同会加分
-  - 多个 `ego`、过多 `solo` 会扣分
-- `trustModifier`
-  - 来自 `teamTrust`
-  - `teamTrust >= 65` -> `+1`
-  - `teamTrust <= 30` -> `-1`
-  - `teamTrust <= 15` -> `-2`
-
-### 赛事个人表现公式
-
-比赛打完后，还会结算个人数据：
-
-- 击杀 / 死亡 / 助攻
-- 爆头率 `headshotRate`
-- `rating`
-- 比分
-
-其中：
-
-- `headshotRate` 主要看 `agility + feel`
-- `rating` 近似公式为：
-  - `kd * 0.60 + headshotRate * 0.35 + decisionMod + 0.20`
-  - 其中 `decisionMod = (decisionBase - 50) / 100 * 0.12`
-
-这些数据进一步影响：
-
-- 比赛叙事文案
-- `feelDelta`
-- `tiltDelta`
-- `fatigueDelta`
-
-也就是说：
-
-- `agility`、`experience`、`mentality` 更直接决定你赢不赢
-- `intelligence` 更偏向提升决策表现和赛事事件分支质量
-- `constitution` 更偏向影响长期作战稳定性，而不是单场纯胜率
-
-相关路由：
-
-- `GET /game/:sessionId/tournaments`
-- `POST /game/:sessionId/signup`
-- `POST /game/:sessionId/withdraw`
-
-弃赛当前会带来：
-
-- 压力惩罚
-- 名气惩罚
-- 在 `second / pro` 阶段可能附带资金惩罚
+`/api/health` 会返回当前 AI provider 和 active 状态。未启用 AI 时，系统会尽量使用模板内容兜底；自由行动和流式叙事这类强依赖 LLM 的能力会返回错误或被前端跳过。
 
 ---
 
-## 积分榜
+## 前端页面
 
-项目内维护一份战队积分榜，用于：
+- `/`：新局创建，包含选手名、特质抽取和属性分配。
+- `/game/:sessionId`：主游戏界面，包含事件、选项、行动、商店、贷款、战队、赛事、社交动态、历史和结局面板。
+- `/debug`：本地 LLM 调试页，读取 `/api/debug/*` 接口。
 
-- 展示玩家队伍所处位置
-- 校验部分赛事报名门槛
-- 作为赛事生态的一部分持续滚动
+API 基础地址解析逻辑在 `frontend/src/lib/api.ts`：
 
-前端展示组件：`frontend/src/components/Leaderboard.tsx`
+1. 优先使用 `NEXT_PUBLIC_API_BASE`。
+2. 本地或局域网 host 默认指向 `http://127.0.0.1:8787`。
+3. `cs.example.com` 会映射到 `cs-api.example.com`。
+4. 其他 host 会尝试映射到 `api.{host}`。
 
 ---
 
 ## API 概览
 
-主要后端入口在 `backend/src/routes/game.ts`。
+所有业务接口挂在 `/api` 下。
 
-### 基础接口
+基础：
 
-- `GET /health`
-- `GET /traits`
-- `GET /backgrounds`
-- `POST /game/roll-traits`
-- `POST /game/start`
-- `GET /game/:sessionId`
+- `GET /api/health`
+- `GET /api/traits`
+- `GET /api/backgrounds`
+- `POST /api/game/roll-traits`
+- `POST /api/game/start`
+- `GET /api/game/:sessionId`
+- `GET /api/game/meta/rules`
 
-### 回合与行动
+回合和行动：
 
-- `POST /game/:sessionId/choice`
-- `POST /game/:sessionId/action`
+- `POST /api/game/:sessionId/choice`
+- `POST /api/game/:sessionId/action`
 
-### 商店
+赛事：
 
-- `POST /game/:sessionId/shop`
-- `GET /game/meta/shop`
+- `GET /api/game/:sessionId/tournaments`
+- `POST /api/game/:sessionId/signup`
+- `POST /api/game/:sessionId/withdraw`
 
-`/shop` 当前返回：
+商店和经济：
 
-- `player`
-- `itemName`
-- `shopNarrative`
-- `shopNarrativePositive`
-- `shopBuffLabelsAdded`
-- `shopBuffLabelsRemoved`
-- `shopTagsAdded`
-- `shopTagsRemoved`
+- `GET /api/game/meta/shop`
+- `POST /api/game/:sessionId/shop`
+- `POST /api/game/:sessionId/loan`
+- `POST /api/game/:sessionId/pawn`
+- `POST /api/game/:sessionId/narrate-shop`
 
-### 赛事
+战队：
 
-- `GET /game/:sessionId/tournaments`
-- `POST /game/:sessionId/signup`
-- `POST /game/:sessionId/withdraw`
-- `GET /game/meta/rules`
+- `GET /api/game/meta/clubs`
+- `POST /api/game/:sessionId/apply-club`
+- `POST /api/game/:sessionId/team-response`
+- `POST /api/game/:sessionId/leave-team`
 
-### 战队
+AI 和叙事：
 
-- `GET /game/meta/clubs`
-- `POST /game/:sessionId/apply-club`
-- `POST /game/:sessionId/team-response`
-- `POST /game/:sessionId/leave-team`
+- `GET /api/game/:sessionId/intro`
+- `POST /api/game/:sessionId/narrate-stream`
+- `GET /api/game/:sessionId/social-feed`
+- `GET /api/game/:sessionId/summary`
 
-### 元数据
+元数据：
 
-- `GET /game/meta/actions`
-- `GET /game/meta/shop`
-- `GET /game/meta/clubs`
+- `GET /api/game/meta/actions`
+- `GET /api/game/meta/shop`
+- `GET /api/game/meta/clubs`
+
+本地调试：
+
+- `POST /api/debug/:sessionId`
+- `GET /api/debug/llm-logs`
+- `GET /api/debug/llm-logs/:id`
+- `POST /api/debug/llm-logs/test`
+- `GET /api/debug/ai-status`
+- `GET /api/debug/ai-events/:sessionId`
+
+需要注意：
+
+- `choice`、`intro`、`narrate-stream`、`narrate-shop`、`social-feed`、`summary` 需要 `Authorization: Bearer <apiToken>`。
+- `apiToken` 由 `POST /api/game/start` 返回。
+- `/api/debug/*` 中修改数据和读取日志的接口只允许本地或局域网调试请求。
 
 ---
 
-## 本地开发
+## 存储
 
-### 1. 安装依赖
+后端存储封装在 `backend/src/storage/`：
 
-后端：
+- `D1`：保存 session、history、round result 等长期状态。
+- `KV`：缓存 intro、社交动态、AI 临时事件、LLM 日志等短期或调试数据。
 
-```bash
-cd backend
-npm install
-```
-
-前端：
-
-```bash
-cd frontend
-npm install
-```
-
-### 2. 初始化本地数据库
-
-```bash
-cd backend
-npm run db:init:local
-```
-
-### 3. 启动后端
-
-```bash
-cd backend
-npm run dev
-```
-
-默认会跑在 `http://127.0.0.1:8787`。
-
-### 4. 启动前端
-
-先配置 `frontend/.env.local`：
-
-```bash
-NEXT_PUBLIC_API_BASE=http://127.0.0.1:8787
-```
-
-然后启动：
-
-```bash
-cd frontend
-npm run dev
-```
+数据库 schema 在 `backend/schema.sql`。
 
 ---
 
@@ -622,20 +518,27 @@ npm run dev
 
 ### 后端
 
-先更新 `backend/wrangler.toml`：
+准备 `backend/wrangler.toml`，配置 D1 和 KV：
 
-- `database_id`
-- `kv namespace id`
-- 可选 AI 相关变量
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "cs2-sim-db"
+database_id = "..."
 
-然后执行：
+[[kv_namespaces]]
+binding = "KV"
+id = "..."
+```
+
+部署：
 
 ```bash
 cd backend
 npm run deploy
 ```
 
-如需远端初始化 D1：
+初始化远端 D1：
 
 ```bash
 cd backend
@@ -644,49 +547,33 @@ npm run db:init:remote
 
 ### 前端
 
-前端可单独部署到支持 `Next.js` 的平台。
+前端可部署到任何支持 Next.js 的平台。生产环境需要设置：
 
-必须保证：
-
-- `NEXT_PUBLIC_API_BASE` 指向后端地址
-
----
-
-## 脚本
-
-### backend
-
-- `npm run dev`
-- `npm run deploy`
-- `npm run db:init:local`
-- `npm run db:init:remote`
-- `npm run typecheck`
-
-### frontend
-
-- `npm run dev`
-- `npm run build`
-- `npm run start`
-- `npm run lint`
-- `npm run typecheck`
+```bash
+NEXT_PUBLIC_API_BASE=https://your-worker-domain.example.com
+```
 
 ---
 
-## 当前文档边界
+## 开发注意事项
 
-这份 README 只描述当前仓库里已经实现或已经接线的系统。
+- 改领域类型时，同步检查 `backend/src/types.ts`、`frontend/src/lib/types.ts` 和 `shared/types.ts`。
+- 新增事件时，优先放入 `backend/src/data/events/`，再从 `backend/src/data/events/index.ts` 注册。
+- 新增行动改 `backend/src/data/actions.ts`，新增商品改 `backend/src/data/shop.ts`，新增赛事改 `backend/src/data/tournaments.ts`。
+- 涉及判定、成长、被动结算、贷款和薪资时，检查 `backend/src/engine/gameEngine.ts`。
+- 涉及赛事胜率和个人数据时，检查 `backend/src/engine/matchSimulator.ts`。
+- 涉及队伍资格门票时，检查 `backend/src/engine/qualification.ts`。
+- 涉及 AI 输出结构时，更新 `backend/src/ai/prompts.ts` 并确认 `backend/src/validation/guard.ts` 仍能兜住非法输出。
 
-它刻意移除了以下过时内容：
+---
 
-- 旧版阶段链路（如 `star` / `veteran` 正式阶段）
-- 早期 roadmap / phase 规划
-- 已经改成历史设计但不再对应现有代码的数值说明
+## 当前边界
 
-如果后续继续扩展：
+这份 README 描述的是当前仓库中已经实现或已经接线的系统，不作为长期路线图。
 
-- 经纪人事件种类
-- 商店准备类商品
-- 更复杂的战队生态
-- 更多结局条件
+已知工程边界：
 
-建议同步维护这里，而不是继续在 README 里堆历史计划。
+- 不是 monorepo 构建体系，前后端分别安装、运行、检查和部署。
+- 共享类型目前不是自动生成，需要人工保持同步。
+- AI 是增强能力，不是核心规则引擎的硬依赖。
+- `wrangler.toml.local` 是模板，真实部署配置和密钥不应提交。

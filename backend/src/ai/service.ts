@@ -1,4 +1,4 @@
-import type { Background, Env, GameEventPublic, LeaderboardTeam, Player, RoundResult, Trait } from '../types.js';
+import type { Background, Env, EventDef, GameEventPublic, LeaderboardTeam, Player, RoundResult, Trait } from '../types.js';
 import { LlmLogger } from './logger.js';
 import { fetchWithRetry } from './fetchWithRetry.js';
 import {
@@ -15,6 +15,7 @@ import {
   type ShopNarrativeInput,
   type SocialFeedPost,
 } from './prompts.js';
+import { analyzeEventGaps, buildEventGenPrompt, extractJsonArray, parseAiEvents } from './eventGenerator.js';
 import {
   buildTraitRulesForPlayer,
   loadTraitNarrativeConfig,
@@ -38,6 +39,7 @@ export interface AiService {
   judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null>;
   validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation>;
   simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]>;
+  generateEvents(player: Player, history: RoundResult[]): Promise<EventDef[] | null>;
   simulateLeaderboardTick?(
     teams: LeaderboardTeam[],
     player: Player,
@@ -351,6 +353,10 @@ class TemplateNarrator implements AiService {
   async simulateSocialFeed(player: Player, _recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
     return templateSocialFeed(player, leaderboard);
   }
+
+  async generateEvents(): Promise<EventDef[] | null> {
+    return null;
+  }
 }
 
 // ── Shared LLM base ──────────────────────────────────────────────
@@ -507,6 +513,52 @@ abstract class BaseLlmNarrator implements AiService {
     // Social posts can use third-person ("他/她") legitimately, so persona check is skipped here.
     const filtered = posts.value.filter((p) => quickCheck(p.content).ok);
     return filtered.length > 0 ? filtered : templateSocialFeed(player, leaderboard);
+  }
+
+  async generateEvents(player: Player, history: RoundResult[]): Promise<EventDef[] | null> {
+    const gaps = analyzeEventGaps(player, history);
+    const prompt = buildEventGenPrompt({ player, recentHistory: history, gaps });
+    const text = await this.doChat(
+      '你是一个 CS2 电竞生涯的事件设计师。只输出 JSON 数组，不加任何其他内容。',
+      prompt,
+      1200,
+      true,
+      'generateEvents',
+    );
+    const jsonArrayFound = extractJsonArray(text) !== null;
+    const { valid, invalid } = parseAiEvents(text);
+    if (this.logger) {
+      await this.logger.log({
+        method: 'generateEventsParsed',
+        provider: this.getProviderName(),
+        model: this.getModel(),
+        systemPrompt: '',
+        userPrompt: prompt,
+        response: JSON.stringify({
+          jsonArrayFound,
+          validCount: valid.length,
+          invalidCount: invalid.length,
+          validIds: valid.map((e) => e.id),
+        }),
+        error: valid.length === 0 ? 'no valid AI events after parsing/validation' : undefined,
+        latencyMs: 0,
+        stream: false,
+      });
+    }
+    if (invalid.length > 0 && this.logger) {
+      await this.logger.log({
+        method: 'generateEventsInvalid',
+        provider: this.getProviderName(),
+        model: this.getModel(),
+        systemPrompt: '',
+        userPrompt: prompt,
+        response: JSON.stringify(invalid),
+        error: `invalid count: ${invalid.length}`,
+        latencyMs: 0,
+        stream: false,
+      });
+    }
+    return valid.length > 0 ? valid : null;
   }
 }
 

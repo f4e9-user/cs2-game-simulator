@@ -21,7 +21,19 @@ export interface Buff {
   label: string;
   actionTag: string;
   growthKey?: StatKey;
-  multiplier: number;
+  growthMultiplier?: number;
+  fatigueGainMultiplier?: number;
+  stressGainMultiplier?: number;
+  remainingUses: number;
+  consumeOn?: 'growth' | 'fatigue' | 'stress' | 'any';
+  /** @deprecated Use growthMultiplier instead. */
+  multiplier?: number;
+}
+
+export interface RoundCombo {
+  id: string;
+  label: string;
+  sourceActionId: string;
   remainingUses: number;
 }
 
@@ -44,6 +56,13 @@ export type EventType =
   | 'betting'
   | 'cheat'
   | 'rest'
+  | 'stress'
+  | 'rival'
+  | 'broadcast'
+  | 'daily'
+  | 'chains'
+  | 'skins'
+  | 'agent'
   | 'routine';
 
 export interface Trait {
@@ -253,6 +272,7 @@ export interface DynamicState {
   creditScore: number;
   familyBailoutCount: number;
   pendingFamilyCrisis?: PendingFamilyCrisis;
+  roundCombos: RoundCombo[];
 }
 
 export interface ActionResult {
@@ -270,6 +290,8 @@ export interface ActionResult {
   growthAmount?: number;
   newStats: Stats;
   newVolatile: { feel: number; tilt: number; fatigue: number };
+  comboTriggeredLabels?: string[];
+  comboAddedLabels?: string[];
 }
 
 export type ShopCategory = 'consumable' | 'service' | 'equipment' | 'social';
@@ -419,6 +441,17 @@ export interface GameSession {
   updatedAt: string;
   promotion?: PromotionCheck;
   leaderboard: LeaderboardTeam[];
+}
+
+export interface SessionSummary {
+  id: string;
+  name: string;
+  stage: Stage;
+  round: number;
+  status: SessionStatus;
+  ending: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface StartGameResponse {

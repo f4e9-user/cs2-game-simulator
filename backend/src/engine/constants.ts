@@ -141,6 +141,7 @@ export function fatigueMult(constitution: number): number {
 // 正向疲劳增量下限
 export const FATIGUE_DELTA_FLOOR_ROUTINE = 5; // 日常行动
 export const FATIGUE_DELTA_FLOOR_EVENT   = 2; // 随机事件
+export const FATIGUE_DELTA_FLOOR_MATCH   = 8; // 正式比赛
 
 // 心态对压力增量的梯度乘数（仅作用于正值）
 export function stressMult(mentality: number): number {

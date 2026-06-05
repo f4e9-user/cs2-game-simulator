@@ -44,7 +44,7 @@ export function clampStats(stats: Stats): Stats {
 // 应用静态 delta（不走成长曲线，用于背景加成、特质负面）
 export function applyDelta(stats: Stats, delta: StatDelta): Stats {
   const out = { ...stats };
-  for (const k of STAT_KEYS) {
+  for (const k of CORE_STAT_KEYS as Array<Exclude<StatKey, 'money'>>) {
     const v = delta[k];
     if (typeof v === 'number') out[k] += v;
   }
@@ -94,7 +94,7 @@ export function applyGrowth(
   // 应用 buff 倍率
   const multiplier = buffs
     .filter((b) => (b.actionTag === 'all' || b.actionTag === actionTag) && (!b.growthKey || b.growthKey === growthKey))
-    .reduce((acc, b) => acc * b.multiplier, 1);
+    .reduce((acc, b) => acc * (b.growthMultiplier ?? b.multiplier ?? 1), 1);
 
   const current = stats[growthKey];
   const factor = growthFactor(current);
@@ -114,7 +114,6 @@ export interface TranslatedDelta {
   feelDelta: number;
   tiltDelta: number;
   fatigueDelta: number;
-  moneyDelta: number;
   expGrowth: number; // 极小的 experience 核心成长（需再过成长因子+上限）
 }
 
@@ -122,7 +121,6 @@ export function translateStatDelta(delta: StatDelta): TranslatedDelta {
   let feelDelta = 0;
   let tiltDelta = 0;
   let fatigueDelta = 0;
-  let moneyDelta = 0;
   let expGrowth = 0;
 
   for (const [k, v] of Object.entries(delta) as [StatKey, number][]) {
@@ -150,13 +148,10 @@ export function translateStatDelta(delta: StatDelta): TranslatedDelta {
         // 体能负向 → 疲劳增加；正向 → 疲劳轻微恢复
         fatigueDelta += v < 0 ? Math.abs(v) * 8 : -(v * 4);
         break;
-      case 'money':
-        moneyDelta += v;
-        break;
     }
   }
 
-  return { feelDelta, tiltDelta, fatigueDelta, moneyDelta, expGrowth };
+  return { feelDelta, tiltDelta, fatigueDelta, expGrowth };
 }
 
 // ── Trait modifier 计算 ───────────────────────────────────────
@@ -307,11 +302,19 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
   let feelDelta = chosenOutcome.feelDelta ?? 0;
   let tiltDelta = chosenOutcome.tiltDelta ?? 0;
   let fatigueDelta = chosenOutcome.fatigueDelta ?? 0;
+  const translatedStatChanges = chosenOutcome.statChanges
+    ? translateStatDelta(chosenOutcome.statChanges)
+    : null;
+  if (translatedStatChanges) {
+    feelDelta += translatedStatChanges.feelDelta;
+    tiltDelta += translatedStatChanges.tiltDelta;
+    fatigueDelta += translatedStatChanges.fatigueDelta;
+  }
   let moneyDelta = chosenOutcome.moneyDelta ?? 0;
 
   // ── 核心成长 ──
   let nextStats = { ...player.stats };
-  // money 变化直接写入 stats.money（保持兼容）
+  // money 变化直接写入 stats.money
   nextStats.money = Math.max(0, Math.min(MONEY_MAX, nextStats.money + moneyDelta));
 
   let growthApplied = 0;

@@ -5,34 +5,60 @@ import { api } from '@/lib/api';
 import { useGameStore } from '@/store/gameStore';
 import type { ActionResult, Player, Stage } from '@/lib/types';
 
+interface ActionMeta {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  apCost: number;
+  comboConsumes?: Array<{
+    id: string;
+    label: string;
+    summary: string;
+  }>;
+}
+
 const ACTIONS = [
   {
     id: 'action-ranked-grind',
     label: '打天梯',
     description: '实战磨练枪法，敏捷成长',
     icon: '🎯',
-    apCost: 25,
+    apCost: 30,
+    comboConsumes: [
+      { id: 'structured-mind', label: '结构化思路', summary: '敏捷成长提高，tilt 风险降低' },
+      { id: 'flow-ready', label: '心流准备', summary: '压力和 tilt 风险降低' },
+      { id: 'body-activated', label: '身体激活', summary: '疲劳增长降低' },
+      { id: 'body-reset', label: '身体清空', summary: '找回手感，疲劳增长降低' },
+    ],
   },
   {
     id: 'action-structured-training',
     label: '系统训练',
     description: '战术训练，智力成长',
     icon: '📋',
-    apCost: 25,
+    apCost: 30,
+    comboConsumes: [
+      { id: 'practical-problems', label: '实战问题', summary: '智力成长提高，压力增长降低' },
+      { id: 'body-activated', label: '身体激活', summary: '疲劳增长降低' },
+    ],
   },
   {
     id: 'action-rest-day',
     label: '休息一天',
     description: '恢复疲劳，手感微降',
     icon: '💤',
-    apCost: 25,
+    apCost: 30,
+    comboConsumes: [
+      { id: 'overdrawn', label: '透支感', summary: '额外恢复疲劳和压力' },
+    ],
   },
   {
     id: 'action-fitness',
     label: '健身锻炼',
     description: '增强体能，增加疲劳',
     icon: '🏋️',
-    apCost: 25,
+    apCost: 30,
   },
   {
     id: 'action-meditation',
@@ -40,43 +66,49 @@ const ACTIONS = [
     description: '快速缓解疲劳与压力，不消耗成长预算',
     icon: '🧘',
     apCost: 15,
+    comboConsumes: [
+      { id: 'overdrawn', label: '透支感', summary: '额外恢复疲劳和压力' },
+    ],
   },
   {
     id: 'action-mental-training',
     label: '心理训练',
     description: '专项心理强化，心态成长，但会积累压力',
     icon: '🧠',
-    apCost: 25,
+    apCost: 30,
+    comboConsumes: [
+      { id: 'flow-ready', label: '心流准备', summary: '压力和 tilt 风险降低' },
+    ],
   },
   {
     id: 'action-vacation',
     label: '度假断网',
     description: '大幅恢复，手感生疏',
     icon: '🏖',
-    apCost: 25,
+    apCost: 50,
   },
   {
     id: 'action-boosting',
     label: '代练接单',
     description: '高强度代练，用枪法换现金',
     icon: '💰',
-    apCost: 25,
+    apCost: 35,
   },
   {
     id: 'action-coaching',
     label: '陪玩指导',
     description: '指导新人，稳定收入',
     icon: '🎓',
-    apCost: 25,
+    apCost: 30,
   },
   {
     id: 'action-net-cafe',
     label: '网吧打工',
     description: '网吧值班，体力换钱',
     icon: '🖥️',
-    apCost: 25,
+    apCost: 35,
   },
-];
+] satisfies ActionMeta[];
 
 const STAGE_ORDER: Stage[] = ['rookie', 'youth', 'second', 'pro', 'retired'];
 const ACTION_STAGE_REQUIREMENTS: Record<string, Stage> = {
@@ -99,18 +131,13 @@ interface Props {
   disabledReason?: string;
 }
 
-const AP_SEGMENT = 25; // bar displays segments of 25 AP
-
 function ApBar({ ap }: { ap: number }) {
-  const filled = Math.round(ap / AP_SEGMENT);
+  const pct = Math.max(0, Math.min(100, (ap / AP_MAX) * 100));
   return (
     <div className="ap-bar">
-      {Array.from({ length: AP_MAX / AP_SEGMENT }).map((_, i) => (
-        <div
-          key={i}
-          className={`ap-segment ${i < filled ? 'filled' : 'empty'}`}
-        />
-      ))}
+      <div className="ap-track" aria-hidden="true">
+        <div className="ap-fill" style={{ width: `${pct}%` }} />
+      </div>
       <span className="ap-label">{ap} AP</span>
     </div>
   );
@@ -130,6 +157,16 @@ export function ActionResultCard({ result, moneyChange }: { result: ActionResult
         {result.narrative}
       </div>
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+        {result.comboTriggeredLabels?.map((label) => (
+          <span key={`triggered-${label}`} className="chip chip-up">
+            连锁 {label}
+          </span>
+        ))}
+        {result.comboAddedLabels?.map((label) => (
+          <span key={`added-${label}`} className="chip">
+            开启 {label}
+          </span>
+        ))}
         {result.fatigueChange !== 0 && (
           <span className={`chip ${result.fatigueChange < 0 ? 'chip-up' : 'chip-down'}`}>
             疲劳 {result.fatigueChange > 0 ? '+' : ''}{result.fatigueChange}
@@ -167,6 +204,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
   const apiToken = useGameStore((s) => s.apiToken);
 
   const ap = player.actionPoints ?? 0;
+  const activeComboIds = new Set((player.roundCombos ?? []).map((combo) => combo.id));
 
   const isTournamentWeek =
     player.pendingMatch !== null &&
@@ -206,6 +244,12 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
         <div className="action-panel-hint">{panelDisabledReason}</div>
       ) : null}
 
+      {(player.roundCombos?.length ?? 0) > 0 && !panelDisabledReason ? (
+        <div className="action-panel-hint">
+          本回合连锁：{player.roundCombos.map((combo) => combo.label).join(' / ')}
+        </div>
+      ) : null}
+
       <div className={`action-list ${panelDisabledReason ? 'panel-disabled' : ''}`}>
         {ACTIONS.map((a) => {
           const requiredStage = ACTION_STAGE_REQUIREMENTS[a.id];
@@ -219,6 +263,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
             actionDisabledReason = `需达到 ${requiredStage === 'youth' ? '青训' : requiredStage} 阶段`;
           }
           const canDo = actionDisabledReason === null && busyId === null;
+          const availableCombos = (a.comboConsumes ?? []).filter((combo) => activeComboIds.has(combo.id));
           return (
             <div key={a.id} className="action-item">
               <button
@@ -231,6 +276,11 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
                 <div className="action-btn-body">
                   <div className="action-btn-label">{a.label}</div>
                   <div className="action-btn-desc">{a.description}</div>
+                  {availableCombos.length > 0 && (
+                    <div className="action-btn-desc">
+                      可触发：{availableCombos.map((combo) => `${combo.label}（${combo.summary}）`).join(' / ')}
+                    </div>
+                  )}
                 </div>
                 <span className="ap-cost-badge">-{a.apCost} AP</span>
               </button>

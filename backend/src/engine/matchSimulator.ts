@@ -22,12 +22,20 @@ export interface MatchSimResult extends MatchStats {
 }
 
 // effectiveDifficulty = tournament.baseDifficulty + stage.difficultyBonus
-// Range in practice: 0 (netcafe entry) to 7 (major final)
+// Range in practice: early B-tier entry stages to Major finals.
 
 function rosterTeamBonus(player: Player): number {
   if (!player.roster || player.roster.length === 0) return 0;
   const sum = player.roster.reduce((s, tm) => s + tm.stats.agility, 0);
   return Math.floor(sum / 4 / 4);
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
 }
 
 export function simulateMatch(
@@ -64,30 +72,79 @@ export function simulateMatch(
   ));
   const won = rng() < winProb;
 
-  // ── 比分（先到 13 局，最多 24 局）────────────────────────────
-  const enemyScore = won ? Math.max(2, Math.round(rng() * 12)) : 13;
-  const teamScore = won ? 13 : Math.max(2, Math.round(rng() * 12));
+  // ── 比分（先到 13 局）：强弱差影响分差，爆冷局通常更接近 ─────────────
+  const winnerConfidence = won ? winProb : 1 - winProb;
+  const confidenceMargin = Math.max(0, winnerConfidence - 0.5);
+  const upsetTightener = winnerConfidence < 0.5 ? -2 : 0;
+  const margin = clamp(
+    Math.round(3 + confidenceMargin * 12 + (rng() - 0.5) * 4 + upsetTightener),
+    2,
+    11,
+  );
+  const loserScore = clamp(13 - margin, 2, 11);
+  const enemyScore = won ? loserScore : 13;
+  const teamScore = won ? 13 : loserScore;
   const totalRounds = teamScore + enemyScore;
 
-  // ── 个人 K / D / A ───────────────────────────────────────────
-  const noise = () => 0.8 + rng() * 0.4;
-  const killRate = 0.28 + (effectiveAim / 100) * 0.42;
-  const deathRate = 0.20 + (enemyAim / 100) * 0.38;
-  const kills = Math.max(5, Math.min(40, Math.round(killRate * totalRounds * noise())));
-  const deaths = Math.max(3, Math.min(30, Math.round(deathRate * totalRounds * noise())));
-  const assists = Math.max(0, Math.min(15, Math.round(kills * 0.2 + rng() * 3)));
+  // ── 个人 K / D / A：按每回合参与生成，避免短局被 K/D 下限抬高 ───────
+  const aimScore = effectiveAim / 100;
+  const decisionScore = decisionBase / 100;
+  const stabilityScore = stats.mentality / 20;
+  const enemyPressure = enemyAim / 100;
+  const lostRoundPressure = enemyScore / totalRounds;
 
-  // ── 爆头率（与敏捷 + 手感相关）──────────────────────────────
-  const baseHSR = 0.15 + (stats.agility / 20) * 0.35;
-  const headshotRate = Math.max(0.05, Math.min(0.80,
-    baseHSR + feel * 0.025 + (rng() - 0.5) * 0.12,
-  ));
+  const kpr = clamp(
+    0.58 +
+      (aimScore - 0.50) * 0.35 +
+      (decisionScore - 0.50) * 0.10 +
+      (won ? 0.04 : -0.03) +
+      (rng() - 0.5) * 0.16,
+    0.25,
+    1.10,
+  );
+  const dpr = clamp(
+    0.52 +
+      (enemyPressure - 0.50) * 0.22 +
+      (lostRoundPressure - 0.50) * 0.35 -
+      (stabilityScore - 0.50) * 0.08 +
+      (rng() - 0.5) * 0.14,
+    0.25,
+    1.05,
+  );
+  const apr = clamp(
+    0.12 + decisionScore * 0.12 + (rng() - 0.5) * 0.08,
+    0.04,
+    0.35,
+  );
 
-  // ── Rating（近似 HLTV 2.0）──────────────────────────────────
-  const kd = kills / deaths;
+  const kills = clamp(Math.round(kpr * totalRounds), 0, 40);
+  const deaths = clamp(Math.round(dpr * totalRounds), 1, 30);
+  const assists = clamp(Math.round(apr * totalRounds), 0, 15);
+
+  // ── 爆头率：先按击杀数生成爆头击杀，再反推比例 ────────────────────
+  const hsChance = clamp(
+    0.22 + aimScore * 0.28 + feel * 0.025 + (rng() - 0.5) * 0.12,
+    0.10,
+    0.75,
+  );
+  const headshotKills = clamp(Math.round(kills * hsChance), 0, kills);
+  const headshotRate = kills > 0 ? headshotKills / kills : 0;
+
+  // ── Rating：每回合贡献模型，低击杀小样本不再只因 K/D 高而抬分 ─────
+  const actualKpr = kills / totalRounds;
+  const actualDpr = deaths / totalRounds;
+  const actualApr = assists / totalRounds;
   const decisionMod = (decisionBase - 50) / 100 * 0.12;
-  const rawRating = kd * 0.60 + headshotRate * 0.35 + decisionMod + 0.20;
-  const rating = Math.round(Math.max(0.50, Math.min(2.50, rawRating)) * 100) / 100;
+  const resultModifier = won ? 0.03 : -0.03;
+  const rawRating =
+    0.30 +
+    actualKpr * 0.95 -
+    actualDpr * 0.35 +
+    actualApr * 0.25 +
+    headshotRate * 0.12 +
+    decisionMod +
+    resultModifier;
+  const rating = round2(clamp(rawRating, 0.50, 2.50));
 
   // ── 状态变化 ─────────────────────────────────────────────────
   const ratingVsAvg = rating - 1.0;

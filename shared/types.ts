@@ -27,7 +27,21 @@ export type EventType =
   | 'betting'
   | 'cheat'
   | 'rest'
+  | 'stress'
+  | 'rival'
+  | 'broadcast'
+  | 'daily'
+  | 'chains'
+  | 'skins'
+  | 'agent'
   | 'routine';
+
+export interface RoundCombo {
+  id: string;
+  label: string;
+  sourceActionId: string;
+  remainingUses: number;
+}
 
 export interface Trait {
   id: string;
@@ -129,6 +143,7 @@ export interface DynamicState {
   creditScore: number;
   familyBailoutCount: number;
   pendingFamilyCrisis?: PendingFamilyCrisis;
+  roundCombos: RoundCombo[];
 }
 
 // A tournament the player has signed up for. Resolves when (year, month) match.
@@ -226,7 +241,7 @@ export interface GameEvent {
   choices: Choice[];
 }
 
-export type StatDelta = Partial<Stats>;
+export type StatDelta = Partial<Omit<Stats, 'money'>>;
 
 export interface RoundResult {
   round: number;
