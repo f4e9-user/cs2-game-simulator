@@ -4,6 +4,12 @@ import type {
   ClubTier,
   EventDef,
   Outcome,
+  CoreStatDelta,
+  EffectDelta,
+  ProgressionDelta,
+  ResourceDelta,
+  StateDelta,
+  TagDelta,
   Player,
   Stage,
   StatDelta,
@@ -31,6 +37,55 @@ import {
   TILT_MIN,
   growthFactor,
 } from './constants.js';
+import { applyMoneyDeltaToStats } from './money.js';
+
+export function outcomeCoreGrowth(outcome: Outcome): CoreStatDelta | undefined {
+  return outcome.coreGrowth;
+}
+
+export function outcomeStateDelta(outcome: Outcome): Required<StateDelta> {
+  return {
+    feel: outcome.stateDelta?.feel ?? 0,
+    tilt: outcome.stateDelta?.tilt ?? 0,
+    fatigue: outcome.stateDelta?.fatigue ?? 0,
+    stress: outcome.stateDelta?.stress ?? 0,
+  };
+}
+
+export function outcomeResourceDelta(outcome: Outcome): Required<ResourceDelta> {
+  return {
+    money: outcome.resourceDelta?.money ?? 0,
+    fame: outcome.resourceDelta?.fame ?? 0,
+    points: outcome.resourceDelta?.points ?? 0,
+    actionPoints: outcome.resourceDelta?.actionPoints ?? 0,
+  };
+}
+
+export function outcomeProgression(outcome: Outcome): ProgressionDelta {
+  return {
+    stageSet: outcome.progression?.stageSet,
+    stageDelta: outcome.progression?.stageDelta,
+    teamTierSet: outcome.progression?.teamTierSet,
+    injuryRestRounds: outcome.progression?.injuryRestRounds,
+    endRun: outcome.progression?.endRun,
+    endReason: outcome.progression?.endReason,
+  };
+}
+
+export function outcomeTags(outcome: Outcome): Required<TagDelta> {
+  return {
+    add: outcome.tags?.add ?? [],
+    remove: outcome.tags?.remove ?? [],
+    cooldowns: outcome.tags?.cooldowns ?? {},
+  };
+}
+
+export function outcomeEffects(outcome: Outcome): EffectDelta {
+  return {
+    buffAdd: outcome.effects?.buffAdd,
+    buffRemoveId: outcome.effects?.buffRemoveId,
+  };
+}
 
 export function clampStats(stats: Stats): Stats {
   const out = { ...stats };
@@ -299,23 +354,26 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
   const chosenOutcome = success ? choice.success : choice.failure;
 
   // ── 状态变化 ──
-  let feelDelta = chosenOutcome.feelDelta ?? 0;
-  let tiltDelta = chosenOutcome.tiltDelta ?? 0;
-  let fatigueDelta = chosenOutcome.fatigueDelta ?? 0;
-  const translatedStatChanges = chosenOutcome.statChanges
-    ? translateStatDelta(chosenOutcome.statChanges)
+  const stateDelta = outcomeStateDelta(chosenOutcome);
+  let feelDelta = stateDelta.feel;
+  let tiltDelta = stateDelta.tilt;
+  let fatigueDelta = stateDelta.fatigue;
+  const coreGrowth = outcomeCoreGrowth(chosenOutcome);
+  const translatedStatChanges = coreGrowth
+    ? translateStatDelta(coreGrowth)
     : null;
   if (translatedStatChanges) {
     feelDelta += translatedStatChanges.feelDelta;
     tiltDelta += translatedStatChanges.tiltDelta;
     fatigueDelta += translatedStatChanges.fatigueDelta;
   }
-  let moneyDelta = chosenOutcome.moneyDelta ?? 0;
+  const resourceDelta = outcomeResourceDelta(chosenOutcome);
+  let moneyDelta = resourceDelta.money;
 
   // ── 核心成长 ──
   let nextStats = { ...player.stats };
   // money 变化直接写入 stats.money
-  nextStats.money = Math.max(0, Math.min(MONEY_MAX, nextStats.money + moneyDelta));
+  nextStats = applyMoneyDeltaToStats(nextStats, moneyDelta);
 
   let growthApplied = 0;
   let growthKey: StatKey | undefined;
@@ -339,15 +397,17 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
   nextStats = clampStats(nextStats);
 
   // ── Stage 变化 ──
+  const progression = outcomeProgression(chosenOutcome);
   let stageAfter = player.stage;
-  if (chosenOutcome.stageSet) {
-    stageAfter = chosenOutcome.stageSet;
-  } else if (chosenOutcome.stageDelta) {
-    stageAfter = stageFromIndex(stageIndex(player.stage) + chosenOutcome.stageDelta);
+  if (progression.stageSet) {
+    stageAfter = progression.stageSet;
+  } else if (progression.stageDelta) {
+    stageAfter = stageFromIndex(stageIndex(player.stage) + progression.stageDelta);
   }
 
-  const tagsAdded = chosenOutcome.tagAdds ?? [];
-  const tagsRemoved = chosenOutcome.tagRemoves ?? [];
+  const tagDelta = outcomeTags(chosenOutcome);
+  const tagsAdded = tagDelta.add;
+  const tagsRemoved = tagDelta.remove;
 
   return {
     success,
@@ -358,11 +418,11 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
     chosenOutcome,
     nextStats,
     stageAfter,
-    teamTierSet: chosenOutcome.teamTierSet,
+    teamTierSet: progression.teamTierSet,
     tagsAdded,
     tagsRemoved,
-    endRun: Boolean(chosenOutcome.endRun),
-    endReason: chosenOutcome.endReason,
+    endRun: Boolean(progression.endRun),
+    endReason: progression.endReason,
     feelDelta,
     tiltDelta,
     fatigueDelta,

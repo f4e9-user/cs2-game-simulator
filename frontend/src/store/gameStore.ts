@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type {
+  CareerGoal,
   GameEvent,
   GameSession,
   LeaderboardTeam,
@@ -20,6 +21,7 @@ interface GameState {
   ending: string | null;
   lastResult: RoundResult | null;
   promotion: PromotionCheck | null;
+  careerGoal: CareerGoal | null;
   leaderboard: LeaderboardTeam[];
 
   actionsPhase: boolean;
@@ -36,6 +38,7 @@ interface GameState {
     sessionId: string;
     player: Player;
     currentEvent: GameEvent | null;
+    careerGoal?: CareerGoal;
   }) => void;
   applyChoiceResponse: (args: {
     result: RoundResult;
@@ -44,6 +47,7 @@ interface GameState {
     status: SessionStatus;
     ending?: string;
     promotion?: PromotionCheck;
+    careerGoal?: CareerGoal;
     leaderboard?: LeaderboardTeam[];
   }) => void;
   setPlayer: (player: Player) => void;
@@ -67,6 +71,7 @@ export const useGameStore = create<GameState>((set) => ({
   ending: null,
   lastResult: null,
   promotion: null,
+  careerGoal: null,
   leaderboard: [],
   actionsPhase: false,
   pendingOffer: null,
@@ -86,6 +91,7 @@ export const useGameStore = create<GameState>((set) => ({
       ending: session.ending ?? null,
       lastResult: session.history[session.history.length - 1] ?? null,
       promotion: session.promotion ?? null,
+      careerGoal: session.careerGoal ?? null,
       leaderboard: session.leaderboard ?? [],
       pendingOffer: session.player.pendingOffer ?? null,
       // 第一回合（从未做过选择）自动进入行动阶段，让玩家先熟悉面板再面对随机事件
@@ -93,7 +99,7 @@ export const useGameStore = create<GameState>((set) => ({
       error: null,
     }),
 
-  hydrateFromStart: ({ sessionId, player, currentEvent }) =>
+  hydrateFromStart: ({ sessionId, player, currentEvent, careerGoal }) =>
     set({
       sessionId,
       player,
@@ -103,6 +109,7 @@ export const useGameStore = create<GameState>((set) => ({
       ending: null,
       lastResult: null,
       promotion: null,
+      careerGoal: careerGoal ?? null,
       error: null,
     }),
 
@@ -113,6 +120,7 @@ export const useGameStore = create<GameState>((set) => ({
     status,
     ending,
     promotion,
+    careerGoal,
     leaderboard,
   }) =>
     set((state) => ({
@@ -123,6 +131,7 @@ export const useGameStore = create<GameState>((set) => ({
       history: [...state.history, result],
       lastResult: result,
       promotion: promotion ?? state.promotion,
+      careerGoal: careerGoal ?? state.careerGoal,
       leaderboard: leaderboard ?? state.leaderboard,
       actionsPhase: false,
       pendingOffer: player.pendingOffer ?? null,
@@ -148,6 +157,7 @@ export const useGameStore = create<GameState>((set) => ({
       ending: null,
       lastResult: null,
       promotion: null,
+      careerGoal: null,
       actionsPhase: false,
       loading: false,
       error: null,

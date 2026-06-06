@@ -15,7 +15,7 @@ import {
 import { getEventById } from '../data/events/index.js';
 import { TRAITS, getTrait } from '../data/traits.js';
 import { ACTIONS, getAction, type ActionDef, type ComboConsume } from '../data/actions.js';
-import { getShopItem, SHOP_ITEMS } from '../data/shop.js';
+import { getShopItem, SHOP_ITEMS, type ShopCategory } from '../data/shop.js';
 import { CLUBS, getClub, clubsForStage, PRIZE_SPLIT } from '../data/clubs.js';
 import type {
   ActionResult,
@@ -60,14 +60,12 @@ import {
   PERIPHERAL_PRICES,
   PERIPHERAL_SUCCESS_CHANCE,
   CORE_STAT_KEYS,
-  MONEY_MAX,
   POINT_POOL,
   STAGE_ORDER,
   STAT_KEYS,
   STRESS_GRACE_ROUNDS,
   STRESS_MAX,
   STRESS_MIN,
-  STRESS_SCALE,
   TEAMMATE_GROWTH_CAP,
   TILT_MAX,
   TILT_MIN,
@@ -76,14 +74,33 @@ import {
 } from './constants.js';
 import { buildTournamentPrepEvent, pickEvent, ROLE_STAT_REQUIREMENT, substituteRivals, substituteTeammates, toPublicEvent } from './events.js';
 import { checkTournamentPromotion } from './stages.js';
-import { applyDelta, applyGrowth, clampStats, makeRng, resolveChoice, stageIndex, translateStatDelta } from './resolver.js';
+import {
+  applyDelta,
+  applyGrowth,
+  clampStats,
+  makeRng,
+  outcomeEffects,
+  outcomeProgression,
+  outcomeResourceDelta,
+  outcomeStateDelta,
+  outcomeTags,
+  resolveChoice,
+  stageIndex,
+  translateStatDelta,
+} from './resolver.js';
 import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
 import { applyStateDeltaModifiers, consumeTriggeredBuffs } from './stateModifiers.js';
+import { applyMoneyDeltaToStats, applyMoneyTransaction } from './money.js';
 import {
   addQualificationRewardsByOwner,
   clearTeamQualifications,
   formatQualificationRewards,
 } from './qualification.js';
+
+const WEEKLY_SHOP_LIMITS: Partial<Record<ShopCategory, number>> = {
+  consumable: 2,
+  service: 1,
+};
 
 export interface InitInput {
   name: string;
@@ -119,10 +136,6 @@ function clampTilt(v: number): number {
 
 function clampFatigue(v: number): number {
   return Math.max(FATIGUE_MIN, Math.min(FATIGUE_MAX, Math.round(v)));
-}
-
-function clampMoney(v: number): number {
-  return Math.max(0, Math.min(MONEY_MAX, Math.round(v)));
 }
 
 function matchingActionCombos(player: Player, actionDef: ActionDef): ComboConsume[] {
@@ -272,7 +285,7 @@ export function applyForLoan(player: Player, amount: number): { success: boolean
   };
 
   player.loans = [...(player.loans ?? []), loan];
-  player.stats.money = clampMoney(player.stats.money + amount);
+  applyMoneyTransaction(player, amount);
 
   return { success: true, loan };
 }
@@ -305,7 +318,7 @@ export function applyFriendLoan(player: Player, amount: number): { success: bool
   };
 
   player.loans = [...(player.loans ?? []), loan];
-  player.stats.money = clampMoney(player.stats.money + amount);
+  applyMoneyTransaction(player, amount);
 
   return { success: true, loan };
 }
@@ -322,7 +335,7 @@ export function processLoanRepayment(player: Player, effects?: string[]): void {
     const totalDue = Math.floor(loan.remainingPrincipal * (1 + loan.interestRate));
     const loanSource = loan.source ?? 'bank';
     if (player.stats.money >= totalDue) {
-      player.stats.money = clampMoney(player.stats.money - totalDue);
+      applyMoneyTransaction(player, -totalDue);
       loan.paid = true;
       loan.remainingPrincipal = 0;
       const label = loanSource === 'friend' ? '朋友借款已还清' : '贷款还款';
@@ -382,7 +395,7 @@ function processRecoverySystems(player: Player, eventId: string, effects?: strin
   if (player.pendingFamilyCrisis && player.round >= player.pendingFamilyCrisis.deadlineRound) {
     const crisis = player.pendingFamilyCrisis;
     if (player.stats.money >= crisis.amountNeeded) {
-      player.stats.money = clampMoney(player.stats.money - crisis.amountNeeded);
+      applyMoneyTransaction(player, -crisis.amountNeeded);
       player.pendingFamilyCrisis = undefined;
       player.creditScore = Math.min(100, (player.creditScore ?? 100) + 10);
       if (!player.tagExpiry) player.tagExpiry = {};
@@ -439,6 +452,7 @@ export function initPlayer(input: InitInput): Player {
     pendingMatch: null,
     actionPoints: 100,
     shopCooldowns: {},
+    weeklyShopPurchases: {},
     team: null,
     pendingApplication: null,
     qualificationSlots: {},
@@ -489,7 +503,7 @@ function settleSalaryOnDeparture(player: Player): number {
     (player.team.monthlySalary * weeksServed) / player.salaryTracker.payCycle,
   );
   if (settlement > 0) {
-    player.stats.money = clampMoney(player.stats.money + settlement);
+    applyMoneyTransaction(player, settlement);
   }
   player.salaryTracker = null;
   return settlement;
@@ -549,8 +563,8 @@ function buildMatchResolveResult(
   const winFame = isFinal ? r.fame : Math.floor(r.fame / 5);
   const lossFame = Math.floor(r.fame * lossShare);
   // Win a final still costs stress at high tiers; loss is always stressful.
-  const winStressDelta = isFinal ? (r.stressDelta ?? 0) : 0;
-  const lossStressDelta = (r.stressDelta ?? 1) + 2;
+  const winStressDelta = isFinal ? (r.stressDelta ?? 0) * 5 : 0;
+  const lossStressDelta = ((r.stressDelta ?? 1) + 2) * 5;
 
   // 奖金分成：签约战队后俱乐部从奖金抽成
   const playerShare = player.team
@@ -566,7 +580,7 @@ function buildMatchResolveResult(
     experience: won ? (winReward.experience ?? 0) : (lossReward.experience ?? 0),
   });
   let nextStats = { ...player.stats };
-  nextStats.money = clampMoney(nextStats.money + moneyDelta);
+  nextStats = applyMoneyDeltaToStats(nextStats, moneyDelta);
 
   let growthApplied = 0;
   let growthKey: StatKey | undefined;
@@ -590,15 +604,21 @@ function buildMatchResolveResult(
 
   const chosenOutcome: Outcome = {
     narrative: sim.summary,
-    statChanges: {
+    coreGrowth: {
       experience: won ? (winReward.experience ?? 0) : (lossReward.experience ?? 0),
     },
-    feelDelta: sim.feelDelta,
-    tiltDelta: sim.tiltDelta,
-    fatigueDelta: sim.fatigueDelta,
-    stressDelta: won ? winStressDelta : lossStressDelta,
-    fameDelta: won ? winFame : lossFame,
-    tagAdds,
+    stateDelta: {
+      feel: sim.feelDelta,
+      tilt: sim.tiltDelta,
+      fatigue: sim.fatigueDelta,
+      stress: won ? winStressDelta : lossStressDelta,
+    },
+    resourceDelta: {
+      fame: won ? winFame : lossFame,
+    },
+    tags: {
+      add: tagAdds,
+    },
   };
 
   // roll = rating×100 for display; dc = enemy aim proxy
@@ -715,6 +735,12 @@ export function applyChoice(
     });
   })();
 
+  const chosenStateDelta = outcomeStateDelta(outcome.chosenOutcome);
+  const chosenResourceDelta = outcomeResourceDelta(outcome.chosenOutcome);
+  const chosenProgression = outcomeProgression(outcome.chosenOutcome);
+  const chosenTags = outcomeTags(outcome.chosenOutcome);
+  const chosenEffects = outcomeEffects(outcome.chosenOutcome);
+
   const stageBefore = session.player.stage;
   const wasBroke = session.player.stats.money <= 0;
 
@@ -751,12 +777,12 @@ export function applyChoice(
   const dramaAmplify = (session.player.roster ?? []).some((tm) => tm.personality === 'drama');
   const feelDeltaRaw = dramaAmplify ? outcome.feelDelta * 1.2 : outcome.feelDelta;
   const tiltDeltaRaw = dramaAmplify ? outcome.tiltDelta * 1.2 : outcome.tiltDelta;
-  const stressDeltaRaw = dramaAmplify && outcome.chosenOutcome.stressDelta != null
-    ? outcome.chosenOutcome.stressDelta * 1.2
-    : outcome.chosenOutcome.stressDelta;
-  const fameDeltaRaw = dramaAmplify && outcome.chosenOutcome.fameDelta != null
-    ? outcome.chosenOutcome.fameDelta * 1.2
-    : outcome.chosenOutcome.fameDelta;
+  const stressDeltaRaw = dramaAmplify && chosenStateDelta.stress !== 0
+    ? chosenStateDelta.stress * 1.2
+    : chosenStateDelta.stress;
+  const fameDeltaRaw = dramaAmplify && chosenResourceDelta.fame !== 0
+    ? chosenResourceDelta.fame * 1.2
+    : chosenResourceDelta.fame;
 
   const stateContext = {
     actionTag: eventDef.type,
@@ -770,7 +796,7 @@ export function applyChoice(
   let stressDeltaBase = 0;
   let stressFromFailure = false;
   if (typeof stressDeltaRaw === 'number' && stressDeltaRaw !== 0) {
-    stressDeltaBase = stressDeltaRaw * STRESS_SCALE;
+    stressDeltaBase = stressDeltaRaw;
   } else if (!outcome.success) {
     stressDeltaBase = IMPLICIT_FAILURE_STRESS;
     stressFromFailure = true;
@@ -819,8 +845,8 @@ export function applyChoice(
     stressReduced: modifiedState.stressReduced,
   });
 
-  if (outcome.chosenOutcome.buffAdd) {
-    buffs = [...buffs, outcome.chosenOutcome.buffAdd];
+  if (chosenEffects.buffAdd) {
+    buffs = [...buffs, chosenEffects.buffAdd];
   }
 
   // ── 状态系统更新（feel / tilt / fatigue）──
@@ -851,8 +877,8 @@ export function applyChoice(
 
   // ── 受伤/强制休养 ──
   let restRounds = session.player.restRounds ?? 0;
-  if (outcome.chosenOutcome.injuryRestRounds && outcome.chosenOutcome.injuryRestRounds > 0) {
-    restRounds = Math.max(restRounds, outcome.chosenOutcome.injuryRestRounds);
+  if (chosenProgression.injuryRestRounds && chosenProgression.injuryRestRounds > 0) {
+    restRounds = Math.max(restRounds, chosenProgression.injuryRestRounds);
     if (!tagsAdded.includes('injured')) tagsAdded.push('injured');
     passiveEffects.push('injury-triggered');
   }
@@ -921,7 +947,7 @@ export function applyChoice(
   ]);
 
   // 3. 写入本次事件新增的冷却 tag
-  const newCooldowns = outcome.chosenOutcome.tagCooldowns ?? {};
+  const newCooldowns = chosenTags.cooldowns;
   for (const [tag, duration] of Object.entries(newCooldowns)) {
     if (!nextTags.includes(tag)) nextTags.push(tag);
     nextTagExpiry[tag] = nextRound + duration;
@@ -1072,7 +1098,7 @@ export function applyChoice(
 
     const roundsSinceLastPay = nextPlayer.round - nextPlayer.salaryTracker.lastPayRound;
     if (roundsSinceLastPay >= nextPlayer.salaryTracker.payCycle) {
-      nextPlayer.stats.money = clampMoney(nextPlayer.stats.money + nextPlayer.team.monthlySalary);
+      applyMoneyTransaction(nextPlayer, nextPlayer.team.monthlySalary);
       nextPlayer.salaryTracker = {
         ...nextPlayer.salaryTracker,
         lastPayRound: nextPlayer.round,
@@ -1170,11 +1196,11 @@ export function applyChoice(
 
   const isConflictDeparture =
     eventDef.id === 'chain-team-fired' ||
-    (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'));
+    (eventDef.id === 'chain-team-conflict' && chosenTags.add.includes('bad-blood'));
   const isTeamDeparture =
     (eventDef.id === 'chain-team-fired' && (choiceDef.id === 'accept-gracefully' || !outcome.success)) ||
     (eventDef.id === 'chain-contract-renewal' && choiceDef.id === 'leave-team') ||
-    (eventDef.id === 'chain-team-conflict' && outcome.chosenOutcome.tagAdds?.includes('bad-blood'));
+    (eventDef.id === 'chain-team-conflict' && chosenTags.add.includes('bad-blood'));
 
   if (isTeamDeparture) {
     const settlement = settleSalaryOnDeparture(nextPlayer);
@@ -1241,7 +1267,7 @@ export function applyChoice(
     feelChange,
     tiltChange,
     fatigueChange,
-    buffsAdded: outcome.chosenOutcome.buffAdd ? [outcome.chosenOutcome.buffAdd] : [],
+    buffsAdded: chosenEffects.buffAdd ? [chosenEffects.buffAdd] : [],
     matchStats: pendingMatchSim
       ? {
           kills: pendingMatchSim.kills,
@@ -1270,7 +1296,7 @@ export function applyChoice(
 
     if (t) {
       const reward = stageRewardDelta(t, idx, outcome.success);
-      const extraPoints = outcome.chosenOutcome.pointsDelta ?? 0;
+      const extraPoints = chosenResourceDelta.points;
       const totalPoints = reward.points + extraPoints;
       if (totalPoints !== 0) leaderboard = addPlayerPoints(leaderboard, totalPoints);
 
@@ -1576,6 +1602,8 @@ export function applyAction(
     traits,
     rng,
   });
+  const chosenStateDelta = outcomeStateDelta(outcome.chosenOutcome);
+  const chosenEffects = outcomeEffects(outcome.chosenOutcome);
 
   const volatile = session.player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
   const actionFeelCap = session.player.feelCap ?? FEEL_CAP_DEFAULT;
@@ -1583,8 +1611,8 @@ export function applyAction(
   const tilt = clampTilt(volatile.tilt + outcome.tiltDelta + comboTiltDelta);
 
   let stress = session.player.stress ?? 0;
-  const explicitStress = outcome.chosenOutcome.stressDelta;
-  const stressDeltaBase = typeof explicitStress === 'number' ? explicitStress * STRESS_SCALE : 0;
+  const explicitStress = chosenStateDelta.stress;
+  const stressDeltaBase = typeof explicitStress === 'number' ? explicitStress : 0;
   const stateContext = { actionTag: actionDef.eventType, source: 'routine' as const };
   const modifiedState = applyStateDeltaModifiers(
     { ...comboPlayer, stats: outcome.nextStats },
@@ -1607,8 +1635,8 @@ export function applyAction(
     stressReduced: modifiedState.stressReduced,
   });
 
-  if (outcome.chosenOutcome.buffAdd) {
-    buffs = [...buffs, outcome.chosenOutcome.buffAdd];
+  if (chosenEffects.buffAdd) {
+    buffs = [...buffs, chosenEffects.buffAdd];
   }
 
   const newVolatile = { feel, tilt, fatigue };
@@ -1677,6 +1705,13 @@ export function applyShopPurchase(
 
   const player = session.player;
   const round = player.round;
+  const weeklyLimit = WEEKLY_SHOP_LIMITS[item.category];
+  const purchaseRecord = (player.weeklyShopPurchases ?? {})[itemId];
+  const currentYear = player.year ?? 1;
+  const currentWeek = player.week ?? 1;
+  const purchaseCount = purchaseRecord?.year === currentYear && purchaseRecord.week === currentWeek
+    ? purchaseRecord.count
+    : 0;
 
   if ((player.pawnedItemIds ?? []).includes(itemId)) {
     throw new Error('该装备已永久典当，无法重新购买');
@@ -1699,6 +1734,9 @@ export function applyShopPurchase(
   const cooldownUntil = (player.shopCooldowns ?? {})[itemId] ?? 0;
   if (cooldownUntil > round) {
     throw new Error(`商品冷却中，还需 ${cooldownUntil - round} 回合`);
+  }
+  if (weeklyLimit !== undefined && purchaseCount >= weeklyLimit) {
+    throw new Error(`本周购买次数已达上限（${purchaseCount}/${weeklyLimit}）`);
   }
 
   if (player.stats.money < item.priceMoney) {
@@ -1757,8 +1795,7 @@ export function applyShopPurchase(
       shopNarrative = `买到了山寨货，手感上限反而下降至 ${newFeelCap}`;
     }
 
-    const newStats = { ...player.stats };
-    newStats.money = clampMoney(newStats.money - price);
+    const newStats = applyMoneyDeltaToStats(player.stats, -price);
 
     const nextPlayer: Player = {
       ...player,
@@ -1779,8 +1816,7 @@ export function applyShopPurchase(
   const { effect } = item;
 
   // Apply money cost
-  let stats = { ...player.stats };
-  stats.money = clampMoney(stats.money - item.priceMoney);
+  let stats = applyMoneyDeltaToStats(player.stats, -item.priceMoney);
 
   // Constitution delta
   if (effect.constitutionDelta) {
@@ -1821,6 +1857,14 @@ export function applyShopPurchase(
   if (item.cooldownRounds > 0) {
     nextShopCooldowns[itemId] = round + item.cooldownRounds;
   }
+  const nextWeeklyShopPurchases = { ...(player.weeklyShopPurchases ?? {}) };
+  if (weeklyLimit !== undefined) {
+    nextWeeklyShopPurchases[itemId] = {
+      year: currentYear,
+      week: currentWeek,
+      count: purchaseCount + 1,
+    };
+  }
 
   // ── 负面事件随机触发（team-dinner / fan-meetup 等）──
   // 概率检定是顺序独立的：第一个未触发才检定第二个，break 保证每次最多触发一个。
@@ -1850,6 +1894,7 @@ export function applyShopPurchase(
     fame,
     tags,
     shopCooldowns: nextShopCooldowns,
+    weeklyShopPurchases: nextWeeklyShopPurchases,
     ownedItems: item.category === 'equipment' && !(player.ownedItems ?? []).includes(itemId)
       ? [...(player.ownedItems ?? []), itemId]
       : player.ownedItems,
@@ -1896,9 +1941,8 @@ export function pawnItem(
   if (itemId === 'ergo-chair') {
     pawnValue = Math.floor(35 * 0.6);
     const newStats = clampStats({
-      ...player.stats,
+      ...applyMoneyDeltaToStats(player.stats, pawnValue),
       constitution: Math.max(0, player.stats.constitution - 2),
-      money: clampMoney(player.stats.money + pawnValue),
     });
     nextPlayer = {
       ...player,
@@ -1919,8 +1963,7 @@ export function pawnItem(
     pawnValue = Math.floor(totalValue * 0.5);
     const newFeelCap = FEEL_CAP_DEFAULT;
     const newStats = clampStats({
-      ...player.stats,
-      money: clampMoney(player.stats.money + pawnValue),
+      ...applyMoneyDeltaToStats(player.stats, pawnValue),
     });
     nextPlayer = {
       ...player,

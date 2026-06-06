@@ -28,7 +28,7 @@ export interface ShopItem {
   description: string;
   category: ShopCategory;
   priceMoney: number;      // cost in money (1 = 1K)
-  cooldownRounds: number;  // 0 = no cooldown
+  cooldownRounds: number;  // legacy cooldown for equipment/social long-cycle gates
   effect: ShopEffect;
   requireFame?: number;
   requireStage?: Stage[];
@@ -36,7 +36,7 @@ export interface ShopItem {
 }
 
 export const SHOP_ITEMS: ShopItem[] = [
-  // ── 消耗品（无冷却）─────────────────────────────────────────────
+  // ── 消耗品（每周每种限购 2 次，由购买入口统一限制）──────────────
   {
     id: 'energy-drink',
     name: '能量饮料',
@@ -44,35 +44,45 @@ export const SHOP_ITEMS: ShopItem[] = [
     category: 'consumable',
     priceMoney: 3, // 3K
     cooldownRounds: 0,
-    effect: { fatigueDelta: -20 },
+    effect: { fatigueDelta: -14 },
   },
   {
     id: 'meal-kit',
     name: '外卖套餐',
-    description: '好好吃一顿，心情和体力都回来了一点。',
+    description: '好好吃一顿，心情和体力都回来一些。',
     category: 'consumable',
     priceMoney: 3, // 3K
     cooldownRounds: 0,
-    effect: { fatigueDelta: -8, mentalityDelta: 0 }, // mentality not directly changeable, just fatigue
+    effect: { fatigueDelta: -10, stressDelta: -4 },
   },
   {
     id: 'painkiller',
     name: '止痛药',
     description: '暂时压制身体不适，让手腕撑过今天。',
     category: 'consumable',
-    priceMoney: 5, // 5K
+    priceMoney: 6, // 6K
     cooldownRounds: 0,
-    effect: { fatigueDelta: -15 },
+    effect: {
+      fatigueDelta: -22,
+      buffAdd: {
+        id: 'painkiller-cover',
+        label: '止痛维持',
+        actionTag: 'all',
+        fatigueGainMultiplier: 0.75,
+        remainingUses: 1,
+        consumeOn: 'fatigue',
+      },
+    },
   },
 
-  // ── 服务类（冷却 5 回合）─────────────────────────────────────────
+  // ── 服务类（每周每种限购 1 次；长冷却物品仍保留 cooldown）───────
   {
     id: 'psych-session',
     name: '心理咨询',
     description: '和运动心理师谈一小时，把压力拆成能处理的碎片。',
     category: 'service',
     priceMoney: 15, // 15K
-    cooldownRounds: 5,
+    cooldownRounds: 0,
     effect: {
       stressDelta: -100,
       buffAdd: {
@@ -92,7 +102,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: '请教练盯着你把拉枪和定位一点点抠顺，短期涨得快，但练狠了也容易把手感练乱。',
     category: 'service',
     priceMoney: 30,
-    cooldownRounds: 4,
+    cooldownRounds: 0,
     effect: {
       fatigueDelta: -6,
       stressDelta: -8,
@@ -125,7 +135,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: '拉上分析师和队友把 demo 过一遍，理清思路后训练效率更高。',
     category: 'service',
     priceMoney: 25,
-    cooldownRounds: 4,
+    cooldownRounds: 0,
     effect: {
       stressDelta: -12,
       buffAdd: {
@@ -152,7 +162,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: '离开城市两三天，彻底切断与比赛的联系。',
     category: 'service',
     priceMoney: 30, // 30K
-    cooldownRounds: 5,
+    cooldownRounds: 0,
     effect: {
       stressDelta: -35,
       fatigueDelta: -30,
@@ -165,7 +175,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: '让理疗师把肩颈和前臂彻底放松下来，恢复很扎实，但按得太重也可能适得其反。',
     category: 'service',
     priceMoney: 35,
-    cooldownRounds: 6,
+    cooldownRounds: 0,
     effect: {
       fatigueDelta: -20,
       stressDelta: -15,

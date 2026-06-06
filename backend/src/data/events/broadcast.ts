@@ -26,14 +26,22 @@ export const BROADCAST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '{rival0} 官号回了你一个握手 emoji，粉丝觉得你大气。',
-          fameDelta: 1,
-          stressDelta: -1,
+          stateDelta: {
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 1,
+          },
         },
         failure: {
           narrative: '动态没人看，反而有酸民截图说你在蹭流量。',
-          feelDelta: -0.5,
-          fameDelta: -1,
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
         },
       },
       {
@@ -47,12 +55,16 @@ export const BROADCAST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你抠到了 {rival0} IGL 的两个 setup 思路，下周训练赛你直接抄了一个。',
-          feelDelta: 0.4,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.4,
+            stress: -5,
+          },
         },
         failure: {
           narrative: '看了三个小时，记住的没几条，时间没了。',
-          stressDelta: 1,
+          stateDelta: {
+            stress: 5,
+          },
         },
       },
       {
@@ -66,13 +78,17 @@ export const BROADCAST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你睡了一觉，醒来心态平了。下次轮到自己。',
-          feelDelta: 0.5,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
         },
         failure: {
           narrative: '越逃避越不爽，半夜还在脑补"我上我也行"。',
-          feelDelta: -0.5,
-          stressDelta: 3,
+          stateDelta: {
+            feel: -0.5,
+            stress: 15,
+          },
         },
       },
     ],

@@ -121,11 +121,8 @@ export function passiveStressFromMentality(mentality: number): number {
 export const FATIGUE_STRESS_THRESHOLD = 70;
 export const FATIGUE_STRESS_MULTIPLIER = 1.4;
 
-// 失败时没有显式 stressDelta 的默认压力增量（提高至 12）
+// 失败时没有显式压力变化的默认压力增量。
 export const IMPLICIT_FAILURE_STRESS = 12;
-
-// 旧版事件 stressDelta 的倍率（旧版基于 0-20 scale，×5 映射到 0-100）
-export const STRESS_SCALE = 5;
 
 // 破产时心态减损
 export const BROKE_MENTALITY_DRAIN = 1;

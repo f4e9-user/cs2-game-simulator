@@ -1536,6 +1536,116 @@ input[type='text']:focus {
 
 /* ── Compact player info (right panel top) ───────────────────── */
 
+.career-goal-panel {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.career-goal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.career-goal-kicker,
+.career-goal-block-title {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+}
+
+.career-goal-title {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.career-goal-next {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 91, 31, 0.3);
+  border-radius: 4px;
+  background: var(--accent-glow);
+  color: var(--accent-dim);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.career-goal-summary {
+  margin-bottom: 8px;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.career-goal-block {
+  margin-top: 8px;
+}
+
+.career-goal-list,
+.career-opportunity-list {
+  margin-top: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.career-goal-row,
+.career-opportunity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-2);
+}
+
+.career-goal-row.completed {
+  border-color: rgba(63, 185, 80, 0.3);
+  background: rgba(63, 185, 80, 0.08);
+}
+
+.career-goal-label,
+.career-opportunity-name {
+  min-width: 0;
+  color: var(--fg-2);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.career-opportunity-name {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.career-goal-count,
+.career-opportunity-week {
+  flex-shrink: 0;
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.career-goal-row.completed .career-goal-count {
+  color: var(--success);
+}
+
+.career-goal-empty {
+  margin-top: 5px;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
 .player-card {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);

@@ -25,19 +25,31 @@ export const AGENT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '拍摄节奏紧，但成片效果不错。品牌方很满意，你的曝光和收入都往上跳了一截。',
-          fameDelta: 6,
-          moneyDelta: 18,
-          stressDelta: 4,
-          fatigueDelta: 6,
-          tagCooldowns: { 'agent-event-cd': 12 },
+          stateDelta: {
+            stress: 20,
+            fatigue: 6,
+          },
+          resourceDelta: {
+            fame: 6,
+            money: 18,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 12 },
+          },
         },
         failure: {
           narrative: '档期被塞得太满，你拍到最后只想赶紧结束。钱是拿到了，人也被榨得差不多了。',
-          fameDelta: 2,
-          moneyDelta: 12,
-          stressDelta: 10,
-          fatigueDelta: 12,
-          tagCooldowns: { 'agent-event-cd': 10 },
+          stateDelta: {
+            stress: 50,
+            fatigue: 12,
+          },
+          resourceDelta: {
+            fame: 2,
+            money: 12,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 10 },
+          },
         },
       },
       {
@@ -52,17 +64,29 @@ export const AGENT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '经纪人把流程砍得很利落，合作照做，训练时间也保住了。',
-          fameDelta: 4,
-          moneyDelta: 10,
-          stressDelta: -6,
-          tagCooldowns: { 'agent-event-cd': 12 },
+          stateDelta: {
+            stress: -30,
+          },
+          resourceDelta: {
+            fame: 4,
+            money: 10,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 12 },
+          },
         },
         failure: {
           narrative: '品牌不愿改流程，经纪人也有些为难。你没少跑，最后两边都不算特别满意。',
-          moneyDelta: 6,
-          stressDelta: 8,
-          fatigueDelta: 8,
-          tagCooldowns: { 'agent-event-cd': 10 },
+          stateDelta: {
+            stress: 40,
+            fatigue: 8,
+          },
+          resourceDelta: {
+            money: 6,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 10 },
+          },
         },
       },
     ],
@@ -92,15 +116,25 @@ export const AGENT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '几轮模拟采访下来，你说话明显更稳了。以后再被镜头怼脸时，至少不会先心跳加速。',
-          fameDelta: 4,
-          stressDelta: -10,
-          tagCooldowns: { 'agent-event-cd': 14 },
+          stateDelta: {
+            stress: -50,
+          },
+          resourceDelta: {
+            fame: 4,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 14 },
+          },
         },
         failure: {
           narrative: '练着练着你反而开始在意每一个词，结束后脑子里全是“刚才那句是不是又说差了”。',
-          stressDelta: 8,
-          fatigueDelta: 4,
-          tagCooldowns: { 'agent-event-cd': 10 },
+          stateDelta: {
+            stress: 40,
+            fatigue: 4,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 10 },
+          },
         },
       },
       {
@@ -115,14 +149,24 @@ export const AGENT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '顾问没把你修成模板，反而保住了原本的感觉。镜头前的你更自然了。',
-          fameDelta: 3,
-          stressDelta: -6,
-          tagCooldowns: { 'agent-event-cd': 14 },
+          stateDelta: {
+            stress: -30,
+          },
+          resourceDelta: {
+            fame: 3,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 14 },
+          },
         },
         failure: {
           narrative: '“自然一点”最后变成了没人知道该怎么收，你和经纪人聊完都有点心累。',
-          stressDelta: 6,
-          tagCooldowns: { 'agent-event-cd': 10 },
+          stateDelta: {
+            stress: 30,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 10 },
+          },
         },
       },
     ],
@@ -152,17 +196,27 @@ export const AGENT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你硬是把整周行程全顶了下来。曝光和收入没丢，但结束那天你只想瘫着。',
-          fameDelta: 4,
-          moneyDelta: 12,
-          stressDelta: 8,
-          fatigueDelta: 12,
-          tagCooldowns: { 'agent-event-cd': 16 },
+          stateDelta: {
+            stress: 40,
+            fatigue: 12,
+          },
+          resourceDelta: {
+            fame: 4,
+            money: 12,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 16 },
+          },
         },
         failure: {
           narrative: '连续赶场把你榨得只剩惯性。最后一项活动结束时，你已经连笑都挤不太出来了。',
-          stressDelta: 14,
-          fatigueDelta: 18,
-          tagCooldowns: { 'agent-event-cd': 14 },
+          stateDelta: {
+            stress: 70,
+            fatigue: 18,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 14 },
+          },
         },
       },
       {
@@ -177,15 +231,25 @@ export const AGENT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你把底线说得很清楚，经纪人也帮你扛住了外面的压力，最后总算留住了训练和休息。',
-          stressDelta: -8,
-          fatigueDelta: -6,
-          tagCooldowns: { 'agent-event-cd': 16 },
+          stateDelta: {
+            stress: -40,
+            fatigue: -6,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 16 },
+          },
         },
         failure: {
           narrative: '行程砍是砍了，但合作方和经纪人两头都不太高兴，你也被来回沟通弄得更烦。',
-          fameDelta: -3,
-          stressDelta: 10,
-          tagCooldowns: { 'agent-event-cd': 12 },
+          stateDelta: {
+            stress: 50,
+          },
+          resourceDelta: {
+            fame: -3,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 12 },
+          },
         },
       },
     ],
@@ -215,15 +279,27 @@ export const AGENT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '脚本并没有完全吞掉你的个性，反而帮你把存在感拉了上来。舆论至少暂时站在你这边。',
-          fameDelta: 5,
-          stressDelta: 4,
-          tagCooldowns: { 'agent-event-cd': 14 },
+          stateDelta: {
+            stress: 20,
+          },
+          resourceDelta: {
+            fame: 5,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 14 },
+          },
         },
         failure: {
           narrative: '你越演越别扭，外界也看出来那不是你。热度是有了，但讨论区里全是阴阳怪气。',
-          fameDelta: -6,
-          stressDelta: 12,
-          tagCooldowns: { 'agent-event-cd': 12 },
+          stateDelta: {
+            stress: 60,
+          },
+          resourceDelta: {
+            fame: -6,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 12 },
+          },
         },
       },
       {
@@ -238,14 +314,24 @@ export const AGENT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你把自己不想碰的线讲清楚了，经纪人虽然嘴上念叨两句，最后还是按你的节奏重做方案。',
-          stressDelta: -10,
-          fameDelta: 2,
-          tagCooldowns: { 'agent-event-cd': 14 },
+          stateDelta: {
+            stress: -50,
+          },
+          resourceDelta: {
+            fame: 2,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 14 },
+          },
         },
         failure: {
           narrative: '这次沟通没谈拢，你们两边都觉得对方不够理解自己，合作气氛也跟着僵了下来。',
-          stressDelta: 14,
-          tagCooldowns: { 'agent-event-cd': 12 },
+          stateDelta: {
+            stress: 70,
+          },
+          tags: {
+            cooldowns: { 'agent-event-cd': 12 },
+          },
         },
       },
     ],

@@ -26,17 +26,25 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '气话说完之后反而是沉默，然后是笑。矛盾解开了一大半。',
-          feelDelta: 0.5,
-          tagRemoves: ['locker-tension'],
-          tagAdds: ['team-trust'],
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          tags: {
+            remove: ['locker-tension'],
+            add: ['team-trust'],
+          },
         },
         failure: {
           narrative: '话没说到点子上，气氛更糟了。有人拂袖而去。',
-          feelDelta: -0.5,
-          tagRemoves: ['locker-tension'],
-          tagAdds: ['suppressed-anger'],
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          tags: {
+            remove: ['locker-tension'],
+            add: ['suppressed-anger'],
+          },
         },
       },
       {
@@ -50,16 +58,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '一场欢乐的休闲局之后，大家好像忘了昨天在闹什么。',
-          tagRemoves: ['locker-tension'],
-          feelDelta: 1,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 1,
+            stress: -5,
+          },
+          tags: {
+            remove: ['locker-tension'],
+          },
         },
         failure: {
           narrative: '没人接这个台子。你的提议被沉默拒绝了，气还是没散。',
-          feelDelta: -0.5,
-          tagRemoves: ['locker-tension'],
-          tagAdds: ['suppressed-anger'],
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
+          tags: {
+            remove: ['locker-tension'],
+            add: ['suppressed-anger'],
+          },
         },
       },
       {
@@ -74,16 +90,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '几天后大家都在忙训练，矛盾暂时被搁置了。',
-          tagRemoves: ['locker-tension'],
-          stressDelta: 0,
+          stateDelta: {
+            stress: 0,
+          },
+          tags: {
+            remove: ['locker-tension'],
+          },
         },
         failure: {
           narrative: '矛盾没有消失，只是积得更深了。你开始担心下一次爆发。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagRemoves: ['locker-tension'],
-          tagAdds: ['suppressed-anger'],
-          stressDelta: 2,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 10,
+          },
+          tags: {
+            remove: ['locker-tension'],
+            add: ['suppressed-anger'],
+          },
         },
       },
     ],
@@ -113,17 +137,27 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '爆发之后反而有种解脱感。队友愣了片刻，然后各自检讨。问题摆到台面上了。',
-          feelDelta: 1.5,
-          tagRemoves: ['suppressed-anger'],
-          stressDelta: -2,
+          stateDelta: {
+            feel: 1.5,
+            stress: -10,
+          },
+          tags: {
+            remove: ['suppressed-anger'],
+          },
         },
         failure: {
           narrative: '话说得太难听。你事后后悔了，但伤害已经造成。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagRemoves: ['suppressed-anger'],
-          stressDelta: 3,
-          fameDelta: -1,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 15,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
+          tags: {
+            remove: ['suppressed-anger'],
+          },
         },
       },
       {
@@ -138,16 +172,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你沉默着打了三小时训练，数据漂亮得让所有人闭嘴。气消了一半。',
-          feelDelta: 0.6,
-          tagRemoves: ['suppressed-anger'],
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.6,
+            stress: -5,
+          },
+          tags: {
+            remove: ['suppressed-anger'],
+          },
         },
         failure: {
           narrative: '你想用表现说话，但那天状态很差。压着的火气变成了焦虑。',
-          feelDelta: -0.5,
-          tagRemoves: ['suppressed-anger'],
-          stressDelta: 2,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+            tilt: 1,
+          },
+          tags: {
+            remove: ['suppressed-anger'],
+          },
         },
       },
       {
@@ -162,16 +204,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '教练单独找了每个人聊。隔天气氛好了很多，你也不那么孤立了。',
-          feelDelta: 0.5,
-          tagRemoves: ['suppressed-anger'],
-          tagAdds: ['team-trust'],
-          stressDelta: -2,
+          stateDelta: {
+            feel: 0.5,
+            stress: -10,
+          },
+          tags: {
+            remove: ['suppressed-anger'],
+            add: ['team-trust'],
+          },
         },
         failure: {
           narrative: '教练说"我会处理"，但什么也没发生。你觉得自己被无视了。',
-          feelDelta: -0.5,
-          tagRemoves: ['suppressed-anger'],
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
+          tags: {
+            remove: ['suppressed-anger'],
+          },
         },
       },
     ],
@@ -201,21 +251,33 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '解释勉强通过了审计。你长呼一口气，但这件事没有结束。',
-          feelDelta: -0.5,
-          tagRemoves: ['dirty-money'],
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          tags: {
+            remove: ['dirty-money'],
+          },
         },
         failure: {
           narrative: '说辞前后矛盾，审计升级为外部调查。你的名字出现在报告首页。',
-          feelDelta: -1.5,
-          tiltDelta: 1,
-          moneyDelta: -50,
-          tagRemoves: ['dirty-money'],
-          tagAdds: ['banned'],
-          endRun: true,
-          endReason: 'banned_for_match_fixing',
-          stressDelta: 10,
-          fameDelta: -15,
+          stateDelta: {
+            feel: -1.5,
+            tilt: 1,
+            stress: 50,
+          },
+          resourceDelta: {
+            money: -50,
+            fame: -15,
+          },
+          progression: {
+            endRun: true,
+            endReason: 'banned_for_match_fixing',
+          },
+          tags: {
+            remove: ['dirty-money'],
+            add: ['banned'],
+          },
         },
       },
       {
@@ -230,22 +292,36 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '内部处理完结：接受赞助禁令 + 自愿退还 30K。没有公开处分。你睡得踏实一些了。',
-          feelDelta: 0.5,
-          moneyDelta: -30,
-          tagRemoves: ['dirty-money'],
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          resourceDelta: {
+            money: -30,
+          },
+          tags: {
+            remove: ['dirty-money'],
+          },
         },
         failure: {
           narrative: '坦白了但公司认为不够，决定上报联盟。禁赛通知随后到来。',
-          feelDelta: -1.5,
-          tiltDelta: 1,
-          moneyDelta: -50,
-          tagRemoves: ['dirty-money'],
-          tagAdds: ['banned'],
-          endRun: true,
-          endReason: 'banned_for_match_fixing',
-          stressDelta: 8,
-          fameDelta: -10,
+          stateDelta: {
+            feel: -1.5,
+            tilt: 1,
+            stress: 40,
+          },
+          resourceDelta: {
+            money: -50,
+            fame: -10,
+          },
+          progression: {
+            endRun: true,
+            endReason: 'banned_for_match_fixing',
+          },
+          tags: {
+            remove: ['dirty-money'],
+            add: ['banned'],
+          },
         },
       },
       {
@@ -261,23 +337,37 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '对方没有反驳的资本。你全身而退，但失去了一个人。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagRemoves: ['dirty-money'],
-          stressDelta: 1,
-          fameDelta: -1,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 5,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
+          tags: {
+            remove: ['dirty-money'],
+          },
         },
         failure: {
           narrative: '对方把完整的聊天记录发给了调查组。局面一下子全崩了。',
-          feelDelta: -1.5,
-          tiltDelta: 1,
-          moneyDelta: -50,
-          tagRemoves: ['dirty-money'],
-          tagAdds: ['banned'],
-          endRun: true,
-          endReason: 'banned_for_match_fixing',
-          stressDelta: 10,
-          fameDelta: -15,
+          stateDelta: {
+            feel: -1.5,
+            tilt: 1,
+            stress: 50,
+          },
+          resourceDelta: {
+            money: -50,
+            fame: -15,
+          },
+          progression: {
+            endRun: true,
+            endReason: 'banned_for_match_fixing',
+          },
+          tags: {
+            remove: ['dirty-money'],
+            add: ['banned'],
+          },
         },
       },
     ],
@@ -306,16 +396,26 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '那条帖子的互动量也爆了。你的用户名在圈里开始被人认出来。',
-          feelDelta: 0.5,
-          tagRemoves: ['highlight-clip'],
-          tagAdds: ['fan-favorite'],
-          fameDelta: 4,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 4,
+          },
+          tags: {
+            remove: ['highlight-clip'],
+            add: ['fan-favorite'],
+          },
         },
         failure: {
           narrative: '帖子措辞被挑剔了。小部分人找茬，热度散得很快。',
-          tagRemoves: ['highlight-clip'],
-          fameDelta: 1,
+          resourceDelta: {
+            fame: 1,
+          },
+          tags: {
+            remove: ['highlight-clip'],
+          },
         },
       },
       {
@@ -329,15 +429,23 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你没被热度带偏，这周训练数据是近一个月最好的。',
-          tagRemoves: ['highlight-clip'],
-          feelDelta: 1,
+          stateDelta: {
+            feel: 1,
+          },
+          tags: {
+            remove: ['highlight-clip'],
+          },
         },
         failure: {
           narrative: '明明想无视，还是忍不住刷评论到凌晨。第二天迟到了训练。',
-          feelDelta: -0.5,
-          tagRemoves: ['highlight-clip'],
-          fatigueDelta: 10,
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            fatigue: 10,
+            stress: 5,
+          },
+          tags: {
+            remove: ['highlight-clip'],
+          },
         },
       },
       {
@@ -352,15 +460,23 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '一个外设品牌签了三个月短约。有点钱，有点名。',
-          moneyDelta: 30,
-          tagRemoves: ['highlight-clip'],
-          tagAdds: ['fan-favorite'],
-          fameDelta: 2,
+          resourceDelta: {
+            money: 30,
+            fame: 2,
+          },
+          tags: {
+            remove: ['highlight-clip'],
+            add: ['fan-favorite'],
+          },
         },
         failure: {
           narrative: '谈判桌上条款没谈拢，热度过了就没人找了。',
-          tagRemoves: ['highlight-clip'],
-          fameDelta: 1,
+          resourceDelta: {
+            fame: 1,
+          },
+          tags: {
+            remove: ['highlight-clip'],
+          },
         },
       },
     ],
@@ -390,19 +506,31 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '合同签了，60K 到账。你的脸开始出现在外设网站首页。日程也跟着密了。',
-          moneyDelta: 60,
-          tagRemoves: ['fan-favorite'],
-          fameDelta: 4,
-          stressDelta: 2,
+          stateDelta: {
+            stress: 10,
+          },
+          resourceDelta: {
+            money: 60,
+            fame: 4,
+          },
+          tags: {
+            remove: ['fan-favorite'],
+          },
         },
         failure: {
           narrative: '活动太多压垮了训练计划。战队管理层打来电话表达不满。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          moneyDelta: 40,
-          tagRemoves: ['fan-favorite'],
-          fameDelta: 2,
-          stressDelta: 4,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 20,
+          },
+          resourceDelta: {
+            money: 40,
+            fame: 2,
+          },
+          tags: {
+            remove: ['fan-favorite'],
+          },
         },
       },
       {
@@ -416,14 +544,22 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '品牌方接受了条件。30K，少一些，但自由度保住了。',
-          moneyDelta: 30,
-          tagRemoves: ['fan-favorite'],
-          fameDelta: 2,
+          resourceDelta: {
+            money: 30,
+            fame: 2,
+          },
+          tags: {
+            remove: ['fan-favorite'],
+          },
         },
         failure: {
           narrative: '谈判没成，品牌方找了别人。机会就这样过了。',
-          tagRemoves: ['fan-favorite'],
-          stressDelta: 1,
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            remove: ['fan-favorite'],
+          },
         },
       },
       {
@@ -438,14 +574,22 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你回绝了。圈内有人觉得你务实，训练专注度明显提高。',
-          feelDelta: 1.5,
-          tagRemoves: ['fan-favorite'],
+          stateDelta: {
+            feel: 1.5,
+          },
+          tags: {
+            remove: ['fan-favorite'],
+          },
         },
         failure: {
           narrative: '拒绝了之后又后悔了。反复横跳让经纪人直接甩手不干了。',
-          feelDelta: -0.5,
-          tagRemoves: ['fan-favorite'],
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
+          tags: {
+            remove: ['fan-favorite'],
+          },
         },
       },
     ],
@@ -475,16 +619,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '录像看了六遍。你找到了三个可以改进的位置习惯。下次不会再犯。',
-          tagRemoves: ['grand-final-loss'],
-          stressDelta: -2,
-          feelDelta: 1,
+          stateDelta: {
+            stress: -10,
+            feel: 1,
+          },
+          tags: {
+            remove: ['grand-final-loss'],
+          },
         },
         failure: {
           narrative: '反复看反而加深了那一刻的画面。你对这局录像产生了抵触。',
-          feelDelta: -0.5,
-          tagRemoves: ['grand-final-loss'],
-          stressDelta: 2,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+            tilt: 1,
+          },
+          tags: {
+            remove: ['grand-final-loss'],
+          },
         },
       },
       {
@@ -499,16 +651,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你强迫自己把那局关掉。两周后，你发现自己确实没再想它。',
-          feelDelta: 0.5,
-          tagRemoves: ['grand-final-loss'],
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          tags: {
+            remove: ['grand-final-loss'],
+          },
         },
         failure: {
           narrative: '告诉自己向前看，但梦里还是那个 16:14。',
-          feelDelta: -0.5,
-          tagRemoves: ['grand-final-loss'],
-          stressDelta: 1,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+            tilt: 1,
+          },
+          tags: {
+            remove: ['grand-final-loss'],
+          },
         },
       },
       {
@@ -522,14 +682,22 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '顾问帮你重构了对"输"的定义。你睡前不再反复回放那场比赛了。',
-          tagRemoves: ['grand-final-loss'],
-          stressDelta: -3,
-          feelDelta: 1,
+          stateDelta: {
+            stress: -15,
+            feel: 1,
+          },
+          tags: {
+            remove: ['grand-final-loss'],
+          },
         },
         failure: {
           narrative: '说了两次感觉没什么用，你退出了。问题还挂在那里。',
-          tagRemoves: ['grand-final-loss'],
-          stressDelta: 0,
+          stateDelta: {
+            stress: 0,
+          },
+          tags: {
+            remove: ['grand-final-loss'],
+          },
         },
       },
     ],
@@ -559,15 +727,23 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '教练接受了道歉。他说他更在意你知道为什么不对，而不是你说了什么。',
-          feelDelta: 0.5,
-          tagRemoves: ['missed-practice'],
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          tags: {
+            remove: ['missed-practice'],
+          },
         },
         failure: {
           narrative: '道歉的时候没忍住加了一句解释，教练皱眉打断了你。气氛很糟。',
-          feelDelta: -0.5,
-          tagRemoves: ['missed-practice'],
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
+          tags: {
+            remove: ['missed-practice'],
+          },
         },
       },
       {
@@ -581,16 +757,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '谎说了，教练信了。事情过去了，但你知道这不是你的最好状态。',
-          feelDelta: -0.5,
-          tagRemoves: ['missed-practice'],
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
+          tags: {
+            remove: ['missed-practice'],
+          },
         },
         failure: {
           narrative: '教练当场指出了漏洞，然后直接通知你下周停赛一场。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagRemoves: ['missed-practice'],
-          stressDelta: 3,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 15,
+          },
+          tags: {
+            remove: ['missed-practice'],
+          },
         },
       },
       {
@@ -605,17 +789,29 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '教练没有再追。但名单上你的上场时间少了一场。',
-          tagRemoves: ['missed-practice'],
-          stressDelta: 0,
-          fameDelta: -1,
+          stateDelta: {
+            stress: 0,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
+          tags: {
+            remove: ['missed-practice'],
+          },
         },
         failure: {
           narrative: '俱乐部直接发来了书面警告，并转发给了联盟。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagRemoves: ['missed-practice'],
-          stressDelta: 3,
-          fameDelta: -2,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 15,
+          },
+          resourceDelta: {
+            fame: -2,
+          },
+          tags: {
+            remove: ['missed-practice'],
+          },
         },
       },
     ],
@@ -645,16 +841,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '最后一个小时你开始感觉到那种"锁定"的感觉。手感上来了。',
-          feelDelta: 2.2,
-          tagCooldowns: { 'awper-training-cd': 9 },
-          stressDelta: -1,
+          stateDelta: {
+            feel: 2.2,
+            stress: -5,
+          },
+          tags: {
+            cooldowns: { 'awper-training-cd': 9 },
+          },
         },
         failure: {
           narrative: '打了五百发之后眼睛开始酸，准头反而越来越散。',
-          feelDelta: 0.6,
-          tagCooldowns: { 'awper-training-cd': 7 },
-          fatigueDelta: 15,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: 0.6,
+            fatigue: 15,
+            tilt: 1,
+          },
+          tags: {
+            cooldowns: { 'awper-training-cd': 7 },
+          },
         },
       },
       {
@@ -669,12 +873,18 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你记住了十二个对方常见的过图时机，下次打这张图会更稳。',
-          feelDelta: 1.4,
-          tagCooldowns: { 'awper-training-cd': 9 },
+          stateDelta: {
+            feel: 1.4,
+          },
+          tags: {
+            cooldowns: { 'awper-training-cd': 9 },
+          },
         },
         failure: {
           narrative: '理论记住了，但临场执行又是另一回事，这次训练没有太大收获。',
-          tagCooldowns: { 'awper-training-cd': 7 },
+          tags: {
+            cooldowns: { 'awper-training-cd': 7 },
+          },
         },
       },
     ],
@@ -706,18 +916,28 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '第一场以 IGL 身份打的比赛，你的指挥让全队都找到了节奏。赛后大家叫你"指挥官"。',
-          feelDelta: 0.8,
-          tagRemoves: ['natural-igl'],
-          tagAdds: ['team-trust'],
-          fameDelta: 3,
-          stressDelta: 2,
+          stateDelta: {
+            feel: 0.8,
+            stress: 10,
+          },
+          resourceDelta: {
+            fame: 3,
+          },
+          tags: {
+            remove: ['natural-igl'],
+            add: ['team-trust'],
+          },
         },
         failure: {
           narrative: 'IGL 压力比你想的大得多。队伍因为你的失误输了两场，开始有人质疑这个决定。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagRemoves: ['natural-igl'],
-          stressDelta: 4,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 20,
+          },
+          tags: {
+            remove: ['natural-igl'],
+          },
         },
       },
       {
@@ -731,14 +951,20 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你推荐的人接受了。你继续在辅助位置上发光，偶尔给 IGL 支招。',
-          tagCooldowns: { 'igl-opportunity-cd': 12 },
-          tagAdds: ['team-trust'],
+          tags: {
+            cooldowns: { 'igl-opportunity-cd': 12 },
+            add: ['team-trust'],
+          },
         },
         failure: {
           narrative: '被你推荐的人拒绝了。队伍最终空降了一个外部 IGL，你和他磨合得很痛苦。',
-          feelDelta: -0.5,
-          tagCooldowns: { 'igl-opportunity-cd': 10 },
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          tags: {
+            cooldowns: { 'igl-opportunity-cd': 10 },
+          },
         },
       },
       {
@@ -753,13 +979,19 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你划清了边界。队长尊重了你的决定，最终找了另一个方案。',
-          tagCooldowns: { 'igl-opportunity-cd': 10 },
+          tags: {
+            cooldowns: { 'igl-opportunity-cd': 10 },
+          },
         },
         failure: {
           narrative: '你拒绝了，但队伍一直没找到合适人选。下个赛季整体指挥混乱。',
-          feelDelta: -0.5,
-          tagCooldowns: { 'igl-opportunity-cd': 8 },
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          tags: {
+            cooldowns: { 'igl-opportunity-cd': 8 },
+          },
         },
       },
     ],
@@ -789,18 +1021,30 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '声明措辞得当，大部分人接受了。舆论在 48 小时内平息。',
-          feelDelta: 0.5,
-          tagRemoves: ['media-backlash'],
-          fameDelta: -1,
-          stressDelta: -2,
+          stateDelta: {
+            feel: 0.5,
+            stress: -10,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
+          tags: {
+            remove: ['media-backlash'],
+          },
         },
         failure: {
           narrative: '声明被截图断章取义二次传播，引发新一轮争论。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagRemoves: ['media-backlash'],
-          fameDelta: -4,
-          stressDelta: 3,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 15,
+          },
+          resourceDelta: {
+            fame: -4,
+          },
+          tags: {
+            remove: ['media-backlash'],
+          },
         },
       },
       {
@@ -816,18 +1060,30 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '反驳逻辑严密，对方没有反应。一部分圈内人改变了立场。',
-          feelDelta: 0.5,
-          tagRemoves: ['media-backlash'],
-          fameDelta: 2,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 2,
+          },
+          tags: {
+            remove: ['media-backlash'],
+          },
         },
         failure: {
           narrative: '反击被认为是"傲慢"，引来更多负面评价。经纪人发来了警告短信。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagRemoves: ['media-backlash'],
-          fameDelta: -5,
-          stressDelta: 4,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 20,
+          },
+          resourceDelta: {
+            fame: -5,
+          },
+          tags: {
+            remove: ['media-backlash'],
+          },
         },
       },
       {
@@ -841,17 +1097,29 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '一周后新的事件出现，你的名字淡出了热搜。沉默奏效了。',
-          tagRemoves: ['media-backlash'],
-          fameDelta: -1,
-          stressDelta: -1,
+          stateDelta: {
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
+          tags: {
+            remove: ['media-backlash'],
+          },
         },
         failure: {
           narrative: '沉默被解读为默认。帖子热度持续了更久，俱乐部扣了 20K 违约金。',
-          feelDelta: -0.5,
-          moneyDelta: -20,
-          tagRemoves: ['media-backlash'],
-          fameDelta: -3,
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          resourceDelta: {
+            money: -20,
+            fame: -3,
+          },
+          tags: {
+            remove: ['media-backlash'],
+          },
         },
       },
     ],
@@ -881,18 +1149,28 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你打出了近期最好的一场。赛后更衣室气氛很好，新队友主动加了你联系方式。',
-          feelDelta: 1.6,
-          tagRemoves: ['signed-second-team'],
-          tagAdds: ['team-trust'],
-          fameDelta: 2,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 1.6,
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 2,
+          },
+          tags: {
+            remove: ['signed-second-team'],
+            add: ['team-trust'],
+          },
         },
         failure: {
           narrative: '关键局手抖了。教练保持着职业性的沉默，但你知道今天没有发挥应有水平。',
-          feelDelta: -0.5,
-          tagRemoves: ['signed-second-team'],
-          stressDelta: 2,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+            tilt: 1,
+          },
+          tags: {
+            remove: ['signed-second-team'],
+          },
         },
       },
       {
@@ -906,13 +1184,19 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你没有亮点，但也没有失误。IGL 说"你很好融入"，这已经够了。',
-          tagRemoves: ['signed-second-team'],
+          tags: {
+            remove: ['signed-second-team'],
+          },
         },
         failure: {
           narrative: '太稳了以至于失去了攻击性。新队感觉你还在适应，上场时间被压缩。',
-          feelDelta: -0.5,
-          tagRemoves: ['signed-second-team'],
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
+          tags: {
+            remove: ['signed-second-team'],
+          },
         },
       },
       {
@@ -927,15 +1211,23 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '赛前那二十分钟很有效。打的时候你们的沟通比第一场正式打的队伍要顺很多。',
-          feelDelta: 0.5,
-          tagRemoves: ['signed-second-team'],
-          tagAdds: ['team-trust'],
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          tags: {
+            remove: ['signed-second-team'],
+            add: ['team-trust'],
+          },
         },
         failure: {
           narrative: '有人比较封闭，没太想搭理你。比赛里默契也出了问题。',
-          tagRemoves: ['signed-second-team'],
-          stressDelta: 1,
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            remove: ['signed-second-team'],
+          },
         },
       },
     ],
@@ -964,17 +1256,25 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '聊了一个多小时。你知道了家里一切都好。挂掉之后你发现压了很久的某根弦松了。',
-          feelDelta: 1,
-          fatigueDelta: -4,
-          tagRemoves: ['family-strain'],
-          stressDelta: -3,
+          stateDelta: {
+            feel: 1,
+            fatigue: -4,
+            stress: -15,
+          },
+          tags: {
+            remove: ['family-strain'],
+          },
         },
         failure: {
           narrative: '聊了一会儿就陷入争吵，话题滑向了"你什么时候放弃打游戏"。你挂断了电话。',
-          feelDelta: -0.5,
-          tagRemoves: ['family-strain'],
-          stressDelta: 2,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+            tilt: 1,
+          },
+          tags: {
+            remove: ['family-strain'],
+          },
         },
       },
       {
@@ -988,15 +1288,23 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '承诺了回家。妈妈听起来高兴了很多，你也有个盼头了。',
-          feelDelta: 0.5,
-          tagRemoves: ['family-strain'],
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          tags: {
+            remove: ['family-strain'],
+          },
         },
         failure: {
           narrative: '说了但没做到。训练排期出了变化，回家的计划泡汤了，家里更担心了。',
-          feelDelta: -0.5,
-          tagRemoves: ['family-strain'],
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          tags: {
+            remove: ['family-strain'],
+          },
         },
       },
       {
@@ -1010,14 +1318,22 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '家里接受了，这次过去了。但你清楚，这不是解决，只是延期。',
-          tagRemoves: ['family-strain'],
-          stressDelta: 1,
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            remove: ['family-strain'],
+          },
         },
         failure: {
           narrative: '妈妈直接买了票要来看你。你在宿舍慌了半天。',
-          feelDelta: -0.5,
-          tagRemoves: ['family-strain'],
-          stressDelta: 3,
+          stateDelta: {
+            feel: -0.5,
+            stress: 15,
+          },
+          tags: {
+            remove: ['family-strain'],
+          },
         },
       },
     ],
@@ -1047,16 +1363,28 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你的声明措辞合适，评论区情绪基本平稳。粉丝中有人表示理解。',
-          tagRemoves: ['forfeit-recent'],
-          fameDelta: -2,
-          stressDelta: -1,
+          stateDelta: {
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: -2,
+          },
+          tags: {
+            remove: ['forfeit-recent'],
+          },
         },
         failure: {
           narrative: '声明里有一句话被断章取义，话题热度反而更大了。',
-          feelDelta: -0.5,
-          tagRemoves: ['forfeit-recent'],
-          fameDelta: -5,
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          resourceDelta: {
+            fame: -5,
+          },
+          tags: {
+            remove: ['forfeit-recent'],
+          },
         },
       },
       {
@@ -1072,17 +1400,25 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '队友们虽然不满，但听了你的解释后接受了。团队内部没有进一步撕裂。',
-          feelDelta: 0.5,
-          tagRemoves: ['forfeit-recent'],
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          tags: {
+            remove: ['forfeit-recent'],
+          },
         },
         failure: {
           narrative: '有人当场说了重话。气氛很差，团队信任又少了一些。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagRemoves: ['forfeit-recent'],
-          tagAdds: ['locker-tension'],
-          stressDelta: 3,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 15,
+          },
+          tags: {
+            remove: ['forfeit-recent'],
+            add: ['locker-tension'],
+          },
         },
       },
       {
@@ -1097,16 +1433,28 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '一周后新事件把注意力转移走了。弃赛的事被大家逐渐忘记。',
-          tagRemoves: ['forfeit-recent'],
-          fameDelta: -3,
-          stressDelta: 0,
+          stateDelta: {
+            stress: 0,
+          },
+          resourceDelta: {
+            fame: -3,
+          },
+          tags: {
+            remove: ['forfeit-recent'],
+          },
         },
         failure: {
           narrative: '沉默被解读成傲慢，俱乐部管理层传来了正式警告。',
-          feelDelta: -0.5,
-          tagRemoves: ['forfeit-recent'],
-          fameDelta: -5,
-          stressDelta: 3,
+          stateDelta: {
+            feel: -0.5,
+            stress: 15,
+          },
+          resourceDelta: {
+            fame: -5,
+          },
+          tags: {
+            remove: ['forfeit-recent'],
+          },
         },
       },
     ],
@@ -1137,14 +1485,22 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '他们邀请你去线下聊一次——这本质上是面试。你对镜整理了一下衣领。',
-          tagRemoves: ['application-response-ready'],
-          tagCooldowns: { 'interview-pending': 8 },
-          fameDelta: 1,
+          resourceDelta: {
+            fame: 1,
+          },
+          tags: {
+            remove: ['application-response-ready'],
+            cooldowns: { 'interview-pending': 8 },
+          },
         },
         failure: {
           narrative: '回信很客气但简短——"感谢您的申请，我们目前人员已满。"',
-          tagRemoves: ['application-response-ready', 'application-path-open-match', 'application-path-talent'],
-          stressDelta: 1,
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            remove: ['application-response-ready', 'application-path-open-match', 'application-path-talent'],
+          },
         },
       },
     ],
@@ -1175,14 +1531,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '教练对你关于 meta 的理解印象深刻，转头对经理点了点头。',
-          tagRemoves: ['interview-pending', 'interview-ready'],
-          stressDelta: -1,
-          fameDelta: 1,
+          stateDelta: {
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 1,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready'],
+          },
         },
         failure: {
           narrative: '你说了半天对方没什么反应，面试匆匆结束了。',
-          tagRemoves: ['interview-pending', 'interview-ready'],
-          stressDelta: 2,
+          stateDelta: {
+            stress: 10,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready'],
+          },
         },
       },
       {
@@ -1198,14 +1564,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '经理翻了一下你的比赛记录，合上文件夹说"我们很感兴趣"。',
-          tagRemoves: ['interview-pending', 'interview-ready'],
-          stressDelta: -1,
-          fameDelta: 1,
+          stateDelta: {
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 1,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready'],
+          },
         },
         failure: {
           narrative: '对方觉得你还差点火候，说下次有机会再来。',
-          tagRemoves: ['interview-pending', 'interview-ready'],
-          stressDelta: 2,
+          stateDelta: {
+            stress: 10,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready'],
+          },
         },
       },
     ],
@@ -1236,14 +1612,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '教练盯着你复盘那场决赛，眼神变了——"你在高压下还能做出这个判断，不错。"他盖上文件夹，伸出手。',
-          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-open-match'],
-          fameDelta: 2,
-          stressDelta: -1,
+          stateDelta: {
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 2,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready', 'application-path-open-match'],
+          },
         },
         failure: {
           narrative: '你说了很多，但对方听完后沉默了一会儿："成绩有，但我们需要的不只这些。"面试结束。',
-          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-open-match'],
-          stressDelta: 2,
+          stateDelta: {
+            stress: 10,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready', 'application-path-open-match'],
+          },
         },
       },
       {
@@ -1259,15 +1645,25 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '屏幕上那个 4K 的瞬间让整个会客室安静了一秒。教练转头对经理说："这个可以。"',
-          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-open-match'],
-          fameDelta: 2,
-          feelDelta: 0.5,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 2,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready', 'application-path-open-match'],
+          },
         },
         failure: {
           narrative: '那几段回放里你的枪法没打出最好的状态。对方礼貌地说会再联系。',
-          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-open-match'],
-          stressDelta: 2,
+          stateDelta: {
+            stress: 10,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready', 'application-path-open-match'],
+          },
         },
       },
     ],
@@ -1297,16 +1693,26 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '十五分钟内你打出了教练从没在同龄人身上见过的准星控制。他把键盘推回来："行了，条件我们来谈。"',
-          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-talent'],
-          fameDelta: 3,
-          feelDelta: 1,
-          stressDelta: -2,
+          stateDelta: {
+            feel: 1,
+            stress: -10,
+          },
+          resourceDelta: {
+            fame: 3,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready', 'application-path-talent'],
+          },
         },
         failure: {
           narrative: '有几球你打出了不错的东西，但整体不够稳定。教练皱了皱眉："天赋能看到，但现在还差点火候。"',
-          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-talent'],
-          stressDelta: 2,
-          feelDelta: -0.5,
+          stateDelta: {
+            stress: 10,
+            feel: -0.5,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready', 'application-path-talent'],
+          },
         },
       },
       {
@@ -1322,15 +1728,25 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你坦诚自己经验不多，但清楚自己的短板在哪。教练听完点头："知道自己缺什么的人，教起来最省心。"',
-          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-talent'],
-          fameDelta: 1,
+          stateDelta: {
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 1,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready', 'application-path-talent'],
+          },
           dailyGrowth: 'intelligence',
-          stressDelta: -1,
         },
         failure: {
           narrative: '你讲了不少，但对方显然更想看实力而不是听故事。面试气氛有点尴尬地结束了。',
-          tagRemoves: ['interview-pending', 'interview-ready', 'application-path-talent'],
-          stressDelta: 2,
+          stateDelta: {
+            stress: 10,
+          },
+          tags: {
+            remove: ['interview-pending', 'interview-ready', 'application-path-talent'],
+          },
         },
       },
     ],
@@ -1360,15 +1776,23 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你关上电脑，打开训练图。拒绝信可以删，手感不能丢。',
-          tagRemoves: ['club-rejected-notify', 'application-path-open-match', 'application-path-talent'],
+          stateDelta: {
+            stress: -5,
+          },
+          tags: {
+            remove: ['club-rejected-notify', 'application-path-open-match', 'application-path-talent'],
+          },
           dailyGrowth: 'mentality',
-          stressDelta: -1,
         },
         failure: {
           narrative: '你坐在椅子上发了好一会儿呆。这封回信比预想的更难受。',
-          tagRemoves: ['club-rejected-notify', 'application-path-open-match', 'application-path-talent'],
-          stressDelta: 2,
-          tiltDelta: 1,
+          stateDelta: {
+            stress: 10,
+            tilt: 1,
+          },
+          tags: {
+            remove: ['club-rejected-notify', 'application-path-open-match', 'application-path-talent'],
+          },
         },
       },
     ],
@@ -1398,14 +1822,22 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '教练给你指了位置。你点头应下，队友们也松了口气——空缺终于有人填上了。',
-          tagRemoves: ['just-joined-team'],
-          feelDelta: 1,
-          tagAdds: ['team-trust'],
+          stateDelta: {
+            feel: 1,
+          },
+          tags: {
+            remove: ['just-joined-team'],
+            add: ['team-trust'],
+          },
         },
         failure: {
           narrative: '你有点犹豫，但教练拍了拍你的肩膀说"刚开始，先试试看。"',
-          tagRemoves: ['just-joined-team'],
-          feelDelta: -0.5,
+          stateDelta: {
+            feel: -0.5,
+          },
+          tags: {
+            remove: ['just-joined-team'],
+          },
         },
       },
       {
@@ -1420,13 +1852,21 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '"全能选手？也行。"教练在战术板上写了你的名字，旁边打了个问号。',
-          tagRemoves: ['just-joined-team'],
-          feelDelta: 0.5,
+          stateDelta: {
+            feel: 0.5,
+          },
+          tags: {
+            remove: ['just-joined-team'],
+          },
         },
         failure: {
           narrative: '教练皱了皱眉，但还是尊重了你的选择。不过能感觉到他希望你尽快定下来。',
-          tagRemoves: ['just-joined-team'],
-          stressDelta: 1,
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            remove: ['just-joined-team'],
+          },
         },
       },
       {
@@ -1441,14 +1881,22 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你简单介绍了自己的打法风格和擅长位置。IGL 点了点头，把你加进了战术讨论组。',
-          tagRemoves: ['just-joined-team'],
-          feelDelta: 1,
-          tagAdds: ['team-trust'],
+          stateDelta: {
+            feel: 1,
+          },
+          tags: {
+            remove: ['just-joined-team'],
+            add: ['team-trust'],
+          },
         },
         failure: {
           narrative: '你一紧张没说太多。教练拍了拍你的肩膀说"刚开始，不急。"',
-          tagRemoves: ['just-joined-team'],
-          feelDelta: -0.5,
+          stateDelta: {
+            feel: -0.5,
+          },
+          tags: {
+            remove: ['just-joined-team'],
+          },
         },
       },
       {
@@ -1463,15 +1911,23 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '一局下来你拿了 25 杀。会议室里有人吹了个口哨，这次是佩服的那种。',
-          tagRemoves: ['just-joined-team'],
-          feelDelta: 1.5,
-          tagAdds: ['highlight-clip'],
+          stateDelta: {
+            feel: 1.5,
+          },
+          tags: {
+            remove: ['just-joined-team'],
+            add: ['highlight-clip'],
+          },
         },
         failure: {
           narrative: '你太想表现反而手抖了几波。有好几个该拿下的击杀都错过了。',
-          tagRemoves: ['just-joined-team'],
-          feelDelta: -1,
-          stressDelta: 1,
+          stateDelta: {
+            feel: -1,
+            stress: 5,
+          },
+          tags: {
+            remove: ['just-joined-team'],
+          },
         },
       },
     ],
@@ -1502,13 +1958,21 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你在合同上签了字，一切照旧。经纪人笑着说"明智的选择"。',
-          stressDelta: -1,
-          tagCooldowns: { 'contract-cd': 48 },
+          stateDelta: {
+            stress: -5,
+          },
+          tags: {
+            cooldowns: { 'contract-cd': 48 },
+          },
         },
         failure: {
           narrative: '你犹豫了很久，感觉条款里有坑。但最后还是在压力下签了。',
-          stressDelta: 1,
-          tagCooldowns: { 'contract-cd': 48 },
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            cooldowns: { 'contract-cd': 48 },
+          },
         },
       },
       {
@@ -1524,16 +1988,26 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '经纪人为你争取到了更高的周薪。俱乐部虽然不情愿，但知道你的价值。',
-          moneyDelta: 20,
-          feelDelta: 1,
-          stressDelta: -1,
-          tagCooldowns: { 'contract-cd': 48 },
+          stateDelta: {
+            feel: 1,
+            stress: -5,
+          },
+          resourceDelta: {
+            money: 20,
+          },
+          tags: {
+            cooldowns: { 'contract-cd': 48 },
+          },
         },
         failure: {
           narrative: '谈判桌上气氛不太对。俱乐部拒绝了你的要求，说"维持原样"已经是最好的方案。',
-          feelDelta: -0.5,
-          stressDelta: 2,
-          tagCooldowns: { 'contract-cd': 48 },
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          tags: {
+            cooldowns: { 'contract-cd': 48 },
+          },
         },
       },
       {
@@ -1548,14 +2022,22 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你站起来握了握经理的手。合同结束，下一站你自己选。',
-          stressDelta: -1,
-          fameDelta: -1,
+          stateDelta: {
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
         },
         failure: {
           narrative: '你说了不续，但回头看到队友们还在那练枪，心里不是滋味。',
-          feelDelta: -0.5,
-          stressDelta: 2,
-          fameDelta: -1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
         },
       },
     ],
@@ -1588,16 +2070,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         success: {
           narrative: '你们坐下来把话说开了。{teammate0} 承认是训练节奏的问题，没人真对彼此有意见。',
           dailyGrowth: 'mentality',
-          stressDelta: -2,
-          tagAdds: ['team-trust'],
-          tagCooldowns: { 'team-conflict-cd': 16 },
+          stateDelta: {
+            stress: -10,
+          },
+          tags: {
+            add: ['team-trust'],
+            cooldowns: { 'team-conflict-cd': 16 },
+          },
         },
         failure: {
           narrative: '越说越僵，{teammate0} 摔门走了。气氛比开会前还差。',
-          feelDelta: -0.5,
-          stressDelta: 3,
-          tiltDelta: 1,
-          tagCooldowns: { 'team-conflict-cd': 12 },
+          stateDelta: {
+            feel: -0.5,
+            stress: 15,
+            tilt: 1,
+          },
+          tags: {
+            cooldowns: { 'team-conflict-cd': 12 },
+          },
         },
       },
       {
@@ -1612,16 +2102,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你没说什么，但之后几场训练赛打得格外认真。用行动带动了节奏。',
-          feelDelta: 1,
-          stressDelta: 0,
-          tagCooldowns: { 'team-conflict-cd': 12 },
+          stateDelta: {
+            feel: 1,
+            stress: 0,
+          },
+          tags: {
+            cooldowns: { 'team-conflict-cd': 12 },
+          },
         },
         failure: {
           narrative: '忍久了总会炸。一次小失误之后你终于没忍住发了火，虽然很快就后悔了。',
-          feelDelta: -0.5,
-          stressDelta: 2,
-          tiltDelta: 1,
-          tagCooldowns: { 'team-conflict-cd': 10 },
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+            tilt: 1,
+          },
+          tags: {
+            cooldowns: { 'team-conflict-cd': 10 },
+          },
         },
       },
     ],
@@ -1651,14 +2149,18 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你站起来握了手。虽然合同终止了，但经理说"你的训练态度没问题，就是运气差了点。"',
-          stressDelta: -1,
+          stateDelta: {
+            stress: -5,
+          },
           dailyGrowth: 'mentality',
         },
         failure: {
           narrative: '你说不出话来。经理递过来的解约书你看了好几遍也没签。',
-          feelDelta: -1.0,
-          stressDelta: 4,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -1.0,
+            stress: 20,
+            tilt: 1,
+          },
         },
       },
       {
@@ -1674,14 +2176,20 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你把自己的数据和战术贡献一一列出来。经理沉默了半分钟——然后说再给你一个赛季。',
-          stressDelta: -2,
-          fameDelta: 1,
+          stateDelta: {
+            stress: -10,
+          },
+          resourceDelta: {
+            fame: 1,
+          },
         },
         failure: {
           narrative: '数据对方都有，你的辩解只是延长了尴尬。合同还是被终止了。',
-          feelDelta: -1.0,
-          tiltDelta: 1,
-          stressDelta: 5,
+          stateDelta: {
+            feel: -1.0,
+            tilt: 1,
+            stress: 25,
+          },
         },
       },
     ],
@@ -1713,15 +2221,25 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '对方给出的条件比你现在的合同好一截。经纪人已经开始起草意向书了。',
-          fameDelta: 2,
-          stressDelta: -1,
-          tagCooldowns: { 'promote-offer-cd': 32 },
+          stateDelta: {
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 2,
+          },
+          tags: {
+            cooldowns: { 'promote-offer-cd': 32 },
+          },
         },
         failure: {
           narrative: '对方只是打听了一圈。你的价格比他们预期的要高了一点，这次没成。',
-          feelDelta: -0.5,
-          stressDelta: 1,
-          tagCooldowns: { 'promote-offer-cd': 16 },
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
+          tags: {
+            cooldowns: { 'promote-offer-cd': 16 },
+          },
         },
       },
       {
@@ -1737,13 +2255,19 @@ export const CHAIN_EVENTS: EventDef[] = [
         success: {
           narrative: '你回了邮件表达了感谢。现任经理不知道这件事，但你知道你选择了什么。',
           dailyGrowth: 'mentality',
-          tagCooldowns: { 'promote-offer-cd': 24 },
+          tags: {
+            cooldowns: { 'promote-offer-cd': 24 },
+          },
         },
         failure: {
           narrative: '拒绝了又后悔。夜深的时候你会想"如果当时去了会怎样"。',
-          feelDelta: -0.5,
-          stressDelta: 1,
-          tagCooldowns: { 'promote-offer-cd': 20 },
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
+          tags: {
+            cooldowns: { 'promote-offer-cd': 20 },
+          },
         },
       },
     ],
@@ -1769,14 +2293,22 @@ export const CHAIN_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 6, traitBonuses: { steady: 1, tactical: 1 } },
         success: {
           narrative: '见面聊得不错，星探对你的状态和态度都很满意，表示会向俱乐部汇报。',
-          fameDelta: 2,
-          tagCooldowns: { 'rival-scout-cd': 12 },
-          tagAdds: ['scouted'],
+          resourceDelta: {
+            fame: 2,
+          },
+          tags: {
+            cooldowns: { 'rival-scout-cd': 12 },
+            add: ['scouted'],
+          },
         },
         failure: {
           narrative: '见面时你有点紧张，发挥不稳，星探礼貌地表示会继续观察。',
-          stressDelta: 1,
-          tagCooldowns: { 'rival-scout-cd': 8 },
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            cooldowns: { 'rival-scout-cd': 8 },
+          },
         },
       },
       {
@@ -1786,11 +2318,15 @@ export const CHAIN_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 1 },
         success: {
           narrative: '你礼貌地表示现在还不想考虑转会，星探理解地点点头，说随时欢迎联系。',
-          tagCooldowns: { 'rival-scout-cd': 16 },
+          tags: {
+            cooldowns: { 'rival-scout-cd': 16 },
+          },
         },
         failure: {
           narrative: '拒绝得有些生硬，对方脸色有点难看。希望没有烧掉这座桥。',
-          tagCooldowns: { 'rival-scout-cd': 20 },
+          tags: {
+            cooldowns: { 'rival-scout-cd': 20 },
+          },
         },
       },
     ],
@@ -1814,11 +2350,15 @@ export const CHAIN_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 5, traitBonuses: { tactical: 1, igl: 1 } },
         success: {
           narrative: '对方开出了让你心动的条件——更高的薪资、更好的平台。你需要认真考虑。',
-          tagCooldowns: { 'poach-cd': 16 },
+          tags: {
+            cooldowns: { 'poach-cd': 16 },
+          },
         },
         failure: {
           narrative: '对方的条件有些含糊，薪资也没你预期的高。你礼貌地表示需要时间考虑。',
-          tagCooldowns: { 'poach-cd': 12 },
+          tags: {
+            cooldowns: { 'poach-cd': 12 },
+          },
         },
       },
       {
@@ -1828,13 +2368,21 @@ export const CHAIN_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 1, traitBonuses: { selfless: 2, support: 1 } },
         success: {
           narrative: '你婉拒了对方，并告知了现任教练。教练拍了拍你的肩膀，团队凝聚力明显上升。',
-          feelDelta: 0.5,
-          tagCooldowns: { 'poach-cd': 24 },
+          stateDelta: {
+            feel: 0.5,
+          },
+          tags: {
+            cooldowns: { 'poach-cd': 24 },
+          },
         },
         failure: {
           narrative: '你拒绝了，但内心还是有些纠结。毕竟那是一个更大的舞台。',
-          stressDelta: 1,
-          tagCooldowns: { 'poach-cd': 16 },
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            cooldowns: { 'poach-cd': 16 },
+          },
         },
       },
     ],
@@ -1858,15 +2406,23 @@ export const CHAIN_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 7, traitBonuses: { steady: 3, igl: 2 } },
         success: {
           narrative: '你劝住了躁动的队友，整个队伍以平稳的心态进入赛前准备。',
-          feelDelta: 0.5,
-          fatigueDelta: -5,
-          tagCooldowns: { 'trash-talk-cd': 8 },
+          stateDelta: {
+            feel: 0.5,
+            fatigue: -5,
+          },
+          tags: {
+            cooldowns: { 'trash-talk-cd': 8 },
+          },
         },
         failure: {
           narrative: '话是这么说，但看到那些挑衅你还是有点上头，注意力开始分散。',
-          tiltDelta: 1,
-          stressDelta: 1,
-          tagCooldowns: { 'trash-talk-cd': 6 },
+          stateDelta: {
+            tilt: 1,
+            stress: 5,
+          },
+          tags: {
+            cooldowns: { 'trash-talk-cd': 6 },
+          },
         },
       },
       {
@@ -1876,14 +2432,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 6, traitBonuses: { ego: 1, solo: 1 }, traitPenalties: { steady: 1 } },
         success: {
           narrative: '一番犀利的回击让队伍士气大振，更衣室里笑声不断，大家摩拳擦掌等着开赛。',
-          feelDelta: 1,
-          tagCooldowns: { 'trash-talk-cd': 8 },
+          stateDelta: {
+            feel: 1,
+          },
+          tags: {
+            cooldowns: { 'trash-talk-cd': 8 },
+          },
         },
         failure: {
           narrative: '你的回击被对方截图断章取义，反而造成了舆论压力，赛前情绪有些复杂。',
-          stressDelta: 2,
-          fameDelta: -1,
-          tagCooldowns: { 'trash-talk-cd': 10 },
+          stateDelta: {
+            stress: 10,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
+          tags: {
+            cooldowns: { 'trash-talk-cd': 10 },
+          },
         },
       },
     ],
@@ -1907,11 +2473,15 @@ export const CHAIN_EVENTS: EventDef[] = [
         check: { primary: 'intelligence', dc: 5, traitBonuses: { tactical: 1, igl: 2 } },
         success: {
           narrative: '你暗暗观察了几天，感觉有队友最近心思不太在训练上，但还不能确定是谁。',
-          feelDelta: 0,
+          stateDelta: {
+            feel: 0,
+          },
         },
         failure: {
           narrative: '消息来源可信度存疑，你没能判断这是不是空穴来风，只能先放下。',
-          stressDelta: 1,
+          stateDelta: {
+            stress: 5,
+          },
         },
       },
       {
@@ -1925,8 +2495,10 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '嘴上说不在意，心里总忍不住想这件事，白白消耗了一些精力。',
-          stressDelta: 1,
-          fatigueDelta: 5,
+          stateDelta: {
+            stress: 5,
+            fatigue: 5,
+          },
         },
       },
     ],
@@ -1953,7 +2525,9 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '教练认为流言不足为信，没有立刻行动。你的努力白费了，只能寄希望于事情不成真。',
-          stressDelta: 2,
+          stateDelta: {
+            stress: 10,
+          },
         },
       },
       {
@@ -1966,7 +2540,9 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '{transferTarget} 矢口否认，你也拿不准真假。就这样，你只能等待事态发展。',
-          stressDelta: 2,
+          stateDelta: {
+            stress: 10,
+          },
         },
       },
       {
@@ -1979,7 +2555,9 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         failure: {
           narrative: '这件事在心里挥之不去，无形中给你带来了不少压力。',
-          stressDelta: 2,
+          stateDelta: {
+            stress: 10,
+          },
         },
       },
     ],
@@ -2010,15 +2588,23 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你制定了详细的训练计划。教练看了你一眼，没说话——但你知道他注意到了。',
-          stressDelta: -1,
-          feelDelta: 0.5,
-          tagAdds: ['role-transition-active'],
-          tagCooldowns: { 'role-transition-cd': 24 },
+          stateDelta: {
+            stress: -5,
+            feel: 0.5,
+          },
+          tags: {
+            add: ['role-transition-active'],
+            cooldowns: { 'role-transition-cd': 24 },
+          },
         },
         failure: {
           narrative: '计划列出来了，但每次到了训练时间总会有别的事。进度比自己想的慢。',
-          stressDelta: 1,
-          tagCooldowns: { 'role-transition-cd': 12 },
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            cooldowns: { 'role-transition-cd': 12 },
+          },
         },
       },
       {
@@ -2032,13 +2618,21 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你关掉了录像。自己的位置还有太多可以精进的地方。',
-          feelDelta: 0.5,
-          tagCooldowns: { 'role-transition-cd': 20 },
+          stateDelta: {
+            feel: 0.5,
+          },
+          tags: {
+            cooldowns: { 'role-transition-cd': 20 },
+          },
         },
         failure: {
           narrative: '虽然嘴上说算了，但那个念头还在脑子里转。或许以后还会有机会。',
-          stressDelta: 1,
-          tagCooldowns: { 'role-transition-cd': 8 },
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            cooldowns: { 'role-transition-cd': 8 },
+          },
         },
       },
     ],
@@ -2069,17 +2663,25 @@ export const CHAIN_EVENTS: EventDef[] = [
         success: {
           narrative: '你在新位置上打出了统治级的表现。赛后教练拍了拍你的肩膀："看来你是认真的。"',
           dailyGrowth: 'experience',
-          feelDelta: 1.5,
-          tagRemoves: ['role-transition-active'],
-          tagCooldowns: { 'role-transition-cd': 36 },
+          stateDelta: {
+            feel: 1.5,
+          },
+          tags: {
+            remove: ['role-transition-active'],
+            cooldowns: { 'role-transition-cd': 36 },
+          },
         },
         failure: {
           narrative: '新位置比你想象的更难。几个关键回合的处理都差点意思。但教练说你"有潜力"。',
-          feelDelta: -1,
-          stressDelta: 2,
+          stateDelta: {
+            feel: -1,
+            stress: 10,
+          },
+          tags: {
+            remove: ['role-transition-active'],
+            cooldowns: { 'role-transition-cd': 24 },
+          },
           dailyGrowth: 'experience',
-          tagRemoves: ['role-transition-active'],
-          tagCooldowns: { 'role-transition-cd': 24 },
         },
       },
       {
@@ -2093,16 +2695,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '训练赛前你把位置换回去了。队友们没说什么，但你知道他们松了口气。',
-          feelDelta: 0.5,
-          tagRemoves: ['role-transition-active'],
-          tagCooldowns: { 'role-transition-cd': 16 },
+          stateDelta: {
+            feel: 0.5,
+          },
+          tags: {
+            remove: ['role-transition-active'],
+            cooldowns: { 'role-transition-cd': 16 },
+          },
         },
         failure: {
           narrative: '回到原位后反而打得更差了——脑子里全是新角色的思路。教练皱眉看了你好几秒。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagRemoves: ['role-transition-active'],
-          tagCooldowns: { 'role-transition-cd': 12 },
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+          },
+          tags: {
+            remove: ['role-transition-active'],
+            cooldowns: { 'role-transition-cd': 12 },
+          },
         },
       },
     ],
@@ -2131,14 +2741,24 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你们聊了一个多小时。{teammate0} 现在也还不错，还说有些队伍在打听你的近况。',
-          stressDelta: -2,
-          fameDelta: 1,
-          tagCooldowns: { 'old-friend-cd': 24 },
+          stateDelta: {
+            stress: -10,
+          },
+          resourceDelta: {
+            fame: 1,
+          },
+          tags: {
+            cooldowns: { 'old-friend-cd': 24 },
+          },
         },
         failure: {
           narrative: '聊着聊着有点尴尬。太久没联系，彼此的生活轨迹已经完全不一样了。',
-          stressDelta: 1,
-          tagCooldowns: { 'old-friend-cd': 16 },
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            cooldowns: { 'old-friend-cd': 16 },
+          },
         },
       },
       {
@@ -2153,14 +2773,22 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你滑掉了通知。专注眼前才是最重要的。',
-          feelDelta: 0.5,
-          tagCooldowns: { 'old-friend-cd': 20 },
+          stateDelta: {
+            feel: 0.5,
+          },
+          tags: {
+            cooldowns: { 'old-friend-cd': 20 },
+          },
         },
         failure: {
           narrative: '你又看了那条消息好几遍才关掉。有些东西没那么容易放下。',
-          stressDelta: 1,
-          fatigueDelta: 5,
-          tagCooldowns: { 'old-friend-cd': 12 },
+          stateDelta: {
+            stress: 5,
+            fatigue: 5,
+          },
+          tags: {
+            cooldowns: { 'old-friend-cd': 12 },
+          },
         },
       },
     ],

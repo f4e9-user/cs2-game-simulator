@@ -43,13 +43,17 @@ export const STRESS_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你睡到中午，醒来感觉脑子终于装回了壳。',
-          feelDelta: 1,
-          stressDelta: -4,
+          stateDelta: {
+            feel: 1,
+            stress: -20,
+          },
         },
         failure: {
           narrative: '冥想反而让你更清醒。第二天黑眼圈到颧骨。',
-          feelDelta: -0.5,
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
         },
       },
       {
@@ -62,17 +66,25 @@ export const STRESS_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你睡了 8 小时，第二天人是飘的，但脑子总算停了。',
-          feelDelta: 0.5,
-          moneyDelta: -10,
-          stressDelta: -3,
+          stateDelta: {
+            feel: 0.5,
+            stress: -15,
+          },
+          resourceDelta: {
+            money: -10,
+          },
         },
         failure: {
           narrative: '药吃了反应不对，醒来比没睡还累。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          fatigueDelta: 8,
-          moneyDelta: -10,
-          stressDelta: 2,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            fatigue: 8,
+            stress: 10,
+          },
+          resourceDelta: {
+            money: -10,
+          },
         },
       },
       {
@@ -87,16 +99,22 @@ export const STRESS_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '通宵后你打出最佳手感，但代价是接下来一周状态飘忽。',
-          feelDelta: 0.6,
-          fatigueDelta: 16,
-          stressDelta: 3,
+          stateDelta: {
+            feel: 0.6,
+            fatigue: 16,
+            stress: 15,
+          },
         },
         failure: {
           narrative: '通宵越练越烦，最后键盘都被你砸了一下。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          moneyDelta: -20,
-          stressDelta: 4,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 20,
+          },
+          resourceDelta: {
+            money: -20,
+          },
         },
       },
     ],
@@ -124,15 +142,21 @@ export const STRESS_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你深呼吸三次，会议平稳过去。下来你单独和教练沟通了原因。',
-          feelDelta: 1.4,
-          stressDelta: -2,
-          tagAdds: ['team-trust'],
+          stateDelta: {
+            feel: 1.4,
+            stress: -10,
+          },
+          tags: {
+            add: ['team-trust'],
+          },
         },
         failure: {
           narrative: '你忍住了，但复盘后躲在房间一根烟一根烟。',
-          feelDelta: -0.5,
-          fatigueDelta: 8,
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            fatigue: 8,
+            stress: 5,
+          },
         },
       },
       {
@@ -147,16 +171,24 @@ export const STRESS_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '出乎意料，教练沉默了一下，承认你说得有理。',
-          feelDelta: 0.5,
-          stressDelta: 0,
+          stateDelta: {
+            feel: 0.5,
+            stress: 0,
+          },
         },
         failure: {
           narrative: '会议直接吵起来，队内氛围降到冰点。',
-          feelDelta: -1.5,
-          tiltDelta: 1,
-          fameDelta: -1,
-          stressDelta: 5,
-          tagAdds: ['locker-tension'],
+          stateDelta: {
+            feel: -1.5,
+            tilt: 1,
+            stress: 25,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
+          tags: {
+            add: ['locker-tension'],
+          },
         },
       },
       {
@@ -171,17 +203,25 @@ export const STRESS_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你走出去后冷静了，半小时后回来道歉。气氛尴尬但保住了。',
-          feelDelta: -0.5,
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
         },
         failure: {
           narrative: '你直接收拾东西走人。第二天经纪人电话不停。',
-          feelDelta: -1.5,
-          tiltDelta: 1,
-          moneyDelta: -20,
-          fameDelta: -3,
-          stressDelta: 6,
-          tagAdds: ['locker-tension'],
+          stateDelta: {
+            feel: -1.5,
+            tilt: 1,
+            stress: 30,
+          },
+          resourceDelta: {
+            money: -20,
+            fame: -3,
+          },
+          tags: {
+            add: ['locker-tension'],
+          },
         },
       },
     ],

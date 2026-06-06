@@ -236,6 +236,7 @@ export interface DynamicState {
   pendingMatch: PendingMatch | null;
   actionPoints: number;
   shopCooldowns: Record<string, number>;
+  weeklyShopPurchases: Record<string, { year: number; week: number; count: number }>;
   team: PlayerTeam | null;
   pendingApplication: PendingApplication | null;
   qualificationSlots: Record<string, number>;
@@ -330,6 +331,42 @@ export interface GameEventPublic {
 }
 
 export type StatDelta = Partial<Omit<Stats, 'money'>>;
+export type CoreStatKey = Exclude<StatKey, 'money'>;
+export type CoreStatDelta = Partial<Record<CoreStatKey, number>>;
+
+export interface StateDelta {
+  feel?: number;
+  tilt?: number;
+  fatigue?: number;
+  stress?: number;
+}
+
+export interface ResourceDelta {
+  money?: number;
+  fame?: number;
+  points?: number;
+  actionPoints?: number;
+}
+
+export interface ProgressionDelta {
+  stageSet?: Stage;
+  stageDelta?: number;
+  teamTierSet?: ClubTier;
+  injuryRestRounds?: number;
+  endRun?: boolean;
+  endReason?: string;
+}
+
+export interface TagDelta {
+  add?: string[];
+  remove?: string[];
+  cooldowns?: Record<string, number>;
+}
+
+export interface EffectDelta {
+  buffAdd?: Buff;
+  buffRemoveId?: string;
+}
 
 export interface MatchStats {
   kills: number;
@@ -404,27 +441,13 @@ export interface SessionSummary {
 
 export interface Outcome {
   narrative: string;
-  // 仅供 gameEngine.ts 的赛事/锦标赛奖励路径使用；叙事事件改用直接字段
-  statChanges?: StatDelta;
-  tagAdds?: string[];
-  tagRemoves?: string[];
-  stageDelta?: number;
-  stageSet?: Stage;
-  teamTierSet?: ClubTier;
-  endRun?: boolean;
-  endReason?: string;
-  stressDelta?: number;
-  fameDelta?: number;
-  injuryRestRounds?: number;
-  pointsDelta?: number;
-  feelDelta?: number;
-  tiltDelta?: number;
-  fatigueDelta?: number;
-  moneyDelta?: number;
-  dailyGrowth?: StatKey;
-  buffAdd?: Buff;
-  // ── 冷却 tag：key = tag 名称，value = 持续轮数（从本轮起算）──
-  tagCooldowns?: Record<string, number>;
+  coreGrowth?: CoreStatDelta;
+  stateDelta?: StateDelta;
+  resourceDelta?: ResourceDelta;
+  progression?: ProgressionDelta;
+  tags?: TagDelta;
+  effects?: EffectDelta;
+  dailyGrowth?: CoreStatKey;
 }
 
 export interface DetectionCheck {

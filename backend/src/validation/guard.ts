@@ -33,6 +33,29 @@ function isValidStatChanges(v: unknown): boolean {
   return true;
 }
 
+function isValidStateDelta(v: unknown): boolean {
+  if (!isObject(v)) return false;
+  for (const [k, val] of Object.entries(v)) {
+    if (!isNumber(val)) return false;
+    if (k === 'stress' && (val < -20 || val > 20)) return false;
+    else if (k === 'fatigue' && (val < -50 || val > 50)) return false;
+    else if (k === 'feel' && (val < -3 || val > 3)) return false;
+    else if (k === 'tilt' && (val < -3 || val > 3)) return false;
+    else if (!['stress', 'fatigue', 'feel', 'tilt'].includes(k)) return false;
+  }
+  return true;
+}
+
+function isValidResourceDelta(v: unknown): boolean {
+  if (!isObject(v)) return false;
+  for (const [k, val] of Object.entries(v)) {
+    if (!isNumber(val)) return false;
+    if (['money', 'fame'].includes(k) && (val < -20 || val > 20)) return false;
+    else if (!['money', 'fame'].includes(k)) return false;
+  }
+  return true;
+}
+
 function isValidChoice(v: unknown): v is ChoiceDef {
   if (!isObject(v)) return false;
   const c = v as Record<string, unknown>;
@@ -53,13 +76,9 @@ function isValidChoice(v: unknown): v is ChoiceDef {
     if (!isObject(out)) return false;
     const o = out as Record<string, unknown>;
     if (!isString(o.narrative) || o.narrative.length < 5 || o.narrative.length > 200) return false;
-    if (o.statChanges !== undefined && !isValidStatChanges(o.statChanges)) return false;
-    if (o.stressDelta !== undefined && (!isNumber(o.stressDelta) || o.stressDelta < -20 || o.stressDelta > 20)) return false;
-    if (o.fatigueDelta !== undefined && (!isNumber(o.fatigueDelta) || o.fatigueDelta < -50 || o.fatigueDelta > 50)) return false;
-    if (o.feelDelta !== undefined && (!isNumber(o.feelDelta) || o.feelDelta < -3 || o.feelDelta > 3)) return false;
-    if (o.tiltDelta !== undefined && (!isNumber(o.tiltDelta) || o.tiltDelta < -3 || o.tiltDelta > 3)) return false;
-    if (o.fameDelta !== undefined && (!isNumber(o.fameDelta) || o.fameDelta < -20 || o.fameDelta > 20)) return false;
-    if (o.moneyDelta !== undefined && (!isNumber(o.moneyDelta) || o.moneyDelta < -20 || o.moneyDelta > 20)) return false;
+    if (o.coreGrowth !== undefined && !isValidStatChanges(o.coreGrowth)) return false;
+    if (o.stateDelta !== undefined && !isValidStateDelta(o.stateDelta)) return false;
+    if (o.resourceDelta !== undefined && !isValidResourceDelta(o.resourceDelta)) return false;
   }
 
   return true;

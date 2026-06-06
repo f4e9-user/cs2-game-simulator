@@ -312,6 +312,18 @@ rookie -> youth -> second -> pro -> retired
 
 事件会按阶段、标签、最近事件、压力、疲劳、报名状态、面试状态、强制休养和调试强制事件进行筛选或加权。LLM 开启时，后端还会根据近期历史生成临时 AI 事件，并通过 `backend/src/validation/guard.ts` 做结构校验。
 
+事件和行动的结果统一使用结构化 `Outcome`：
+
+- `coreGrowth`：五个竞技属性成长，不包含 `money`。
+- `stateDelta`：手感、tilt、疲劳、压力等高频状态。
+- `resourceDelta`：资金、名气、积分、AP 等资源。
+- `progression`：阶段、战队层级、伤病休养和结局推进。
+- `tags`：标签增删和冷却标签。
+- `effects`：Buff 添加或移除。
+- `dailyGrowth`：日常行动触发的成长属性。
+
+新增事件、行动或 AI 事件时，不要写 `moneyDelta`、`stressDelta`、`tagAdds`、`buffAdd` 等顶层字段；这些语义分别进入 `resourceDelta`、`stateDelta`、`tags` 和 `effects`。`stateDelta.stress` 使用 `0-100` 压力尺度上的最终基础变化值。
+
 ### 自由行动
 
 `POST /api/game/:sessionId/choice` 支持 `customAction`。开启 AI 后，后端会：
@@ -344,6 +356,8 @@ rookie -> youth -> second -> pro -> retired
 - `POST /api/game/:sessionId/pawn`：典当装备
 
 贷款规则在 `applyForLoan` 和 `processLoanRepayment` 中：青训以后可借，单笔 `20K-100K`，12 回合后按 10% 利息还款；违约会降低名气并添加转会禁止标签。
+
+所有系统级资金变化都应经过 `backend/src/engine/money.ts`。事件和行动资金变化使用 `Outcome.resourceDelta.money`，商店、贷款、典当、薪资、还款等系统交易使用 money helper，避免直接写 `stats.money` 造成多路径结算。
 
 ### 战队和阵容
 
@@ -560,10 +574,12 @@ NEXT_PUBLIC_API_BASE=https://your-worker-domain.example.com
 - 改领域类型时，同步检查 `backend/src/types.ts`、`frontend/src/lib/types.ts` 和 `shared/types.ts`。
 - 新增事件时，优先放入 `backend/src/data/events/`，再从 `backend/src/data/events/index.ts` 注册。
 - 新增行动改 `backend/src/data/actions.ts`，新增商品改 `backend/src/data/shop.ts`，新增赛事改 `backend/src/data/tournaments.ts`。
+- 新增事件或行动结果时使用结构化 `Outcome`，不要新增顶层 delta 字段；AI 输出结构也需要同步 `backend/src/validation/guard.ts`。
+- 涉及资金变化时，事件/行动走 `resourceDelta.money`，系统交易走 `backend/src/engine/money.ts`。
 - 涉及判定、成长、被动结算、贷款和薪资时，检查 `backend/src/engine/gameEngine.ts`。
 - 涉及赛事胜率和个人数据时，检查 `backend/src/engine/matchSimulator.ts`。
 - 涉及队伍资格门票时，检查 `backend/src/engine/qualification.ts`。
-- 涉及 AI 输出结构时，更新 `backend/src/ai/prompts.ts` 并确认 `backend/src/validation/guard.ts` 仍能兜住非法输出。
+- 涉及 AI 输出结构时，更新 `backend/src/ai/` 相关 prompt 和 parser，并确认 `backend/src/validation/guard.ts` 仍能兜住非法输出。
 
 ---
 

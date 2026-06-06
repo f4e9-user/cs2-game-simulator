@@ -172,7 +172,7 @@ export function describeFatigueChange(delta: number): string {
     if (abs <= 10) return '略感疲倦';
     if (abs <= 20) return '疲劳积累';
     if (abs <= 30) return '明显疲惫';
-    return '极度消耗';
+    return '疲劳大幅增加';
   }
   if (abs <= 15) return '稍作恢复';
   if (abs <= 30) return '得到休息';

@@ -257,6 +257,7 @@ export interface DynamicState {
   pendingMatch: PendingMatch | null;
   actionPoints: number;
   shopCooldowns: Record<string, number>;
+  weeklyShopPurchases: Record<string, { year: number; week: number; count: number }>;
   team: PlayerTeam | null;
   pendingApplication: PendingApplication | null;
   qualificationSlots: Record<string, number>;
@@ -429,6 +430,29 @@ export interface PromotionCheck {
   reasons: string[];
 }
 
+export interface CareerGoalProgress {
+  id: string;
+  label: string;
+  current: number;
+  target: number;
+  completed: boolean;
+}
+
+export interface CareerGoalOpportunity {
+  week: number;
+  name: string;
+  tier: string;
+}
+
+export interface CareerGoal {
+  stage: Stage;
+  stageLabel: string;
+  summary: string;
+  nextStageLabel?: string;
+  goals: CareerGoalProgress[];
+  opportunities: CareerGoalOpportunity[];
+}
+
 export interface GameSession {
   id: string;
   apiToken: string;
@@ -440,6 +464,7 @@ export interface GameSession {
   createdAt: string;
   updatedAt: string;
   promotion?: PromotionCheck;
+  careerGoal?: CareerGoal;
   leaderboard: LeaderboardTeam[];
 }
 
@@ -459,6 +484,7 @@ export interface StartGameResponse {
   apiToken: string;
   player: Player;
   currentEvent: GameEvent | null;
+  careerGoal?: CareerGoal;
   leaderboard: LeaderboardTeam[];
 }
 
@@ -503,6 +529,7 @@ export interface ChoiceResponse {
   status: SessionStatus;
   ending?: string;
   promotion?: PromotionCheck;
+  careerGoal?: CareerGoal;
   leaderboard?: LeaderboardTeam[];
 }
 

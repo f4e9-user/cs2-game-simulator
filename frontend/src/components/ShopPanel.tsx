@@ -16,7 +16,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   social: '社交',
 };
 
-
+const WEEKLY_SHOP_LIMITS: Partial<Record<ShopItem['category'], number>> = {
+  consumable: 2,
+  service: 1,
+};
 
 interface Props {
   sessionId: string;
@@ -139,6 +142,7 @@ export function ShopPanel({
 
   const round = player.round;
   const cooldowns = player.shopCooldowns ?? {};
+  const weeklyPurchases = player.weeklyShopPurchases ?? {};
   const hasAgent = player.tags.includes('has-agent');
 
   const TOURNAMENT_LOCKED_ITEMS = new Set(['team-dinner', 'fan-meetup', 'short-trip']);
@@ -180,6 +184,15 @@ export function ShopPanel({
     const cdUntil = cooldowns[item.id] ?? 0;
     if (cdUntil > round) {
       return { ok: false, reason: `冷却中（${cdUntil - round} 回合后可用）` };
+    }
+    const weeklyLimit = WEEKLY_SHOP_LIMITS[item.category];
+    const purchaseRecord = weeklyPurchases[item.id];
+    const purchaseCount =
+      purchaseRecord?.year === player.year && purchaseRecord.week === player.week
+        ? purchaseRecord.count
+        : 0;
+    if (weeklyLimit !== undefined && purchaseCount >= weeklyLimit) {
+      return { ok: false, reason: `本周已达上限（${purchaseCount}/${weeklyLimit}）` };
     }
     if (item.requireFame !== undefined && (player.fame ?? 0) < item.requireFame) {
       return { ok: false, reason: `名气不足（需 ${item.requireFame}）` };
@@ -248,7 +261,11 @@ export function ShopPanel({
           if (catItems.length === 0) return null;
           return (
             <div key={cat} className="shop-category">
-              <div className="shop-category-label">{CATEGORY_LABELS[cat]}</div>
+              <div className="shop-category-label">
+                {CATEGORY_LABELS[cat]}
+                {cat === 'consumable' && <span> · 每周每种 2 次</span>}
+                {cat === 'service' && <span> · 每周每种 1 次</span>}
+              </div>
               {catItems.map((item) => {
                 const { ok, reason } = canBuy(item);
                 return (

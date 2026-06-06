@@ -26,18 +26,28 @@ export const RIVAL_EVENTS: EventDef[] = [
         success: {
           narrative:
             '你一条长推把 {rival0} 的水军证据全列出来。粉丝站你这边，舆论反转。',
-          feelDelta: 0.5,
-          fameDelta: 3,
-          stressDelta: 1,
+          stateDelta: {
+            feel: 0.5,
+            stress: 5,
+          },
+          resourceDelta: {
+            fame: 3,
+          },
         },
         failure: {
           narrative:
             '你情绪上头说错话，被 {rival0} 的官号反将一军，话题持续发酵。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          fameDelta: -3,
-          stressDelta: 4,
-          tagAdds: ['media-backlash'],
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 20,
+          },
+          resourceDelta: {
+            fame: -3,
+          },
+          tags: {
+            add: ['media-backlash'],
+          },
         },
       },
       {
@@ -53,16 +63,24 @@ export const RIVAL_EVENTS: EventDef[] = [
         success: {
           narrative:
             '法务发函、经纪人公关，48 小时内 {rival0} 那边低调撤了水军。',
-          feelDelta: 0.4,
-          moneyDelta: -10,
-          fameDelta: 1,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.4,
+            stress: -5,
+          },
+          resourceDelta: {
+            money: -10,
+            fame: 1,
+          },
         },
         failure: {
           narrative: '走流程效率太低，话题已经没法压住。',
-          feelDelta: -0.5,
-          fameDelta: -2,
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+          resourceDelta: {
+            fame: -2,
+          },
         },
       },
       {
@@ -77,16 +95,24 @@ export const RIVAL_EVENTS: EventDef[] = [
         success: {
           narrative:
             '你不发一言，下一场训练赛打出全场最高 ADR。{rival0} 的话题自动凉了。',
-          feelDelta: 1.6,
-          fameDelta: 2,
-          stressDelta: 0,
+          stateDelta: {
+            feel: 1.6,
+            stress: 0,
+          },
+          resourceDelta: {
+            fame: 2,
+          },
         },
         failure: {
           narrative: '冷处理让话题继续滚雪球，几个媒体甚至开始信了。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          fameDelta: -2,
-          stressDelta: 3,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 15,
+          },
+          resourceDelta: {
+            fame: -2,
+          },
         },
       },
     ],
@@ -114,15 +140,23 @@ export const RIVAL_EVENTS: EventDef[] = [
         success: {
           narrative:
             '运维 5 分钟切到香港机房，你们顶着延迟把训练赛打完，{rival1} 的小动作没起作用。',
-          feelDelta: 0.4,
-          fameDelta: 2,
-          stressDelta: 1,
+          stateDelta: {
+            feel: 0.4,
+            stress: 5,
+          },
+          resourceDelta: {
+            fame: 2,
+          },
         },
         failure: {
           narrative: '切线之后队员状态全飘，被 {rival1} 顺势赢下了那把。',
-          feelDelta: -0.5,
-          fameDelta: -1,
-          stressDelta: 3,
+          stateDelta: {
+            feel: -0.5,
+            stress: 15,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
         },
       },
       {
@@ -137,18 +171,28 @@ export const RIVAL_EVENTS: EventDef[] = [
         success: {
           narrative:
             '你贴出原始日志，{rival1} 第二天就被赞助商解约。圈子里没人再敢这么玩。',
-          feelDelta: 0.5,
-          fameDelta: 4,
-          stressDelta: 2,
-          tagAdds: ['fan-favorite'],
+          stateDelta: {
+            feel: 0.5,
+            stress: 10,
+          },
+          resourceDelta: {
+            fame: 4,
+          },
+          tags: {
+            add: ['fan-favorite'],
+          },
         },
         failure: {
           narrative:
             '日志被部分网友质疑造假，反而引来 {rival1} 粉丝的反扑。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          fameDelta: -2,
-          stressDelta: 4,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 20,
+          },
+          resourceDelta: {
+            fame: -2,
+          },
         },
       },
       {
@@ -162,14 +206,20 @@ export const RIVAL_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '联盟两周后通报 {rival1} 罚款，你们没出现在新闻里。',
-          feelDelta: 0.4,
-          fameDelta: 1,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.4,
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 1,
+          },
         },
         failure: {
           narrative: '调查无果，{rival1} 全身而退，事情不了了之。',
-          feelDelta: -0.5,
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
         },
       },
     ],
@@ -195,15 +245,23 @@ export const RIVAL_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你 1v3 翻盘那把被对方观战录下来，回去发到了 {rival0} 内部群。',
-          feelDelta: 0.6,
-          fameDelta: 1,
-          stressDelta: 1,
+          stateDelta: {
+            feel: 0.6,
+            stress: 5,
+          },
+          resourceDelta: {
+            fame: 1,
+          },
         },
         failure: {
           narrative: '你想秀但被对方稳稳压制，公屏继续被嘲讽。',
-          feelDelta: -0.5,
-          fameDelta: -1,
-          stressDelta: 3,
+          stateDelta: {
+            feel: -0.5,
+            stress: 15,
+          },
+          resourceDelta: {
+            fame: -1,
+          },
         },
       },
       {
@@ -218,16 +276,24 @@ export const RIVAL_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你回得又毒又快，对面退游戏前发了一句"小子有点东西"。',
-          feelDelta: 0.5,
-          fameDelta: 1,
-          stressDelta: 0,
+          stateDelta: {
+            feel: 0.5,
+            stress: 0,
+          },
+          resourceDelta: {
+            fame: 1,
+          },
         },
         failure: {
           narrative: '你越说越乱，被截图发到 {rival0} 后援群当笑话。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          fameDelta: -2,
-          stressDelta: 4,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 20,
+          },
+          resourceDelta: {
+            fame: -2,
+          },
         },
       },
       {
@@ -241,13 +307,17 @@ export const RIVAL_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你屏蔽后 ADR 直接拉满。{rival0} 替补打完退游戏。',
-          feelDelta: 1.1,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 1.1,
+            stress: -5,
+          },
         },
         failure: {
           narrative: '屏蔽了但还是分心了，那把输得难看。',
-          feelDelta: -0.5,
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
         },
       },
     ],

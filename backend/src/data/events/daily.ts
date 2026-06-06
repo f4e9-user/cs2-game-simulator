@@ -26,17 +26,21 @@ export const DAILY_EVENTS: EventDef[] = [
           narrative:
             '今天状态不错，手感跟着了，几把连胜，准星像有自己的想法。',
           dailyGrowth: 'agility',
-          feelDelta: 1.5,
-          fatigueDelta: 18,
-          stressDelta: 1,
+          stateDelta: {
+            feel: 1.5,
+            fatigue: 18,
+            stress: 5,
+          },
         },
         failure: {
           narrative:
             '被对面压着打，局局都很难受。越练越差，索性关机散散心。',
-          feelDelta: -1,
-          fatigueDelta: 22,
-          stressDelta: 2,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -1,
+            fatigue: 22,
+            stress: 10,
+            tilt: 1,
+          },
         },
       },
       {
@@ -48,17 +52,21 @@ export const DAILY_EVENTS: EventDef[] = [
           narrative:
             '反复拆解了两个点位的交叉火力，豁然开朗，下次打一定不一样。',
           dailyGrowth: 'intelligence',
-          feelDelta: 0.5,
-          fatigueDelta: 12,
-          stressDelta: 1,
+          stateDelta: {
+            feel: 0.5,
+            fatigue: 12,
+            stress: 5,
+          },
         },
         failure: {
           narrative:
             '脑子转不动，看了两小时还是一团浆糊，什么都没记住。',
-          feelDelta: -0.5,
-          fatigueDelta: 8,
-          stressDelta: 1,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            fatigue: 8,
+            stress: 5,
+            tilt: 1,
+          },
         },
       },
       {
@@ -69,16 +77,20 @@ export const DAILY_EVENTS: EventDef[] = [
         success: {
           narrative:
             '睡到自然醒，出门买了杯咖啡，感觉脑子清了不少，明天再冲。',
-          stressDelta: -3,
-          fatigueDelta: -40,
-          feelDelta: 0.5,
+          stateDelta: {
+            stress: -15,
+            fatigue: -40,
+            feel: 0.5,
+          },
         },
         failure: {
           narrative:
             '想休息，但脑子停不下来，反复回想上周那几把翻车局，越想越烦。',
-          stressDelta: -1,
-          fatigueDelta: -20,
-          tiltDelta: 1,
+          stateDelta: {
+            stress: -5,
+            fatigue: -20,
+            tilt: 1,
+          },
         },
       },
       {
@@ -89,15 +101,19 @@ export const DAILY_EVENTS: EventDef[] = [
         success: {
           narrative:
             '三天没碰电脑，你去了海边，看了两部电影。回来后整个人轻松了很多。',
-          stressDelta: -5,
-          fatigueDelta: -25,
-          feelDelta: -1,
-          tiltDelta: -1,
+          stateDelta: {
+            stress: -25,
+            fatigue: -25,
+            feel: -1,
+            tilt: -1,
+          },
         },
         failure: {
           narrative: '强迫自己放松，却没什么效果，脑子里全是比赛画面。',
-          stressDelta: -2,
-          fatigueDelta: -15,
+          stateDelta: {
+            stress: -10,
+            fatigue: -15,
+          },
         },
       },
     ],
@@ -122,17 +138,21 @@ export const DAILY_EVENTS: EventDef[] = [
         success: {
           narrative: '高强度对局让你的反应速度逼出了极限，感觉自己在进步。',
           dailyGrowth: 'agility',
-          feelDelta: 2,
-          fatigueDelta: 25,
-          stressDelta: 2,
+          stateDelta: {
+            feel: 2,
+            fatigue: 25,
+            stress: 10,
+          },
         },
         failure: {
           narrative:
             '输了很多局，疲劳和挫败感叠在一起，感觉比较糟糕。',
-          feelDelta: -1.5,
-          fatigueDelta: 30,
-          stressDelta: 3,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -1.5,
+            fatigue: 30,
+            stress: 15,
+            tilt: 1,
+          },
         },
       },
       {
@@ -144,23 +164,29 @@ export const DAILY_EVENTS: EventDef[] = [
           narrative:
             '把对手几个常用战术拆得七七八八，脑子里已经有反制思路了。',
           dailyGrowth: 'intelligence',
-          feelDelta: 1,
-          fatigueDelta: 15,
-          stressDelta: 1,
-          buffAdd: {
-            id: 'pre-match-analysis',
-            label: '赛前分析加成',
-            actionTag: 'match',
-            growthMultiplier: 1.2,
-            remainingUses: 2,
-            consumeOn: 'growth',
+          stateDelta: {
+            feel: 1,
+            fatigue: 15,
+            stress: 5,
+          },
+          effects: {
+            buffAdd: {
+              id: 'pre-match-analysis',
+              label: '赛前分析加成',
+              actionTag: 'match',
+              growthMultiplier: 1.2,
+              remainingUses: 2,
+              consumeOn: 'growth',
+            },
           },
         },
         failure: {
           narrative: '看了几个对手片段但完全看不出规律，感觉对面太随机了。',
-          feelDelta: -0.5,
-          fatigueDelta: 10,
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            fatigue: 10,
+            stress: 5,
+          },
         },
       },
       {
@@ -170,14 +196,18 @@ export const DAILY_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 6, traitBonuses: { steady: 1 }, traitPenalties: { grinder: 1, obsessed: 1 } },
         success: {
           narrative: '你抵住了"大家都在练，我也要练"的焦虑，好好睡了一觉。',
-          stressDelta: -3,
-          fatigueDelta: -35,
-          feelDelta: 1,
+          stateDelta: {
+            stress: -15,
+            fatigue: -35,
+            feel: 1,
+          },
         },
         failure: {
           narrative: '想休息但罪恶感太强，在床上刷了两小时战术视频，效果不大。',
-          stressDelta: 0,
-          fatigueDelta: -15,
+          stateDelta: {
+            stress: 0,
+            fatigue: -15,
+          },
         },
       },
       {
@@ -188,15 +218,19 @@ export const DAILY_EVENTS: EventDef[] = [
         success: {
           narrative:
             '你告假一周，队友有些惊讶，但你在外面真的恢复了。',
-          stressDelta: -6,
-          fatigueDelta: -30,
-          feelDelta: -1.5,
-          tiltDelta: -1,
+          stateDelta: {
+            stress: -30,
+            fatigue: -30,
+            feel: -1.5,
+            tilt: -1,
+          },
         },
         failure: {
           narrative: '心里惦记着比赛，度假成了煎熬。',
-          stressDelta: -1,
-          fatigueDelta: -10,
+          stateDelta: {
+            stress: -5,
+            fatigue: -10,
+          },
         },
       },
     ],
@@ -221,15 +255,19 @@ export const DAILY_EVENTS: EventDef[] = [
         success: {
           narrative: '没有压力的天梯状态出奇的好，一口气六连胜，手感烫手。',
           dailyGrowth: 'agility',
-          feelDelta: 2,
-          fatigueDelta: 15,
-          stressDelta: 1,
+          stateDelta: {
+            feel: 2,
+            fatigue: 15,
+            stress: 5,
+          },
         },
         failure: {
           narrative: '轻松氛围下你反而打得漫不经心，输了也无所谓，但什么也没练到。',
-          feelDelta: -0.5,
-          fatigueDelta: 10,
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            fatigue: 10,
+            stress: 5,
+          },
         },
       },
       {
@@ -240,23 +278,29 @@ export const DAILY_EVENTS: EventDef[] = [
         success: {
           narrative: '研究了一种冷门进点路线，测试下来效果比预期好，有点兴奋。',
           dailyGrowth: 'intelligence',
-          feelDelta: 1,
-          fatigueDelta: 8,
-          stressDelta: 0,
-          buffAdd: {
-            id: 'self-study',
-            label: '自主研究加成',
-            actionTag: 'training',
-            growthMultiplier: 1.15,
-            remainingUses: 2,
-            consumeOn: 'growth',
+          stateDelta: {
+            feel: 1,
+            fatigue: 8,
+            stress: 0,
+          },
+          effects: {
+            buffAdd: {
+              id: 'self-study',
+              label: '自主研究加成',
+              actionTag: 'training',
+              growthMultiplier: 1.15,
+              remainingUses: 2,
+              consumeOn: 'growth',
+            },
           },
         },
         failure: {
           narrative: '没有方向瞎研究，东看西看，最后什么也没沉淀下来。',
-          feelDelta: 0,
-          fatigueDelta: 5,
-          stressDelta: 0,
+          stateDelta: {
+            feel: 0,
+            fatigue: 5,
+            stress: 0,
+          },
         },
       },
       {
@@ -266,15 +310,19 @@ export const DAILY_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 3, traitBonuses: { steady: 1 }, traitPenalties: { grinder: 1, obsessed: 1 } },
         success: {
           narrative: '难得不内疚地休息，睡足、吃好，感觉整个人清爽多了。',
-          stressDelta: -4,
-          fatigueDelta: -50,
-          feelDelta: 1,
-          tiltDelta: -1,
+          stateDelta: {
+            stress: -20,
+            fatigue: -50,
+            feel: 1,
+            tilt: -1,
+          },
         },
         failure: {
           narrative: '睡了很久却感觉更累，可能是睡太多了，脑子混沌。',
-          stressDelta: -2,
-          fatigueDelta: -30,
+          stateDelta: {
+            stress: -10,
+            fatigue: -30,
+          },
         },
       },
       {
@@ -284,15 +332,19 @@ export const DAILY_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 1 },
         success: {
           narrative: '和朋友去打了卡丁车，吃了烧烤，完全忘了比赛这件事，很开心。',
-          stressDelta: -7,
-          fatigueDelta: -40,
-          feelDelta: -0.5,
-          tiltDelta: -2,
+          stateDelta: {
+            stress: -35,
+            fatigue: -40,
+            feel: -0.5,
+            tilt: -2,
+          },
         },
         failure: {
           narrative: '出去了，但总觉得差点什么，玩得不尽兴。',
-          stressDelta: -3,
-          fatigueDelta: -20,
+          stateDelta: {
+            stress: -15,
+            fatigue: -20,
+          },
         },
       },
     ],

@@ -8,6 +8,7 @@ import { WelcomeCard } from '@/components/WelcomeCard';
 import { EventCard } from '@/components/EventCard';
 import { ChoiceList } from '@/components/ChoiceList';
 import { PlayerStats } from '@/components/PlayerStats';
+import { CareerGoalPanel } from '@/components/CareerGoalPanel';
 import { ResultPanel } from '@/components/ResultPanel';
 import { EndingPanel } from '@/components/EndingPanel';
 import { MatchPanel } from '@/components/MatchPanel';
@@ -42,6 +43,7 @@ export default function GamePage() {
     ending,
     lastResult,
     promotion,
+    careerGoal,
     leaderboard,
     pendingOffer,
     aiActive,
@@ -515,6 +517,7 @@ export default function GamePage() {
 
         {/* Right: player info + feed */}
         <aside className="hud-right">
+          <CareerGoalPanel goal={careerGoal} />
           <PlayerStats player={player} traits={traits} promotion={promotion} />
           <FeedPanel history={history} socialPosts={socialPosts} socialLoading={socialLoading} />
         </aside>

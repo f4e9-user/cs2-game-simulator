@@ -170,7 +170,7 @@ function milestone(
   return { stageIndex, label, rewards, requireWin };
 }
 
-function buildYearTournaments(year: number): Tournament[] {
+export function buildYearTournaments(year: number): Tournament[] {
   const cached = YEAR_CACHE.get(year);
   if (cached) return cached;
 
@@ -505,22 +505,32 @@ function buildOpeningChoices(
       },
       success: {
         narrative: '分析到位，开局就打出了针对性压制，对面措手不及。' + advanceNote,
-        statChanges: {
+        coreGrowth: {
           experience: winReward.experience,
           intelligence: 1,
         },
-        moneyDelta: winReward.money,
-        fameDelta: Math.floor(winFame * 0.9),
-        stressDelta: winStress - 1,
-        pointsDelta: 1,
-        tagAdds: isFinal ? ['tournament-winner'] : [],
+        stateDelta: {
+          stress: winStress - 1,
+        },
+        resourceDelta: {
+          money: winReward.money,
+          fame: Math.floor(winFame * 0.9),
+          points: 1,
+        },
+        tags: {
+          add: isFinal ? ['tournament-winner'] : [],
+        },
       },
       failure: {
         narrative: '对面提前有应对方案，你们的战术被逐一拆解。',
-        statChanges: { experience: lossReward.experience },
-        moneyDelta: lossReward.money,
-        fameDelta: lossFame,
-        stressDelta: lossStress,
+        coreGrowth: { experience: lossReward.experience },
+        stateDelta: {
+          stress: lossStress,
+        },
+        resourceDelta: {
+          money: lossReward.money,
+          fame: lossFame,
+        },
       },
     },
     {
@@ -536,18 +546,28 @@ function buildOpeningChoices(
       },
       success: {
         narrative: isFinal ? winNarrative : '手感在线，开局个人数据领先，队伍节奏也上来了。' + advanceNote,
-        statChanges: { experience: winReward.experience },
-        moneyDelta: winReward.money,
-        fameDelta: winFame,
-        stressDelta: winStress,
-        tagAdds: isFinal ? ['tournament-winner', 'highlight-clip'] : [],
+        coreGrowth: { experience: winReward.experience },
+        stateDelta: {
+          stress: winStress,
+        },
+        resourceDelta: {
+          money: winReward.money,
+          fame: winFame,
+        },
+        tags: {
+          add: isFinal ? ['tournament-winner', 'highlight-clip'] : [],
+        },
       },
       failure: {
         narrative: '状态没跟上预期，关键枪被对面压住，开局就落入被动。',
-        statChanges: { experience: lossReward.experience },
-        moneyDelta: lossReward.money,
-        fameDelta: lossFame,
-        stressDelta: lossStress,
+        coreGrowth: { experience: lossReward.experience },
+        stateDelta: {
+          stress: lossStress,
+        },
+        resourceDelta: {
+          money: lossReward.money,
+          fame: lossFame,
+        },
       },
     },
     {
@@ -563,20 +583,30 @@ function buildOpeningChoices(
         narrative: isFinal
           ? '稳扎稳打走完全程，靠经验拿下冠军。'
           : '节奏稳住，对面没找到破绽，晋级。' + advanceNote,
-        statChanges: {
+        coreGrowth: {
           experience: Math.max(1, Math.floor((winReward.experience ?? 1) * 0.8)),
         },
-        moneyDelta: Math.max(0, Math.floor((winReward.money ?? 0) * 0.8)),
-        fameDelta: Math.floor(winFame * 0.7),
-        stressDelta: 0,
-        tagAdds: isFinal ? ['tournament-winner'] : [],
+        stateDelta: {
+          stress: 0,
+        },
+        resourceDelta: {
+          money: Math.max(0, Math.floor((winReward.money ?? 0) * 0.8)),
+          fame: Math.floor(winFame * 0.7),
+        },
+        tags: {
+          add: isFinal ? ['tournament-winner'] : [],
+        },
       },
       failure: {
         narrative: '保守过头，被对面找到节奏咬住，最终没能翻身。',
-        statChanges: { experience: lossReward.experience ?? 0 },
-        moneyDelta: 0,
-        fameDelta: -1,
-        stressDelta: Math.max(1, lossStress - 1),
+        coreGrowth: { experience: lossReward.experience ?? 0 },
+        stateDelta: {
+          stress: Math.max(1, lossStress - 1),
+        },
+        resourceDelta: {
+          money: 0,
+          fame: -1,
+        },
       },
     },
   ];
@@ -607,24 +637,34 @@ function buildCrunchChoices(
       },
       success: {
         narrative: '队友接住了你让的枪，打出了名场面。积分板上差距拉开了。' + advanceNote,
-        statChanges: {
+        coreGrowth: {
           experience: Math.max(1, Math.floor(winReward.experience * 0.8)),
         },
-        moneyDelta: Math.max(0, Math.floor(winReward.money * 0.5)),
-        fameDelta: Math.floor(winFame * 0.8),
-        stressDelta: -2,
-        pointsDelta: 2,
-        tagAdds: isFinal ? ['tournament-winner'] : [],
+        stateDelta: {
+          stress: -10,
+        },
+        resourceDelta: {
+          money: Math.max(0, Math.floor(winReward.money * 0.5)),
+          fame: Math.floor(winFame * 0.8),
+          points: 2,
+        },
+        tags: {
+          add: isFinal ? ['tournament-winner'] : [],
+        },
       },
       failure: {
         narrative: '队友没接住，你空枪被打爆，资源白让了这局白给了。',
-        statChanges: {
+        coreGrowth: {
           experience: lossReward.experience,
           mentality: -1,
         },
-        moneyDelta: lossReward.money,
-        fameDelta: lossFame - 1,
-        stressDelta: lossStress + 2,
+        stateDelta: {
+          stress: lossStress + 2,
+        },
+        resourceDelta: {
+          money: lossReward.money,
+          fame: lossFame - 1,
+        },
       },
     },
     {
@@ -640,25 +680,37 @@ function buildCrunchChoices(
       },
       success: {
         narrative: '你咬牙撑过去，收掉了几个关键枪，耳麦里队友在喊你。' + advanceNote,
-        statChanges: {
+        coreGrowth: {
           experience: winReward.experience,
           constitution: -1,
         },
-        moneyDelta: winReward.money,
-        fameDelta: winFame + 2,
-        stressDelta: -1,
-        tagAdds: isFinal ? ['tournament-winner', 'highlight-clip'] : [],
+        stateDelta: {
+          stress: -5,
+        },
+        resourceDelta: {
+          money: winReward.money,
+          fame: winFame + 2,
+        },
+        tags: {
+          add: isFinal ? ['tournament-winner', 'highlight-clip'] : [],
+        },
       },
       failure: {
         narrative: '身体在关键回合突然加重，发挥受影响拖累了全队。',
-        statChanges: {
+        coreGrowth: {
           experience: lossReward.experience,
           constitution: -2,
         },
-        moneyDelta: lossReward.money,
-        fameDelta: lossFame,
-        stressDelta: lossStress + 2,
-        injuryRestRounds: 1,
+        stateDelta: {
+          stress: lossStress + 2,
+        },
+        resourceDelta: {
+          money: lossReward.money,
+          fame: lossFame,
+        },
+        progression: {
+          injuryRestRounds: 1,
+        },
       },
     },
     {
@@ -674,21 +726,31 @@ function buildCrunchChoices(
       },
       success: {
         narrative: '临场应变打乱了对手的预判，你们的反击打得漂亮。' + advanceNote,
-        statChanges: {
+        coreGrowth: {
           experience: winReward.experience,
           intelligence: 1,
         },
-        moneyDelta: winReward.money,
-        fameDelta: winFame,
-        stressDelta: winStress,
-        tagAdds: isFinal ? ['tournament-winner'] : [],
+        stateDelta: {
+          stress: winStress,
+        },
+        resourceDelta: {
+          money: winReward.money,
+          fame: winFame,
+        },
+        tags: {
+          add: isFinal ? ['tournament-winner'] : [],
+        },
       },
       failure: {
         narrative: '临场换战术执行太仓促，队员之间信号混乱，被对面抓住破绽。',
-        statChanges: { experience: lossReward.experience },
-        moneyDelta: lossReward.money,
-        fameDelta: lossFame,
-        stressDelta: lossStress,
+        coreGrowth: { experience: lossReward.experience },
+        stateDelta: {
+          stress: lossStress,
+        },
+        resourceDelta: {
+          money: lossReward.money,
+          fame: lossFame,
+        },
       },
     },
   ];
@@ -717,26 +779,36 @@ function buildFinaleChoices(
       },
       success: {
         narrative: '你打出了本届最高光时刻，全场爆发欢呼声。' + winNarrative,
-        statChanges: {
+        coreGrowth: {
           experience: winReward.experience,
           agility: 1,
           mentality: 1,
         },
-        moneyDelta: winReward.money,
-        fameDelta: winFame + 5,
-        stressDelta: -3,
-        pointsDelta: 2,
-        tagAdds: ['tournament-winner', 'highlight-clip'],
+        stateDelta: {
+          stress: -15,
+        },
+        resourceDelta: {
+          money: winReward.money,
+          fame: winFame + 5,
+          points: 2,
+        },
+        tags: {
+          add: ['tournament-winner', 'highlight-clip'],
+        },
       },
       failure: {
         narrative: '压力在决赛把你压垮了，手开始颤，回合走不出去。',
-        statChanges: {
+        coreGrowth: {
           experience: lossReward.experience,
           mentality: -2,
         },
-        moneyDelta: lossReward.money,
-        fameDelta: lossFame - 1,
-        stressDelta: lossStress + 5,
+        stateDelta: {
+          stress: lossStress + 5,
+        },
+        resourceDelta: {
+          money: lossReward.money,
+          fame: lossFame - 1,
+        },
       },
     },
     {
@@ -752,21 +824,31 @@ function buildFinaleChoices(
       },
       success: {
         narrative: '你保持住了情绪，稳健走完全程，对手急了你没急。' + winNarrative,
-        statChanges: { experience: winReward.experience },
-        moneyDelta: winReward.money,
-        fameDelta: winFame,
-        stressDelta: -3,
-        tagAdds: ['tournament-winner'],
+        coreGrowth: { experience: winReward.experience },
+        stateDelta: {
+          stress: -15,
+        },
+        resourceDelta: {
+          money: winReward.money,
+          fame: winFame,
+        },
+        tags: {
+          add: ['tournament-winner'],
+        },
       },
       failure: {
         narrative: '决赛心理关没过，越想放松越紧张，最终输在心态上。',
-        statChanges: {
+        coreGrowth: {
           experience: lossReward.experience,
           mentality: -1,
         },
-        moneyDelta: lossReward.money,
-        fameDelta: lossFame,
-        stressDelta: lossStress + 3,
+        stateDelta: {
+          stress: lossStress + 3,
+        },
+        resourceDelta: {
+          money: lossReward.money,
+          fame: lossFame,
+        },
       },
     },
     {
@@ -781,23 +863,33 @@ function buildFinaleChoices(
       },
       success: {
         narrative: '体系打得行云流水，对手的反应比你们慢了半步。' + winNarrative,
-        statChanges: {
+        coreGrowth: {
           experience: winReward.experience,
           intelligence: 1,
         },
-        moneyDelta: winReward.money,
-        fameDelta: winFame,
-        stressDelta: 0,
-        tagAdds: ['tournament-winner'],
+        stateDelta: {
+          stress: 0,
+        },
+        resourceDelta: {
+          money: winReward.money,
+          fame: winFame,
+        },
+        tags: {
+          add: ['tournament-winner'],
+        },
       },
       failure: {
         narrative: '体系被提前读透，临场没有 plan B，被人追过去。',
-        statChanges: {
+        coreGrowth: {
           experience: lossReward.experience + 1,
         },
-        moneyDelta: lossReward.money,
-        fameDelta: lossFame + 1,
-        stressDelta: lossStress,
+        stateDelta: {
+          stress: lossStress,
+        },
+        resourceDelta: {
+          money: lossReward.money,
+          fame: lossFame + 1,
+        },
       },
     },
   ];

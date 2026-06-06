@@ -35,15 +35,23 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 4 },
         success: {
           narrative: '家里给你转来一笔周转金。虽然你知道这钱要记在心里，但至少今晚不用再盯着余额发呆。',
-          moneyDelta: 30,
-          stressDelta: -4,
-          fameDelta: -3,
+          stateDelta: {
+            stress: -20,
+          },
+          resourceDelta: {
+            money: 30,
+            fame: -3,
+          },
         },
         failure: {
           narrative: '你嘴上说着"我自己能扛"，但最后还是收下了这笔钱。电话挂断后，你的压力反而更重了。',
-          moneyDelta: 20,
-          stressDelta: 2,
-          fameDelta: -2,
+          stateDelta: {
+            stress: 10,
+          },
+          resourceDelta: {
+            money: 20,
+            fame: -2,
+          },
         },
       },
       {
@@ -54,14 +62,18 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 8, traitBonuses: { steady: 2, ego: 1 }, traitPenalties: { support: 1, fragile: 1 } },
         success: {
           narrative: '你说了声"没事，我有办法"，然后挂了电话。深吸一口气，没有退路，但也不想用这种方式过这道坎。',
-          stressDelta: 2,
-          feelDelta: 0.5,
+          stateDelta: {
+            stress: 10,
+            feel: 0.5,
+          },
           dailyGrowth: 'mentality',
         },
         failure: {
           narrative: '你说了"我没事"，挂了电话，然后盯着账户发呆。这种倔强让你压力更大——你清楚自己根本没有办法。',
-          stressDelta: 5,
-          feelDelta: -0.5,
+          stateDelta: {
+            stress: 25,
+            feel: -0.5,
+          },
         },
       },
     ],
@@ -102,14 +114,22 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 3 },
         success: {
           narrative: '你把红包收进口袋，心里却沉了一下。钱能解燃眉之急，但欠下的是一份人情。',
-          moneyDelta: 20,
-          stressDelta: 3,
+          stateDelta: {
+            stress: 15,
+          },
+          resourceDelta: {
+            money: 20,
+          },
         },
         failure: {
           narrative: '你盯着红包看了很久，最后还是收下了。那种难受没消失，只是被你暂时压住了。',
-          moneyDelta: 15,
-          stressDelta: 4,
-          fameDelta: -1,
+          stateDelta: {
+            stress: 20,
+          },
+          resourceDelta: {
+            money: 15,
+            fame: -1,
+          },
         },
       },
       {
@@ -120,14 +140,18 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 7, traitBonuses: { steady: 1, ego: 1 }, traitPenalties: { support: 1 } },
         success: {
           narrative: '你把红包放回箱子，附了一张纸条："我会想办法的，不用担心。"心里有点轻，有点沉。',
-          stressDelta: 1,
-          feelDelta: 0.5,
+          stateDelta: {
+            stress: 5,
+            feel: 0.5,
+          },
           dailyGrowth: 'mentality',
         },
         failure: {
           narrative: '你想寄回去，但最后只是把箱子搁到一边。不好意思退，也不甘心收，两头都不是。这种悬着的感觉更难熬。',
-          stressDelta: 4,
-          feelDelta: -0.5,
+          stateDelta: {
+            stress: 20,
+            feel: -0.5,
+          },
         },
       },
     ],
@@ -169,15 +193,23 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'experience', dc: 5 },
         success: {
           narrative: '你收下了这笔钱，也记下了这次帮忙。老朋友的手伸过来时，你确实没那么孤单了。',
-          moneyDelta: 40,
-          stressDelta: -2,
-          fameDelta: -5,
+          stateDelta: {
+            stress: -10,
+          },
+          resourceDelta: {
+            money: 40,
+            fame: -5,
+          },
         },
         failure: {
           narrative: '你本来还想逞强，但对方根本不给你拒绝的机会。钱到了，面子也被按了回去。',
-          moneyDelta: 35,
-          stressDelta: 1,
-          fameDelta: -4,
+          stateDelta: {
+            stress: 5,
+          },
+          resourceDelta: {
+            money: 35,
+            fame: -4,
+          },
         },
       },
       {
@@ -188,15 +220,19 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 8, traitBonuses: { ego: 2, solo: 1 }, traitPenalties: { support: 1, selfless: 1 } },
         success: {
           narrative: '你回消息说"没那么严重，谢了"。对方没再追问。心里有些释然，也有些不是滋味——但这是你自己的选择。',
-          stressDelta: 2,
-          feelDelta: 0.5,
+          stateDelta: {
+            stress: 10,
+            feel: 0.5,
+          },
           dailyGrowth: 'mentality',
         },
         failure: {
           narrative: '你拒绝了，然后把手机扔到床上。孤立无援的感觉比破产更难受，这份倔强今晚让你付出了代价。',
-          stressDelta: 5,
-          feelDelta: -1.0,
-          tiltDelta: 1,
+          stateDelta: {
+            stress: 25,
+            feel: -1.0,
+            tilt: 1,
+          },
         },
       },
     ],
@@ -219,13 +255,21 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 4 },
         success: {
           narrative: '你签下临时协议，经理很快把应急金打了过来。至少接下来几周，你能把注意力重新放回训练室。',
-          moneyDelta: 30,
-          stressDelta: -5,
+          stateDelta: {
+            stress: -25,
+          },
+          resourceDelta: {
+            money: 30,
+          },
         },
         failure: {
           narrative: '你接受了垫款，但也感觉自己在队里欠下了一份难说出口的人情。钱到账了，压力却没有完全消失。',
-          moneyDelta: 20,
-          stressDelta: 5,
+          stateDelta: {
+            stress: 25,
+          },
+          resourceDelta: {
+            money: 20,
+          },
         },
       },
       {
@@ -236,13 +280,17 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 9, traitBonuses: { steady: 2, ego: 1 }, traitPenalties: { fragile: 1 } },
         success: {
           narrative: '你婉拒了经理，说三个月薪资不需要下调，自己能扛过去。经理点了点头："有困难随时来找我。"这份坚持，也许在队里多了一份说不清的分量。',
-          stressDelta: 3,
+          stateDelta: {
+            stress: 15,
+          },
           dailyGrowth: 'mentality',
         },
         failure: {
           narrative: '你拒绝了，经理有点意外，但没有勉强。走出办公室，你不确定自己是不是做了对的决定——钱的问题并没有因为你的倔强消失。',
-          stressDelta: 6,
-          feelDelta: -0.5,
+          stateDelta: {
+            stress: 30,
+            feel: -0.5,
+          },
         },
       },
     ],
@@ -265,13 +313,21 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'experience', dc: 5 },
         success: {
           narrative: '你看懂了条款，也确认没有隐藏陷阱。预支到账后，账面终于不再刺眼，只是未来几个月要勒紧一点。',
-          moneyDelta: 50,
-          stressDelta: 10,
+          stateDelta: {
+            stress: 50,
+          },
+          resourceDelta: {
+            money: 50,
+          },
         },
         failure: {
           narrative: '协议流程比你想象得更难堪，几层审批之后，款项少了一截。你还是签了，因为眼前没有更好的办法。',
-          moneyDelta: 40,
-          stressDelta: 15,
+          stateDelta: {
+            stress: 75,
+          },
+          resourceDelta: {
+            money: 40,
+          },
         },
       },
       {
@@ -282,14 +338,18 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 8, traitBonuses: { steady: 2, grinder: 1 }, traitPenalties: { impulsive: 1 } },
         success: {
           narrative: '你退回了协议，决定自己扛过这关。财务表情有点惊讶，但也没再追。这个决定意味着接下来一段时间要更紧，但薪资不会被动手脚。',
-          stressDelta: 3,
+          stateDelta: {
+            stress: 15,
+          },
           dailyGrowth: 'mentality',
         },
         failure: {
           narrative: '你说不签，但脑子里转了半天也没找到别的出路。最后既后悔拒绝，又拉不下脸回头——悬在这里更难受。',
-          stressDelta: 6,
-          feelDelta: -0.5,
-          tiltDelta: 1,
+          stateDelta: {
+            stress: 30,
+            feel: -0.5,
+            tilt: 1,
+          },
         },
       },
     ],
@@ -311,13 +371,17 @@ export const BAILOUT_EVENTS: EventDef[] = [
         check: { primary: 'mentality', dc: 6, traitBonuses: { steady: 2 }, traitPenalties: { fragile: 2, volatile: 1 } },
         success: {
           narrative: '你深吸一口气，告诉爸爸："给我一点时间，我想办法。"电话挂了，你盯着账户上那个数字——80K，四个回合。你不知道从哪里开始，但你知道自己必须开始。',
-          stressDelta: 5,
+          stateDelta: {
+            stress: 25,
+          },
         },
         failure: {
           narrative: '你愣了很久，什么也没说出来，只是答应下来。电话挂了，压力像一块石头压在胸口。你不知道从哪里开始，但你知道这是你最难的一关。',
-          stressDelta: 10,
-          feelDelta: -1.0,
-          tiltDelta: 1,
+          stateDelta: {
+            stress: 50,
+            feel: -1.0,
+            tilt: 1,
+          },
         },
       },
       {
@@ -332,17 +396,25 @@ export const BAILOUT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你放下了电话。你告诉自己：这件事已经超出你的能力范围了。某扇门就这样永远关上了——不是解脱，是一种更沉的东西。职业生涯继续，但某些东西不一样了。',
-          feelDelta: -2.0,
-          stressDelta: 3,
-          tagAdds: ['abandoned-family'],
+          stateDelta: {
+            feel: -2.0,
+            stress: 15,
+          },
+          tags: {
+            add: ['abandoned-family'],
+          },
         },
         failure: {
           narrative: '你试着说服自己这不是你的事，但那个声音一直在脑子里转。你没办法睡着，没办法认真训练，没办法假装什么都没发生过。职业继续了，但你的状态已经不是你的了。',
-          feelDelta: -3.0,
-          stressDelta: 8,
-          tiltDelta: 2,
-          fatigueDelta: 20,
-          tagAdds: ['abandoned-family', 'guilt-spiral'],
+          stateDelta: {
+            feel: -3.0,
+            stress: 40,
+            tilt: 2,
+            fatigue: 20,
+          },
+          tags: {
+            add: ['abandoned-family', 'guilt-spiral'],
+          },
         },
       },
     ],

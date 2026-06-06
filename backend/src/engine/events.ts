@@ -236,19 +236,21 @@ export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
         check: { primary: 'intelligence', dc: 8, traitBonuses: { tactical: 2, igl: 1 } },
         success: {
           narrative: '你发现对手在某个点位有固定的战术偏好，这会是关键。',
-          buffAdd: {
-            id: 'pre-match-intel',
-            label: '赛前情报',
-            actionTag: 'match',
-            growthKey: 'intelligence',
-            growthMultiplier: 1.15,
-            remainingUses: 2,
-            consumeOn: 'growth',
+          effects: {
+            buffAdd: {
+              id: 'pre-match-intel',
+              label: '赛前情报',
+              actionTag: 'match',
+              growthKey: 'intelligence',
+              growthMultiplier: 1.15,
+              remainingUses: 2,
+              consumeOn: 'growth',
+            },
           },
         },
         failure: {
           narrative: '录像看了两个小时，没找到什么特别的规律。',
-          fatigueDelta: 10,
+          stateDelta: { fatigue: 10 },
         },
       },
       {
@@ -258,12 +260,11 @@ export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
         check: { primary: 'mentality', dc: 5, traitBonuses: { grinder: 1 } },
         success: {
           narrative: '轻量训练到位，身体状态维持得不错。',
-          fatigueDelta: -10,
-          feelDelta: 1,
+          stateDelta: { fatigue: -10, feel: 1 },
         },
         failure: {
           narrative: '练习感觉很干，状态也没起色。',
-          fatigueDelta: 5,
+          stateDelta: { fatigue: 5 },
         },
       },
       {
@@ -273,12 +274,11 @@ export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
         check: { primary: 'mentality', dc: 4, traitBonuses: { steady: 2 } },
         success: {
           narrative: '脑子里的杂念少了一些，感觉可以专注上场了。',
-          stressDelta: -2,
-          fatigueDelta: -5,
+          stateDelta: { stress: -10, fatigue: -5 },
         },
         failure: {
           narrative: '越想放松越焦虑，最后也没怎么休息到。',
-          stressDelta: 1,
+          stateDelta: { stress: 5 },
         },
       },
     ],

@@ -21,12 +21,16 @@ export const RANKED_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你连续三把大的，把队伍硬拉回 1v1 残局并取胜。',
-          feelDelta: 1.7,
+          stateDelta: {
+            feel: 1.7,
+          },
         },
         failure: {
           narrative: '你想 carry 但被架点点死，语音里又多了一个喷你的人。',
-          feelDelta: -1,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+          },
         },
       },
       {
@@ -41,13 +45,19 @@ export const RANKED_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你冷静分工、给信息，队友慢慢冷静下来，比赛被你拉平。',
-          feelDelta: 1.8,
-          tagAdds: ['natural-igl'],
+          stateDelta: {
+            feel: 1.8,
+          },
+          tags: {
+            add: ['natural-igl'],
+          },
         },
         failure: {
           narrative: '没人听你，你越说越尴尬。',
-          feelDelta: -1,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+          },
         },
       },
       {
@@ -60,7 +70,9 @@ export const RANKED_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你关掉电脑，下楼买了杯冰美式。',
-          feelDelta: 1.5,
+          stateDelta: {
+            feel: 1.5,
+          },
         },
         failure: {
           narrative: '你退了游戏，但仍在脑子里反复 replay 那波架点。',
@@ -87,13 +99,21 @@ export const RANKED_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '三人先后被你一枪爆头，集锦自动保存。',
-          feelDelta: 2.2,
-          moneyDelta: 10,
-          tagAdds: ['highlight-clip'],
+          stateDelta: {
+            feel: 2.2,
+          },
+          resourceDelta: {
+            money: 10,
+          },
+          tags: {
+            add: ['highlight-clip'],
+          },
         },
         failure: {
           narrative: '你架错了角度，被对面一波平 A 抹掉。',
-          feelDelta: -0.5,
+          stateDelta: {
+            feel: -0.5,
+          },
         },
       },
       {
@@ -108,13 +128,19 @@ export const RANKED_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你屏住呼吸等对面报了点，三个人一个接一个走进你的准星。',
-          feelDelta: 1.8,
-          tagAdds: ['highlight-clip'],
+          stateDelta: {
+            feel: 1.8,
+          },
+          tags: {
+            add: ['highlight-clip'],
+          },
         },
         failure: {
           narrative: '你等到的是一个闪光弹。',
-          feelDelta: -1,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+          },
         },
       },
       {
@@ -128,11 +154,15 @@ export const RANKED_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你在死之前报出了三个人的位置，下一局队友零封回来。',
-          feelDelta: 0.4,
+          stateDelta: {
+            feel: 0.4,
+          },
         },
         failure: {
           narrative: '你刚露头就被击杀，麦克风里甚至来不及说话。',
-          feelDelta: -0.5,
+          stateDelta: {
+            feel: -0.5,
+          },
         },
       },
     ],

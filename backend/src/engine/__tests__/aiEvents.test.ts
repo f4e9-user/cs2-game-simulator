@@ -18,15 +18,15 @@ function aiEvent(): EventDef {
         description: '你重新打开自己的 demo，寻找对方可能盯上的习惯。',
         check: { primary: 'intelligence', dc: 6 },
         success: { narrative: '你提前发现了自己的固定习惯，准备做一次改变。' },
-        failure: { narrative: '你看了半天，反而越来越怀疑自己的判断。', stressDelta: 1 },
+        failure: { narrative: '你看了半天，反而越来越怀疑自己的判断。', stateDelta: { stress: 1 } },
       },
       {
         id: 'ignore',
         label: '继续训练',
         description: '你决定先把注意力放回枪法。',
         check: { primary: 'agility', dc: 6 },
-        success: { narrative: '你把杂音压下去，手感慢慢热了起来。', feelDelta: 1 },
-        failure: { narrative: '你越想不在意，越容易被细节干扰。', tiltDelta: 1 },
+        success: { narrative: '你把杂音压下去，手感慢慢热了起来。', stateDelta: { feel: 1 } },
+        failure: { narrative: '你越想不在意，越容易被细节干扰。', stateDelta: { tilt: 1 } },
       },
     ],
   };

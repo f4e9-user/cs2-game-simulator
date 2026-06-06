@@ -23,14 +23,22 @@ const DETECT_LIGHT = {
 const BANNED = {
   narrative:
     'VAC 邮件在训练赛中途弹出，队内账号被拉黑。你的名字被所有赛事主办方拉入禁赛名单。',
-  feelDelta: -1.5,
-  tiltDelta: 1,
-  moneyDelta: -50,
-  endRun: true,
-  endReason: 'banned_for_cheating',
-  tagAdds: ['banned'],
-  fameDelta: -15,
-  stressDelta: 10,
+  stateDelta: {
+    feel: -1.5,
+    tilt: 1,
+    stress: 50,
+  },
+  resourceDelta: {
+    money: -50,
+    fame: -15,
+  },
+  progression: {
+    endRun: true,
+    endReason: 'banned_for_cheating',
+  },
+  tags: {
+    add: ['banned'],
+  },
 };
 
 export const CHEAT_EVENTS: EventDef[] = [
@@ -55,9 +63,13 @@ export const CHEAT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '这波没被逮住。排位胜率飙起来，屏幕前你却微微出汗。',
-          feelDelta: 1.2,
-          stressDelta: 3,
-          tagAdds: ['cheater'],
+          stateDelta: {
+            feel: 1.2,
+            stress: 15,
+          },
+          tags: {
+            add: ['cheater'],
+          },
         },
         failure: BANNED,
       },
@@ -72,9 +84,13 @@ export const CHEAT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '包装得很隐蔽，反作弊暂时没抓到。但你每把都多一分心虚。',
-          feelDelta: 0.6,
-          stressDelta: 2,
-          tagAdds: ['cheater'],
+          stateDelta: {
+            feel: 0.6,
+            stress: 10,
+          },
+          tags: {
+            add: ['cheater'],
+          },
         },
         failure: BANNED,
       },
@@ -90,14 +106,20 @@ export const CHEAT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '群主把那人踢了。你睡得很踏实，训练反而更专注。',
-          feelDelta: 0.5,
-          tagAdds: ['clean-record'],
-          stressDelta: -2,
+          stateDelta: {
+            feel: 0.5,
+            stress: -10,
+          },
+          tags: {
+            add: ['clean-record'],
+          },
         },
         failure: {
           narrative: '你没装也没举报，但链接一直留在聊天里。心里那根刺没拔。',
-          feelDelta: -0.5,
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
         },
       },
     ],
@@ -123,10 +145,16 @@ export const CHEAT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '账号起飞，你在平台被称为"天才少年"，顺手进账 40K。你开始忘了自己真实段位是什么。',
-          feelDelta: 1.8,
-          moneyDelta: 40,
-          stressDelta: 5,
-          tagAdds: ['cheater', 'dirty-money'],
+          stateDelta: {
+            feel: 1.8,
+            stress: 25,
+          },
+          resourceDelta: {
+            money: 40,
+          },
+          tags: {
+            add: ['cheater', 'dirty-money'],
+          },
         },
         failure: BANNED,
       },
@@ -142,15 +170,23 @@ export const CHEAT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '俱乐部法务当晚就把人查出来交给反作弊组。你得到一份褒奖信。',
-          feelDelta: 0.5,
-          fameDelta: 2,
-          tagAdds: ['clean-record', 'team-trust'],
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            stress: -5,
+          },
+          resourceDelta: {
+            fame: 2,
+          },
+          tags: {
+            add: ['clean-record', 'team-trust'],
+          },
         },
         failure: {
           narrative: '你举报了，但流程拖延让你觉得这件事没那么重要了。',
-          feelDelta: -0.5,
-          stressDelta: 1,
+          stateDelta: {
+            feel: -0.5,
+            stress: 5,
+          },
         },
       },
       {
@@ -163,14 +199,20 @@ export const CHEAT_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你没看他第二眼。过了一周就不记得这件事了。',
-          stressDelta: 0,
+          stateDelta: {
+            stress: 0,
+          },
         },
         failure: {
           narrative: '你删了，但对话截图被对方传出去，少数论坛有人怀疑你"接触过"。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          fameDelta: -2,
-          stressDelta: 2,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+            stress: 10,
+          },
+          resourceDelta: {
+            fame: -2,
+          },
         },
       },
     ],

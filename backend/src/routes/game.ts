@@ -20,6 +20,8 @@ import {
   validateAllocation,
 } from '../engine/gameEngine.js';
 import { checkTournamentPromotion } from '../engine/stages.js';
+import { buildCareerGoal } from '../engine/careerGoal.js';
+import { applyMoneyTransaction } from '../engine/money.js';
 import { CLUBS, clubsForStage } from '../data/clubs.js';
 import {
   getTournament,
@@ -129,6 +131,7 @@ app.post('/game/start', async (c) => {
       apiToken: session.apiToken,
       player: session.player,
       currentEvent: session.currentEvent,
+      careerGoal: buildCareerGoal(session.player),
       leaderboard: session.leaderboard,
     });
   } catch (err) {
@@ -144,7 +147,7 @@ app.get('/game/:sessionId', async (c) => {
   if (!session) return c.json({ error: 'session not found' }, 404);
   // Annotate with current promotion check so the UI can show next-stage hints.
   const promotion = checkTournamentPromotion(session.player);
-  return c.json({ ...session, promotion });
+  return c.json({ ...session, promotion, careerGoal: buildCareerGoal(session.player) });
 });
 
 const CUSTOM_QUALITY_BONUS: Record<string, number> = {
@@ -364,6 +367,7 @@ app.post('/game/:sessionId/choice', async (c) => {
       status: updated.status,
       ending: updated.ending,
       promotion: checkTournamentPromotion(updated.player),
+      careerGoal: buildCareerGoal(updated.player),
       leaderboard: updated.leaderboard,
     });
   } catch (err) {
@@ -579,7 +583,7 @@ app.post('/game/:sessionId/withdraw', async (c) => {
   // 30K 罚款（3 money points）—— 仅在二线及以上有合约的阶段
   const stageHasContract = ['second', 'pro'].includes(session.player.stage);
   if (stageHasContract) {
-    session.player.stats.money = Math.max(0, session.player.stats.money - 3);
+    applyMoneyTransaction(session.player, -3);
     penalties.push('资金 -30K');
   }
 

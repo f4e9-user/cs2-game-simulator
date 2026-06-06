@@ -52,6 +52,7 @@ function player(overrides: Partial<Player>): Player {
     pendingMatch: null,
     actionPoints: 100,
     shopCooldowns: {},
+    weeklyShopPurchases: {},
     team: null,
     pendingApplication: null,
     qualificationSlots: {},

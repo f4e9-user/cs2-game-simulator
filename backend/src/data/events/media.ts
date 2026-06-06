@@ -26,16 +26,28 @@ export const MEDIA_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你没有发任何声明。三天后，一个更大的热点把这件事盖了下去。名气有所损失，但没有进一步扩散。赞助商那边算是糊弄过去了。',
-          fameDelta: -10,
-          stressDelta: 5,
-          tagAdds: ['media-abandoned-handled'],
+          stateDelta: {
+            stress: 25,
+          },
+          resourceDelta: {
+            fame: -10,
+          },
+          tags: {
+            add: ['media-abandoned-handled'],
+          },
         },
         failure: {
           narrative: '沉默被解读成默认。话题热度不降反升，开始有记者联系你的前队友。赞助商已经暂停了部分合作，俱乐部管理层约你谈话了。',
-          fameDelta: -28,
-          stressDelta: 12,
-          feelDelta: -1.0,
-          tagAdds: ['bad-rep', 'media-abandoned-handled'],
+          stateDelta: {
+            stress: 60,
+            feel: -1.0,
+          },
+          resourceDelta: {
+            fame: -28,
+          },
+          tags: {
+            add: ['bad-rep', 'media-abandoned-handled'],
+          },
         },
       },
       {
@@ -51,17 +63,29 @@ export const MEDIA_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你发了一段文字，没有辩解，只是如实说了当年的处境。评论区有人选择接受，但有更多人说「说出来又怎样」。名气受损，但话题比沉默收得更快一些。',
-          fameDelta: -15,
-          stressDelta: -3,
-          feelDelta: -0.5,
-          tagAdds: ['media-abandoned-handled'],
+          stateDelta: {
+            stress: -15,
+            feel: -0.5,
+          },
+          resourceDelta: {
+            fame: -15,
+          },
+          tags: {
+            add: ['media-abandoned-handled'],
+          },
         },
         failure: {
           narrative: '道歉被解读成公关稿，「太晚了」「装什么呢」的声音铺天盖地。你真诚的部分没有人看到，看到的只有狼狈。赞助商减少了合作频次。',
-          fameDelta: -30,
-          stressDelta: 10,
-          feelDelta: -1.5,
-          tagAdds: ['bad-rep', 'media-abandoned-handled'],
+          stateDelta: {
+            stress: 50,
+            feel: -1.5,
+          },
+          resourceDelta: {
+            fame: -30,
+          },
+          tags: {
+            add: ['bad-rep', 'media-abandoned-handled'],
+          },
         },
       },
     ],
@@ -87,13 +111,21 @@ export const MEDIA_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你提到了 IGL 的指挥和替补兄弟的默契。赞助商私信了俱乐部。',
-          feelDelta: 0.5,
-          moneyDelta: 20,
-          tagAdds: ['team-trust'],
+          stateDelta: {
+            feel: 0.5,
+          },
+          resourceDelta: {
+            money: 20,
+          },
+          tags: {
+            add: ['team-trust'],
+          },
         },
         failure: {
           narrative: '你说得过于客套，反而被粉丝解读成虚伪。',
-          feelDelta: -0.5,
+          stateDelta: {
+            feel: -0.5,
+          },
         },
       },
       {
@@ -108,15 +140,25 @@ export const MEDIA_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你在镜头前自信满满，直播间大量新粉丝涌入你的频道。',
-          feelDelta: 0.5,
-          moneyDelta: 30,
-          tagAdds: ['fan-favorite'],
+          stateDelta: {
+            feel: 0.5,
+          },
+          resourceDelta: {
+            money: 30,
+          },
+          tags: {
+            add: ['fan-favorite'],
+          },
         },
         failure: {
           narrative: '你越说越自负，社交媒体随后开始刷屏嘲讽。',
-          feelDelta: -1.5,
-          tiltDelta: 1,
-          tagAdds: ['media-backlash'],
+          stateDelta: {
+            feel: -1.5,
+            tilt: 1,
+          },
+          tags: {
+            add: ['media-backlash'],
+          },
         },
       },
       {
@@ -131,13 +173,19 @@ export const MEDIA_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你礼貌带过，粉丝觉得你谦逊务实。',
-          feelDelta: 0.5,
+          stateDelta: {
+            feel: 0.5,
+          },
         },
         failure: {
           narrative: '记者追问下你越答越别扭，视频被剪成尴尬合集。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagAdds: ['media-backlash'],
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+          },
+          tags: {
+            add: ['media-backlash'],
+          },
         },
       },
     ],

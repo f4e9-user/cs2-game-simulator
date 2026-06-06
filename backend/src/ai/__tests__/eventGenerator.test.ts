@@ -44,6 +44,7 @@ function mockPlayer(): Player {
     pendingMatch: null,
     actionPoints: 100,
     shopCooldowns: {},
+    weeklyShopPurchases: {},
     team: null,
     pendingApplication: null,
     qualificationSlots: {},
@@ -90,14 +91,16 @@ describe('AI event generation parsing', () => {
     expect(extractJsonArray(`阶段是 ["rookie"]，事件是：${JSON.stringify(raw[0])}`)).toEqual([raw[0]]);
   });
 
-  it('prompt uses direct stressDelta instead of nesting it in statChanges', () => {
+  it('prompt uses structured outcome blocks instead of flat delta fields', () => {
     const prompt = buildEventGenPrompt({
       player: mockPlayer(),
       recentHistory: [],
       gaps: [],
     });
-    expect(prompt).toContain('"stressDelta":2');
+    expect(prompt).toContain('"stateDelta":{"stress":2}');
+    expect(prompt).toContain('"coreGrowth":{"mentality":1}');
     expect(prompt).not.toContain('"statChanges":{"stressDelta"');
+    expect(prompt).not.toContain('"stressDelta":2');
   });
 
   it('normalizes common LLM shape mistakes before validation', () => {
@@ -133,9 +136,10 @@ describe('AI event generation parsing', () => {
     expect(parsed.invalid).toHaveLength(0);
     expect(parsed.valid).toHaveLength(1);
     expect(parsed.valid[0]!.choices[0]!.description).toBe('先停下来');
-    expect(parsed.valid[0]!.choices[0]!.failure.stressDelta).toBe(2);
-    expect(parsed.valid[0]!.choices[0]!.failure.moneyDelta).toBe(-1);
-    expect(parsed.valid[0]!.choices[0]!.failure.statChanges).toBeUndefined();
+    expect(parsed.valid[0]!.choices[0]!.success.coreGrowth?.mentality).toBe(1);
+    expect(parsed.valid[0]!.choices[0]!.failure.stateDelta?.stress).toBe(2);
+    expect(parsed.valid[0]!.choices[0]!.failure.resourceDelta?.money).toBe(-1);
+    expect('statChanges' in parsed.valid[0]!.choices[0]!.failure).toBe(false);
   });
 
   it('rejects generated events with unknown check stats', () => {

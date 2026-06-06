@@ -25,18 +25,24 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你没有试着逃开。你想了很久，那段记忆还是很沉，但你不再用「当时没有办法」来说服自己了。这种诚实让你好受了一点点。',
-          stressDelta: -3,
-          feelDelta: 0.5,
+          stateDelta: {
+            stress: -15,
+            feel: 0.5,
+          },
+          tags: {
+            add: ['guilt-processed'],
+            remove: ['guilt-spiral'],
+          },
           dailyGrowth: 'mentality',
-          tagAdds: ['guilt-processed'],
-          tagRemoves: ['guilt-spiral'],
         },
         failure: {
           narrative: '你试着直面，结果越想越难受。那天的电话声一遍遍在脑子里转，你整夜没睡，训练的时候也在想这件事。',
-          stressDelta: 6,
-          feelDelta: -1.0,
-          fatigueDelta: 20,
-          tiltDelta: 1,
+          stateDelta: {
+            stress: 30,
+            feel: -1.0,
+            fatigue: 20,
+            tilt: 1,
+          },
         },
       },
       {
@@ -51,15 +57,21 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你把那扇门关上，回到战术分析里去。今晚没再想，但你知道它还在那里。',
-          stressDelta: 1,
-          tagAdds: ['guilt-processed'],
-          tagRemoves: ['guilt-spiral'],
+          stateDelta: {
+            stress: 5,
+          },
+          tags: {
+            add: ['guilt-processed'],
+            remove: ['guilt-spiral'],
+          },
         },
         failure: {
           narrative: '你以为自己压住了，但梦里又看到了那个场景。早上起来眼眶是红的，说不清是做梦还是哭了。',
-          stressDelta: 4,
-          feelDelta: -0.5,
-          fatigueDelta: 15,
+          stateDelta: {
+            stress: 20,
+            feel: -0.5,
+            fatigue: 15,
+          },
         },
       },
     ],
@@ -86,12 +98,16 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你把自己的训练计划和目标一条条解释清楚，对方沉默后说了声「注意身体」。',
-          feelDelta: 1.4,
+          stateDelta: {
+            feel: 1.4,
+          },
         },
         failure: {
           narrative: '话题很快滑向争吵，你挂电话后一整晚没睡好。',
-          feelDelta: -1,
-          tiltDelta: 1,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+          },
         },
       },
       {
@@ -106,14 +122,22 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你先稳住当下的情绪，第二天早上才回电话。',
-          feelDelta: 0.5,
-          tagAdds: ['family-strain'],
+          stateDelta: {
+            feel: 0.5,
+          },
+          tags: {
+            add: ['family-strain'],
+          },
         },
         failure: {
           narrative: '手机被你静音后你根本没睡着，脑子里全是那句话。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          tagAdds: ['family-strain'],
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+          },
+          tags: {
+            add: ['family-strain'],
+          },
         },
       },
       {
@@ -128,14 +152,22 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '钱到账的那一刻家里的态度明显软化，但你账户里只剩几个数字。',
-          feelDelta: 1,
-          moneyDelta: -30,
+          stateDelta: {
+            feel: 1,
+          },
+          resourceDelta: {
+            money: -30,
+          },
         },
         failure: {
           narrative: '你没那么多钱，硬转让自己更焦虑。',
-          feelDelta: -1,
-          tiltDelta: 1,
-          moneyDelta: -20,
+          stateDelta: {
+            feel: -1,
+            tilt: 1,
+          },
+          resourceDelta: {
+            money: -20,
+          },
         },
       },
     ],
@@ -178,12 +210,18 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '医生让你下周停训。休养后你感觉连点击鼠标都轻松了。',
-          feelDelta: 1.1,
-          moneyDelta: -10,
+          stateDelta: {
+            feel: 1.1,
+          },
+          resourceDelta: {
+            money: -10,
+          },
         },
         failure: {
           narrative: '你听医生嘱咐但忍不住还是偷偷练了，效果打折。',
-          feelDelta: -0.5,
+          stateDelta: {
+            feel: -0.5,
+          },
         },
       },
       {
@@ -199,14 +237,22 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你挺了过来，状态反而被练到极致。',
-          feelDelta: 0.7,
+          stateDelta: {
+            feel: 0.7,
+          },
         },
         failure: {
           narrative: '你的手腕彻底撑不住，需要停训一个月。',
-          feelDelta: -2.8,
-          tiltDelta: 1,
-          moneyDelta: -20,
-          tagAdds: ['injured'],
+          stateDelta: {
+            feel: -2.8,
+            tilt: 1,
+          },
+          resourceDelta: {
+            money: -20,
+          },
+          tags: {
+            add: ['injured'],
+          },
         },
       },
       {
@@ -221,13 +267,21 @@ export const LIFE_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '设备换了、康复师到位，你的状态迅速回升。',
-          feelDelta: 1.1,
-          moneyDelta: -30,
+          stateDelta: {
+            feel: 1.1,
+          },
+          resourceDelta: {
+            money: -30,
+          },
         },
         failure: {
           narrative: '你买了贵设备，但没坚持康复训练，效果不理想。',
-          feelDelta: -0.5,
-          moneyDelta: -30,
+          stateDelta: {
+            feel: -0.5,
+          },
+          resourceDelta: {
+            money: -30,
+          },
         },
       },
     ],

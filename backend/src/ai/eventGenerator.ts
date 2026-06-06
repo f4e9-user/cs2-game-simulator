@@ -86,15 +86,14 @@ export function buildEventGenPrompt(input: AiEventGenInput): string {
     '- 每个 choice 必须包含 check 字段，格式为 {"primary": "属性名", "dc": 数字}',
     '- primary 可选属性：intelligence / agility / experience / money / mentality / constitution',
     '- dc 范围 4-16',
-    '- statChanges 中单个属性变化绝对值不超过 3',
-    '- stressDelta 范围 -10 到 10',
-    '- fatigueDelta 范围 -20 到 20',
-    '- feelDelta 范围 -2 到 2',
+    '- coreGrowth 只允许 intelligence / agility / experience / mentality / constitution，单个属性变化绝对值不超过 3',
+    '- stateDelta 可包含 stress(-10 到 10), fatigue(-20 到 20), feel(-2 到 2), tilt(-2 到 2)',
+    '- resourceDelta 可包含 money(-20 到 20), fame(-20 到 20)',
     '- 禁止修改 stage、tags 等元数据',
     '- id 必须以 ai- 开头，后面接小写字母和连字符',
     '',
     '严格输出 JSON 数组，不加任何其他内容：',
-    '[{"id":"ai-example","type":"life","title":"...","narrative":"...","stages":["rookie"],"difficulty":3,"choices":[{"id":"c1","label":"...","description":"...","check":{"primary":"mentality","dc":8},"success":{"narrative":"...","statChanges":{"mentality":1}},"failure":{"narrative":"...","stressDelta":2}}]}]',
+    '[{"id":"ai-example","type":"life","title":"...","narrative":"...","stages":["rookie"],"difficulty":3,"choices":[{"id":"c1","label":"...","description":"...","check":{"primary":"mentality","dc":8},"success":{"narrative":"...","coreGrowth":{"mentality":1}},"failure":{"narrative":"...","stateDelta":{"stress":2}}}]}]',
   ].join('\n');
 }
 
@@ -216,34 +215,65 @@ export function parseAiEvents(text: string | null): { valid: EventDef[]; invalid
 function normalizeOutcome(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const outcome = { ...(value as Record<string, unknown>) };
+  const coreGrowth = objectCopy(outcome.coreGrowth);
+  const stateDelta = objectCopy(outcome.stateDelta);
+  const resourceDelta = objectCopy(outcome.resourceDelta);
   const rawStatChanges = outcome.statChanges;
-  if (!rawStatChanges || typeof rawStatChanges !== 'object' || Array.isArray(rawStatChanges)) {
-    return outcome;
+
+  moveOutcomeNumeric(outcome, stateDelta, 'stressDelta', 'stress');
+  moveOutcomeNumeric(outcome, stateDelta, 'fatigueDelta', 'fatigue');
+  moveOutcomeNumeric(outcome, stateDelta, 'feelDelta', 'feel');
+  moveOutcomeNumeric(outcome, stateDelta, 'tiltDelta', 'tilt');
+  moveOutcomeNumeric(outcome, resourceDelta, 'fameDelta', 'fame');
+  moveOutcomeNumeric(outcome, resourceDelta, 'moneyDelta', 'money');
+
+  if (rawStatChanges && typeof rawStatChanges === 'object' && !Array.isArray(rawStatChanges)) {
+    const statChanges = { ...(rawStatChanges as Record<string, unknown>) };
+    moveOutcomeNumeric(statChanges, stateDelta, 'stressDelta', 'stress');
+    moveOutcomeNumeric(statChanges, stateDelta, 'fatigueDelta', 'fatigue');
+    moveOutcomeNumeric(statChanges, stateDelta, 'feelDelta', 'feel');
+    moveOutcomeNumeric(statChanges, stateDelta, 'tiltDelta', 'tilt');
+    moveOutcomeNumeric(statChanges, resourceDelta, 'fameDelta', 'fame');
+    moveOutcomeNumeric(statChanges, resourceDelta, 'moneyDelta', 'money');
+    moveOutcomeNumeric(statChanges, resourceDelta, 'money', 'money');
+
+    for (const key of ['intelligence', 'agility', 'experience', 'mentality', 'constitution']) {
+      if (typeof statChanges[key] === 'number' && coreGrowth[key] === undefined) {
+        coreGrowth[key] = statChanges[key];
+        delete statChanges[key];
+      }
+    }
+
+    if (Object.keys(statChanges).length > 0) {
+      outcome.statChanges = statChanges;
+    } else {
+      delete outcome.statChanges;
+    }
   }
 
-  const statChanges = { ...(rawStatChanges as Record<string, unknown>) };
-  moveNumericField(statChanges, outcome, 'stressDelta');
-  moveNumericField(statChanges, outcome, 'fatigueDelta');
-  moveNumericField(statChanges, outcome, 'feelDelta');
-  moveNumericField(statChanges, outcome, 'tiltDelta');
-  moveNumericField(statChanges, outcome, 'fameDelta');
-  moveNumericField(statChanges, outcome, 'moneyDelta');
-  if (typeof statChanges.money === 'number' && outcome.moneyDelta === undefined) {
-    outcome.moneyDelta = statChanges.money;
-    delete statChanges.money;
-  }
-
-  if (Object.keys(statChanges).length > 0) {
-    outcome.statChanges = statChanges;
-  } else {
-    delete outcome.statChanges;
-  }
+  if (Object.keys(coreGrowth).length > 0) outcome.coreGrowth = coreGrowth;
+  else delete outcome.coreGrowth;
+  if (Object.keys(stateDelta).length > 0) outcome.stateDelta = stateDelta;
+  else delete outcome.stateDelta;
+  if (Object.keys(resourceDelta).length > 0) outcome.resourceDelta = resourceDelta;
+  else delete outcome.resourceDelta;
   return outcome;
 }
 
-function moveNumericField(from: Record<string, unknown>, to: Record<string, unknown>, key: string): void {
-  if (typeof from[key] === 'number' && to[key] === undefined) {
-    to[key] = from[key];
-    delete from[key];
+function objectCopy(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>) }
+    : {};
+}
+
+function moveOutcomeNumeric(
+  from: Record<string, unknown>,
+  to: Record<string, unknown>,
+  fromKey: string,
+  toKey: string,
+): void {
+  if (typeof from[fromKey] === 'number' && to[toKey] === undefined) {
+    to[toKey] = from[fromKey];
+    delete from[fromKey];
   }
 }
