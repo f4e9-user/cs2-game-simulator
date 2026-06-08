@@ -1,15 +1,14 @@
 'use client';
 
-import type { Player, PromotionCheck, Trait } from '@/lib/types';
+import type { Player, Trait } from '@/lib/types';
 import { STAGE_LABELS, formatMoney } from '@/lib/format';
 
 interface Props {
   player: Player;
   traits: Trait[];
-  promotion?: PromotionCheck | null;
 }
 
-export function PlayerStats({ player, traits, promotion }: Props) {
+export function PlayerStats({ player, traits }: Props) {
   const playerTraits = player.traits
     .map((id) => traits.find((t) => t.id === id))
     .filter((t): t is Trait => Boolean(t));
@@ -40,25 +39,6 @@ export function PlayerStats({ player, traits, promotion }: Props) {
           <span className="status-alert warn">
             考察来了 → {STAGE_LABELS[player.promotionPending]}
           </span>
-        </div>
-      ) : promotion && promotion.reasons.length > 0 ? (
-        <div style={{ marginBottom: 6 }}>
-          <div
-            style={{
-              fontSize: 9,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              color: 'var(--fg-3)',
-              marginBottom: 3,
-            }}
-          >
-            晋级条件
-          </div>
-          {promotion.reasons.map((r, i) => (
-            <div key={i} style={{ fontSize: 10, color: 'var(--fg-2)' }}>
-              · {r}
-            </div>
-          ))}
         </div>
       ) : null}
 

@@ -15,15 +15,11 @@ const TIER_LABELS: Record<string, string> = {
 function rookieEligibility(player: Player): { eligible: boolean; path: 'open-match' | 'talent' | null; hint: string } {
   const tp = player.tierParticipations ?? {};
   const tc = player.tierChampionships ?? {};
-  const openParticipations = (tp['b'] ?? 0) + (tp['a'] ?? 0);
-  const openChampionships = (tc['b'] ?? 0) + (tc['a'] ?? 0);
-  const hasOpenMatch = openParticipations >= 3 && openChampionships >= 1;
+  const rookieParticipations = (tp['c'] ?? 0) + (tp['b'] ?? 0);
+  const bParticipations = tp['b'] ?? 0;
+  const rookieChampionships = (tc['c'] ?? 0) + (tc['b'] ?? 0);
+  const hasOpenMatch = rookieParticipations >= 3 && bParticipations >= 1 && rookieChampionships >= 1;
 
-  const traitTags = player.traits.flatMap((id) => {
-    // traits array only has IDs — derive tags via known mapping
-    // aimer tag comes from 枪法天才 trait; check player.tags set by engine
-    return [];
-  });
   // Talent path: player has 'elite-prospect' dynamic tag (injected when aimer/solo trait present)
   // We check player.tags but dynamic tags aren't stored — use a workaround:
   // the engine writes 'application-path-talent' only when aimer trait is present.
@@ -35,8 +31,9 @@ function rookieEligibility(player: Player): { eligible: boolean; path: 'open-mat
   if (hasTalentTrait) return { eligible: true, path: 'talent', hint: '✓ 枪法天才特质达标' };
 
   const parts: string[] = [];
-  if (openParticipations < 3) parts.push(`B/A 级赛事参赛 ${openParticipations}/3 场`);
-  else if (openChampionships < 1) parts.push('B/A 级赛事夺冠 0/1 次');
+  if (rookieParticipations < 3) parts.push(`C/B 级赛事参赛 ${rookieParticipations}/3 场`);
+  if (bParticipations < 1) parts.push(`B 级赛事参赛 ${bParticipations}/1 场`);
+  if (rookieChampionships < 1) parts.push(`C/B 级赛事冠军 ${rookieChampionships}/1 次`);
   return {
     eligible: false,
     path: null,

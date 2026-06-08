@@ -91,9 +91,21 @@ export interface PendingMatch {
   entryType?: string;
   qualificationSlotUsed?: string;
   qualificationSlotOwner?: 'player' | 'team';
+  qualificationSlotExpiresAt?: QualificationExpiry;
   resolveYear: number;
   resolveWeek: number;
   stageIndex: number;
+}
+
+export interface QualificationExpiry {
+  year: number;
+  week: number;
+}
+
+export interface QualificationSlotBatch {
+  slot: string;
+  count: number;
+  expiresAt: QualificationExpiry;
 }
 
 export type TournamentEntryType =
@@ -103,6 +115,7 @@ export type TournamentEntryType =
   | 'direct_signup';
 
 export type TournamentProgressionTier =
+  | 'c'
   | 'b'
   | 'a'
   | 's-qualifier'
@@ -262,6 +275,8 @@ export interface DynamicState {
   pendingApplication: PendingApplication | null;
   qualificationSlots: Record<string, number>;
   teamQualificationSlots: Record<string, number>;
+  qualificationSlotBatches?: QualificationSlotBatch[];
+  teamQualificationSlotBatches?: QualificationSlotBatch[];
   consecutiveLosses: number;
   everHadTeam: boolean;
   contractRenewals: number;

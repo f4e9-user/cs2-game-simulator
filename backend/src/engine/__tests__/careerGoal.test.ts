@@ -82,8 +82,9 @@ describe('buildCareerGoal', () => {
     expect(goal.stageLabel).toBe('路人新人');
     expect(goal.nextStageLabel).toBe('青训');
     expect(goal.goals).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'open-participations', current: 1, target: 3, completed: false }),
-      expect.objectContaining({ id: 'open-championships', current: 0, target: 1, completed: false }),
+      expect.objectContaining({ id: 'rookie-participations', current: 1, target: 3, completed: false }),
+      expect.objectContaining({ id: 'b-participations', current: 1, target: 1, completed: true }),
+      expect.objectContaining({ id: 'rookie-championships', current: 0, target: 1, completed: false }),
     ]));
     expect(goal.opportunities[0]?.week).toBeGreaterThanOrEqual(6);
   });

@@ -46,6 +46,7 @@ export function CareerGoalPanel({ goal }: Props) {
             {goal.opportunities.map((opportunity) => (
               <div key={`${opportunity.week}-${opportunity.name}`} className="career-opportunity-row">
                 <span className="career-opportunity-week">第 {opportunity.week} 周</span>
+                <span className="career-opportunity-tier">{opportunity.tier}</span>
                 <span className="career-opportunity-name">{opportunity.name}</span>
               </div>
             ))}

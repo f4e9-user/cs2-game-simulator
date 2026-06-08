@@ -3,6 +3,7 @@ import type { Player, Trait } from '@/lib/types';
 import { ENDING_LABELS, STAGE_LABELS, STAT_LABELS } from '@/lib/format';
 
 const TIER_LABELS: Record<string, string> = {
+  c: 'C 级赛事',
   b: 'B 级赛事',
   a: 'A 级赛事',
   's-qualifier': 'S 级预选',
@@ -17,6 +18,7 @@ const TIER_ORDER = [
   's-class',
   'a',
   'b',
+  'c',
 ];
 
 const CORE_STATS = [

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyShopPurchase, createSession, initPlayer } from '../gameEngine.js';
+import { applyAction, applyShopPurchase, createSession, initPlayer } from '../gameEngine.js';
 
 describe('applyShopPurchase', () => {
   it('limits each consumable item to two purchases per week', () => {
@@ -46,5 +46,23 @@ describe('applyShopPurchase', () => {
     expect(first.player.weeklyShopPurchases['tactical-review']).toEqual({ year: 1, week: 4, count: 1 });
     expect(() => applyShopPurchase({ ...session, player: first.player }, 'tactical-review'))
       .toThrow('本周购买次数已达上限（1/1）');
+  });
+
+  it('consumes painkiller fatigue buff on the next positive fatigue action', () => {
+    const player = initPlayer({
+      name: 'TestPlayer',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    player.stats.money = 20;
+    player.stats.constitution = 20;
+    player.volatile.fatigue = 50;
+
+    const session = createSession(player, 1);
+    const purchased = applyShopPurchase(session, 'painkiller');
+    expect(purchased.player.buffs.some((buff) => buff.id === 'painkiller-cover')).toBe(true);
+
+    const acted = applyAction({ ...session, player: purchased.player }, 'action-fitness');
+    expect(acted.player.buffs.some((buff) => buff.id === 'painkiller-cover')).toBe(false);
   });
 });

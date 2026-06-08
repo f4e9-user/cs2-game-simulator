@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { applyChoice, createSession } from '../gameEngine.js';
+import { toPublicEvent } from '../events.js';
 import { simulateMatch } from '../matchSimulator.js';
 import type { Player } from '../../types.js';
 
@@ -109,5 +111,52 @@ describe('simulateMatch', () => {
     expect(result.won).toBe(true);
     expect(result.kills).toBeGreaterThan(result.deaths);
     expect(result.rating).toBeGreaterThan(1.1);
+  });
+
+  it('consumes pre-match intel on tournament match experience growth', () => {
+    const p = player({
+      stats: {
+        agility: 18,
+        intelligence: 16,
+        experience: 12,
+        money: 0,
+        mentality: 16,
+        constitution: 14,
+      },
+      buffs: [
+        {
+          id: 'pre-match-intel',
+          label: '赛前情报',
+          actionTag: 'match',
+          growthKey: 'experience',
+          growthMultiplier: 1.15,
+          remainingUses: 2,
+          consumeOn: 'growth',
+        },
+      ],
+    });
+    const session = createSession(p, 1);
+    session.currentEvent = toPublicEvent({
+      id: 'tournament-y1-c-01--0',
+      type: 'match',
+      title: '测试赛事',
+      narrative: '测试赛事',
+      stages: ['rookie', 'youth', 'second', 'pro'],
+      difficulty: 1,
+      choices: [
+        {
+          id: 'match-play',
+          label: '上场比赛',
+          description: '测试',
+          check: { primary: 'agility', dc: 0 },
+          success: { narrative: '' },
+          failure: { narrative: '' },
+        },
+      ],
+    }, []);
+
+    const updated = applyChoice(session, 'match-play');
+    const buff = updated.session.player.buffs.find((entry) => entry.id === 'pre-match-intel');
+    expect(buff?.remainingUses).toBe(1);
   });
 });

@@ -222,7 +222,7 @@ rookie -> youth -> second -> pro -> retired
 - `pro`：职业队
 - `retired`：退役
 
-`rookie -> youth` 主要依赖成功加入战队；`youth -> second -> pro` 主要依赖赛事参与、战队条件和晋级叙事事件。
+`rookie -> youth` 主要依赖成功加入青训战队。新人申请青训前需要完成 C/B 级证明路径：C/B 级累计参赛不少于 3 场、其中至少参加过 1 场 B 级赛事、C/B 级至少夺冠 1 次；拥有枪法天才相关天赋路径时也可以走天赋申请路线。`youth -> second -> pro` 主要依赖赛事参与、战队条件和晋级叙事事件。晋级签约会换到更高层级的真实俱乐部，并重新生成队友阵容、月薪和队伍信任。
 
 ### 核心属性
 
@@ -394,9 +394,32 @@ rookie -> youth -> second -> pro -> retired
 - 战队等级门槛
 - 战队积分门槛
 - 个人或战队资格门票
+- C/B/A/S/Major 资格链
 - 多阶段 bracket 推进
 - 赛前准备事件
 - 弃赛惩罚
+
+资格门票从获得时起滚动有效约 48 周，不再跨年统一清空。报名消耗资格后，本次赛事资格已经锁定；退赛会返还原资格及其原本过期时间。
+
+早期 C/B 级赛事覆盖全年。C 级在下半年有 After Hours Cup、Weekend Rookie Clash、Late Season Open、Last Chance Rookie Cup 等低级别公开杯；公开 B 级在下半年也有 Open Cup、City Masters、Platform Challenger Cup 等赛事，但通常需要先通过 C 级冠军取得 `B级种子资格`。Academy League、Rising Stars Cup 这类青训 B 赛属于战队体系，需要青训战队报名，不消耗 `B级种子资格`。
+
+当前赛事主链：
+
+```text
+C 级赛事夺冠
+  -> B级种子资格
+  -> 部分公开 B 级赛事
+B 级赛事夺冠
+  -> A级公开预选门票
+A Open 晋级决赛
+  -> A级正赛资格
+A Main 四强或夺冠
+  -> 品牌 S 级预选资格
+S 级预选晋级决赛
+  -> S 级正赛资格
+S Main / 品牌主线资格
+  -> Major 资格链
+```
 
 比赛胜率主要看：
 
@@ -404,6 +427,8 @@ rookie -> youth -> second -> pro -> retired
 - 稳定：`mentality`
 - 即时状态：`feel`、`fatigue`、`tilt`
 - 团队加成：队友数值、角色协同、特质协同、`teamTrust`
+
+报名赛事后，待赛卡片会展示方向性的赛前状态预览，帮助玩家理解当前手感、疲劳、tilt、心态和团队因素对比赛表现的影响。
 
 比赛还会结算比分、击杀、死亡、助攻、爆头率、rating、名气、积分和资格奖励。
 

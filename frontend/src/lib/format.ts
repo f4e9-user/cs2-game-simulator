@@ -120,6 +120,10 @@ export const PASSIVE_EFFECT_LABELS: Record<string, string> = {
   'broke-mentality-drain': '资金见底，心态 -1',
   'stress-from-anxiety': '心态偏低，压力上升',
   'stress-decay-mentality': '心态稳定，压力下降',
+  'fatigue-mult-reduced': '体能状态降低了本次疲劳增长',
+  'fatigue-mult-increased': '体能负担放大了本次疲劳增长',
+  'stress-mult-reduced': '心理状态降低了本次压力增长',
+  'stress-mult-increased': '心理状态放大了本次压力增长',
   'stress-from-failure': '选择翻车，压力 +12',
   'stress-from-broke': '破产加剧，压力 +8',
   'stress-pegged-1': '压力 100 · 即将崩溃',
@@ -174,10 +178,10 @@ export function describeFatigueChange(delta: number): string {
     if (abs <= 30) return '明显疲惫';
     return '疲劳大幅增加';
   }
-  if (abs <= 15) return '稍作恢复';
-  if (abs <= 30) return '得到休息';
-  if (abs <= 45) return '充分休息';
-  return '彻底恢复';
+  if (abs <= 15) return '疲劳小幅恢复';
+  if (abs <= 30) return '疲劳明显恢复';
+  if (abs <= 45) return '疲劳大幅恢复';
+  return '疲劳基本清空';
 }
 
 export function describeStressChange(delta: number): string {

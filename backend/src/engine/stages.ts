@@ -53,6 +53,7 @@ function sumTiers(record: Record<string, number>, tiers: string[]): number {
 }
 
 const TIER_LABELS: Record<string, string> = {
+  c: 'C 级赛事',
   b: 'B 级赛事',
   a: 'A 级赛事',
   's-qualifier': 'S 级预选',

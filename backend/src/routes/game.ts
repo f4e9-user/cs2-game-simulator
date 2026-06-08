@@ -29,22 +29,56 @@ import {
 } from '../data/tournaments.js';
 import {
   clearTeamQualifications,
+  consumeQualificationSlot,
+  defaultQualificationExpiry,
+  expireQualificationBatches,
   qualificationFallbackSlots,
   qualificationSlotLabel,
   qualificationSlotOwner,
+  refundQualificationSlot,
+  normalizeQualificationBatches,
 } from '../engine/qualification.js';
 import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
 import type { SocialFeedPost } from '../ai/prompts.js';
 import { validateAiEvents } from '../validation/guard.js';
-import type { ClubTier, Env, EventDef, MatchStats, PlayerTeam, Stats } from '../types.js';
+import type { ClubTier, Env, EventDef, MatchStats, Player, PlayerTeam, Stats } from '../types.js';
 
 function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
   if (!required) return true;
   if (!playerTeam) return false;
   const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
   return tierOrder.indexOf(playerTeam.tier) >= tierOrder.indexOf(required);
+}
+
+function refreshQualificationExpiry(player: Player): Player {
+  const fallbackExpiry = defaultQualificationExpiry(player.year ?? 1, player.week ?? 1);
+  const normalizedPlayer = normalizeQualificationBatches(
+    player.qualificationSlots ?? {},
+    player.qualificationSlotBatches,
+    fallbackExpiry,
+  );
+  const normalizedTeam = normalizeQualificationBatches(
+    player.teamQualificationSlots ?? {},
+    player.teamQualificationSlotBatches,
+    fallbackExpiry,
+  );
+  const activePlayer = expireQualificationBatches(
+    normalizedPlayer.batches,
+    { year: player.year ?? 1, week: player.week ?? 1 },
+  );
+  const activeTeam = expireQualificationBatches(
+    normalizedTeam.batches,
+    { year: player.year ?? 1, week: player.week ?? 1 },
+  );
+  return {
+    ...player,
+    qualificationSlots: activePlayer.slots,
+    teamQualificationSlots: activeTeam.slots,
+    qualificationSlotBatches: activePlayer.batches,
+    teamQualificationSlotBatches: activeTeam.batches,
+  };
 }
 
 
@@ -388,6 +422,7 @@ app.get('/game/:sessionId/tournaments', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  session.player = refreshQualificationExpiry(session.player);
   const playerPoints =
     session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0;
   const open = tournamentsOpenForSignup(
@@ -418,6 +453,7 @@ app.post('/game/:sessionId/signup', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  session.player = refreshQualificationExpiry(session.player);
 
   const t = getTournament(tournamentId);
   if (!t) return c.json({ error: '未知赛事' }, 400);
@@ -480,6 +516,7 @@ app.post('/game/:sessionId/signup', async (c) => {
   }
   let usedQualificationSlot: string | undefined;
   let usedQualificationSlotOwner: 'player' | 'team' | undefined;
+  let usedQualificationSlotExpiresAt: { year: number; week: number } | undefined;
   if (t.qualificationTargets?.length) {
     const usedSlot = t.qualificationTargets
       .flatMap((slot) => qualificationFallbackSlots(slot))
@@ -495,16 +532,27 @@ app.post('/game/:sessionId/signup', async (c) => {
     }
     usedQualificationSlot = usedSlot;
     usedQualificationSlotOwner = qualificationSlotOwner(usedSlot);
+    const fallbackExpiry = defaultQualificationExpiry(session.player.year ?? 1, session.player.week ?? 1);
     if (usedQualificationSlotOwner === 'team') {
-      session.player.teamQualificationSlots = {
-        ...(session.player.teamQualificationSlots ?? {}),
-        [usedSlot]: Math.max(0, (session.player.teamQualificationSlots?.[usedSlot] ?? 0) - 1),
-      };
+      const consumed = consumeQualificationSlot(
+        session.player.teamQualificationSlots ?? {},
+        session.player.teamQualificationSlotBatches,
+        usedSlot,
+        fallbackExpiry,
+      );
+      session.player.teamQualificationSlots = consumed.slots;
+      session.player.teamQualificationSlotBatches = consumed.batches;
+      usedQualificationSlotExpiresAt = consumed.consumedExpiry;
     } else {
-      session.player.qualificationSlots = {
-        ...(session.player.qualificationSlots ?? {}),
-        [usedSlot]: Math.max(0, (session.player.qualificationSlots?.[usedSlot] ?? 0) - 1),
-      };
+      const consumed = consumeQualificationSlot(
+        session.player.qualificationSlots ?? {},
+        session.player.qualificationSlotBatches,
+        usedSlot,
+        fallbackExpiry,
+      );
+      session.player.qualificationSlots = consumed.slots;
+      session.player.qualificationSlotBatches = consumed.batches;
+      usedQualificationSlotExpiresAt = consumed.consumedExpiry;
     }
   }
 
@@ -527,6 +575,7 @@ app.post('/game/:sessionId/signup', async (c) => {
     entryType: t.entryType,
     qualificationSlotUsed: usedQualificationSlot,
     qualificationSlotOwner: usedQualificationSlotOwner,
+    qualificationSlotExpiresAt: usedQualificationSlotExpiresAt,
     resolveYear: next.year,
     resolveWeek: next.week,
     stageIndex: 0,
@@ -545,6 +594,7 @@ app.post('/game/:sessionId/withdraw', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  session.player = refreshQualificationExpiry(session.player);
   if (!session.player.pendingMatch) return c.json({ error: '当前没有报名中的赛事' }, 400);
 
   const penalties: string[] = [];
@@ -558,16 +608,26 @@ app.post('/game/:sessionId/withdraw', async (c) => {
       qualificationFallbackSlots(target).includes(slot),
     ) ?? false;
     if (slotIsValid) {
+      const expiresAt = session.player.pendingMatch.qualificationSlotExpiresAt ??
+        defaultQualificationExpiry(session.player.year ?? 1, session.player.week ?? 1);
       if (session.player.pendingMatch.qualificationSlotOwner === 'team') {
-        session.player.teamQualificationSlots = {
-          ...(session.player.teamQualificationSlots ?? {}),
-          [slot]: (session.player.teamQualificationSlots?.[slot] ?? 0) + 1,
-        };
+        const refunded = refundQualificationSlot(
+          session.player.teamQualificationSlots ?? {},
+          session.player.teamQualificationSlotBatches,
+          slot,
+          expiresAt,
+        );
+        session.player.teamQualificationSlots = refunded.slots;
+        session.player.teamQualificationSlotBatches = refunded.batches;
       } else {
-        session.player.qualificationSlots = {
-          ...(session.player.qualificationSlots ?? {}),
-          [slot]: (session.player.qualificationSlots?.[slot] ?? 0) + 1,
-        };
+        const refunded = refundQualificationSlot(
+          session.player.qualificationSlots ?? {},
+          session.player.qualificationSlotBatches,
+          slot,
+          expiresAt,
+        );
+        session.player.qualificationSlots = refunded.slots;
+        session.player.qualificationSlotBatches = refunded.batches;
       }
       penalties.push(`退还资格：${qualificationSlotLabel(slot)}`);
     }
@@ -810,7 +870,11 @@ app.post('/game/:sessionId/team-response', async (c) => {
     }
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
-    return c.json({ player, leaderboard: session.leaderboard });
+    return c.json({
+      player,
+      leaderboard: session.leaderboard,
+      careerGoal: buildCareerGoal(player),
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);

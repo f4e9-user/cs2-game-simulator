@@ -22,20 +22,26 @@ import type {
   Buff,
   ChoiceDef,
   Club,
+  ClubTier,
+  EventDef,
   GameEventPublic,
   GameSession,
   Loan,
   MatchStats,
   Outcome,
+  PendingApplication,
   PendingDeparture,
   Player,
+  PlayerTeam,
   RoundCombo,
   RoundResult,
+  Stage,
   StatDelta,
   StatKey,
   Stats,
   Teammate,
   TeammateRole,
+  TeamOffer,
   Trait,
   VolatileState,
 } from '../types.js';
@@ -92,9 +98,12 @@ import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
 import { applyStateDeltaModifiers, consumeTriggeredBuffs } from './stateModifiers.js';
 import { applyMoneyDeltaToStats, applyMoneyTransaction } from './money.js';
 import {
-  addQualificationRewardsByOwner,
+  addQualificationRewardsByOwnerWithExpiry,
   clearTeamQualifications,
+  defaultQualificationExpiry,
+  expireQualificationBatches,
   formatQualificationRewards,
+  normalizeQualificationBatches,
 } from './qualification.js';
 
 const WEEKLY_SHOP_LIMITS: Partial<Record<ShopCategory, number>> = {
@@ -457,6 +466,8 @@ export function initPlayer(input: InitInput): Player {
     pendingApplication: null,
     qualificationSlots: {},
     teamQualificationSlots: {},
+    qualificationSlotBatches: [],
+    teamQualificationSlotBatches: [],
     forceNextEvent: null,
     forceMatchResult: null,
     bailoutCooldown: 0,
@@ -841,6 +852,8 @@ export function applyChoice(
   let buffs: Buff[] = consumeTriggeredBuffs(existingBuffs, stateContext, {
     growthApplied: outcome.growthApplied > 0,
     growthKey: outcome.growthKey,
+    fatigueApplied: modifiedState.fatigueApplied,
+    stressApplied: modifiedState.stressApplied,
     fatigueReduced: modifiedState.fatigueReduced,
     stressReduced: modifiedState.stressReduced,
   });
@@ -958,20 +971,33 @@ export function applyChoice(
     session.player.week ?? 1,
   );
 
-  let nextQualificationSlots = { ...(session.player.qualificationSlots ?? {}) };
-  let nextTeamQualificationSlots = { ...(session.player.teamQualificationSlots ?? {}) };
-  // ORDERING: expiry must run here, before tournament rewards are written below (~line 955).
-  // Year-end final-match wins earn tickets AFTER this clear, so the new tickets survive.
-  // Do not move this block past the tournament resolution block.
-  if (nextYear > (session.player.year ?? 1)) {
-    const expiredQualificationCount =
-      Object.values(nextQualificationSlots).reduce((sum, count) => sum + count, 0) +
-      Object.values(nextTeamQualificationSlots).reduce((sum, count) => sum + count, 0);
-    if (expiredQualificationCount > 0) {
-      qualificationChanges.push(`赛季资格过期：清空 ${expiredQualificationCount} 张资格门票`);
-    }
-    nextQualificationSlots = {};
-    nextTeamQualificationSlots = {};
+  const fallbackQualificationExpiry = defaultQualificationExpiry(nextYear, nextWeek);
+  const normalizedPlayerQualifications = normalizeQualificationBatches(
+    session.player.qualificationSlots ?? {},
+    session.player.qualificationSlotBatches,
+    fallbackQualificationExpiry,
+  );
+  const normalizedTeamQualifications = normalizeQualificationBatches(
+    session.player.teamQualificationSlots ?? {},
+    session.player.teamQualificationSlotBatches,
+    fallbackQualificationExpiry,
+  );
+  const activePlayerQualifications = expireQualificationBatches(
+    normalizedPlayerQualifications.batches,
+    { year: nextYear, week: nextWeek },
+  );
+  const activeTeamQualifications = expireQualificationBatches(
+    normalizedTeamQualifications.batches,
+    { year: nextYear, week: nextWeek },
+  );
+  let nextQualificationSlots = activePlayerQualifications.slots;
+  let nextTeamQualificationSlots = activeTeamQualifications.slots;
+  let nextQualificationSlotBatches = activePlayerQualifications.batches;
+  let nextTeamQualificationSlotBatches = activeTeamQualifications.batches;
+  const expiredQualificationCount =
+    activePlayerQualifications.expiredCount + activeTeamQualifications.expiredCount;
+  if (expiredQualificationCount > 0) {
+    qualificationChanges.push(`资格过期：失去 ${expiredQualificationCount} 张资格门票`);
   }
 
   // ── 行动力重置（赛事比赛周冻结为 0，面试期间减半）────────────────
@@ -990,18 +1016,14 @@ export function applyChoice(
     if (until > nextRound) nextShopCooldowns[itemId] = until;
   }
 
-  const nextTeam = outcome.teamTierSet && session.player.team
-    ? { ...session.player.team, tier: outcome.teamTierSet }
-    : session.player.team;
-
-  const nextPlayer: Player = {
+  let nextPlayer: Player = {
     ...session.player,
     stats: statsAfterGrowth,
     volatile: { feel, tilt, fatigue },
     buffs,
     growthSpent,
     stage: outcome.stageAfter,
-    team: nextTeam,
+    team: session.player.team,
     round: nextRound,
     tags: nextTags,
     tagExpiry: nextTagExpiry,
@@ -1016,9 +1038,25 @@ export function applyChoice(
     shopCooldowns: nextShopCooldowns,
     qualificationSlots: nextQualificationSlots,
     teamQualificationSlots: nextTeamQualificationSlots,
+    qualificationSlotBatches: nextQualificationSlotBatches,
+    teamQualificationSlotBatches: nextTeamQualificationSlotBatches,
     consecutiveLosses,
     consecutiveBrokeRounds,
   };
+
+  if (eventDef.id.startsWith('promotion-') && outcome.success && outcome.teamTierSet) {
+    const promotedClub = pickPromotionClub(outcome.teamTierSet, session.id, nextRound);
+    if (promotedClub) {
+      const offer = generateTeamOffer(promotedClub.id);
+      nextPlayer = joinTeamFromOffer(
+        session,
+        { ...nextPlayer, pendingOffer: offer },
+        offer,
+        { contractDispute: false },
+      );
+      passiveEffects.push(`签约 ${offer.clubName}`);
+    }
+  }
 
   // ── 明星/老将 tag 检查与首次获得奖励 ─────────────────────────────
   // veteran tag：顶级赛事（s-main/major）累计参加 4 场即可获得
@@ -1313,13 +1351,18 @@ export function applyChoice(
         );
         const milestoneRewards = matchedMilestones.flatMap((milestone) => milestone.rewards);
         if (milestoneRewards.length > 0) {
-          const rewardsByOwner = addQualificationRewardsByOwner(
+          const rewardsByOwner = addQualificationRewardsByOwnerWithExpiry(
             nextPlayer.qualificationSlots ?? {},
             nextPlayer.teamQualificationSlots ?? {},
+            nextPlayer.qualificationSlotBatches,
+            nextPlayer.teamQualificationSlotBatches,
             milestoneRewards,
+            defaultQualificationExpiry(nextPlayer.year ?? 1, nextPlayer.week ?? 1),
           );
           nextPlayer.qualificationSlots = rewardsByOwner.playerSlots;
           nextPlayer.teamQualificationSlots = rewardsByOwner.teamSlots;
+          nextPlayer.qualificationSlotBatches = rewardsByOwner.playerBatches;
+          nextPlayer.teamQualificationSlotBatches = rewardsByOwner.teamBatches;
           for (const milestone of matchedMilestones) {
             qualificationChanges.push(`获得资格：${milestone.label}，${formatQualificationRewards(milestone.rewards)}`);
           }
@@ -1332,13 +1375,18 @@ export function applyChoice(
         nextPlayer.tierChampionships = tierChamp;
         nextPlayer.tournamentChampionships = (nextPlayer.tournamentChampionships ?? 0) + 1;
         if (t.qualificationRewards?.length) {
-          const rewardsByOwner = addQualificationRewardsByOwner(
+          const rewardsByOwner = addQualificationRewardsByOwnerWithExpiry(
             nextPlayer.qualificationSlots ?? {},
             nextPlayer.teamQualificationSlots ?? {},
+            nextPlayer.qualificationSlotBatches,
+            nextPlayer.teamQualificationSlotBatches,
             t.qualificationRewards,
+            defaultQualificationExpiry(nextPlayer.year ?? 1, nextPlayer.week ?? 1),
           );
           nextPlayer.qualificationSlots = rewardsByOwner.playerSlots;
           nextPlayer.teamQualificationSlots = rewardsByOwner.teamSlots;
+          nextPlayer.qualificationSlotBatches = rewardsByOwner.playerBatches;
+          nextPlayer.teamQualificationSlotBatches = rewardsByOwner.teamBatches;
           qualificationChanges.push(`获得资格：${formatQualificationRewards(t.qualificationRewards)}`);
         }
 
@@ -1631,6 +1679,8 @@ export function applyAction(
   let buffs: Buff[] = consumeTriggeredBuffs(session.player.buffs ?? [], stateContext, {
     growthApplied: outcome.growthApplied > 0,
     growthKey: outcome.growthKey,
+    fatigueApplied: modifiedState.fatigueApplied,
+    stressApplied: modifiedState.stressApplied,
     fatigueReduced: modifiedState.fatigueReduced,
     stressReduced: modifiedState.stressReduced,
   });
@@ -1984,7 +2034,6 @@ export function pawnItem(
 }
 
 // ── 战队申请 ──────────────────────────────────────────────────
-import type { ClubTier, EventDef, PendingApplication, PlayerTeam, Stage, TeamOffer } from '../types.js';
 
 export function applyClubRequest(
   session: GameSession,
@@ -2015,22 +2064,23 @@ export function applyClubRequest(
   if (ap < 25) throw new Error('行动力不足');
 
   // Rookie-specific eligibility: must have proven themselves before clubs will respond.
-  // Path A: 3+ B-tier participations AND 1+ championship.
+  // Path A: 3+ C/B-tier participations, at least 1 B-tier participation, and 1+ C/B championship.
   // Path B: holds 枪法天才 (aimer trait tag); 天赋之子 reserved for future trait 'prodigy'.
   let pathTag: 'application-path-open-match' | 'application-path-talent' | null = null;
   if (player.stage === 'rookie') {
     const tp = player.tierParticipations ?? {};
     const tc = player.tierChampionships ?? {};
-    const openParticipations = (tp['b'] ?? 0) + (tp['a'] ?? 0);
-    const openChampionships = (tc['b'] ?? 0) + (tc['a'] ?? 0);
-    const hasOpenMatchPath = openParticipations >= 3 && openChampionships >= 1;
+    const rookieParticipations = (tp['c'] ?? 0) + (tp['b'] ?? 0);
+    const bParticipations = tp['b'] ?? 0;
+    const rookieChampionships = (tc['c'] ?? 0) + (tc['b'] ?? 0);
+    const hasOpenMatchPath = rookieParticipations >= 3 && bParticipations >= 1 && rookieChampionships >= 1;
 
     const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
     const hasTalentPath = traitTags.includes('aimer'); // 'prodigy' reserved for 天赋之子
 
     if (!hasOpenMatchPath && !hasTalentPath) {
       throw new Error(
-        '需要先在 B/A 级赛事积累经验（参赛 ≥ 3 场 + 夺冠 ≥ 1 次），或拥有枪法天才特质',
+        '需要先在 C/B 级赛事积累经验（C/B 级参赛 ≥ 3 场、B 级参赛 ≥ 1 场、C/B 级夺冠 ≥ 1 次），或拥有枪法天才特质',
       );
     }
     pathTag = hasOpenMatchPath ? 'application-path-open-match' : 'application-path-talent';
@@ -2065,75 +2115,7 @@ export function respondTeamOffer(
   if (!offer) throw new Error('没有待处理的入队邀请');
 
   if (accept) {
-    // 骑驴找马违约：名气 -15、压力 +25，contract-dispute 标签持续 12 回合
-    // 现实中这类操作会引发舆论争议，"不忠诚"标签会背一段时间
-    if (player.team) {
-      player.fame = Math.max(0, (player.fame ?? 0) - 15);
-      player.stress = Math.min(100, (player.stress ?? 0) + 25);
-      const expiryRound = player.round + 12;
-      player.tagExpiry = { ...(player.tagExpiry ?? {}), 'contract-dispute': expiryRound };
-      Object.assign(player, clearTeamQualifications(player));
-    }
-
-    const team: PlayerTeam = {
-      clubId: offer.clubId,
-      name: offer.clubName,
-      tag: offer.tag,
-      region: offer.region,
-      tier: offer.tier,
-      monthlySalary: offer.monthlySalary,
-      joinedRound: player.round,
-    };
-
-    // Advance stage to match the minimum required by the new team's tier.
-    const TIER_MIN_STAGE: Record<ClubTier, Stage> = {
-      youth: 'youth',
-      'semi-pro': 'second',
-      pro: 'pro',
-      top: 'pro',
-    };
-    const minStage = TIER_MIN_STAGE[offer.tier];
-    const nextStage = stageIndex(minStage) > stageIndex(player.stage) ? minStage : player.stage;
-
-    const rosterRng = makeRng(hashString(session.id) ^ (player.round * 7919));
-    const roster = generateRoster(offer.tier, rosterRng);
-
-    const hadTeam = player.team !== null;
-    const cleanTags = player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending');
-    const nextTags = hadTeam ? dedupe([...cleanTags, 'contract-dispute']) : cleanTags;
-
-    // 初始化队友转会计划
-    const deptOffset = 20 + Math.floor(rosterRng() * 21); // 20-40 回合后首次转会
-    const deptSlot = roster[Math.floor(rosterRng() * roster.length)]!.id;
-    const deptRivals = player.rivals.length > 0 ? player.rivals : [{ name: '某支战队', tag: '???', region: '' }];
-    const deptDestTeam = deptRivals[Math.floor(rosterRng() * deptRivals.length)]!.name;
-    const initialPendingDeparture: PendingDeparture = {
-      slotId: deptSlot,
-      departureRound: player.round + deptOffset,
-      rumorShown: false,
-      revealed: false,
-      destTeamName: deptDestTeam,
-      earlyRecruit: false,
-    };
-
-    return {
-      ...player,
-      team,
-      stage: nextStage,
-      everHadTeam: true,
-      salaryTracker: {
-        lastPayRound: player.round,
-        joinedRound: player.round,
-        payCycle: 4,
-      },
-      pendingOffer: null,
-      pendingApplication: null,
-      roster,
-      teamTrust: hadTeam ? 25 : 40, // 跳槽违约，新队对你观感也打折
-      tags: nextTags,
-      tagExpiry: player.tagExpiry,
-      pendingDeparture: initialPendingDeparture,
-    };
+    return joinTeamFromOffer(session, player, offer, { contractDispute: true });
   } else {
     // Add 10-round cooldown so the same poach event doesn't re-trigger immediately
     const cooldownTag = 'poach-cd';
@@ -2148,6 +2130,92 @@ export function respondTeamOffer(
       tagExpiry: nextTagExpiry,
     };
   }
+}
+
+function joinTeamFromOffer(
+  session: GameSession,
+  sourcePlayer: Player,
+  offer: TeamOffer,
+  options: { contractDispute: boolean },
+): Player {
+  let player = { ...sourcePlayer };
+  const hadTeam = player.team !== null;
+
+  if (hadTeam) {
+    player = clearTeamQualifications(player);
+    if (options.contractDispute) {
+      player.fame = Math.max(0, (player.fame ?? 0) - 15);
+      player.stress = Math.min(100, (player.stress ?? 0) + 25);
+      player.tagExpiry = { ...(player.tagExpiry ?? {}), 'contract-dispute': player.round + 12 };
+    }
+  }
+
+  const team: PlayerTeam = {
+    clubId: offer.clubId,
+    name: offer.clubName,
+    tag: offer.tag,
+    region: offer.region,
+    tier: offer.tier,
+    monthlySalary: offer.monthlySalary,
+    joinedRound: player.round,
+  };
+
+  const TIER_MIN_STAGE: Record<ClubTier, Stage> = {
+    youth: 'youth',
+    'semi-pro': 'second',
+    pro: 'pro',
+    top: 'pro',
+  };
+  const minStage = TIER_MIN_STAGE[offer.tier];
+  const nextStage = stageIndex(minStage) > stageIndex(player.stage) ? minStage : player.stage;
+
+  const rosterRng = makeRng(hashString(session.id) ^ (player.round * 7919));
+  const roster = generateRoster(offer.tier, rosterRng);
+
+  const cleanTags = player.tags.filter((t) => t !== 'applying' && t !== 'interview-pending');
+  const nextTags = hadTeam && options.contractDispute
+    ? dedupe([...cleanTags, 'contract-dispute'])
+    : cleanTags;
+
+  // 初始化队友转会计划
+  const deptOffset = 20 + Math.floor(rosterRng() * 21); // 20-40 回合后首次转会
+  const deptSlot = roster[Math.floor(rosterRng() * roster.length)]!.id;
+  const deptRivals = player.rivals.length > 0 ? player.rivals : [{ name: '某支战队', tag: '???', region: '' }];
+  const deptDestTeam = deptRivals[Math.floor(rosterRng() * deptRivals.length)]!.name;
+  const initialPendingDeparture: PendingDeparture = {
+    slotId: deptSlot,
+    departureRound: player.round + deptOffset,
+    rumorShown: false,
+    revealed: false,
+    destTeamName: deptDestTeam,
+    earlyRecruit: false,
+  };
+
+  return {
+    ...player,
+    team,
+    stage: nextStage,
+    everHadTeam: true,
+    salaryTracker: {
+      lastPayRound: player.round,
+      joinedRound: player.round,
+      payCycle: 4,
+    },
+    pendingOffer: null,
+    pendingApplication: null,
+    roster,
+    teamTrust: hadTeam ? (options.contractDispute ? 25 : 35) : 40,
+    tags: nextTags,
+    tagExpiry: player.tagExpiry,
+    pendingDeparture: initialPendingDeparture,
+  };
+}
+
+function pickPromotionClub(tier: ClubTier, sessionId: string, round: number): Club | null {
+  const candidates = CLUBS.filter((club) => club.tier === tier && !club.isRival);
+  if (candidates.length === 0) return null;
+  const idx = Math.abs(hashString(`${sessionId}:${round}:${tier}`)) % candidates.length;
+  return candidates[idx]!;
 }
 
 export function generateTeamOffer(clubId: string): TeamOffer {

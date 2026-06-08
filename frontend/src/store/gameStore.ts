@@ -51,6 +51,11 @@ interface GameState {
     leaderboard?: LeaderboardTeam[];
   }) => void;
   setPlayer: (player: Player) => void;
+  setPlayerState: (args: {
+    player: Player;
+    careerGoal?: CareerGoal;
+    leaderboard?: LeaderboardTeam[];
+  }) => void;
   setLeaderboard: (leaderboard: LeaderboardTeam[]) => void;
   setActionsPhase: (v: boolean) => void;
   clearLastResult: () => void;
@@ -140,6 +145,13 @@ export const useGameStore = create<GameState>((set) => ({
 
   setAiActive: (v) => set({ aiActive: v }),
   setPlayer: (player) => set({ player, pendingOffer: player.pendingOffer ?? null }),
+  setPlayerState: ({ player, careerGoal, leaderboard }) =>
+    set((state) => ({
+      player,
+      careerGoal: careerGoal ?? state.careerGoal,
+      leaderboard: leaderboard ?? state.leaderboard,
+      pendingOffer: player.pendingOffer ?? null,
+    })),
   setLeaderboard: (leaderboard) => set({ leaderboard }),
   setActionsPhase: (v) => set({ actionsPhase: v }),
   clearLastResult: () => set({ lastResult: null }),

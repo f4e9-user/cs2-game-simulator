@@ -22,6 +22,8 @@ export interface StateModifierContext {
 export interface StateModifierResult {
   fatigueDelta: number;
   stressDelta: number;
+  fatigueApplied: boolean;
+  stressApplied: boolean;
   fatigueReduced: boolean;
   stressReduced: boolean;
   passiveEffects: string[];
@@ -30,6 +32,8 @@ export interface StateModifierResult {
 export interface BuffConsumeTrigger {
   growthApplied?: boolean;
   growthKey?: string;
+  fatigueApplied?: boolean;
+  stressApplied?: boolean;
   fatigueReduced?: boolean;
   stressReduced?: boolean;
 }
@@ -142,6 +146,8 @@ export function applyStateDeltaModifiers(
   return {
     fatigueDelta,
     stressDelta,
+    fatigueApplied: input.fatigueDelta > 0,
+    stressApplied: input.stressDelta > 0,
     fatigueReduced,
     stressReduced,
     passiveEffects,
@@ -168,11 +174,11 @@ function shouldConsumeBuff(
     ((buff.growthMultiplier ?? buff.multiplier) !== undefined);
 
   const fatigueMatches =
-    !!trigger.fatigueReduced &&
+    !!trigger.fatigueApplied &&
     buff.fatigueGainMultiplier !== undefined;
 
   const stressMatches =
-    !!trigger.stressReduced &&
+    !!trigger.stressApplied &&
     buff.stressGainMultiplier !== undefined;
 
   switch (inferredConsumeOn(buff)) {

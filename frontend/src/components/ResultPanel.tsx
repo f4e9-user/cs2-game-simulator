@@ -51,7 +51,7 @@ export function ResultPanel({
 }: Props) {
   const deltas = Object.entries(result.statChanges) as [StatKey, number][];
   const stageChanged = result.stageBefore !== result.stageAfter;
-  const passives = result.passiveEffects ?? [];
+  const passives = Array.from(new Set(result.passiveEffects ?? []));
   const qualificationChanges = result.qualificationChanges ?? [];
   const buffsAdded = result.buffsAdded ?? [];
   const stressChange = result.stressChange ?? 0;

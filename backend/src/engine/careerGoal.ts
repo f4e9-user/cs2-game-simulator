@@ -1,5 +1,6 @@
 import type { Player, Stage } from '../types.js';
 import { buildYearTournaments, type Tournament } from '../data/tournaments.js';
+import { getTrait } from '../data/traits.js';
 import { getGate } from './stages.js';
 
 export interface CareerGoalProgress {
@@ -34,6 +35,7 @@ const STAGE_LABELS: Record<Stage, string> = {
 };
 
 const TIER_LABELS: Record<string, string> = {
+  c: 'C 级赛事',
   b: 'B 级赛事',
   a: 'A 级赛事',
   's-qualifier': 'S 级预选',
@@ -100,11 +102,14 @@ export function buildCareerGoal(player: Player): CareerGoal {
   }
 
   if (player.stage === 'rookie') {
-    const openParticipations = sumTiers(player.tierParticipations ?? {}, ['b', 'a']);
-    const openChampionships = sumTiers(player.tierChampionships ?? {}, ['b', 'a']);
-    const hasTalentPath = player.traits.some((traitId) => traitId === 'aimer')
-      || player.tags.some((tag) => tag === 'aimer');
-    const readyForYouthApplication = player.team?.tier === 'youth' || hasTalentPath || (openParticipations >= 3 && openChampionships >= 1);
+    const rookieParticipations = sumTiers(player.tierParticipations ?? {}, ['c', 'b']);
+    const bParticipations = sumTiers(player.tierParticipations ?? {}, ['b']);
+    const rookieChampionships = sumTiers(player.tierChampionships ?? {}, ['c', 'b']);
+    const traitTags = player.traits.flatMap((traitId) => getTrait(traitId)?.tags ?? []);
+    const hasTalentPath = traitTags.includes('aimer');
+    const readyForYouthApplication = player.team?.tier === 'youth'
+      || hasTalentPath
+      || (rookieParticipations >= 3 && bParticipations >= 1 && rookieChampionships >= 1);
 
     return {
       stage: player.stage,
@@ -112,13 +117,14 @@ export function buildCareerGoal(player: Player): CareerGoal {
       summary: '证明自己，申请青训战队。',
       nextStageLabel: STAGE_LABELS.youth,
       goals: [
-        progress('open-participations', 'B/A 级赛事参赛', openParticipations, 3),
-        progress('open-championships', 'B/A 级赛事冠军', openChampionships, 1),
+        progress('rookie-participations', 'C/B 级赛事参赛', rookieParticipations, 3),
+        progress('b-participations', 'B 级赛事参赛', bParticipations, 1),
+        progress('rookie-championships', 'C/B 级赛事冠军', rookieChampionships, 1),
         progress('youth-application', '青训申请资格', readyForYouthApplication ? 1 : 0, 1),
       ],
       opportunities: upcomingOpportunities(
         player,
-        (tournament) => ['b', 'a'].includes(tournament.progressionTier),
+        (tournament) => ['c', 'b'].includes(tournament.progressionTier),
       ),
     };
   }

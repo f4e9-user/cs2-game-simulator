@@ -5,8 +5,9 @@
   --bg-2: #161b22;
   --bg-3: #1c2431;
   --fg: #e6edf3;
-  --fg-2: #8b949e;
-  --fg-3: #3d444d;
+  --fg-1: #c9d1d9;
+  --fg-2: #a8b3bf;
+  --fg-3: #7d8590;
   --accent: #ff5b1f;
   --accent-dim: #ff8a5c;
   --accent-glow: rgba(255, 91, 31, 0.12);
@@ -1623,8 +1624,22 @@ input[type='text']:focus {
 }
 
 .career-opportunity-name {
+  flex: 1;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.career-opportunity-tier {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 138, 92, 0.28);
+  border-radius: 4px;
+  color: var(--accent-dim);
+  background: var(--accent-glow);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .career-goal-count,
@@ -1751,6 +1766,79 @@ input[type='text']:focus {
   margin-bottom: 6px;
 }
 
+.tourney-section-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px 8px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+  color: var(--fg-2);
+}
+
+.tourney-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-1);
+}
+
+.tourney-help {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  color: var(--fg-2);
+  background: var(--bg-2);
+  font-size: 10px;
+  line-height: 1;
+  cursor: help;
+  outline: none;
+}
+
+.tourney-help:hover,
+.tourney-help:focus-visible {
+  color: var(--accent-dim);
+  border-color: rgba(255, 138, 92, 0.55);
+}
+
+.tourney-help-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  display: none;
+  width: min(420px, calc(100vw - 32px));
+  padding: 9px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: #0f141c;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  color: var(--fg-1);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.tourney-help:hover .tourney-help-popover,
+.tourney-help:focus-visible .tourney-help-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .tourney-card:last-child {
   margin-bottom: 0;
 }
@@ -1758,12 +1846,13 @@ input[type='text']:focus {
 .tourney-name {
   font-weight: 600;
   font-size: 14px;
+  color: var(--fg);
   margin-bottom: 2px;
 }
 
 .tourney-meta {
   font-size: 12px;
-  color: var(--fg-2);
+  color: var(--fg-1);
   margin-bottom: 6px;
 }
 
@@ -1794,6 +1883,71 @@ input[type='text']:focus {
   font-size: 12px;
   color: var(--fg-2);
   margin-bottom: 6px;
+}
+
+.pre-match-preview {
+  border-top: 1px solid rgba(255, 91, 31, 0.22);
+  border-bottom: 1px solid rgba(255, 91, 31, 0.18);
+  padding: 7px 0;
+  margin: 6px 0;
+}
+
+.pre-match-preview-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+}
+
+.pre-match-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 4px;
+}
+
+.pre-match-preview-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.pre-match-preview-item.up {
+  border-color: rgba(63, 185, 80, 0.26);
+  background: rgba(63, 185, 80, 0.06);
+}
+
+.pre-match-preview-item.down {
+  border-color: rgba(248, 81, 73, 0.26);
+  background: rgba(248, 81, 73, 0.06);
+}
+
+.pre-match-preview-label {
+  flex: 0 0 56px;
+  font-size: 10px;
+  color: var(--fg-3);
+  font-weight: 700;
+}
+
+.pre-match-preview-text {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--fg-2);
+}
+
+.pre-match-preview-item.up .pre-match-preview-text {
+  color: var(--success);
+}
+
+.pre-match-preview-item.down .pre-match-preview-text {
+  color: var(--danger);
 }
 
 /* ── Ending screen ───────────────────────────────────────────── */

@@ -95,9 +95,21 @@ export interface PendingMatch {
   entryType?: string;
   qualificationSlotUsed?: string;
   qualificationSlotOwner?: 'player' | 'team';
+  qualificationSlotExpiresAt?: QualificationExpiry;
   resolveYear: number;
   resolveWeek: number;
   stageIndex: number;
+}
+
+export interface QualificationExpiry {
+  year: number;
+  week: number;
+}
+
+export interface QualificationSlotBatch {
+  slot: string;
+  count: number;
+  expiresAt: QualificationExpiry;
 }
 
 export interface Rival {
@@ -241,6 +253,8 @@ export interface DynamicState {
   pendingApplication: PendingApplication | null;
   qualificationSlots: Record<string, number>;
   teamQualificationSlots: Record<string, number>;
+  qualificationSlotBatches?: QualificationSlotBatch[];
+  teamQualificationSlotBatches?: QualificationSlotBatch[];
   consecutiveLosses: number;         // 连续赛事失利计数
   everHadTeam: boolean;               // 是否曾拥有过战队（用于结局判定）
   contractRenewals: number;           // 续约次数（用于 loyal-veteran 结局）

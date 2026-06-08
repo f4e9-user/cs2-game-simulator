@@ -331,18 +331,17 @@ export const TRYOUT_EVENTS: EventDef[] = [
           traitBonuses: { mechanical: 2, grinder: 2, clutch: 2 },
         },
         success: {
-          narrative: '三天的训练赛，你打出近一个月最好的表现，签下意向书。',
+          narrative: '三天的训练赛，你打出近一个月最好的表现。对方没有立刻给正式合同，但把你列进了后续观察名单。',
           stateDelta: {
             feel: 1,
+            stress: -5,
           },
           resourceDelta: {
             money: -20,
-          },
-          progression: {
-            stageDelta: 1,
+            fame: 3,
           },
           tags: {
-            add: ['signed-second-team'],
+            add: ['semi-pro-scouted'],
           },
         },
         failure: {
@@ -366,18 +365,17 @@ export const TRYOUT_EVENTS: EventDef[] = [
           traitBonuses: { tactical: 2, streamer: 1, media: 1 },
         },
         success: {
-          narrative: '对方同意报销路费并加一条保障条款，你以更稳的状态赴约。',
+          narrative: '对方同意报销路费并保留后续试训席位。你没有马上签下二线合同，但这次沟通让他们记住了你的名字。',
           stateDelta: {
             feel: 0.4,
+            stress: -5,
           },
           resourceDelta: {
             money: 20,
-          },
-          progression: {
-            stageDelta: 1,
+            fame: 2,
           },
           tags: {
-            add: ['signed-second-team'],
+            add: ['semi-pro-scouted'],
           },
         },
         failure: {

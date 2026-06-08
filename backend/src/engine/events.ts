@@ -241,7 +241,7 @@ export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
               id: 'pre-match-intel',
               label: '赛前情报',
               actionTag: 'match',
-              growthKey: 'intelligence',
+              growthKey: 'experience',
               growthMultiplier: 1.15,
               remainingUses: 2,
               consumeOn: 'growth',
@@ -301,6 +301,17 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     if (restPool.length > 0) return weightedPick(restPool, rng, () => 1);
   }
 
+  // 战队申请到期后必须先给回信，避免申请链路被普通随机事件长期挤掉。
+  if (synthTags.has('application-response-ready')) {
+    const responseEvent = pool.find(
+      (e) =>
+        e.id === 'chain-club-response' &&
+        e.stages.includes(player.stage) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)),
+    );
+    return responseEvent ?? null;
+  }
+
   // 家人危机：最高优先级注入，即使在赛事期间也必须面对
   if (synthTags.has('needs-family-crisis')) {
     const crisisEvent = pool.find((e) => e.id === 'family-crisis-illness');
@@ -337,12 +348,14 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   // 面试优先：interview-ready 时直接注入对应面试事件，不参与随机池竞争
   // 即使找不到匹配事件也返回 null，确保面试期间不插入任何随机事件
   if (synthTags.has('interview-ready')) {
-    const interviewEvent = pool.find(
+    const interviewPool = pool.filter(
       (e) =>
         e.requireTags?.includes('interview-ready') &&
         e.stages.includes(player.stage) &&
-        !e.requireTags?.some((t) => !synthTags.has(t)),
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
     );
+    const interviewEvent = weightedPick(interviewPool, rng, (e) => e.requireTags?.length ?? 1);
     return interviewEvent ?? null;
   }
 
