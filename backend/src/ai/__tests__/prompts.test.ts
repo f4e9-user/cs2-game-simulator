@@ -56,6 +56,7 @@ function mockPlayer(overrides?: Partial<Player>): Player {
     actionPoints: 3,
     shopCooldowns: {},
     weeklyShopPurchases: {},
+    weeklyTeamActions: {},
     team: null,
     pendingApplication: null,
     qualificationSlots: {},

@@ -45,6 +45,7 @@ function mockPlayer(): Player {
     actionPoints: 100,
     shopCooldowns: {},
     weeklyShopPurchases: {},
+    weeklyTeamActions: {},
     team: null,
     pendingApplication: null,
     qualificationSlots: {},

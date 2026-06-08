@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { useGameStore } from '@/store/gameStore';
-import type { Club, Player } from '@/lib/types';
+import type { Club, Player, TeamActionResult, Teammate } from '@/lib/types';
 
 const TIER_LABELS: Record<string, string> = {
   youth: '青训',
@@ -68,6 +68,11 @@ function TeamTrustBar({ trust }: { trust: number }) {
   );
 }
 
+function statAvg(tm: Teammate): number {
+  const s = tm.stats;
+  return Math.round(((s.agility + s.intelligence + s.mentality + s.experience) / 4) * 10) / 10;
+}
+
 interface Props {
   sessionId: string;
   player: Player;
@@ -79,8 +84,10 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
   const apiToken = useGameStore((s) => s.apiToken);
   const [clubs, setClubs] = useState<Club[]>([]);
   const [loading, setLoading] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [teamActionResult, setTeamActionResult] = useState<TeamActionResult | null>(null);
 
   useEffect(() => {
     api.listClubs().then((res) => setClubs(res.clubs)).catch(() => {});
@@ -104,7 +111,20 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
   const hasTeam = player.team !== null;
   const hasPending = player.pendingApplication !== null;
   const ap = player.actionPoints ?? 0;
-  const inMatch = player.pendingMatch !== null && player.pendingMatch !== undefined;
+  const hasPendingMatch = player.pendingMatch !== null && player.pendingMatch !== undefined;
+  const inMatchWeek = hasPendingMatch
+    && player.pendingMatch?.resolveYear === (player.year ?? 1)
+    && player.pendingMatch?.resolveWeek === (player.week ?? 1);
+  const weeklyTeamActions = player.weeklyTeamActions ?? {};
+  const currentYear = player.year ?? 1;
+  const currentWeek = player.week ?? 1;
+  const teamActionCount = (key: string) => {
+    const record = weeklyTeamActions[key];
+    return record?.year === currentYear && record.week === currentWeek ? record.count : 0;
+  };
+  const practiceTotal = Object.entries(weeklyTeamActions)
+    .filter(([key, record]) => key.startsWith('practice:') && record.year === currentYear && record.week === currentWeek)
+    .reduce((sum, [, record]) => sum + record.count, 0);
 
   const apply = async (clubId: string) => {
     setLoading(true);
@@ -130,6 +150,23 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const runTeamAction = async (
+    key: string,
+    fn: () => Promise<{ player: Player; result: TeamActionResult }>,
+  ) => {
+    setBusyAction(key);
+    setError(null);
+    try {
+      const res = await fn();
+      setTeamActionResult(res.result);
+      onPlayerUpdate(res.player);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyAction(null);
     }
   };
 
@@ -197,6 +234,90 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
 
             <TeamTrustBar trust={player.teamTrust ?? 50} />
 
+            {player.roster && player.roster.length > 0 && (
+              <div style={{ padding: '7px 8px', background: 'var(--bg-2)', borderRadius: 6 }}>
+                <div style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                  阵容
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {player.roster.map((tm) => {
+                    const practiceKey = `practice:${tm.id}`;
+                    const practiced = teamActionCount(practiceKey) >= 1;
+                    const canPractice = enabled && !inMatchWeek && !busyAction && ap >= 25 && !practiced && practiceTotal < 2;
+                    return (
+                      <div key={tm.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontSize: 10, color: 'var(--fg-3)', fontVariantNumeric: 'tabular-nums' }}>[{tm.role}]</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12, color: 'var(--fg)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tm.name}</div>
+                          <div style={{ fontSize: 10, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {tm.traits.join(' / ')} · 均值 {statAvg(tm)}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={!canPractice}
+                          onClick={() => runTeamAction(
+                            practiceKey,
+                            () => api.teamPractice(sessionId, tm.id, apiToken ?? undefined),
+                          )}
+                          title={practiced ? '本周已加练' : practiceTotal >= 2 ? '本周加练次数已满' : undefined}
+                          style={{ fontSize: 11, padding: '4px 8px', whiteSpace: 'nowrap' }}
+                        >
+                          {practiced ? '已加练' : ap < 25 ? 'AP 不足' : '加练 -25'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div style={{ padding: '7px 8px', background: 'var(--bg-2)', borderRadius: 6 }}>
+              <div style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                团队管理
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={!enabled || inMatchWeek || !!busyAction || ap < 30 || teamActionCount('team-meeting') >= 1}
+                  onClick={() => runTeamAction(
+                    'team-meeting',
+                    () => api.teamMeeting(sessionId, apiToken ?? undefined),
+                  )}
+                  style={{ fontSize: 11, padding: '4px 10px' }}
+                >
+                  {teamActionCount('team-meeting') >= 1 ? '会议已开' : ap < 30 ? 'AP 不足' : '战术会议 -30'}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={!enabled || inMatchWeek || !!busyAction || ap < 25 || teamActionCount('locker-room-talk') >= 1 || (!player.tags.includes('locker-tension') && (player.teamTrust ?? 50) >= 30)}
+                  onClick={() => runTeamAction(
+                    'locker-room-talk',
+                    () => api.lockerRoomTalk(sessionId, apiToken ?? undefined),
+                  )}
+                  style={{ fontSize: 11, padding: '4px 10px' }}
+                >
+                  {teamActionCount('locker-room-talk') >= 1 ? '已安抚' : ap < 25 ? 'AP 不足' : '安抚更衣室 -25'}
+                </button>
+              </div>
+              {teamActionResult && (
+                <div style={{ marginTop: 8, paddingTop: 7, borderTop: '1px solid var(--border)', fontSize: 11 }}>
+                  <div style={{ color: teamActionResult.success ? 'var(--up)' : 'var(--warn)', fontWeight: 600 }}>
+                    {teamActionResult.label} · {teamActionResult.success ? '成功' : '失败'} ({teamActionResult.roll}/{teamActionResult.dc})
+                  </div>
+                  <div style={{ color: 'var(--fg-2)', marginTop: 3 }}>{teamActionResult.narrative}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+                    {teamActionResult.effects.map((effect) => (
+                      <span key={effect} className="chip chip-neu">{effect}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {confirmLeave ? (
               <div style={{ padding: '8px', background: 'var(--bg-2)', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ fontSize: 11, color: 'var(--fg-2)' }}>
@@ -207,7 +328,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                     type="button"
                     className="ghost-button"
                     onClick={leaveTeam}
-                    disabled={loading || inMatch}
+                    disabled={loading || hasPendingMatch}
                     style={{ fontSize: 11, padding: '4px 10px', color: 'var(--danger)' }}
                   >
                     确认离队
@@ -228,10 +349,10 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                 type="button"
                 className="ghost-button"
                 onClick={() => setConfirmLeave(true)}
-                disabled={!enabled || inMatch}
+                disabled={!enabled || hasPendingMatch}
                 style={{ fontSize: 11, padding: '4px 10px', alignSelf: 'flex-start', color: 'var(--fg-2)' }}
               >
-                {inMatch ? '赛事中无法离队' : '申请离队'}
+                {hasPendingMatch ? '赛事中无法离队' : '申请离队'}
               </button>
             )}
 

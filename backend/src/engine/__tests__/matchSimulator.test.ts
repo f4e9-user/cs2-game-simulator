@@ -55,6 +55,7 @@ function player(overrides: Partial<Player>): Player {
     actionPoints: 100,
     shopCooldowns: {},
     weeklyShopPurchases: {},
+    weeklyTeamActions: {},
     team: null,
     pendingApplication: null,
     qualificationSlots: {},

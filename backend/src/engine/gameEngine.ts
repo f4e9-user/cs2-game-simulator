@@ -41,6 +41,7 @@ import type {
   Stats,
   Teammate,
   TeammateRole,
+  TeamActionResult,
   TeamOffer,
   Trait,
   VolatileState,
@@ -462,6 +463,7 @@ export function initPlayer(input: InitInput): Player {
     actionPoints: 100,
     shopCooldowns: {},
     weeklyShopPurchases: {},
+    weeklyTeamActions: {},
     team: null,
     pendingApplication: null,
     qualificationSlots: {},
@@ -498,6 +500,115 @@ export function initPlayer(input: InitInput): Player {
     promotionPending: null,
     promotionCooldown: 0,
     roundCombos: [],
+  };
+}
+
+const TEAM_ACTION_LIMITS: Record<string, number> = {
+  'team-meeting': 1,
+  'locker-room-talk': 1,
+};
+const TEAM_PRACTICE_AP_COST = 25;
+const TEAM_PRACTICE_WEEKLY_TOTAL_LIMIT = 2;
+const TEAM_MEETING_AP_COST = 30;
+const LOCKER_ROOM_TALK_AP_COST = 25;
+
+function isCurrentMatchWeek(player: Player): boolean {
+  const pm = player.pendingMatch;
+  return !!pm && pm.resolveYear === (player.year ?? 1) && pm.resolveWeek === (player.week ?? 1);
+}
+
+function teamActionRecordCurrent(
+  player: Player,
+  key: string,
+): { year: number; week: number; count: number } | undefined {
+  const record = (player.weeklyTeamActions ?? {})[key];
+  if (!record) return undefined;
+  const year = player.year ?? 1;
+  const week = player.week ?? 1;
+  return record.year === year && record.week === week ? record : undefined;
+}
+
+function weeklyTeamActionCount(player: Player, key: string): number {
+  return teamActionRecordCurrent(player, key)?.count ?? 0;
+}
+
+function weeklyPracticeTotal(player: Player): number {
+  const year = player.year ?? 1;
+  const week = player.week ?? 1;
+  return Object.entries(player.weeklyTeamActions ?? {})
+    .filter(([key, record]) => key.startsWith('practice:') && record.year === year && record.week === week)
+    .reduce((sum, [, record]) => sum + record.count, 0);
+}
+
+function bumpWeeklyTeamAction(player: Player, key: string): Record<string, { year: number; week: number; count: number }> {
+  const year = player.year ?? 1;
+  const week = player.week ?? 1;
+  const current = teamActionRecordCurrent(player, key);
+  return {
+    ...(player.weeklyTeamActions ?? {}),
+    [key]: { year, week, count: (current?.count ?? 0) + 1 },
+  };
+}
+
+function assertTeamActionAvailable(player: Player, apCost: number): void {
+  if (!player.team || !player.roster || player.roster.length === 0) {
+    throw new Error('当前没有可管理的战队阵容');
+  }
+  if ((player.actionPoints ?? 0) < apCost) throw new Error('行动力不足');
+  if (isCurrentMatchWeek(player)) throw new Error('赛事比赛周无法进行队伍管理');
+}
+
+function teammateAverage(tm: Teammate): number {
+  return (tm.stats.agility + tm.stats.intelligence + tm.stats.mentality + tm.stats.experience) / 4;
+}
+
+function primaryStatForRole(role: TeammateRole): keyof Teammate['stats'] {
+  if (role === 'IGL' || role === 'Lurker') return 'intelligence';
+  if (role === 'Support') return 'mentality';
+  return 'agility';
+}
+
+function teammateStatLabel(stat: keyof Teammate['stats']): string {
+  if (stat === 'agility') return '敏捷';
+  if (stat === 'intelligence') return '智力';
+  if (stat === 'mentality') return '心态';
+  return '经验';
+}
+
+function statBonusForTeamAction(value: number, coefficient = 1.5): number {
+  return Math.round(Math.sqrt(Math.max(0, value) * 10) * coefficient);
+}
+
+function rollTeamAction(
+  player: Player,
+  primary: StatKey,
+  secondary: StatKey | undefined,
+  dc: number,
+  seed: string,
+): { success: boolean; roll: number; dc: number; naturalRoll: number } {
+  const rng = makeRng(hashString(seed));
+  const naturalRoll = 1 + Math.floor(rng() * 20);
+  const primaryValue = primary === 'money' ? Math.round(player.stats.money / 2) : player.stats[primary];
+  const secondaryValue = secondary
+    ? secondary === 'money'
+      ? Math.round(player.stats.money / 2)
+      : player.stats[secondary]
+    : 0;
+  const roll = naturalRoll + statBonusForTeamAction(primaryValue) + statBonusForTeamAction(secondaryValue, 0.75);
+  return { success: naturalRoll === 20 || (naturalRoll !== 1 && roll >= dc), roll, dc, naturalRoll };
+}
+
+function applyTeammateGrowth(tm: Teammate, stat: keyof Teammate['stats'], amount: number): Teammate {
+  const remaining = Math.max(0, TEAMMATE_GROWTH_CAP - (tm.growthSpent ?? 0));
+  if (remaining <= 0 || amount <= 0) return tm;
+  const applied = Math.min(amount, remaining);
+  return {
+    ...tm,
+    stats: {
+      ...tm.stats,
+      [stat]: Math.round((tm.stats[stat] + applied) * 10) / 10,
+    },
+    growthSpent: Math.round(((tm.growthSpent ?? 0) + applied) * 10) / 10,
   };
 }
 
@@ -2130,6 +2241,228 @@ export function respondTeamOffer(
       tagExpiry: nextTagExpiry,
     };
   }
+}
+
+export function applyTeamPractice(
+  session: GameSession,
+  teammateId: string,
+): { player: Player; result: TeamActionResult } {
+  if (session.status !== 'active') throw new Error('session is not active');
+  if (!teammateId) throw new Error('teammateId 必填');
+  const player = session.player;
+  assertTeamActionAvailable(player, TEAM_PRACTICE_AP_COST);
+
+  const roster = player.roster ?? [];
+  const targetIndex = roster.findIndex((tm) => tm.id === teammateId);
+  if (targetIndex === -1) throw new Error('未知队友');
+
+  const actionKey = `practice:${teammateId}`;
+  if (weeklyTeamActionCount(player, actionKey) >= 1) {
+    throw new Error('本周已经和这名队友加练过');
+  }
+  if (weeklyPracticeTotal(player) >= TEAM_PRACTICE_WEEKLY_TOTAL_LIMIT) {
+    throw new Error(`本周队友加练次数已达上限（${TEAM_PRACTICE_WEEKLY_TOTAL_LIMIT} 次）`);
+  }
+
+  const target = roster[targetIndex]!;
+  const primaryStat = primaryStatForRole(target.role);
+  const primaryStatLabel = teammateStatLabel(primaryStat);
+  const dc = 8 + Math.floor(teammateAverage(target) / 4);
+  const check = rollTeamAction(
+    player,
+    primaryStat as StatKey,
+    'experience',
+    dc,
+    `${session.id}:team-practice:${player.round}:${player.actionPoints}:${teammateId}`,
+  );
+  const growth = check.success ? 0.4 + Math.min(0.4, Math.max(0, (check.roll - dc) * 0.05)) : 0.1;
+  const nextRoster = [...roster];
+  nextRoster[targetIndex] = applyTeammateGrowth(target, primaryStat, growth);
+
+  const volatile = player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
+  const fatigueDelta = check.success ? 12 : 10;
+  const stressDelta = check.success ? 4 : 8;
+  const trustDelta = check.success ? 0 : target.personality === 'drama' ? -1 : 0;
+  const nextPlayer: Player = {
+    ...player,
+    roster: nextRoster,
+    teamTrust: clampTeamTrust((player.teamTrust ?? 50) + trustDelta),
+    stress: clampStress((player.stress ?? 0) + stressDelta),
+    volatile: {
+      ...volatile,
+      fatigue: clampFatigue(volatile.fatigue + fatigueDelta),
+    },
+    actionPoints: (player.actionPoints ?? 0) - TEAM_PRACTICE_AP_COST,
+    weeklyTeamActions: bumpWeeklyTeamAction(player, actionKey),
+  };
+
+  return {
+    player: nextPlayer,
+    result: {
+      actionId: 'team-practice',
+      label: `和 ${target.name} 加练`,
+      teammateId,
+      success: check.success,
+      roll: check.roll,
+      dc: check.dc,
+      narrative: check.success
+        ? `你和 ${target.name} 把几个配合细节练顺了，对方的${primaryStatLabel}有了小幅提升。`
+        : `你和 ${target.name} 练得有些拧巴，身体消耗不少，真正沉淀下来的东西有限。`,
+      effects: [
+        check.success ? `${target.name}${primaryStatLabel}小幅提升` : `${target.name}训练收益有限`,
+        trustDelta < 0 ? '队伍信任小幅下降' : '队伍信任不变',
+        `疲劳 +${fatigueDelta}`,
+        `压力 +${stressDelta}`,
+      ],
+    },
+  };
+}
+
+export function applyTeamMeeting(
+  session: GameSession,
+): { player: Player; result: TeamActionResult } {
+  if (session.status !== 'active') throw new Error('session is not active');
+  const player = session.player;
+  assertTeamActionAvailable(player, TEAM_MEETING_AP_COST);
+  const actionKey = 'team-meeting';
+  const limit = TEAM_ACTION_LIMITS[actionKey] ?? 1;
+  if (weeklyTeamActionCount(player, actionKey) >= limit) {
+    throw new Error('本周已经开过战术会议');
+  }
+
+  let dc = 10;
+  if ((player.teamTrust ?? 50) < 30) dc += 2;
+  if (player.tags.includes('locker-tension')) dc += 2;
+  const check = rollTeamAction(
+    player,
+    'intelligence',
+    'mentality',
+    dc,
+    `${session.id}:team-meeting:${player.round}:${player.actionPoints}`,
+  );
+
+  const volatile = player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
+  const fatigueDelta = check.success ? 6 : 5;
+  const stressDelta = check.success ? 3 : 10;
+  const trustDelta = check.success ? 4 : -2;
+  const nextTags = check.success || player.tags.includes('locker-tension')
+    ? player.tags
+    : [...player.tags, 'locker-tension'];
+  const nextBuffs = check.success
+    ? [
+        ...(player.buffs ?? []).filter((buff) => buff.id !== 'team-tactical-ready'),
+        {
+          id: 'team-tactical-ready',
+          label: '战术统一',
+          actionTag: 'match',
+          stressGainMultiplier: 0.9,
+          remainingUses: 1,
+          consumeOn: 'stress' as const,
+        },
+      ]
+    : player.buffs;
+
+  const nextPlayer: Player = {
+    ...player,
+    teamTrust: clampTeamTrust((player.teamTrust ?? 50) + trustDelta),
+    stress: clampStress((player.stress ?? 0) + stressDelta),
+    volatile: {
+      ...volatile,
+      fatigue: clampFatigue(volatile.fatigue + fatigueDelta),
+    },
+    buffs: nextBuffs,
+    tags: nextTags,
+    actionPoints: (player.actionPoints ?? 0) - TEAM_MEETING_AP_COST,
+    weeklyTeamActions: bumpWeeklyTeamAction(player, actionKey),
+  };
+
+  return {
+    player: nextPlayer,
+    result: {
+      actionId: 'team-meeting',
+      label: '战术会议',
+      success: check.success,
+      roll: check.roll,
+      dc: check.dc,
+      narrative: check.success
+        ? '你把几套默认处理讲清楚了，队友们对下一场的沟通口径更统一。'
+        : '会议越开越乱，几个细节没有说清，反而让更衣室气氛更紧。',
+      effects: [
+        `队伍信任 ${trustDelta > 0 ? '+' : ''}${trustDelta}`,
+        check.success ? '获得增益：战术统一' : '更衣室气氛承压',
+        `疲劳 +${fatigueDelta}`,
+        `压力 +${stressDelta}`,
+      ],
+    },
+  };
+}
+
+export function applyLockerRoomTalk(
+  session: GameSession,
+): { player: Player; result: TeamActionResult } {
+  if (session.status !== 'active') throw new Error('session is not active');
+  const player = session.player;
+  assertTeamActionAvailable(player, LOCKER_ROOM_TALK_AP_COST);
+  if (!player.tags.includes('locker-tension') && (player.teamTrust ?? 50) >= 30) {
+    throw new Error('当前更衣室没有需要安抚的明显问题');
+  }
+  const actionKey = 'locker-room-talk';
+  const limit = TEAM_ACTION_LIMITS[actionKey] ?? 1;
+  if (weeklyTeamActionCount(player, actionKey) >= limit) {
+    throw new Error('本周已经安抚过更衣室');
+  }
+
+  const roster = player.roster ?? [];
+  let dc = 10;
+  if (roster.some((tm) => tm.personality === 'drama')) dc += 2;
+  if (roster.some((tm) => tm.personality === 'supportive')) dc -= 1;
+  const check = rollTeamAction(
+    player,
+    'mentality',
+    'experience',
+    dc,
+    `${session.id}:locker-room-talk:${player.round}:${player.actionPoints}`,
+  );
+
+  const volatile = player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
+  const fatigueDelta = check.success ? 3 : 0;
+  const stressDelta = check.success ? -5 : 10;
+  const trustDelta = check.success ? 5 : -3;
+  const nextTags = check.success
+    ? player.tags.filter((tag) => tag !== 'locker-tension')
+    : player.tags;
+  const nextPlayer: Player = {
+    ...player,
+    teamTrust: clampTeamTrust((player.teamTrust ?? 50) + trustDelta),
+    stress: clampStress((player.stress ?? 0) + stressDelta),
+    volatile: {
+      ...volatile,
+      fatigue: clampFatigue(volatile.fatigue + fatigueDelta),
+    },
+    tags: nextTags,
+    actionPoints: (player.actionPoints ?? 0) - LOCKER_ROOM_TALK_AP_COST,
+    weeklyTeamActions: bumpWeeklyTeamAction(player, actionKey),
+  };
+
+  return {
+    player: nextPlayer,
+    result: {
+      actionId: 'locker-room-talk',
+      label: '安抚更衣室',
+      success: check.success,
+      roll: check.roll,
+      dc: check.dc,
+      narrative: check.success
+        ? '你把话题拉回到比赛本身，几个人终于愿意把不满说开。'
+        : '你试着缓和气氛，但话没落到点上，更衣室反而更沉默。',
+      effects: [
+        `队伍信任 ${trustDelta > 0 ? '+' : ''}${trustDelta}`,
+        check.success ? '移除 locker-tension' : 'locker-tension 保留',
+        fatigueDelta !== 0 ? `疲劳 +${fatigueDelta}` : '疲劳不变',
+        `压力 ${stressDelta > 0 ? '+' : ''}${stressDelta}`,
+      ],
+    },
+  };
 }
 
 function joinTeamFromOffer(

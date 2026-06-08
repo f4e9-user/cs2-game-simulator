@@ -10,6 +10,9 @@ import {
   applyForLoan,
   applyFriendLoan,
   applyShopPurchase,
+  applyTeamMeeting,
+  applyTeamPractice,
+  applyLockerRoomTalk,
   computeTraitMods,
   createSession,
   initPlayer,
@@ -875,6 +878,66 @@ app.post('/game/:sessionId/team-response', async (c) => {
       leaderboard: session.leaderboard,
       careerGoal: buildCareerGoal(player),
     });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+app.post('/game/:sessionId/team-practice', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { teammateId } = body ?? {};
+  if (typeof teammateId !== 'string' || !teammateId) {
+    return c.json({ error: 'teammateId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const { player, result } = applyTeamPractice(session, teammateId);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+app.post('/game/:sessionId/team-meeting', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const { player, result } = applyTeamMeeting(session);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+app.post('/game/:sessionId/locker-room-talk', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const { player, result } = applyLockerRoomTalk(session);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);

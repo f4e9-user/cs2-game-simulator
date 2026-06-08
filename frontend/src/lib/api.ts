@@ -15,6 +15,7 @@ import type {
   SocialPost,
   StartGameResponse,
   Stats,
+  TeamActionResult,
   TournamentsResponse,
   Trait,
 } from './types';
@@ -182,6 +183,24 @@ export const api = {
     ),
   leaveTeam: (sessionId: string, apiToken?: string) =>
     request<{ player: Player }>(`/api/game/${sessionId}/leave-team`, { method: 'POST' }, apiToken),
+  teamPractice: (sessionId: string, teammateId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/team-practice`,
+      { method: 'POST', body: JSON.stringify({ teammateId }) },
+      apiToken,
+    ),
+  teamMeeting: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/team-meeting`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  lockerRoomTalk: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/locker-room-talk`,
+      { method: 'POST' },
+      apiToken,
+    ),
   getIntro: (sessionId: string, apiToken?: string) =>
     request<{ intro: string }>(`/api/game/${sessionId}/intro`, {}, apiToken),
   getSummary: (sessionId: string, apiToken?: string) =>

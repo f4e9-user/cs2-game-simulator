@@ -249,6 +249,7 @@ export interface DynamicState {
   actionPoints: number;
   shopCooldowns: Record<string, number>;
   weeklyShopPurchases: Record<string, { year: number; week: number; count: number }>;
+  weeklyTeamActions: Record<string, { year: number; week: number; count: number }>;
   team: PlayerTeam | null;
   pendingApplication: PendingApplication | null;
   qualificationSlots: Record<string, number>;
@@ -286,6 +287,17 @@ export interface ActionResult {
   newVolatile: { feel: number; tilt: number; fatigue: number };
   comboTriggeredLabels?: string[];
   comboAddedLabels?: string[];
+}
+
+export interface TeamActionResult {
+  actionId: string;
+  label: string;
+  success: boolean;
+  roll: number;
+  dc: number;
+  narrative: string;
+  effects: string[];
+  teammateId?: string;
 }
 
 export interface Player extends DynamicState {
