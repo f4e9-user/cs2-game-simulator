@@ -38,9 +38,17 @@ export function calcSynergyBonus(player: Player, roster: Teammate[]): number {
   return bonus;
 }
 
-export function calcTrustModifier(teamTrust: number): number {
-  if (teamTrust >= 65) return 1;
-  if (teamTrust <= 15) return -2;
-  if (teamTrust <= 30) return -1;
+export function deriveTeamChemistry(roster: Teammate[], teamTrust: number): number {
+  if (roster.length === 0) return 0;
+  const avgTeammateChemistry =
+    roster.reduce((sum, tm) => sum + (tm.chemistry ?? 50), 0) / roster.length;
+  const weighted = avgTeammateChemistry * 0.75 + teamTrust * 0.25;
+  const trustPenalty = teamTrust < 25 ? 10 : 0;
+  return Math.max(0, Math.min(100, Math.round(weighted - trustPenalty)));
+}
+
+export function calcTeamChemistryModifier(teamChemistry: number): number {
+  if (teamChemistry >= 70) return 1;
+  if (teamChemistry <= 25) return -1;
   return 0;
 }

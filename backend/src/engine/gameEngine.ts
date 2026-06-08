@@ -612,6 +612,22 @@ function applyTeammateGrowth(tm: Teammate, stat: keyof Teammate['stats'], amount
   };
 }
 
+function clampTeammateChemistry(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function adjustTeammateChemistry(tm: Teammate, delta: number): Teammate {
+  return {
+    ...tm,
+    chemistry: clampTeammateChemistry((tm.chemistry ?? 50) + delta),
+  };
+}
+
+function adjustRosterChemistry(roster: Teammate[], delta: number): Teammate[] {
+  if (delta === 0) return roster;
+  return roster.map((tm) => adjustTeammateChemistry(tm, delta));
+}
+
 function advanceWeek(year: number, week: number): { year: number; week: number } {
   const WEEKS = 48;
   if (week >= WEEKS) return { year: year + 1, week: 1 };
@@ -1542,9 +1558,16 @@ export function applyChoice(
       nextPlayer.teamTrust = clampTeamTrust(
         (nextPlayer.teamTrust ?? 50) + trustDelta,
       );
+      const chemistryDelta = outcome.success ? 1 : (nextPlayer.teamTrust ?? 50) < 30 ? -1 : 0;
+      nextPlayer.roster = adjustRosterChemistry(nextPlayer.roster, chemistryDelta);
       passiveEffects.push(
         outcome.success ? '队伍信任上升' : '队伍信任下降',
       );
+      if (chemistryDelta !== 0) {
+        passiveEffects.push(
+          chemistryDelta > 0 ? '全队队友默契上升' : '全队队友默契下降',
+        );
+      }
     }
   }
 
@@ -2276,8 +2299,12 @@ export function applyTeamPractice(
     `${session.id}:team-practice:${player.round}:${player.actionPoints}:${teammateId}`,
   );
   const growth = check.success ? 0.4 + Math.min(0.4, Math.max(0, (check.roll - dc) * 0.05)) : 0.1;
+  const chemistryDelta = check.success ? 4 : 1;
   const nextRoster = [...roster];
-  nextRoster[targetIndex] = applyTeammateGrowth(target, primaryStat, growth);
+  nextRoster[targetIndex] = adjustTeammateChemistry(
+    applyTeammateGrowth(target, primaryStat, growth),
+    chemistryDelta,
+  );
 
   const volatile = player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
   const fatigueDelta = check.success ? 12 : 10;
@@ -2310,6 +2337,7 @@ export function applyTeamPractice(
         : `你和 ${target.name} 练得有些拧巴，身体消耗不少，真正沉淀下来的东西有限。`,
       effects: [
         check.success ? `${target.name}${primaryStatLabel}小幅提升` : `${target.name}训练收益有限`,
+        `${target.name}队友默契 +${chemistryDelta}`,
         trustDelta < 0 ? '队伍信任小幅下降' : '队伍信任不变',
         `疲劳 +${fatigueDelta}`,
         `压力 +${stressDelta}`,
@@ -2345,6 +2373,7 @@ export function applyTeamMeeting(
   const fatigueDelta = check.success ? 6 : 5;
   const stressDelta = check.success ? 3 : 10;
   const trustDelta = check.success ? 4 : -2;
+  const chemistryDelta = check.success ? 2 : 0;
   const nextTags = check.success || player.tags.includes('locker-tension')
     ? player.tags
     : [...player.tags, 'locker-tension'];
@@ -2364,6 +2393,7 @@ export function applyTeamMeeting(
 
   const nextPlayer: Player = {
     ...player,
+    roster: player.roster ? adjustRosterChemistry(player.roster, chemistryDelta) : player.roster,
     teamTrust: clampTeamTrust((player.teamTrust ?? 50) + trustDelta),
     stress: clampStress((player.stress ?? 0) + stressDelta),
     volatile: {
@@ -2389,6 +2419,7 @@ export function applyTeamMeeting(
         : '会议越开越乱，几个细节没有说清，反而让更衣室气氛更紧。',
       effects: [
         `队伍信任 ${trustDelta > 0 ? '+' : ''}${trustDelta}`,
+        chemistryDelta > 0 ? `全队队友默契 +${chemistryDelta}` : '队友默契不变',
         check.success ? '获得增益：战术统一' : '更衣室气氛承压',
         `疲劳 +${fatigueDelta}`,
         `压力 +${stressDelta}`,

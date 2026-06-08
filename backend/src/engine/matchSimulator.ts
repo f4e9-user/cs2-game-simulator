@@ -1,5 +1,5 @@
 import type { ClubTier, Player } from '../types.js';
-import { calcSynergyBonus, calcTrustModifier } from './synergy.js';
+import { calcSynergyBonus, calcTeamChemistryModifier, deriveTeamChemistry } from './synergy.js';
 
 export interface MatchStats {
   kills: number;
@@ -55,8 +55,10 @@ export function simulateMatch(
   const tiltDebuff = tilt * 3;
   const rawTeamBonus = rosterTeamBonus(player);
   const synergyBonus = player.roster ? calcSynergyBonus(player, player.roster) : 0;
-  const trustModifier = calcTrustModifier(player.teamTrust ?? 50);
-  const teamBonus = rawTeamBonus + synergyBonus + trustModifier;
+  const chemistryModifier = player.roster
+    ? calcTeamChemistryModifier(deriveTeamChemistry(player.roster, player.teamTrust ?? 50))
+    : 0;
+  const teamBonus = rawTeamBonus + synergyBonus + chemistryModifier;
   const effectiveAim = Math.max(5, Math.min(99,
     aimBase + feelEffect - fatigueDebuff - tiltDebuff + teamBonus,
   ));

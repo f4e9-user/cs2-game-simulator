@@ -154,6 +154,7 @@ export interface Teammate {
   traits: string[];
   stats: TeammateStats;
   growthSpent: number;
+  chemistry?: number;
 }
 
 export interface RoleTransition {

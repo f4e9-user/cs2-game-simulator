@@ -180,6 +180,7 @@ export interface Teammate {
   traits: string[];
   stats: TeammateStats;
   growthSpent: number;
+  chemistry?: number;
   injuryRisk: number;
   retired: boolean;
 }

@@ -102,6 +102,7 @@ export function generateSingleTeammate(
       experience:   Math.max(1, rollStat(lo, hi, rng) + boost),
     },
     growthSpent: 0,
+    chemistry: quality === 'good' ? 45 : 35,
   };
 }
 
@@ -122,6 +123,7 @@ export function generateRoster(
       traits: pickTraits(ROLE_TRAIT_POOL[role], traitCount, rng),
       stats: randomStats(clubTier, rng),
       growthSpent: 0,
+      chemistry: 40,
     };
   });
 }

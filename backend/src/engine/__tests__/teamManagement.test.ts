@@ -33,6 +33,7 @@ function teammate(id: string, role: Teammate['role']): Teammate {
       experience: 5,
     },
     growthSpent: 0,
+    chemistry: 40,
   };
 }
 
@@ -74,6 +75,7 @@ describe('team management actions', () => {
 
     expect(second.player.weeklyTeamActions['practice:slot-1']?.count).toBe(1);
     expect(second.player.weeklyTeamActions['practice:slot-2']?.count).toBe(1);
+    expect(second.player.roster?.find((tm) => tm.id === 'slot-1')?.chemistry).toBeGreaterThan(40);
     expect(() => applyTeamPractice({ ...session, player: second.player }, 'slot-3'))
       .toThrow('本周队友加练次数已达上限');
   });
@@ -84,6 +86,7 @@ describe('team management actions', () => {
 
     expect(result.result.success).toBe(true);
     expect(result.player.buffs.some((buff) => buff.id === 'team-tactical-ready')).toBe(true);
+    expect(result.player.roster?.every((tm) => tm.chemistry === 42)).toBe(true);
     expect(result.player.weeklyTeamActions['team-meeting']).toEqual({ year: 1, week: 10, count: 1 });
   });
 });

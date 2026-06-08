@@ -73,6 +73,14 @@ function statAvg(tm: Teammate): number {
   return Math.round(((s.agility + s.intelligence + s.mentality + s.experience) / 4) * 10) / 10;
 }
 
+function deriveTeamChemistry(roster: Teammate[], teamTrust: number): number {
+  if (roster.length === 0) return 0;
+  const avgTeammateChemistry = roster.reduce((sum, tm) => sum + (tm.chemistry ?? 50), 0) / roster.length;
+  const weighted = avgTeammateChemistry * 0.75 + teamTrust * 0.25;
+  const trustPenalty = teamTrust < 25 ? 10 : 0;
+  return Math.max(0, Math.min(100, Math.round(weighted - trustPenalty)));
+}
+
 interface Props {
   sessionId: string;
   player: Player;
@@ -235,6 +243,15 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
             <TeamTrustBar trust={player.teamTrust ?? 50} />
 
             {player.roster && player.roster.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', background: 'var(--bg-2)', borderRadius: 6 }}>
+                <span style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 600 }}>队伍默契</span>
+                <span style={{ fontSize: 12, color: 'var(--fg)', fontWeight: 700 }}>
+                  {deriveTeamChemistry(player.roster, player.teamTrust ?? 50)} / 100
+                </span>
+              </div>
+            )}
+
+            {player.roster && player.roster.length > 0 && (
               <div style={{ padding: '7px 8px', background: 'var(--bg-2)', borderRadius: 6 }}>
                 <div style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                   阵容
@@ -250,7 +267,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 12, color: 'var(--fg)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tm.name}</div>
                           <div style={{ fontSize: 10, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {tm.traits.join(' / ')} · 均值 {statAvg(tm)}
+                            {tm.traits.join(' / ')} · 均值 {statAvg(tm)} · 默契 {tm.chemistry ?? 50}
                           </div>
                         </div>
                         <button
