@@ -39,7 +39,7 @@ export interface AiService {
   judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null>;
   validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation>;
   simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]>;
-  generateEvents(player: Player, history: RoundResult[]): Promise<EventDef[] | null>;
+  generateEvents(player: Player, history: RoundResult[], worldStorylines?: string[]): Promise<EventDef[] | null>;
   simulateLeaderboardTick?(
     teams: LeaderboardTeam[],
     player: Player,
@@ -515,9 +515,9 @@ abstract class BaseLlmNarrator implements AiService {
     return filtered.length > 0 ? filtered : templateSocialFeed(player, leaderboard);
   }
 
-  async generateEvents(player: Player, history: RoundResult[]): Promise<EventDef[] | null> {
+  async generateEvents(player: Player, history: RoundResult[], worldStorylines: string[] = []): Promise<EventDef[] | null> {
     const gaps = analyzeEventGaps(player, history);
-    const prompt = buildEventGenPrompt({ player, recentHistory: history, gaps });
+    const prompt = buildEventGenPrompt({ player, recentHistory: history, gaps, worldStorylines });
     const text = await this.doChat(
       '你是一个 CS2 电竞生涯的事件设计师。只输出 JSON 数组，不加任何其他内容。',
       prompt,

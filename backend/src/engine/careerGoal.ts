@@ -1,7 +1,9 @@
 import type { Player, Stage } from '../types.js';
 import { buildYearTournaments, type Tournament } from '../data/tournaments.js';
 import { getTrait } from '../data/traits.js';
+import { getClubProfile } from '../data/clubProfiles.js';
 import { getGate } from './stages.js';
+import { canSeeTournamentOpportunity } from './tournamentEligibility.js';
 
 export interface CareerGoalProgress {
   id: string;
@@ -21,6 +23,7 @@ export interface CareerGoal {
   stage: Stage;
   stageLabel: string;
   summary: string;
+  teamHint?: string;
   nextStageLabel?: string;
   goals: CareerGoalProgress[];
   opportunities: CareerGoalOpportunity[];
@@ -65,10 +68,12 @@ function tournamentWeek(tournament: Tournament, currentWeek: number): number {
 
 function upcomingOpportunities(
   player: Player,
+  playerPoints: number,
   predicate: (tournament: Tournament) => boolean,
 ): CareerGoalOpportunity[] {
   return buildYearTournaments(player.year)
     .filter((tournament) => isUpcomingTournament(player, tournament))
+    .filter((tournament) => canSeeTournamentOpportunity(player, tournament, playerPoints))
     .filter(predicate)
     .map((tournament) => ({
       week: tournamentWeek(tournament, player.week),
@@ -90,12 +95,32 @@ function progress(id: string, label: string, current: number, target: number): C
   };
 }
 
-export function buildCareerGoal(player: Player): CareerGoal {
+function teamHint(player: Player): string | undefined {
+  if (!player.team) return undefined;
+  const profile = getClubProfile(player.team.clubId, player.team.tier);
+  const status = player.team.teamStatus === 'trial'
+    ? '试训期，先争取稳定出场'
+    : player.team.teamStatus === 'rotation'
+      ? '轮换位，适合用表现争取首发'
+      : '首发定位，适合围绕当前赛事目标推进';
+  const styleHint: Record<string, string> = {
+    tactical: '这支队伍更适合：战术体系晋级',
+    firepower: '这支队伍更适合：公开赛冲成绩',
+    development: '这支队伍更适合：稳定积累比赛经验',
+    chaotic: '这支队伍更适合：用个人表现打开机会',
+    balanced: '这支队伍更适合：均衡推进职业目标',
+  };
+  return `${styleHint[profile.rosterStyle] ?? styleHint.balanced}。${status}。`;
+}
+
+export function buildCareerGoal(player: Player, playerPoints = 0): CareerGoal {
+  const hint = teamHint(player);
   if (player.stage === 'retired') {
     return {
       stage: player.stage,
       stageLabel: STAGE_LABELS[player.stage],
       summary: '职业生涯已经结束。',
+      teamHint: hint,
       goals: [],
       opportunities: [],
     };
@@ -115,6 +140,7 @@ export function buildCareerGoal(player: Player): CareerGoal {
       stage: player.stage,
       stageLabel: STAGE_LABELS[player.stage],
       summary: '证明自己，申请青训战队。',
+      teamHint: hint,
       nextStageLabel: STAGE_LABELS.youth,
       goals: [
         progress('rookie-participations', 'C/B 级赛事参赛', rookieParticipations, 3),
@@ -124,6 +150,7 @@ export function buildCareerGoal(player: Player): CareerGoal {
       ],
       opportunities: upcomingOpportunities(
         player,
+        playerPoints,
         (tournament) => ['c', 'b'].includes(tournament.progressionTier),
       ),
     };
@@ -137,6 +164,7 @@ export function buildCareerGoal(player: Player): CareerGoal {
       stage: player.stage,
       stageLabel: STAGE_LABELS[player.stage],
       summary: `${tierLabel(gate.tiers)}参赛和夺冠，晋级${STAGE_LABELS[gate.to]}。`,
+      teamHint: hint,
       nextStageLabel: STAGE_LABELS[gate.to],
       goals: [
         progress(`${gate.tiers.join('-')}-participations`, `${tierLabel(gate.tiers)}参赛`, participations, gate.minParticipations),
@@ -144,6 +172,7 @@ export function buildCareerGoal(player: Player): CareerGoal {
       ],
       opportunities: upcomingOpportunities(
         player,
+        playerPoints,
         (tournament) => gate.tiers.includes(tournament.progressionTier),
       ),
     };
@@ -155,6 +184,7 @@ export function buildCareerGoal(player: Player): CareerGoal {
     stage: player.stage,
     stageLabel: STAGE_LABELS[player.stage],
     summary: '冲击 S 级赛事、Major、名气和传奇结局。',
+    teamHint: hint,
     goals: [
       progress('s-participations', 'S 级与 Major 参赛', sClassParticipations, 4),
       progress('s-championships', 'S 级或 Major 冠军', sClassChampionships, 1),
@@ -162,6 +192,7 @@ export function buildCareerGoal(player: Player): CareerGoal {
     ],
     opportunities: upcomingOpportunities(
       player,
+      playerPoints,
       (tournament) => ['s-qualifier', 's-main', 'major'].includes(tournament.progressionTier),
     ),
   };

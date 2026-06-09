@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   calcTeamChemistryModifier,
+  calcSynergyBonus,
   deriveTeamChemistry,
+  explainSynergy,
 } from '../synergy.js';
+import { initPlayer } from '../gameEngine.js';
 import type { Teammate } from '../../types.js';
 
 function teammate(id: string, chemistry: number): Teammate {
@@ -24,6 +27,26 @@ function teammate(id: string, chemistry: number): Teammate {
 }
 
 describe('team chemistry', () => {
+  it('explains synergy factors and keeps the numeric bonus consistent', () => {
+    const player = initPlayer({
+      name: 'SynergyTester',
+      traitIds: ['tactical-mind', 'aim-god', 'ice-cold'],
+      backgroundId: '',
+    });
+    const roster = [
+      { ...teammate('igl', 50), role: 'IGL' as const, traits: ['support'] },
+      { ...teammate('awp', 50), role: 'AWPer' as const, traits: ['aimer'] },
+    ];
+
+    const explained = explainSynergy(player, roster);
+
+    expect(explained.bonus).toBe(calcSynergyBonus(player, roster));
+    expect(explained.factors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'igl-tactical', value: 2 }),
+      expect.objectContaining({ id: 'awper-aimer', value: 1 }),
+    ]));
+  });
+
   it('derives team chemistry from teammate chemistry and team trust', () => {
     const roster = [teammate('a', 80), teammate('b', 80), teammate('c', 80)];
 

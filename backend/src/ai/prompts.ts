@@ -54,7 +54,7 @@ export function buildSocialFeedPrompt(
     const isTopTier = title.includes('S级') || title.includes('IEM') || title.includes('BLAST') || title.includes('S-');
     matchHeat = isMajor ? 3 : isTopTier ? 2 : 1;
     const ms = lastMatch.matchStats;
-    const teamName = player.team?.name ?? player.name;
+    const teamName = lastMatch.teamSnapshot?.name ?? player.team?.name ?? player.name;
     const result = lastMatch.success ? '夺冠/晋级' : '出局/落败';
     const perf = ms
       ? `个人数据 ${ms.kills}/${ms.deaths}/${ms.assists} KDA，Rating ${ms.rating.toFixed(2)}，爆头率 ${Math.round(ms.headshotRate * 100)}%`
@@ -128,7 +128,7 @@ export function buildSocialFeedPrompt(
           : '主角是无名新人，禁止围绕主角发帖。内容必须是：顶级战队动态、行业八卦、地图/武器讨论、赛事预告、日常吐槽等。粉丝和俱乐部此时不可能讨论一个无名练习生';
 
   return [
-    '你是一个极度活跃的 CS2 职业电竞 Twitter/X 用户。你不是在写新闻稿，你是在刷推特——每条帖子要像真实的人随手发的日常动态。',
+    '你是社交媒体模拟引擎，一个极度活跃的 CS2 职业电竞 Twitter/X 用户。你不是在写新闻稿，你是在刷社媒——每条帖子要像真实的人随手发的日常动态。',
     '',
     '【当前世界状态】',
     `赛季：第${w}周 — ${seasonPhase}`,
@@ -144,6 +144,7 @@ export function buildSocialFeedPrompt(
       '',
       '【最近赛事结果 —— 必须基于以下真实数据发帖，不得编造】',
       matchReport,
+      '赛事归属以这条赛事结果里的队伍为准；如果主角后来转队/升队，禁止用当前战队改写旧赛事。',
       matchHeat === 3
         ? '【赛事热度：Major 级别 —— 所有媒体都在报道，几乎所有角色都会提到这场赛事】'
         : matchHeat === 2
@@ -168,7 +169,7 @@ export function buildSocialFeedPrompt(
     contentFocusInstruction,
     '',
     '【主角特质映射】',
-    `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}。他人视角可能这样聊：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? '无特殊特质'}`,
+    `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}。社媒中只能间接体现；他人视角可能这样聊：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? '无特殊特质'}`,
     '',
     '严格输出 JSON 数组，不加任何其他内容：',
     '[{"author":"...","authorType":"star","handle":"@...","content":"..."}]',

@@ -71,6 +71,23 @@ export interface PlayerTeam {
   tier: ClubTier;
   monthlySalary: number;
   joinedRound: number;
+  teamStatus?: 'starter' | 'trial' | 'rotation';
+  teamStatusUntilRound?: number;
+  joinMode?: PlayerJoinMode;
+  joinReason?: string;
+  roleOverlap?: RoleOverlap[];
+}
+
+export type RoundTeamSnapshot = Pick<PlayerTeam, 'clubId' | 'name' | 'tag' | 'region' | 'tier'>;
+
+export type PlayerJoinMode = 'replace-starter' | 'fill-vacancy' | 'trial-sixth' | 'rotation';
+
+export interface RoleOverlap {
+  kind: 'identity' | 'role';
+  value: TeamIdentity | TeammateRole;
+  teammateId?: string;
+  teammateName?: string;
+  severity: 'low' | 'medium' | 'high';
 }
 
 export interface PendingApplication {
@@ -171,6 +188,48 @@ export interface Rival {
 
 export type TeammateRole = 'IGL' | 'AWPer' | 'Entry' | 'Support' | 'Lurker';
 
+export type TeamIdentity =
+  | 'caller'
+  | 'star'
+  | 'veteran'
+  | 'rookie'
+  | 'glue'
+  | 'problem';
+
+export type VisiblePlayerTeamIdentity = TeamIdentity | 'star-caller';
+
+export interface TeamIdentityTarget {
+  type: 'player' | 'teammate';
+  id: string;
+  label: string;
+  score: number;
+  reasons: string[];
+  identities: TeamIdentity[];
+}
+
+export interface TeamIdentityScoreDebug {
+  identity: TeamIdentity;
+  score: number;
+  reasons: string[];
+}
+
+export interface TeamIdentityDebug {
+  player: {
+    visibleIdentity?: VisiblePlayerTeamIdentity;
+    sinceRound?: number;
+    scores: TeamIdentityScoreDebug[];
+  };
+  teammates: Array<{
+    id: string;
+    name: string;
+    visibleIdentity?: TeamIdentity;
+    sinceRound?: number;
+    scores: TeamIdentityScoreDebug[];
+  }>;
+  caller: TeamIdentityTarget | null;
+  star: TeamIdentityTarget | null;
+}
+
 export type PersonalityTag =
   | 'strict'
   | 'supportive'
@@ -199,6 +258,9 @@ export interface Teammate {
   traits: string[];
   stats: TeammateStats;
   growthSpent: number;
+  chemistry?: number;
+  visibleIdentity?: TeamIdentity;
+  identitySinceRound?: number;
   injuryRisk: number;
   retired: boolean;
 }
@@ -248,6 +310,7 @@ export interface RoundResult {
   eventId: string;
   eventType: EventType;
   eventTitle: string;
+  teamSnapshot?: RoundTeamSnapshot;
   choiceId: string;
   choiceLabel: string;
   success: boolean;
@@ -286,6 +349,7 @@ export interface GameSession {
   updatedAt: string;
   promotion?: PromotionCheck;
   leaderboard: LeaderboardTeam[];
+  debugTeamIdentity?: TeamIdentityDebug;
 }
 
 export interface StartGameRequest {

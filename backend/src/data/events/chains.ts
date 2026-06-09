@@ -2279,7 +2279,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     id: 'chain-rival-scout',
     type: 'tryout',
     title: '星探来访',
-    narrative: '一位来自半职业俱乐部的星探联系了你——你在公开赛的表现引起了他们的注意。',
+    narrative: '一位来自二线俱乐部的星探联系了你——你在公开赛的表现引起了他们的注意。',
     stages: ['rookie', 'youth', 'second'],
     difficulty: 2,
     weight: 2,

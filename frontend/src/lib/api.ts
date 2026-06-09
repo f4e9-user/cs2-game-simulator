@@ -4,6 +4,7 @@ import type {
   CareerGoal,
   ChoiceResponse,
   Club,
+  ClubApplicationSummary,
   GameSession,
   LeaderboardTeam,
   Loan,
@@ -169,6 +170,8 @@ export const api = {
     request<{ items: ShopItem[] }>('/api/game/meta/shop'),
   listClubs: () =>
     request<{ clubs: Club[] }>('/api/game/meta/clubs'),
+  listSessionClubs: (sessionId: string) =>
+    request<{ clubs: ClubApplicationSummary[] }>(`/api/game/${sessionId}/clubs`),
   applyClub: (sessionId: string, clubId: string, apiToken?: string) =>
     request<{ player: Player }>(
       `/api/game/${sessionId}/apply-club`,
@@ -199,6 +202,18 @@ export const api = {
     request<{ player: Player; result: TeamActionResult }>(
       `/api/game/${sessionId}/locker-room-talk`,
       { method: 'POST' },
+      apiToken,
+    ),
+  retainCoreTeammate: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/retain-core-teammate`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  teamTrainingFocus: (sessionId: string, focus: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/team-training-focus`,
+      { method: 'POST', body: JSON.stringify({ focus }) },
       apiToken,
     ),
   getIntro: (sessionId: string, apiToken?: string) =>

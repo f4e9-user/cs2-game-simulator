@@ -84,6 +84,10 @@ export function outcomeEffects(outcome: Outcome): EffectDelta {
   return {
     buffAdd: outcome.effects?.buffAdd,
     buffRemoveId: outcome.effects?.buffRemoveId,
+    teamTrustDelta: outcome.effects?.teamTrustDelta,
+    teamChemistryDelta: outcome.effects?.teamChemistryDelta,
+    targetTeammateChemistryDelta: outcome.effects?.targetTeammateChemistryDelta,
+    targetIdentity: outcome.effects?.targetIdentity,
   };
 }
 

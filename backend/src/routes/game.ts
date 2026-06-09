@@ -13,6 +13,8 @@ import {
   applyTeamMeeting,
   applyTeamPractice,
   applyLockerRoomTalk,
+  applyRetainCoreTeammate,
+  applyTeamTrainingFocus,
   computeTraitMods,
   createSession,
   initPlayer,
@@ -25,10 +27,19 @@ import {
 import { checkTournamentPromotion } from '../engine/stages.js';
 import { buildCareerGoal } from '../engine/careerGoal.js';
 import { applyMoneyTransaction } from '../engine/money.js';
-import { CLUBS, clubsForStage } from '../data/clubs.js';
+import { canSignUpForTournament, playerTeamMeetsRequirement } from '../engine/tournamentEligibility.js';
+import { activateClubRuntime, deriveRosterNeed, previewClubRuntime } from '../engine/worldClubs.js';
 import {
+  derivePlayerIdentityScores,
+  deriveTeammateIdentityScores,
+  findTeamCaller,
+  findTeamStar,
+} from '../engine/teamIdentity.js';
+import { CLUBS, clubsForStage, getClub } from '../data/clubs.js';
+import { getClubProfile } from '../data/clubProfiles.js';
+import {
+  buildYearTournaments,
   getTournament,
-  tournamentsOpenForSignup,
 } from '../data/tournaments.js';
 import {
   clearTeamQualifications,
@@ -46,14 +57,7 @@ import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
 import type { SocialFeedPost } from '../ai/prompts.js';
 import { validateAiEvents } from '../validation/guard.js';
-import type { ClubTier, Env, EventDef, MatchStats, Player, PlayerTeam, Stats } from '../types.js';
-
-function teamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
-  if (!required) return true;
-  if (!playerTeam) return false;
-  const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
-  return tierOrder.indexOf(playerTeam.tier) >= tierOrder.indexOf(required);
-}
+import type { ClubApplicationSummary, ClubRuntimeState, ClubStoryline, ClubTier, Env, EventDef, GameSession, MatchStats, Player, PlayerTeam, Stats, TeamIdentityDebug } from '../types.js';
 
 function refreshQualificationExpiry(player: Player): Player {
   const fallbackExpiry = defaultQualificationExpiry(player.year ?? 1, player.week ?? 1);
@@ -82,6 +86,62 @@ function refreshQualificationExpiry(player: Player): Player {
     qualificationSlotBatches: activePlayer.batches,
     teamQualificationSlotBatches: activeTeam.batches,
   };
+}
+
+function buildTeamIdentityDebug(player: Player): TeamIdentityDebug {
+  const roster = player.roster ?? [];
+  return {
+    player: {
+      visibleIdentity: player.visibleTeamIdentity,
+      sinceRound: player.teamIdentitySinceRound,
+      scores: derivePlayerIdentityScores(player, roster),
+    },
+    teammates: roster.map((tm) => ({
+      id: tm.id,
+      name: tm.name,
+      visibleIdentity: tm.visibleIdentity,
+      sinceRound: tm.identitySinceRound,
+      scores: deriveTeammateIdentityScores(tm, roster),
+    })),
+    caller: findTeamCaller(player, roster),
+    star: findTeamStar(player, roster),
+  };
+}
+
+function runtimeHint(runtime: ClubRuntimeState, needs: string[]): string {
+  const hints: string[] = [];
+  if (runtime.currentForm >= 25) hints.push('近期状态火热');
+  if (runtime.currentForm <= -25) hints.push('近期状态低迷');
+  if (runtime.rosterStability <= 40) hints.push('阵容不稳');
+  if (runtime.internalChemistry <= 40) hints.push('磨合吃紧');
+  if (needs.length > 0) hints.push(`正在寻找${needs.slice(0, 2).join(' / ')}`);
+  if (runtime.activeStorylines.length > 0) hints.push(`故事线：${runtime.activeStorylines[0]}`);
+  return hints.join(' · ') || '运行稳定';
+}
+
+function buildClubApplicationSummaries(session: GameSession): ClubApplicationSummary[] {
+  return CLUBS.map((club) => {
+    const runtime = previewClubRuntime(session, club.id);
+    const need = deriveRosterNeed(runtime);
+    const profile = getClubProfile(club.id, club.tier);
+    const needs = [
+      ...need.neededRoles.map((role) => `${role} 位`),
+      ...need.neededIdentities.map((identity) => `${identity} 身份`),
+    ];
+    return {
+      ...club,
+      runtimeSummary: {
+        rosterStyle: profile.rosterStyle,
+        currentForm: runtime.currentForm,
+        rosterStability: runtime.rosterStability,
+        internalChemistry: runtime.internalChemistry,
+        clubTrust: runtime.clubTrust,
+        needs,
+        storylines: runtime.activeStorylines,
+        hint: runtimeHint(runtime, needs),
+      },
+    };
+  });
 }
 
 
@@ -168,7 +228,7 @@ app.post('/game/start', async (c) => {
       apiToken: session.apiToken,
       player: session.player,
       currentEvent: session.currentEvent,
-      careerGoal: buildCareerGoal(session.player),
+      careerGoal: buildCareerGoal(session.player, 0),
       leaderboard: session.leaderboard,
     });
   } catch (err) {
@@ -184,7 +244,15 @@ app.get('/game/:sessionId', async (c) => {
   if (!session) return c.json({ error: 'session not found' }, 404);
   // Annotate with current promotion check so the UI can show next-stage hints.
   const promotion = checkTournamentPromotion(session.player);
-  return c.json({ ...session, promotion, careerGoal: buildCareerGoal(session.player) });
+  return c.json({
+    ...session,
+    promotion,
+    careerGoal: buildCareerGoal(
+      session.player,
+      session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0,
+    ),
+    debugTeamIdentity: buildTeamIdentityDebug(session.player),
+  });
 });
 
 const CUSTOM_QUALITY_BONUS: Record<string, number> = {
@@ -374,7 +442,11 @@ app.post('/game/:sessionId/choice', async (c) => {
         };
 
         try {
-          const generated = await ai.generateEvents(updated.player, updated.history);
+          const generated = await ai.generateEvents(
+            updated.player,
+            updated.history,
+            buildWorldStorylineContext(updated),
+          );
           if (generated && generated.length > 0) {
             await writeMergedAiEvents(generated);
           } else {
@@ -404,7 +476,10 @@ app.post('/game/:sessionId/choice', async (c) => {
       status: updated.status,
       ending: updated.ending,
       promotion: checkTournamentPromotion(updated.player),
-      careerGoal: buildCareerGoal(updated.player),
+      careerGoal: buildCareerGoal(
+        updated.player,
+        updated.leaderboard?.find((t) => t.isPlayer)?.points ?? 0,
+      ),
       leaderboard: updated.leaderboard,
     });
   } catch (err) {
@@ -428,17 +503,13 @@ app.get('/game/:sessionId/tournaments', async (c) => {
   session.player = refreshQualificationExpiry(session.player);
   const playerPoints =
     session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0;
-  const open = tournamentsOpenForSignup(
-    session.player.stage,
-    session.player.fame ?? 0,
-    playerPoints,
-    session.player.week ?? 1,
-    session.player.year ?? 1,
-    {
-      ...(session.player.qualificationSlots ?? {}),
-      ...(session.player.teamQualificationSlots ?? {}),
-    },
-  );
+  const open = buildYearTournaments(session.player.year ?? 1)
+    .filter((tournament) => canSignUpForTournament(
+      session.player,
+      tournament,
+      playerPoints,
+      session.player.week ?? 1,
+    ));
   return c.json({
     open,
     pendingMatch: session.player.pendingMatch ?? null,
@@ -481,7 +552,7 @@ app.post('/game/:sessionId/signup', async (c) => {
   }
   // 战队门槛校验：持有该赛事所需资格门票时可破格参加（只要有战队即可）
   const teamReq = t.teamRequirement ?? null;
-  if (teamReq !== null && !teamMeetsRequirement(session.player.team, teamReq)) {
+  if (teamReq !== null && !playerTeamMeetsRequirement(session.player.team, teamReq)) {
     const hasQualTicket = !!t.qualificationTargets?.length &&
       t.qualificationTargets
         .flatMap((slot) => qualificationFallbackSlots(slot))
@@ -498,9 +569,9 @@ app.post('/game/:sessionId/signup', async (c) => {
     if (!hasQualTicket) {
       const tierLabels: Record<ClubTier, string> = {
         youth: '青训',
-        'semi-pro': '半职业',
+        'semi-pro': '二线队',
         pro: '职业',
-        top: '顶级',
+        top: '职业队',
       };
       return c.json(
         { error: `该赛事需要 ${tierLabels[teamReq]} 及以上战队（当前 ${tierLabels[session.player.team.tier]}），或持有资格门票破格参加` },
@@ -521,6 +592,15 @@ app.post('/game/:sessionId/signup', async (c) => {
   let usedQualificationSlotOwner: 'player' | 'team' | undefined;
   let usedQualificationSlotExpiresAt: { year: number; week: number } | undefined;
   if (t.qualificationTargets?.length) {
+    const hasBlockedTeamTicket = t.qualificationTargets
+      .flatMap((slot) => qualificationFallbackSlots(slot))
+      .some((slot) => {
+        if (qualificationSlotOwner(slot) !== 'team') return false;
+        return ((session.player.teamQualificationSlots ?? {})[slot] ?? 0) > 0;
+      }) && session.player.team?.teamStatus !== 'starter';
+    if (hasBlockedTeamTicket) {
+      return c.json({ error: '当前队内定位不是首发，不能使用战队资格门票报名' }, 400);
+    }
     const usedSlot = t.qualificationTargets
       .flatMap((slot) => qualificationFallbackSlots(slot))
       .find((slot) => {
@@ -815,6 +895,14 @@ app.get('/game/meta/actions', (c) => c.json({ actions: ACTIONS }));
 app.get('/game/meta/shop', (c) => c.json({ items: SHOP_ITEMS }));
 app.get('/game/meta/clubs', (c) => c.json({ clubs: CLUBS }));
 
+app.get('/game/:sessionId/clubs', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  return c.json({ clubs: buildClubApplicationSummaries(session) });
+});
+
 // 申请战队
 app.post('/game/:sessionId/apply-club', async (c) => {
   const id = c.req.param('sessionId');
@@ -825,15 +913,16 @@ app.post('/game/:sessionId/apply-club', async (c) => {
   }
 
   const storage = makeStorage(c.env);
-  const session = await storage.sessions.load(id);
+  let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
 
   try {
     const player = applyClubRequest(session, clubId);
     session.player = player;
+    session = activateClubRuntime(session, clubId, 'club-application');
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
-    return c.json({ player });
+    return c.json({ player: session.player });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
@@ -876,7 +965,10 @@ app.post('/game/:sessionId/team-response', async (c) => {
     return c.json({
       player,
       leaderboard: session.leaderboard,
-      careerGoal: buildCareerGoal(player),
+      careerGoal: buildCareerGoal(
+        player,
+        session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0,
+      ),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -944,6 +1036,47 @@ app.post('/game/:sessionId/locker-room-talk', async (c) => {
   }
 });
 
+app.post('/game/:sessionId/retain-core-teammate', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const { player, result } = applyRetainCoreTeammate(session);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+app.post('/game/:sessionId/team-training-focus', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { focus } = body ?? {};
+  if (typeof focus !== 'string' || !focus) {
+    return c.json({ error: 'focus 必填' }, 400);
+  }
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+
+  try {
+    const { player, result } = applyTeamTrainingFocus(session, focus);
+    session.player = player;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+    return c.json({ player, result });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
 // 主动离队
 app.post('/game/:sessionId/leave-team', async (c) => {
   const id = c.req.param('sessionId');
@@ -998,6 +1131,128 @@ app.get('/game/:sessionId/intro', async (c) => {
   return c.json({ intro });
 });
 
+const STORYLINE_SOCIAL_COPY: Record<ClubStoryline, string> = {
+  'dark-horse-run': '最近状态像开了闸，黑马味越来越重',
+  'core-rebuild': '阵容换核还在磨，短期波动很正常',
+  'chemistry-crisis': '更衣室气氛有点紧，下一场很关键',
+  'veteran-decline': '老将状态下滑，队伍需要找到新解法',
+  'star-breakout': '队里有人打出了突破赛季的感觉',
+  'system-clicking': '战术体系终于开始咬合了',
+  'promoted-after-breakout-season': '靠一个爆发赛季打进了更高舞台',
+  'fallen-giant': '这个赛季跌得有点狠，重建压力已经摆上台面',
+};
+
+function formLabel(form: number): string {
+  if (form >= 35) return '状态很热';
+  if (form >= 10) return '势头不错';
+  if (form <= -35) return '状态低迷';
+  if (form <= -10) return '有些起伏';
+  return '走势平稳';
+}
+
+function displayClubName(session: GameSession, clubId: string): string {
+  const club = getClub(clubId);
+  if (club?.isRival && typeof club.rivalIndex === 'number') {
+    return session.player.rivals[club.rivalIndex]?.name ?? club.name;
+  }
+  return club?.name ?? clubId;
+}
+
+function buildWorldClubSocialPosts(session: GameSession): SocialFeedPost[] {
+  const pool = session.worldClubs;
+  if (!pool) return [];
+  const latestSummary = pool.seasonSummaries?.[0];
+  const summaryPosts: SocialFeedPost[] = [];
+  if (latestSummary) {
+    const darkHorse = latestSummary.darkHorseClubIds.map((id) => displayClubName(session, id)).slice(0, 2);
+    const promoted = latestSummary.promotedClubIds.map((id) => displayClubName(session, id)).slice(0, 2);
+    const fallen = latestSummary.fallenClubIds.map((id) => displayClubName(session, id)).slice(0, 2);
+    const pieces = [
+      darkHorse.length > 0 ? `黑马：${darkHorse.join('、')}` : '',
+      promoted.length > 0 ? `升级：${promoted.join('、')}` : '',
+      fallen.length > 0 ? `低迷：${fallen.join('、')}` : '',
+    ].filter(Boolean);
+    if (pieces.length > 0) {
+      summaryPosts.push({
+        author: 'HLTV Brief',
+        authorType: 'media',
+        handle: '@hltv_brief',
+        content: `赛季总结来了，${pieces.join('；')}。新赛季看点不少。`,
+      });
+    }
+  }
+  const runtimes = [...pool.activeClubIds, ...pool.relevantClubIds]
+    .map((clubId) => pool.runtimeByClubId[clubId])
+    .filter((runtime): runtime is ClubRuntimeState => Boolean(runtime))
+    .sort((a, b) => {
+      const aHeat = a.activeStorylines.length * 20 + a.recentResults.length * 4 + Math.abs(a.currentForm);
+      const bHeat = b.activeStorylines.length * 20 + b.recentResults.length * 4 + Math.abs(b.currentForm);
+      return bHeat - aHeat;
+    });
+
+  const posts: SocialFeedPost[] = [...summaryPosts];
+  for (const runtime of runtimes) {
+    const club = getClub(runtime.clubId);
+    if (!club) continue;
+    const clubName = displayClubName(session, runtime.clubId);
+    const storyline = runtime.activeStorylines[0];
+    if (storyline) {
+      posts.push({
+        author: `${club.tag} Watch`,
+        authorType: 'media',
+        handle: `@${club.tag.toLowerCase()}_watch`,
+        content: `${clubName} ${STORYLINE_SOCIAL_COPY[storyline]}，最近整体${formLabel(runtime.currentForm)}。`,
+      });
+    } else if (runtime.recentResults[0]) {
+      const result = runtime.recentResults[0];
+      const resultText = result.result === 'win'
+        ? '拿下冠军'
+        : result.result === 'deep-run'
+          ? '打进深轮'
+          : result.result === 'early-exit'
+            ? '早早出局'
+            : '吞下一败';
+      posts.push({
+        author: clubName,
+        authorType: 'club',
+        handle: `@${club.tag.toLowerCase()}_gg`,
+        content: `${clubName} 最近在 ${result.tier.toUpperCase()} 级赛事${resultText}，训练室今晚继续复盘。`,
+      });
+    }
+    if (posts.length >= 2) break;
+  }
+  return posts;
+}
+
+function dedupeSocialPosts(posts: SocialFeedPost[]): SocialFeedPost[] {
+  const seen = new Set<string>();
+  return posts.filter((post) => {
+    const key = `${post.authorType}|${post.author}|${post.handle}|${post.content}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildWorldStorylineContext(session: GameSession): string[] {
+  const pool = session.worldClubs;
+  if (!pool) return [];
+  return Object.values(pool.runtimeByClubId)
+    .filter((runtime) => runtime.activeStorylines.length > 0 || runtime.recentResults.length > 0)
+    .sort((a, b) => b.activeStorylines.length - a.activeStorylines.length || b.updatedRound - a.updatedRound)
+    .slice(0, 6)
+    .map((runtime) => {
+      const name = displayClubName(session, runtime.clubId);
+      const story = runtime.activeStorylines.length > 0
+        ? `storylines=${runtime.activeStorylines.join(',')}`
+        : 'storylines=none';
+      const recent = runtime.recentResults[0]
+        ? `recent=${runtime.recentResults[0].result}/${runtime.recentResults[0].tier}`
+        : 'recent=none';
+      return `${name}: ${story}; ${recent}`;
+    });
+}
+
 // 社区动态：LLM 模拟队友 / 俱乐部 / 对手的 X 风格帖子（每回合缓存一次）
 app.get('/game/:sessionId/social-feed', async (c) => {
   const id = c.req.param('sessionId');
@@ -1034,8 +1289,9 @@ app.get('/game/:sessionId/social-feed', async (c) => {
     session.history.slice(-5),
     session.leaderboard,
   );
+  const worldPosts = buildWorldClubSocialPosts(session);
 
-  const merged = [...newPosts, ...allPosts].slice(0, MAX_FEED_LENGTH);
+  const merged = dedupeSocialPosts([...worldPosts, ...newPosts, ...allPosts]).slice(0, MAX_FEED_LENGTH);
 
   try {
     await c.env.KV.put(allKey, JSON.stringify(merged), { expirationTtl: 43200 });

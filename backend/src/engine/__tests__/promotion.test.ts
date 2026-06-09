@@ -46,6 +46,7 @@ describe('promotion events', () => {
     expect(event).toBeTruthy();
 
     const session = createSession(basePlayer(), 1);
+    session.id = 'promotion-test-stable';
     session.currentEvent = toPublicEvent(event!, session.player.rivals, session.player.roster ?? []);
 
     const { session: updated, result } = applyChoice(session, 'accept-second-offer', 20);
@@ -57,5 +58,19 @@ describe('promotion events', () => {
     expect(updated.player.team?.name).not.toBe('本地狼队');
     expect(updated.player.roster?.length).toBeGreaterThan(0);
     expect(updated.player.promotionPending).toBeNull();
+  });
+
+  it('uses a 4-round cooldown when a promotion offer is declined', () => {
+    const event = getEventById('promotion-youth-to-second');
+    expect(event).toBeTruthy();
+
+    const session = createSession(basePlayer(), 1);
+    session.currentEvent = toPublicEvent(event!, session.player.rivals, session.player.roster ?? []);
+
+    const { session: updated } = applyChoice(session, 'decline-second-offer', 0);
+
+    expect(updated.player.stage).toBe('youth');
+    expect(updated.player.promotionPending).toBeNull();
+    expect(updated.player.promotionCooldown).toBe(updated.player.round + 4);
   });
 });

@@ -149,8 +149,131 @@ export interface LeaderboardTeam {
 }
 
 export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
+export type TournamentTier = 'c' | 'b' | 'a' | 's-open' | 's-closed' | 's-class' | 'major';
+
+export type RosterStyle =
+  | 'balanced'
+  | 'tactical'
+  | 'firepower'
+  | 'development'
+  | 'chaotic';
 
 export type TeammateRole = 'IGL' | 'AWPer' | 'Entry' | 'Support' | 'Lurker';
+
+export type TeamIdentity =
+  | 'caller'
+  | 'star'
+  | 'veteran'
+  | 'rookie'
+  | 'glue'
+  | 'problem';
+
+export type VisiblePlayerTeamIdentity = TeamIdentity | 'star-caller';
+
+export interface TeamIdentityTarget {
+  type: 'player' | 'teammate';
+  id: string;
+  label: string;
+  score: number;
+  reasons: string[];
+  identities: TeamIdentity[];
+}
+
+export interface TeamIdentityScoreDebug {
+  identity: TeamIdentity;
+  score: number;
+  reasons: string[];
+}
+
+export interface TeamIdentityDebug {
+  player: {
+    visibleIdentity?: VisiblePlayerTeamIdentity;
+    sinceRound?: number;
+    scores: TeamIdentityScoreDebug[];
+  };
+  teammates: Array<{
+    id: string;
+    name: string;
+    visibleIdentity?: TeamIdentity;
+    sinceRound?: number;
+    scores: TeamIdentityScoreDebug[];
+  }>;
+  caller: TeamIdentityTarget | null;
+  star: TeamIdentityTarget | null;
+}
+
+export interface ClubPlayer {
+  id: string;
+  name: string;
+  role: TeammateRole;
+  stats: TeammateStats;
+  traits: string[];
+  personality: PersonalityTag;
+  joinedRound: number;
+  status: 'starter' | 'bench' | 'trial';
+  internalChemistry?: number;
+}
+
+export interface ClubQualificationState {
+  eligibleTiers: TournamentTier[];
+  openQualifierTickets: string[];
+  majorPathProgress?: string;
+  seasonRank?: number;
+}
+
+export type ClubStoryline =
+  | 'dark-horse-run'
+  | 'core-rebuild'
+  | 'chemistry-crisis'
+  | 'veteran-decline'
+  | 'star-breakout'
+  | 'system-clicking'
+  | 'promoted-after-breakout-season'
+  | 'fallen-giant';
+
+export interface ClubRecentResult {
+  round: number;
+  tournamentId?: string;
+  tier: TournamentTier;
+  result: 'win' | 'loss' | 'deep-run' | 'early-exit';
+  note: string;
+}
+
+export interface ClubRuntimeState {
+  clubId: string;
+  tier: ClubTier;
+  fullRoster: ClubPlayer[];
+  clubTrust: number;
+  currentForm: number;
+  rosterStability: number;
+  internalChemistry: number;
+  seasonPoints: number;
+  qualificationState: ClubQualificationState;
+  activeStorylines: ClubStoryline[];
+  recentResults: ClubRecentResult[];
+  pendingStoryFlags: string[];
+  updatedRound: number;
+}
+
+export interface ClubSeasonSummary {
+  season: number;
+  round: number;
+  darkHorseClubIds: string[];
+  fallenClubIds: string[];
+  promotedClubIds: string[];
+  majorNewFaceClubIds: string[];
+}
+
+export interface WorldClubPool {
+  season: number;
+  activeClubIds: string[];
+  relevantClubIds: string[];
+  staticClubIds: string[];
+  runtimeByClubId: Record<string, ClubRuntimeState>;
+  processedTickKeysByClubId: Record<string, string[]>;
+  lastGlobalTickRound?: number;
+  seasonSummaries?: ClubSeasonSummary[];
+}
 
 export type PersonalityTag =
   | 'strict'
@@ -181,6 +304,8 @@ export interface Teammate {
   stats: TeammateStats;
   growthSpent: number;
   chemistry?: number;
+  visibleIdentity?: TeamIdentity;
+  identitySinceRound?: number;
   injuryRisk: number;
   retired: boolean;
 }
@@ -199,6 +324,19 @@ export interface Club {
   rivalIndex?: number;
 }
 
+export interface ClubApplicationSummary extends Club {
+  runtimeSummary?: {
+    rosterStyle: RosterStyle;
+    currentForm: number;
+    rosterStability: number;
+    internalChemistry: number;
+    clubTrust: number;
+    needs: string[];
+    storylines: ClubStoryline[];
+    hint: string;
+  };
+}
+
 export interface PlayerTeam {
   clubId: string;
   name: string;
@@ -207,6 +345,23 @@ export interface PlayerTeam {
   tier: ClubTier;
   monthlySalary: number;
   joinedRound: number;
+  teamStatus?: 'starter' | 'trial' | 'rotation';
+  teamStatusUntilRound?: number;
+  joinMode?: PlayerJoinMode;
+  joinReason?: string;
+  roleOverlap?: RoleOverlap[];
+}
+
+export type RoundTeamSnapshot = Pick<PlayerTeam, 'clubId' | 'name' | 'tag' | 'region' | 'tier'>;
+
+export type PlayerJoinMode = 'replace-starter' | 'fill-vacancy' | 'trial-sixth' | 'rotation';
+
+export interface RoleOverlap {
+  kind: 'identity' | 'role';
+  value: TeamIdentity | TeammateRole;
+  teammateId?: string;
+  teammateName?: string;
+  severity: 'low' | 'medium' | 'high';
 }
 
 export interface PendingApplication {
@@ -232,6 +387,8 @@ export interface PendingDeparture {
   revealed: boolean;
   destTeamName: string;
   earlyRecruit: boolean;
+  retentionAttempted?: boolean;
+  retentionAttemptRound?: number;
 }
 
 export type ForcedMatchResult = 'win' | 'loss';
@@ -321,6 +478,8 @@ export interface TeamActionResult {
   narrative: string;
   effects: string[];
   teammateId?: string;
+  comboTriggeredLabels?: string[];
+  comboAddedLabels?: string[];
 }
 
 export type ShopCategory = 'consumable' | 'service' | 'equipment' | 'social';
@@ -387,6 +546,8 @@ export interface Player extends DynamicState {
   activeRoleRounds: number;
   roleTransition: RoleTransition | null;
   teamTrust: number;
+  visibleTeamIdentity?: VisiblePlayerTeamIdentity;
+  teamIdentitySinceRound?: number;
   pendingDeparture?: PendingDeparture;
   ownedItems: string[];
   loans: Loan[];
@@ -425,6 +586,7 @@ export interface RoundResult {
   eventId: string;
   eventType: EventType;
   eventTitle: string;
+  teamSnapshot?: RoundTeamSnapshot;
   choiceId: string;
   choiceLabel: string;
   success: boolean;
@@ -476,6 +638,7 @@ export interface CareerGoal {
   stage: Stage;
   stageLabel: string;
   summary: string;
+  teamHint?: string;
   nextStageLabel?: string;
   goals: CareerGoalProgress[];
   opportunities: CareerGoalOpportunity[];
@@ -494,6 +657,9 @@ export interface GameSession {
   promotion?: PromotionCheck;
   careerGoal?: CareerGoal;
   leaderboard: LeaderboardTeam[];
+  worldClubs?: WorldClubPool;
+  worldClubsVersion?: number;
+  debugTeamIdentity?: TeamIdentityDebug;
 }
 
 export interface SessionSummary {

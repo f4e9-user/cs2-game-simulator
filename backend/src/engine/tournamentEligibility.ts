@@ -1,0 +1,59 @@
+import type { Player, PlayerTeam, ClubTier } from '../types.js';
+import type { Tournament } from '../data/tournaments.js';
+import {
+  qualificationFallbackSlots,
+  qualificationSlotOwner,
+} from './qualification.js';
+
+export function playerTeamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
+  if (!required) return true;
+  if (!playerTeam) return false;
+  const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+  return tierOrder.indexOf(playerTeam.tier) >= tierOrder.indexOf(required);
+}
+
+function hasUsableQualificationSlot(player: Player, tournament: Tournament): boolean {
+  if (!tournament.qualificationTargets?.length) return true;
+  return tournament.qualificationTargets
+    .flatMap((slot) => qualificationFallbackSlots(slot))
+    .some((slot) => {
+      const owner = qualificationSlotOwner(slot);
+      if (owner === 'team' && player.team?.teamStatus !== 'starter') return false;
+      const pool = owner === 'team'
+        ? (player.teamQualificationSlots ?? {})
+        : (player.qualificationSlots ?? {});
+      return (pool[slot] ?? 0) > 0;
+    });
+}
+
+export function canSignUpForTournament(
+  player: Player,
+  tournament: Tournament,
+  playerPoints: number,
+  week = player.week ?? 1,
+): boolean {
+  if (!tournament.stages.includes(player.stage)) return false;
+  if (tournament.fameRequired !== undefined && (player.fame ?? 0) < tournament.fameRequired) return false;
+  if (tournament.pointsRequired !== undefined && playerPoints < tournament.pointsRequired) return false;
+  if (tournament.signupWeeks !== 'always' && !tournament.signupWeeks.includes(week)) return false;
+  if (!hasUsableQualificationSlot(player, tournament)) return false;
+  const teamReq = tournament.teamRequirement ?? null;
+  if (!playerTeamMeetsRequirement(player.team, teamReq)) {
+    if (!player.team) return false;
+    if (!tournament.qualificationTargets?.length) return false;
+    return hasUsableQualificationSlot(player, tournament);
+  }
+  return true;
+}
+
+export function canSeeTournamentOpportunity(
+  player: Player,
+  tournament: Tournament,
+  playerPoints: number,
+): boolean {
+  const week = tournament.signupWeeks === 'always'
+    ? (player.week ?? 1)
+    : tournament.signupWeeks.find((candidate) => candidate >= (player.week ?? 1));
+  if (week === undefined) return false;
+  return canSignUpForTournament(player, tournament, playerPoints, week);
+}

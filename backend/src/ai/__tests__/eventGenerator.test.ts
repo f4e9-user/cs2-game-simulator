@@ -104,6 +104,59 @@ describe('AI event generation parsing', () => {
     expect(prompt).not.toContain('"stressDelta":2');
   });
 
+  it('injects team identity and V4 permission boundaries into the prompt', () => {
+    const prompt = buildEventGenPrompt({
+      player: {
+        ...mockPlayer(),
+        team: {
+          clubId: 'club-cyber-academy',
+          name: '赛博学院',
+          tag: 'CYA',
+          region: '亚太',
+          tier: 'youth',
+          monthlySalary: 10,
+          joinedRound: 1,
+          teamStatus: 'rotation',
+          teamStatusUntilRound: 12,
+        },
+        visibleTeamIdentity: 'star',
+        roster: [
+          {
+            id: 'slot-1',
+            name: '指挥队友',
+            role: 'IGL',
+            personality: 'strict',
+            traits: ['igl'],
+            stats: { agility: 5, intelligence: 12, mentality: 8, experience: 9 },
+            growthSpent: 0,
+            chemistry: 40,
+            visibleIdentity: 'caller',
+          },
+        ],
+      },
+      recentHistory: [],
+      gaps: [],
+    });
+
+    expect(prompt).toContain('队内定位：rotation');
+    expect(prompt).toContain('玩家队内身份：star');
+    expect(prompt).toContain('指挥队友:caller');
+    expect(prompt).toContain('不能决定训练方向、换人、转会、合同或预算');
+  });
+
+  it('injects world storylines as read-only event context', () => {
+    const prompt = buildEventGenPrompt({
+      player: mockPlayer(),
+      recentHistory: [],
+      gaps: [],
+      worldStorylines: ['赛博学院: storylines=dark-horse-run; recent=deep-run/b'],
+    });
+
+    expect(prompt).toContain('【世界战队故事线】');
+    expect(prompt).toContain('dark-horse-run');
+    expect(prompt).toContain('不允许直接改写世界战队状态');
+  });
+
   it('normalizes common LLM shape mistakes before validation', () => {
     const text = JSON.stringify([
       {

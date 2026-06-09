@@ -135,7 +135,7 @@ attack = d20
        + traitBonuses - traitPenalties     // 玩家特质
        + teamBonus                          // 队友贡献
        + synergyBonus                       // 特质协同
-       + trustModifier                      // 信任度修正
+       + chemistryModifier                  // 队伍默契修正，由队友默契 + teamTrust 派生
 ```
 
 ### teamBonus 计算
@@ -164,13 +164,17 @@ teamBonus = floor(
 | 队内 `ego` 特质持有者 ≥ 2 人 | -2（内耗） |
 | 队内 `solo` 特质持有者 ≥ 3 人 | -1（各打各的） |
 
-### trustModifier 计算
+### trustModifier 计算（旧方案，已由队伍默契公式替代）
 
 ```
 teamTrust ≥ 65 → +1
 teamTrust ≤ 30 → -1
 teamTrust ≤ 15 → -2
 ```
+
+V2 以后比赛中不再单独叠加 `trustModifier`。`teamTrust` 只通过
+`deriveTeamChemistry(roster, teamTrust)` 影响派生队伍默契，再由
+`calcTeamChemistryModifier` 转换为小幅比赛修正，避免信任和默契重复结算。
 
 ---
 
@@ -182,7 +186,7 @@ teamTrust ≤ 15 → -2
 |---|---|
 | 队内冲突事件（`chain-team-conflict`）| 叙事中的"另一方"为 roster 中随机一名队友，附上其名字和性格 |
 | 队友离队传闻（`chain-rival-teammate-leave`）| 随机抽取一名队友名字具体化叙事 |
-| teamTrust 变化 | 赛事胜负影响 teamTrust，teamTrust 反过来影响赛事结算（trustModifier）|
+| teamTrust 变化 | 赛事胜负影响 teamTrust，teamTrust 通过派生队伍默契影响赛事结算 |
 | star 性格队友 | consecutiveLosses ≥ 2 时，`star` 性格队友触发冲突事件的概率翻倍 |
 | drama 性格队友 | 任意事件结果的方差加大（成功更成功，失败更失败）|
 

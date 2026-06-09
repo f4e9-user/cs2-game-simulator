@@ -22,6 +22,7 @@ export function CareerGoalPanel({ goal }: Props) {
       </div>
 
       <div className="career-goal-summary">{goal.summary}</div>
+      {goal.teamHint && <div className="career-goal-summary">{goal.teamHint}</div>}
 
       {goal.goals.length > 0 && (
         <div className="career-goal-block">

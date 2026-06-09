@@ -129,4 +129,67 @@ describe('buildCareerGoal', () => {
       expect.objectContaining({ id: 'fame', current: 42, target: 60 }),
     ]));
   });
+
+  it('does not show gated A-tier opportunities without the required ticket', () => {
+    const blockedGoal = buildCareerGoal(player({
+      stage: 'second',
+      week: 21,
+      fame: 20,
+      team: {
+        clubId: 'semi-pro-test',
+        name: '二线测试队',
+        tag: 'SPT',
+        region: 'CN',
+        tier: 'semi-pro',
+        monthlySalary: 20,
+        joinedRound: 1,
+        teamStatus: 'starter',
+      },
+    }), 20);
+
+    expect(blockedGoal.opportunities.some((opportunity) => opportunity.week === 21)).toBe(false);
+  });
+
+  it('shows A-tier opportunities for a second-tier team with the required ticket', () => {
+    const ticketGoal = buildCareerGoal(player({
+      stage: 'second',
+      week: 21,
+      fame: 20,
+      team: {
+        clubId: 'semi-pro-test',
+        name: '二线测试队',
+        tag: 'SPT',
+        region: 'CN',
+        tier: 'semi-pro',
+        monthlySalary: 20,
+        joinedRound: 1,
+        teamStatus: 'starter',
+      },
+      qualificationSlots: { 'a-open': 1 },
+    }), 20);
+
+    expect(ticketGoal.opportunities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ week: 21, tier: 'A 级赛事' }),
+    ]));
+  });
+
+  it('adds a direction hint from the current club profile', () => {
+    const goal = buildCareerGoal(player({
+      stage: 'youth',
+      team: {
+        clubId: 'club-cyber-academy',
+        name: '赛博学院',
+        tag: 'CYA',
+        region: '亚太',
+        tier: 'youth',
+        monthlySalary: 10,
+        joinedRound: 1,
+        teamStatus: 'trial',
+        teamStatusUntilRound: 9,
+      },
+    }));
+
+    expect(goal.teamHint).toContain('战术体系晋级');
+    expect(goal.teamHint).toContain('试训期');
+  });
 });

@@ -14,9 +14,9 @@ import {
 
 const TIER_LABELS: Record<ClubTier, string> = {
   youth: '青训',
-  'semi-pro': '半职业',
+  'semi-pro': '二线队',
   pro: '职业',
-  top: '顶级',
+  top: '职业队',
 };
 
 const PROGRESSION_LABELS: Record<string, string> = {
@@ -525,7 +525,7 @@ function TournamentCard({
             : !team
               ? '无战队'
               : `战队等级不足（当前${TIER_LABELS[team.tier]}）`
-          } · 需要 {TIER_LABELS[teamReq]}+ 战队
+          } · 需要 {TIER_LABELS[teamReq]}及以上战队
         </div>
       )}
       {t.qualificationTargets && t.qualificationTargets.length > 0 && (

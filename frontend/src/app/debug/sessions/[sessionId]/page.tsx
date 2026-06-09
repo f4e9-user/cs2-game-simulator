@@ -112,6 +112,18 @@ export default function DebugSessionPage() {
     };
   }, [session]);
 
+  const worldClubRows = useMemo(() => {
+    if (!session?.worldClubs) return [];
+    const pool = session.worldClubs;
+    return Object.values(pool.runtimeByClubId)
+      .sort((a, b) => b.updatedRound - a.updatedRound)
+      .slice(0, 12)
+      .map((runtime) => ({
+        ...runtime,
+        tickKeys: pool.processedTickKeysByClubId[runtime.clubId] ?? [],
+      }));
+  }, [session]);
+
   const submit = async () => {
     if (!session || !form) return;
     setSaving(true);
@@ -306,6 +318,96 @@ export default function DebugSessionPage() {
                 : ''}
             </div>
             <pre style={preStyle}>{pretty(aiEvents)}</pre>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">世界战队运行态</div>
+            {session.worldClubs ? (
+              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                <div>
+                  season {session.worldClubs.season} · active {session.worldClubs.activeClubIds.length} · relevant {session.worldClubs.relevantClubIds.length} · static {session.worldClubs.staticClubIds.length} · lastTick {session.worldClubs.lastGlobalTickRound ?? '(none)'}
+                </div>
+                {session.worldClubs.seasonSummaries?.[0] && (
+                  <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10 }}>
+                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>season summary {session.worldClubs.seasonSummaries[0].season}</div>
+                    <div>darkHorse: {session.worldClubs.seasonSummaries[0].darkHorseClubIds.join(', ') || '(none)'}</div>
+                    <div>promoted: {session.worldClubs.seasonSummaries[0].promotedClubIds.join(', ') || '(none)'}</div>
+                    <div>fallen: {session.worldClubs.seasonSummaries[0].fallenClubIds.join(', ') || '(none)'}</div>
+                  </div>
+                )}
+                {worldClubRows.length > 0 ? worldClubRows.map((club) => (
+                  <div key={club.clubId} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>{club.clubId} · {club.tier} · round {club.updatedRound}</div>
+                    <div>form {club.currentForm} · trust {club.clubTrust} · chemistry {club.internalChemistry} · stability {club.rosterStability} · points {club.seasonPoints}</div>
+                    <div>storylines: {club.activeStorylines.length > 0 ? club.activeStorylines.join(', ') : '(none)'}</div>
+                    <div>recent: {club.recentResults[0] ? `${club.recentResults[0].result} ${club.recentResults[0].tier} r${club.recentResults[0].round}` : '(none)'}</div>
+                    <div>ticks: {club.tickKeys.length > 0 ? club.tickKeys.join(', ') : '(none)'}</div>
+                  </div>
+                )) : (
+                  <div>尚未激活任何战队运行态。</div>
+                )}
+              </div>
+            ) : (
+              <div style={{ color: '#8b949e', fontSize: 13 }}>worldClubs 未初始化</div>
+            )}
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">队内身份 Debug</div>
+            {session.debugTeamIdentity ? (
+              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>
+                    player · visible {session.debugTeamIdentity.player.visibleIdentity ?? '(none)'} · since {session.debugTeamIdentity.player.sinceRound ?? '(none)'}
+                  </div>
+                  <div>
+                    scores: {session.debugTeamIdentity.player.scores.length > 0
+                      ? session.debugTeamIdentity.player.scores.map((score) => `${score.identity}:${score.score}`).join(', ')
+                      : '(none)'}
+                  </div>
+                  {session.debugTeamIdentity.player.scores.map((score) => (
+                    <div key={`player-${score.identity}`}>
+                      {score.identity} reasons: {score.reasons.join(' / ') || '(none)'}
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div>
+                    caller: {session.debugTeamIdentity.caller
+                      ? `${session.debugTeamIdentity.caller.label} (${session.debugTeamIdentity.caller.type}, score ${session.debugTeamIdentity.caller.score})`
+                      : '(none)'}
+                  </div>
+                  <div>
+                    star: {session.debugTeamIdentity.star
+                      ? `${session.debugTeamIdentity.star.label} (${session.debugTeamIdentity.star.type}, score ${session.debugTeamIdentity.star.score})`
+                      : '(none)'}
+                  </div>
+                </div>
+
+                {session.debugTeamIdentity.teammates.length > 0 ? session.debugTeamIdentity.teammates.map((tm) => (
+                  <div key={tm.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>
+                      {tm.name} · {tm.id} · visible {tm.visibleIdentity ?? '(none)'} · since {tm.sinceRound ?? '(none)'}
+                    </div>
+                    <div>
+                      scores: {tm.scores.length > 0
+                        ? tm.scores.map((score) => `${score.identity}:${score.score}`).join(', ')
+                        : '(none)'}
+                    </div>
+                    {tm.scores.map((score) => (
+                      <div key={`${tm.id}-${score.identity}`}>
+                        {score.identity} reasons: {score.reasons.join(' / ') || '(none)'}
+                      </div>
+                    ))}
+                  </div>
+                )) : (
+                  <div>当前没有 roster。</div>
+                )}
+              </div>
+            ) : (
+              <div style={{ color: '#8b949e', fontSize: 13 }}>debugTeamIdentity 未返回</div>
+            )}
           </div>
 
           <div className="panel">

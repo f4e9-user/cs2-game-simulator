@@ -1,12 +1,18 @@
 'use client';
 
-import type { Player, Trait } from '@/lib/types';
+import type { Player, Stage, Trait } from '@/lib/types';
 import { STAGE_LABELS, formatMoney } from '@/lib/format';
 
 interface Props {
   player: Player;
   traits: Trait[];
 }
+
+const PROMOTION_PENDING_LABEL: Partial<Record<Stage, string>> = {
+  youth: '青训考察',
+  second: '合同邀约',
+  pro: '职业邀约',
+};
 
 export function PlayerStats({ player, traits }: Props) {
   const playerTraits = player.traits
@@ -37,7 +43,7 @@ export function PlayerStats({ player, traits }: Props) {
       {player.promotionPending ? (
         <div style={{ marginBottom: 6 }}>
           <span className="status-alert warn">
-            考察来了 → {STAGE_LABELS[player.promotionPending]}
+            {PROMOTION_PENDING_LABEL[player.promotionPending] ?? '晋级机会'} → {STAGE_LABELS[player.promotionPending]}
           </span>
         </div>
       ) : null}
