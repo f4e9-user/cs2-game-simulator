@@ -1,4 +1,6 @@
-import type { LeaderboardTeam, Player } from '../types.js';
+import { getClub } from './clubs.js';
+import { previewClubRuntime } from '../engine/worldClubs.js';
+import type { GameSession, LeaderboardTeam, Player, WorldClubPool } from '../types.js';
 import { generateRivals, type Rival } from './rivals.js';
 
 const FILLER_TEAM_COUNT = 10;
@@ -11,8 +13,11 @@ const PLAYER_NAMES = [
 ] as const;
 
 
-// Build the initial leaderboard for a new session: player's team + rivals
-// (already generated) + several filler teams. All start at 0 points.
+interface LeaderboardContext {
+  id: string;
+  player: Player;
+  worldClubs?: WorldClubPool;
+}
 
 // Deterministic hash for seeding player assignments from team name.
 function hashString(s: string): number {
@@ -48,46 +53,110 @@ function pickPlayersForTeam(teamName: string): string[] {
   return players;
 }
 
-export function buildLeaderboard(player: Player): LeaderboardTeam[] {
+export function buildLeaderboard(
+  session: LeaderboardContext,
+  previousLeaderboard?: LeaderboardTeam[],
+): LeaderboardTeam[] {
   const all: LeaderboardTeam[] = [];
+  const playerTeamId = session.player.team?.clubId;
+  const previousFreeAgentPoints = previousLeaderboard?.find((row) => row.clubId === 'free-agent')?.points
+    ?? previousLeaderboard?.find((row) => row.isPlayer && row.kind === 'free-agent')?.points
+    ?? 0;
 
-  const playerTeam: LeaderboardTeam = {
-    name: player.team?.name ?? (player.name || '你'),
-    tag: player.team?.tag ?? '自由人',
-    region: player.team?.region ?? '—',
-    points: 0,
-    isPlayer: true,
-  };
-  all.push(playerTeam);
+  if (session.worldClubs) {
+    const clubIds = [
+      ...session.worldClubs.activeClubIds,
+      ...session.worldClubs.relevantClubIds,
+      ...session.worldClubs.staticClubIds,
+    ];
+    const seen = new Set<string>();
+    for (const clubId of clubIds) {
+      if (seen.has(clubId)) continue;
+      seen.add(clubId);
+      const club = getClub(clubId);
+      if (!club) continue;
+      const runtime = session.worldClubs.runtimeByClubId[clubId] ?? previewClubRuntime({
+        id: session.id,
+        player: session.player,
+        worldClubs: session.worldClubs,
+      } as GameSession, clubId);
+      all.push({
+        clubId,
+        name: club.name,
+        tag: club.tag,
+        region: club.region,
+        points: runtime.seasonPoints,
+        isPlayer: playerTeamId === clubId,
+        kind: 'club',
+        players: runtime.fullRoster
+          .filter((tm) => tm.status === 'starter')
+          .slice(0, 2)
+          .map((tm) => tm.name),
+      });
+    }
+    if (playerTeamId && !all.some((row) => row.clubId === playerTeamId) && session.player.team) {
+      const runtime = session.worldClubs.runtimeByClubId[playerTeamId];
+      all.push({
+        clubId: playerTeamId,
+        name: session.player.team.name,
+        tag: session.player.team.tag,
+        region: session.player.team.region,
+        points: runtime?.seasonPoints ?? 0,
+        isPlayer: true,
+        kind: 'club',
+      });
+    }
+    if (!session.player.team) {
+      all.push({
+        clubId: 'free-agent',
+        name: '自由人',
+        tag: 'FREE',
+        region: '—',
+        points: previousFreeAgentPoints,
+        isPlayer: true,
+        kind: 'free-agent',
+      });
+    }
+  } else {
+    const playerTeam: LeaderboardTeam = {
+      name: session.player.team?.name ?? '自由人',
+      tag: session.player.team?.tag ?? 'FREE',
+      region: session.player.team?.region ?? '—',
+      points: 0,
+      isPlayer: true,
+      kind: session.player.team ? 'club' : 'free-agent',
+    };
+    all.push(playerTeam);
 
-  const seen = new Set<string>([playerTeam.name]);
-  // Player.rivals are the named opponents used in event narratives.
-  for (const r of player.rivals) {
-    if (seen.has(r.name)) continue;
-    seen.add(r.name);
-    all.push({
-      name: r.name,
-      tag: r.tag,
-      region: r.region,
-      points: rndPoints(0, 8),
-      isPlayer: false,
-      players: pickPlayersForTeam(r.name),
-    });
-  }
+    const seen = new Set<string>([playerTeam.name]);
+    for (const r of session.player.rivals) {
+      if (seen.has(r.name)) continue;
+      seen.add(r.name);
+      all.push({
+        name: r.name,
+        tag: r.tag,
+        region: r.region,
+        points: rndPoints(0, 8),
+        isPlayer: false,
+        kind: 'rival',
+        players: pickPlayersForTeam(r.name),
+      });
+    }
 
-  // Filler teams to make the board interesting.
-  const fillers = generateRivals(FILLER_TEAM_COUNT);
-  for (const f of fillers) {
-    if (seen.has(f.name)) continue;
-    seen.add(f.name);
-    all.push({
-      name: f.name,
-      tag: f.tag,
-      region: f.region,
-      points: rndPoints(0, 12),
-      isPlayer: false,
-      players: pickPlayersForTeam(f.name),
-    });
+    const fillers = generateRivals(FILLER_TEAM_COUNT);
+    for (const f of fillers) {
+      if (seen.has(f.name)) continue;
+      seen.add(f.name);
+      all.push({
+        name: f.name,
+        tag: f.tag,
+        region: f.region,
+        points: rndPoints(0, 12),
+        isPlayer: false,
+        kind: 'rival',
+        players: pickPlayersForTeam(f.name),
+      });
+    }
   }
 
   return sortBoard(all);

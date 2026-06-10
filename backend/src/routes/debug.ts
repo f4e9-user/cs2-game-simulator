@@ -2,7 +2,12 @@ import { Hono } from 'hono';
 import { getEventById } from '../data/events/index.js';
 import { LlmLogger } from '../ai/logger.js';
 import { makeStorage } from '../storage/index.js';
-import { validateAiEvents } from '../validation/guard.js';
+import {
+  aiEventCacheKey,
+  aiEventsFromCache,
+  legacyAiEventCacheKey,
+  parseAiEventCache,
+} from '../ai/eventCache.js';
 import type {
   ClubTier,
   Env,
@@ -199,14 +204,23 @@ app.get('/debug/ai-events/:sessionId', async (c) => {
 
   const id = c.req.param('sessionId');
   try {
-    const cached = await c.env.KV.get(`ai-events:${id}`);
-    if (!cached) return c.json({ events: [], message: 'KV 中无此 session 的 AI 事件' });
-    const parsed = JSON.parse(cached) as unknown[];
-    const { valid, invalid } = validateAiEvents(Array.isArray(parsed) ? parsed : []);
+    const storage = makeStorage(c.env);
+    const session = await storage.sessions.load(id);
+    if (!session) return c.json({ error: 'session not found' }, 404);
+
+    const cached = await c.env.KV.get(aiEventCacheKey(id));
+    const legacy = cached ? null : await c.env.KV.get(legacyAiEventCacheKey(id));
+    const source = cached ? 'v2' : legacy ? 'legacy' : null;
+    if (!cached && !legacy) return c.json({ events: [], message: 'KV 中无此 session 的 AI 事件' });
+    const parsed = parseAiEventCache(cached ?? legacy, session.player, session.history);
+    const events = aiEventsFromCache(parsed.cache);
     return c.json({
-      events: parsed,
-      validCount: valid.length,
-      invalidCount: invalid.length,
+      source,
+      active: parsed.cache.active,
+      events,
+      entries: parsed.cache.entries,
+      validCount: events.length,
+      invalidCount: parsed.invalid.length,
     });
   } catch (e) {
     return c.json({ error: String(e) }, 500);

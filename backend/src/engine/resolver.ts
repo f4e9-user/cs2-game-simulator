@@ -88,6 +88,8 @@ export function outcomeEffects(outcome: Outcome): EffectDelta {
     teamChemistryDelta: outcome.effects?.teamChemistryDelta,
     targetTeammateChemistryDelta: outcome.effects?.targetTeammateChemistryDelta,
     targetIdentity: outcome.effects?.targetIdentity,
+    opposingTargetTeammateChemistryDelta: outcome.effects?.opposingTargetTeammateChemistryDelta,
+    opposingTargetIdentity: outcome.effects?.opposingTargetIdentity,
   };
 }
 

@@ -1,6 +1,8 @@
 # AI 事件缓存与 Pickup 设计
 
-状态：搁置，后续排期。
+状态：已实现。
+
+实现日期：2026-06-10。
 
 ## 背景
 
@@ -17,7 +19,18 @@ AI 事件由 LLM 根据玩家当前局面生成。直接用完即删可以避免
 
 ## 缓存结构
 
-建议把 KV 中的 AI 事件从 `EventDef[]` 改为运行时缓存对象数组：
+建议把 KV 中的 AI 事件从 `EventDef[]` 升级为运行时缓存对象数组。
+
+兼容策略：
+
+- 旧数据仍按 `EventDef[]` 读取。
+- 读到旧格式时，按默认 meta 补齐后再写回新格式。
+- 新格式写入后，后续只使用新结构。
+- KV 键建议改为版本化 envelope，例如 `ai-events-v2:<sessionId>`；迁移期间先读旧 key，写入时只落新 key，旧 key 只做一次性兼容读取。
+- `category` 默认直接取 `event.type`，仅在需要合并语义时再做显式覆盖。
+- 所有现有消费者都要先解包 `cached.event` 再做 `validateAiEvents`、结算回找和调试展示。
+
+建议结构：
 
 ```ts
 interface CachedAiEvent {
@@ -39,6 +52,7 @@ interface AiEventTriggerSnapshot {
   fame: number;
   teamTrust: number | null;
   hasTeam: boolean;
+  teamClubId: string | null;
   hasRival: boolean;
   lastMatchResult?: 'win' | 'loss';
 }
@@ -62,16 +76,14 @@ AI_EVENT_MAX_USES = 2;
 1. 读取现有缓存。
 2. 移除过期事件。
 3. 移除 `usedCount >= AI_EVENT_MAX_USES` 的事件。
-4. 保留当前正在展示的 AI 事件。
-5. 合并新生成事件。
-6. 按优先级保留前 `MAX_AI_EVENT_CACHE` 条。
+4. 合并新生成事件。
+5. 按优先级保留前 `MAX_AI_EVENT_CACHE` 条。
 
 优先级建议：
 
-1. 当前正在展示的 AI 事件。
-2. 新生成且未使用的事件。
-3. 旧的未使用事件。
-4. 已使用 1 次但冷却结束的事件。
+1. 新生成且未使用的事件。
+2. 旧的未使用事件。
+3. 已使用 1 次但冷却结束的事件。
 
 ## 使用状态更新
 
@@ -83,6 +95,7 @@ cached.lastPickedRound = player.round;
 ```
 
 不立即删除事件。是否还能再次出现，由 pickup 阶段的过滤和权重决定。
+当前正在展示的事件应单独保存在 cache envelope 的 `active` 字段或等价保活位中，确保结算时能回找完整 `EventDef`；它不属于候选缓存池，也不参与缓存淘汰。结算后再按 `usedCount`、冷却和 TTL 决定是否释放回候选池。
 
 ## Pickup 流程
 
@@ -238,6 +251,10 @@ if (category === 'team' && generatedFor.hasTeam && !currentHasTeam) {
   过滤;
 }
 
+if (category === 'team' && generatedFor.teamClubId !== currentTeamClubId) {
+  过滤;
+}
+
 if (category === 'media' && currentFame 仍然较高) {
   保留或加权;
 }
@@ -245,23 +262,23 @@ if (category === 'media' && currentFame 仍然较高) {
 
 这样可以避免旧 AI 事件脱离当前局面。
 
-## 后续问题
+## 回合时序
 
-当前回合流程是：
+当前回合流程应当是：
 
 ```text
-进入回合 -> 日常行动 -> 事件决策
+进入回合 -> 日常行动 -> 事件 pickup -> 事件展示 -> 事件决策
 ```
 
-如果 AI 事件是上一回合末按当时状态生成的，那么玩家在本回合先通过日常行动改变状态后，事件可能已经不再合理。
+因此 AI 事件不需要在“上一回合末”提前锁定。pickup 直接使用日常行动后的最新状态即可，缓存只负责候选复用和相关性控制，不负责展示后的二次替换。
 
-例如：
+如果 AI 事件在日常行动前生成，就会出现状态过期的问题：
 
 ```text
 上一回合压力 90
-系统生成压力事件
+系统预生成压力事件
 本回合玩家先休息/冥想，压力降到 35
 随后仍然进入压力事件
 ```
 
-因此 AI 事件 pickup 不应只在回合生成时固定。后续需要结合回合流程一起设计：事件展示前是否需要二次校验、是否允许替换当前事件、日常行动后是否重新挑事件。
+这类问题应通过调整 pickup 时机解决，而不是在展示后再重选当前事件。

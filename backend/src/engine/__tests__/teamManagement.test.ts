@@ -111,23 +111,27 @@ describe('team management actions', () => {
   });
 
   it('adds tactical-ready buff when team meeting succeeds', () => {
-    const session = createSession({
-      ...player(),
-      stats: {
-        agility: 10,
-        intelligence: 16,
-        mentality: 16,
-        experience: 10,
-        constitution: 10,
-        money: 20,
-      },
-    }, 1);
-    const result = applyTeamMeeting(session);
+    const result = Array.from({ length: 20 }, (_, i) => {
+      const session = createSession({
+        ...player(),
+        stats: {
+          agility: 10,
+          intelligence: 16,
+          mentality: 16,
+          experience: 10,
+          constitution: 10,
+          money: 20,
+        },
+      }, 1);
+      session.id = `team-meeting-ready-${i}`;
+      return applyTeamMeeting(session);
+    }).find((candidate) => candidate.result.success);
 
-    expect(result.result.success).toBe(true);
-    expect(result.player.buffs.some((buff) => buff.id === 'team-tactical-ready')).toBe(true);
-    expect(result.player.roster?.every((tm) => tm.chemistry === 42)).toBe(true);
-    expect(result.player.weeklyTeamActions['team-meeting']).toEqual({ year: 1, week: 10, count: 1 });
+    expect(result).toBeDefined();
+    expect(result!.result.success).toBe(true);
+    expect(result!.player.buffs.some((buff) => buff.id === 'team-tactical-ready')).toBe(true);
+    expect(result!.player.roster?.every((tm) => tm.chemistry === 42)).toBe(true);
+    expect(result!.player.weeklyTeamActions['team-meeting']).toEqual({ year: 1, week: 10, count: 1 });
   });
 
   it('allows one retain attempt for a revealed core teammate departure', () => {
@@ -141,6 +145,9 @@ describe('team management actions', () => {
         revealed: true,
         destTeamName: '测试队',
         earlyRecruit: false,
+        baseWindowStartRound: base.round - 1,
+        pressure: 82,
+        pressureThreshold: 100,
       },
     }, 1);
 
@@ -152,6 +159,32 @@ describe('team management actions', () => {
     expect(result.player.actionPoints).toBe(base.actionPoints - 35);
     expect(() => applyRetainCoreTeammate({ ...session, player: result.player }))
       .toThrow('这次离队风险已经尝试过挽留');
+  });
+
+  it('reduces departure pressure when a retain attempt succeeds', () => {
+    const base = player();
+    const result = Array.from({ length: 20 }, (_, i) => {
+      const session = createSession({
+        ...base,
+        pendingDeparture: {
+          slotId: 'slot-2',
+          departureRound: base.round + 5,
+          rumorShown: true,
+          revealed: true,
+          destTeamName: '测试队',
+          earlyRecruit: false,
+          baseWindowStartRound: base.round - 1,
+          pressure: 82,
+          pressureThreshold: 100,
+        },
+      }, 1);
+      session.id = `retain-pressure-${i}`;
+      return applyRetainCoreTeammate(session);
+    }).find((candidate) => candidate.result.success);
+
+    expect(result).toBeDefined();
+    expect(result!.player.pendingDeparture?.pressure ?? 0).toBeLessThan(82);
+    expect((result!.player.pendingDeparture?.lockedUntilRound ?? 0)).toBeGreaterThanOrEqual(base.round + 4);
   });
 
   it('lets a caller suggest a short-lived team training focus', () => {
@@ -202,19 +235,23 @@ describe('team management actions', () => {
       preferredRole: 'IGL' as const,
       visibleTeamIdentity: 'caller' as const,
     };
-    const session = createSession(base, 1);
-    const meeting = applyTeamMeeting(session);
+    const meeting = Array.from({ length: 20 }, (_, i) => {
+      const session = createSession(base, 1);
+      session.id = `team-combo-meeting-${i}`;
+      return applyTeamMeeting(session);
+    }).find((candidate) => candidate.result.success);
 
-    expect(meeting.result.success).toBe(true);
-    expect(meeting.result.comboAddedLabels).toContain('战术会议铺垫');
-    expect(meeting.player.roundCombos).toContainEqual({
+    expect(meeting).toBeDefined();
+    expect(meeting!.result.success).toBe(true);
+    expect(meeting!.result.comboAddedLabels).toContain('战术会议铺垫');
+    expect(meeting!.player.roundCombos).toContainEqual({
       id: 'team-meeting-ready',
       label: '战术会议铺垫',
       sourceActionId: 'team-meeting',
       remainingUses: 1,
     });
 
-    const focus = applyTeamTrainingFocus({ ...session, player: meeting.player }, 'tactics');
+    const focus = applyTeamTrainingFocus({ ...createSession(base, 1), player: meeting!.player }, 'tactics');
 
     expect(focus.result.comboTriggeredLabels).toContain('战术会议铺垫');
     expect(focus.player.roundCombos.some((combo) => combo.id === 'team-meeting-ready')).toBe(false);
@@ -222,14 +259,20 @@ describe('team management actions', () => {
   });
 
   it('lets teammate practice set up the next tactical meeting only once', () => {
+    const practice = Array.from({ length: 20 }, (_, i) => {
+      const session = createSession(player(), 1);
+      session.id = `team-practice-link-${i}`;
+      return applyTeamPractice(session, 'slot-1');
+    }).find((candidate) => candidate.result.success);
+
+    expect(practice).toBeDefined();
+
+    expect(practice!.result.success).toBe(true);
+    expect(practice!.result.comboAddedLabels).toContain('配合手感延续');
+    expect(practice!.player.roundCombos.some((combo) => combo.id === 'team-practice-link')).toBe(true);
+
     const session = createSession(player(), 1);
-    const practice = applyTeamPractice(session, 'slot-1');
-
-    expect(practice.result.success).toBe(true);
-    expect(practice.result.comboAddedLabels).toContain('配合手感延续');
-    expect(practice.player.roundCombos.some((combo) => combo.id === 'team-practice-link')).toBe(true);
-
-    const meeting = applyTeamMeeting({ ...session, player: practice.player });
+    const meeting = applyTeamMeeting({ ...session, player: practice!.player });
 
     expect(meeting.result.comboTriggeredLabels).toContain('配合手感延续');
     expect(meeting.player.roundCombos.some((combo) => combo.id === 'team-practice-link')).toBe(false);
@@ -461,6 +504,56 @@ describe('team management actions', () => {
     expect(event?.id).toBe('team-politics-ordinary-stand');
   });
 
+  it('can surface a harder politics choice when both core teammates push the player', () => {
+    const star: Teammate = {
+      ...teammate('star-slot', 'AWPer'),
+      personality: 'star',
+      traits: ['aimer'],
+      stats: {
+        agility: 13,
+        intelligence: 5,
+        mentality: 6,
+        experience: 6,
+      },
+      chemistry: 30,
+      visibleIdentity: 'star',
+    };
+    const caller: Teammate = {
+      ...teammate('caller-slot', 'IGL'),
+      traits: ['igl', 'tactical'],
+      stats: {
+        agility: 5,
+        intelligence: 12,
+        mentality: 8,
+        experience: 9,
+      },
+      chemistry: 30,
+      visibleIdentity: 'caller',
+    };
+    const base = {
+      ...player(),
+      traits: ['tactical-mind'],
+      activeRole: 'IGL' as const,
+      preferredRole: 'IGL' as const,
+      visibleTeamIdentity: 'caller' as const,
+      teamTrust: 35,
+      consecutiveLosses: 2,
+      roster: [star, caller],
+    };
+
+    const event = pickEvent({
+      player: base,
+      recentEventIds: [
+        'team-politics-caller-vs-star',
+        'team-politics-star-vs-caller',
+        'team-politics-ordinary-stand',
+      ],
+      rng: () => 0,
+    });
+
+    expect(event?.id).toBe('team-politics-hard-choice');
+  });
+
   it('applies team trust and target teammate chemistry effects from politics choices', () => {
     const star: Teammate = {
       ...teammate('star-slot', 'AWPer'),
@@ -476,6 +569,19 @@ describe('team management actions', () => {
       chemistry: 30,
       visibleIdentity: 'star',
     };
+    const caller: Teammate = {
+      ...teammate('caller-slot', 'IGL'),
+      name: '指挥队友',
+      traits: ['igl', 'tactical'],
+      stats: {
+        agility: 5,
+        intelligence: 12,
+        mentality: 8,
+        experience: 9,
+      },
+      chemistry: 40,
+      visibleIdentity: 'caller',
+    };
     const base = {
       ...player(),
       traits: ['tactical-mind'],
@@ -483,18 +589,21 @@ describe('team management actions', () => {
       preferredRole: 'IGL' as const,
       visibleTeamIdentity: 'caller' as const,
       teamTrust: 35,
-      roster: [star, teammate('support-slot', 'Support')],
+      roster: [star, caller, teammate('support-slot', 'Support')],
     };
-    const event = getEventById('team-politics-caller-vs-star')!;
+    const event = getEventById('team-politics-hard-choice')!;
     const session = createSession(base, 1);
     session.currentEvent = toPublicEvent(event, base.rivals, base.roster ?? []);
 
-    const resolved = applyChoice(session, 'private-review', 20);
+    const resolved = applyChoice(session, 'back-caller', 20);
 
-    expect(resolved.result.eventId).toBe('team-politics-caller-vs-star');
-    expect(resolved.session.player.teamTrust).toBe(38);
-    expect(resolved.session.player.roster?.find((tm) => tm.id === 'star-slot')?.chemistry).toBe(33);
-    expect(resolved.result.passiveEffects).toContain('队伍信任 +3');
+    expect(resolved.result.eventId).toBe('team-politics-hard-choice');
+    expect(resolved.session.player.teamTrust).toBe(37);
+    expect(resolved.session.player.roster?.find((tm) => tm.id === 'caller-slot')?.chemistry).toBe(44);
+    expect(resolved.session.player.roster?.find((tm) => tm.id === 'star-slot')?.chemistry).toBe(27);
+    expect(resolved.result.passiveEffects).toContain('队伍信任 +2');
+    expect(resolved.result.passiveEffects).toContain('指挥队友默契 +4');
+    expect(resolved.result.passiveEffects).toContain('明星队友默契 -3');
   });
 
   it('promotes expiring trial or rotation status to starter with feedback', () => {

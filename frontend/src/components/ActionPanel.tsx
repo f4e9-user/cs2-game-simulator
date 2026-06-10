@@ -202,6 +202,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const apiToken = useGameStore((s) => s.apiToken);
+  const setCurrentEvent = useGameStore((s) => s.setCurrentEvent);
 
   const ap = player.actionPoints ?? 0;
   const activeComboIds = new Set((player.roundCombos ?? []).map((combo) => combo.id));
@@ -220,6 +221,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
       const moneyChange = res.actionResult.newStats.money - prevMoney;
       onActionResult?.(res.actionResult, moneyChange);
       onPlayerUpdate(res.player);
+      setCurrentEvent(res.currentEvent);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

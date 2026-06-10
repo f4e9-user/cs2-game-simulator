@@ -141,11 +141,13 @@ export interface Rival {
 }
 
 export interface LeaderboardTeam {
+  clubId?: string;
   name: string;
   tag: string;
   region: string;
   points: number;
   isPlayer: boolean;
+  kind?: 'club' | 'rival' | 'free-agent';
 }
 
 export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
@@ -387,6 +389,12 @@ export interface PendingDeparture {
   revealed: boolean;
   destTeamName: string;
   earlyRecruit: boolean;
+  baseWindowStartRound?: number;
+  pressure?: number;
+  pressureThreshold?: number;
+  lastPressureRound?: number;
+  lockedUntilRound?: number;
+  reasonTags?: string[];
   retentionAttempted?: boolean;
   retentionAttemptRound?: number;
 }
@@ -632,6 +640,8 @@ export interface CareerGoalOpportunity {
   week: number;
   name: string;
   tier: string;
+  available?: boolean;
+  status?: string;
 }
 
 export interface CareerGoal {

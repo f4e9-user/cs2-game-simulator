@@ -5,6 +5,7 @@ import type {
   ChoiceResponse,
   Club,
   ClubApplicationSummary,
+  GameEvent,
   GameSession,
   LeaderboardTeam,
   Loan,
@@ -136,7 +137,7 @@ export const api = {
       method: 'POST',
     }, apiToken),
   submitAction: (sessionId: string, actionId: string, apiToken?: string) =>
-    request<{ actionResult: ActionResult; player: Player }>(
+    request<{ actionResult: ActionResult; player: Player; currentEvent: GameEvent | null }>(
       `/api/game/${sessionId}/action`,
       { method: 'POST', body: JSON.stringify({ actionId }) },
       apiToken,

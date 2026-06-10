@@ -700,6 +700,8 @@ export const TEAM_EVENTS: EventDef[] = [
             teamTrustDelta: 2,
             targetIdentity: 'caller',
             targetTeammateChemistryDelta: 3,
+            opposingTargetIdentity: 'star',
+            opposingTargetTeammateChemistryDelta: -2,
           },
           tags: {
             cooldowns: { 'team-ordinary-politics-cd': 5 },
@@ -732,6 +734,8 @@ export const TEAM_EVENTS: EventDef[] = [
             teamTrustDelta: 1,
             targetIdentity: 'star',
             targetTeammateChemistryDelta: 3,
+            opposingTargetIdentity: 'caller',
+            opposingTargetTeammateChemistryDelta: -2,
           },
           tags: {
             add: ['star-freedom'],
@@ -813,6 +817,261 @@ export const TEAM_EVENTS: EventDef[] = [
           tags: {
             add: ['locker-tension'],
             cooldowns: { 'team-ordinary-politics-cd': 4 },
+          },
+        },
+      },
+    ],
+  },
+  {
+    id: 'team-politics-hard-choice',
+    type: 'team',
+    title: '站队时刻',
+    narrative:
+      '训练赛又输了。指挥和明星位都不想再绕弯子，直接把话题推到你面前，要你当场表态。',
+    stages: ['youth', 'second', 'pro'],
+    difficulty: 3,
+    requireTags: ['has-team', 'team-caller-star-conflict-risk'],
+    forbidTags: ['team-politics-cd'],
+    weight: 3,
+    choices: [
+      {
+        id: 'back-caller',
+        label: '站指挥',
+        description: '先保体系，再谈个人发挥。',
+        check: {
+          primary: 'intelligence',
+          secondary: 'mentality',
+          dc: 12,
+          traitBonuses: { tactical: 2, support: 2, steady: 1 },
+        },
+        success: {
+          narrative: '你把默认位和补枪顺序讲得很清楚，指挥那边先稳住了。',
+          effects: {
+            teamTrustDelta: 2,
+            targetIdentity: 'caller',
+            targetTeammateChemistryDelta: 4,
+            opposingTargetIdentity: 'star',
+            opposingTargetTeammateChemistryDelta: -3,
+          },
+          tags: {
+            add: ['caller-backed'],
+            remove: ['locker-tension'],
+            cooldowns: { 'team-politics-cd': 6 },
+          },
+        },
+        failure: {
+          narrative: '你站得太快，明星位觉得自己被你往外推。',
+          stateDelta: { stress: 4, tilt: 1 },
+          effects: {
+            teamTrustDelta: -3,
+            targetIdentity: 'caller',
+            targetTeammateChemistryDelta: 1,
+            opposingTargetIdentity: 'star',
+            opposingTargetTeammateChemistryDelta: -4,
+          },
+          tags: {
+            add: ['locker-tension'],
+            cooldowns: { 'team-politics-cd': 5 },
+          },
+        },
+      },
+      {
+        id: 'back-star',
+        label: '站明星',
+        description: '先保火力点，再谈体系。',
+        check: {
+          primary: 'mentality',
+          secondary: 'agility',
+          dc: 12,
+          traitBonuses: { support: 2, clutch: 1, steady: 1 },
+          traitPenalties: { hothead: 1 },
+        },
+        success: {
+          narrative: '你把几个关键回合的自由度讲清楚，明星位愿意继续承担开局压力。',
+          effects: {
+            teamTrustDelta: 1,
+            targetIdentity: 'star',
+            targetTeammateChemistryDelta: 4,
+            opposingTargetIdentity: 'caller',
+            opposingTargetTeammateChemistryDelta: -3,
+          },
+          tags: {
+            add: ['star-freedom'],
+            remove: ['locker-tension'],
+            cooldowns: { 'team-politics-cd': 6 },
+          },
+        },
+        failure: {
+          narrative: '你想给明星位撑场，但指挥听起来像是被你当众顶了。',
+          stateDelta: { stress: 4 },
+          effects: {
+            teamTrustDelta: -2,
+            targetIdentity: 'star',
+            targetTeammateChemistryDelta: 1,
+            opposingTargetIdentity: 'caller',
+            opposingTargetTeammateChemistryDelta: -4,
+          },
+          tags: {
+            add: ['locker-tension'],
+            cooldowns: { 'team-politics-cd': 5 },
+          },
+        },
+      },
+      {
+        id: 'mediate',
+        label: '压住火气',
+        description: '不直接站边，先把争论拆成回合问题。',
+        check: {
+          primary: 'mentality',
+          secondary: 'intelligence',
+          dc: 11,
+          traitBonuses: { support: 2, tactical: 1, steady: 2 },
+        },
+        success: {
+          narrative: '你把争论拉回到几个具体回合，房间里的火气降了下来。',
+          stateDelta: { stress: -2 },
+          effects: {
+            teamTrustDelta: 3,
+            teamChemistryDelta: 1,
+          },
+          tags: {
+            remove: ['locker-tension'],
+            cooldowns: { 'team-politics-cd': 6 },
+          },
+        },
+        failure: {
+          narrative: '你想圆场，但两边都觉得你在回避真正的问题。',
+          stateDelta: { stress: 3 },
+          effects: {
+            teamTrustDelta: -1,
+            teamChemistryDelta: -1,
+          },
+          tags: {
+            add: ['locker-tension'],
+            cooldowns: { 'team-politics-cd': 4 },
+          },
+        },
+      },
+    ],
+  },
+  {
+    id: 'team-politics-private-pressure',
+    type: 'team',
+    title: '私下表态',
+    narrative:
+      '复盘结束后，指挥和明星位分别找你聊了一次。没有人明说，但每个人都想知道你会帮谁。',
+    stages: ['youth', 'second', 'pro'],
+    difficulty: 2,
+    requireTags: ['has-team', 'team-ordinary-politics-risk'],
+    forbidTags: ['team-politics-cd'],
+    weight: 2,
+    choices: [
+      {
+        id: 'lean-caller',
+        label: '偏向指挥',
+        description: '先把体系和指令顺起来。',
+        check: {
+          primary: 'intelligence',
+          secondary: 'mentality',
+          dc: 9,
+          traitBonuses: { tactical: 2, support: 1 },
+        },
+        success: {
+          narrative: '你把问题说成执行顺序，指挥觉得你愿意帮忙把队伍拉回正轨。',
+          effects: {
+            teamTrustDelta: 1,
+            targetIdentity: 'caller',
+            targetTeammateChemistryDelta: 3,
+            opposingTargetIdentity: 'star',
+            opposingTargetTeammateChemistryDelta: -2,
+          },
+          tags: {
+            cooldowns: { 'team-politics-cd': 5 },
+          },
+        },
+        failure: {
+          narrative: '你一偏向指挥，明星位就觉得自己被晾在外面。',
+          effects: {
+            teamTrustDelta: -2,
+            targetIdentity: 'caller',
+            targetTeammateChemistryDelta: 1,
+            opposingTargetIdentity: 'star',
+            opposingTargetTeammateChemistryDelta: -3,
+          },
+          tags: {
+            add: ['locker-tension'],
+            cooldowns: { 'team-politics-cd': 4 },
+          },
+        },
+      },
+      {
+        id: 'lean-star',
+        label: '偏向明星',
+        description: '先保住最强火力点的状态。',
+        check: {
+          primary: 'mentality',
+          secondary: 'experience',
+          dc: 9,
+          traitBonuses: { steady: 2, clutch: 1 },
+        },
+        success: {
+          narrative: '你替明星位把诉求说得更清楚，队里也承认强点该有更多空间。',
+          effects: {
+            teamTrustDelta: 1,
+            targetIdentity: 'star',
+            targetTeammateChemistryDelta: 3,
+            opposingTargetIdentity: 'caller',
+            opposingTargetTeammateChemistryDelta: -2,
+          },
+          tags: {
+            cooldowns: { 'team-politics-cd': 5 },
+          },
+        },
+        failure: {
+          narrative: '你本来想帮忙，结果像是在替明星位争特权。',
+          effects: {
+            teamTrustDelta: -2,
+            targetIdentity: 'star',
+            targetTeammateChemistryDelta: 1,
+            opposingTargetIdentity: 'caller',
+            opposingTargetTeammateChemistryDelta: -3,
+          },
+          tags: {
+            add: ['locker-tension'],
+            cooldowns: { 'team-politics-cd': 4 },
+          },
+        },
+      },
+      {
+        id: 'hold-ground',
+        label: '不选边',
+        description: '先让双方都冷一下。',
+        check: {
+          primary: 'mentality',
+          dc: 8,
+          traitBonuses: { steady: 2, support: 1 },
+        },
+        success: {
+          narrative: '你没有把火引向任何一边，只是把场面稳住了。',
+          stateDelta: { stress: -1 },
+          effects: {
+            teamTrustDelta: 1,
+            teamChemistryDelta: 1,
+          },
+          tags: {
+            remove: ['locker-tension'],
+            cooldowns: { 'team-politics-cd': 4 },
+          },
+        },
+        failure: {
+          narrative: '你不选边，反而像是在默认谁都不重要。',
+          effects: {
+            teamTrustDelta: -1,
+            teamChemistryDelta: -1,
+          },
+          tags: {
+            add: ['locker-tension'],
+            cooldowns: { 'team-politics-cd': 4 },
           },
         },
       },

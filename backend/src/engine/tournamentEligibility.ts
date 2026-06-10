@@ -2,6 +2,7 @@ import type { Player, PlayerTeam, ClubTier } from '../types.js';
 import type { Tournament } from '../data/tournaments.js';
 import {
   qualificationFallbackSlots,
+  qualificationSlotLabel,
   qualificationSlotOwner,
 } from './qualification.js';
 
@@ -56,4 +57,36 @@ export function canSeeTournamentOpportunity(
     : tournament.signupWeeks.find((candidate) => candidate >= (player.week ?? 1));
   if (week === undefined) return false;
   return canSignUpForTournament(player, tournament, playerPoints, week);
+}
+
+export function tournamentOpportunityStatus(
+  player: Player,
+  tournament: Tournament,
+  playerPoints: number,
+  week = tournament.signupWeeks === 'always'
+    ? (player.week ?? 1)
+    : tournament.signupWeeks.find((candidate) => candidate >= (player.week ?? 1)) ?? (player.week ?? 1),
+): string {
+  if (!tournament.stages.includes(player.stage)) return '阶段不符';
+  if (tournament.fameRequired !== undefined && (player.fame ?? 0) < tournament.fameRequired) {
+    return `名气不足 ${player.fame ?? 0}/${tournament.fameRequired}`;
+  }
+  if (tournament.pointsRequired !== undefined && playerPoints < tournament.pointsRequired) {
+    return `积分不足 ${playerPoints}/${tournament.pointsRequired}`;
+  }
+  if (tournament.signupWeeks !== 'always' && !tournament.signupWeeks.includes(week)) {
+    return '未到报名周';
+  }
+  const teamReq = tournament.teamRequirement ?? null;
+  const teamOk = playerTeamMeetsRequirement(player.team, teamReq);
+  if (!teamOk && !player.team) return '需要战队';
+  if (!teamOk && !tournament.qualificationTargets?.length) return '战队不足';
+  if (!hasUsableQualificationSlot(player, tournament)) {
+    const missing = tournament.qualificationTargets?.[0];
+    if (!missing) return '缺资格';
+    const owner = qualificationSlotOwner(missing);
+    if (owner === 'team' && player.team?.teamStatus !== 'starter') return '需首发资格';
+    return `缺${qualificationSlotLabel(missing)}`;
+  }
+  return '可报名';
 }

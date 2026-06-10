@@ -119,11 +119,13 @@ export interface Rival {
 }
 
 export interface LeaderboardTeam {
+  clubId?: string;
   name: string;
   tag: string;
   region: string;
   points: number;
   isPlayer: boolean;
+  kind?: 'club' | 'rival' | 'free-agent';
   players?: string[]; // Key player handles for social feed
 }
 
@@ -395,11 +397,17 @@ export interface TeamOffer {
 
 export interface PendingDeparture {
   slotId: string;           // 即将离队的队友 id（'slot-1' … 'slot-4'）
-  departureRound: number;   // 实际离队回合
+  departureRound: number;   // 当前预测的离队回合
   rumorShown: boolean;      // 匿名预警事件（-7 回合）已触发
   revealed: boolean;        // 具名预警事件（-4 回合）已触发
   destTeamName: string;     // 目标俱乐部名称（来自 rivals）
   earlyRecruit: boolean;    // 玩家提前行动，新人质量更好
+  baseWindowStartRound?: number;
+  pressure?: number;
+  pressureThreshold?: number;
+  lastPressureRound?: number;
+  lockedUntilRound?: number;
+  reasonTags?: string[];
   retentionAttempted?: boolean;
   retentionAttemptRound?: number;
 }
@@ -593,6 +601,8 @@ export interface EffectDelta {
   teamChemistryDelta?: number;
   targetTeammateChemistryDelta?: number;
   targetIdentity?: TeamIdentity;
+  opposingTargetTeammateChemistryDelta?: number;
+  opposingTargetIdentity?: TeamIdentity;
 }
 
 export interface MatchStats {

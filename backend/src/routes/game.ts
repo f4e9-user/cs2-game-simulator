@@ -36,6 +36,7 @@ import {
   findTeamStar,
 } from '../engine/teamIdentity.js';
 import { CLUBS, clubsForStage, getClub } from '../data/clubs.js';
+import { buildLeaderboard } from '../data/leaderboard.js';
 import { getClubProfile } from '../data/clubProfiles.js';
 import {
   buildYearTournaments,
@@ -56,8 +57,52 @@ import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { makeAiService } from '../ai/service.js';
 import type { SocialFeedPost } from '../ai/prompts.js';
-import { validateAiEvents } from '../validation/guard.js';
+import {
+  aiEventCacheKey,
+  aiEventsFromCache,
+  legacyAiEventCacheKey,
+  markAiEventActive,
+  mergeGeneratedAiEvents,
+  parseAiEventCache,
+  recordAiEventUsed,
+  releaseActiveAiEvent,
+  resolveAiEventById,
+  type AiEventCacheEnvelope,
+} from '../ai/eventCache.js';
 import type { ClubApplicationSummary, ClubRuntimeState, ClubStoryline, ClubTier, Env, EventDef, GameSession, MatchStats, Player, PlayerTeam, Stats, TeamIdentityDebug } from '../types.js';
+
+const AI_EVENT_CACHE_TTL_SECONDS = 43200;
+
+async function loadAiEventCache(
+  kv: KVNamespace,
+  sessionId: string,
+  session: GameSession,
+): Promise<AiEventCacheEnvelope> {
+  const key = aiEventCacheKey(sessionId);
+  const cached = await kv.get(key);
+  if (cached) {
+    const parsed = parseAiEventCache(cached, session.player, session.history);
+    if (parsed.migrated) {
+      await kv.put(key, JSON.stringify(parsed.cache), { expirationTtl: AI_EVENT_CACHE_TTL_SECONDS });
+    }
+    return parsed.cache;
+  }
+
+  const legacy = await kv.get(legacyAiEventCacheKey(sessionId));
+  const parsed = parseAiEventCache(legacy, session.player, session.history);
+  if (legacy && parsed.migrated) {
+    await kv.put(key, JSON.stringify(parsed.cache), { expirationTtl: AI_EVENT_CACHE_TTL_SECONDS });
+  }
+  return parsed.cache;
+}
+
+async function saveAiEventCache(
+  kv: KVNamespace,
+  sessionId: string,
+  cache: AiEventCacheEnvelope,
+): Promise<void> {
+  await kv.put(aiEventCacheKey(sessionId), JSON.stringify(cache), { expirationTtl: AI_EVENT_CACHE_TTL_SECONDS });
+}
 
 function refreshQualificationExpiry(player: Player): Player {
   const fallbackExpiry = defaultQualificationExpiry(player.year ?? 1, player.week ?? 1);
@@ -159,11 +204,17 @@ function validateApiToken(authHeader: string | undefined, sessionToken: string):
 app.use('/game/:sessionId/*', async (c, next) => {
   if (c.req.method === 'GET') return next();
   const path = new URL(c.req.url).pathname;
-  if (path.endsWith('/start') || path.endsWith('/intro')) return next();
+  if (
+    path.endsWith('/game/roll-traits') ||
+    path.endsWith('/game/start') ||
+    path.endsWith('/intro')
+  ) {
+    return next();
+  }
 
   const id = c.req.param('sessionId');
   const storage = makeStorage(c.env);
-  const session = await storage.sessions.load(id);
+  let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
   if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
     return c.json({ error: '无效的 API Token' }, 401);
@@ -240,7 +291,7 @@ app.post('/game/start', async (c) => {
 app.get('/game/:sessionId', async (c) => {
   const id = c.req.param('sessionId');
   const storage = makeStorage(c.env);
-  const session = await storage.sessions.load(id);
+  let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
   // Annotate with current promotion check so the UI can show next-stage hints.
   const promotion = checkTournamentPromotion(session.player);
@@ -280,7 +331,7 @@ app.post('/game/:sessionId/choice', async (c) => {
   }
 
   const storage = makeStorage(c.env);
-  const session = await storage.sessions.load(id);
+  let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
   if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
     return c.json({ error: '无效的 API Token' }, 401);
@@ -318,22 +369,19 @@ app.post('/game/:sessionId/choice', async (c) => {
   }
 
   try {
+    let aiEventCache: AiEventCacheEnvelope | undefined;
     let aiEvents: EventDef[] | undefined;
     try {
-      const cached = await c.env.KV.get(`ai-events:${id}`);
-      if (cached) {
-        const parsed = JSON.parse(cached) as unknown[];
-        const { valid } = validateAiEvents(Array.isArray(parsed) ? parsed : []);
-        aiEvents = valid;
-      }
+      aiEventCache = await loadAiEventCache(c.env.KV, id, session);
+      aiEvents = aiEventsFromCache(aiEventCache);
     } catch {}
 
     // 面试 post-handler 需要 clubId，但 applyChoice 内部会清空 pendingApplication
     // 提前保存，供下方生成入队邀请时使用
     const preChoicePendingApplication = session.player.pendingApplication;
-    const { session: updated, result } = applyChoice(session, choiceId, customRollBonus, aiEvents);
-    const pendingAiEventDef = updated.currentEvent?.id.startsWith('ai-')
-      ? aiEvents?.find((e) => e.id === updated.currentEvent!.id)
+    const { session: updated, result } = applyChoice(session, choiceId, customRollBonus, aiEvents, aiEventCache);
+    const nextAiEventDef = updated.currentEvent?.id.startsWith('ai-')
+      ? resolveAiEventById(aiEventCache, updated.currentEvent.id) ?? aiEvents?.find((e) => e.id === updated.currentEvent!.id)
       : undefined;
 
     // 自由行动时：用自定义行动作为叙事重写依据，不拼接默认叙事
@@ -425,20 +473,29 @@ app.post('/game/:sessionId/choice', async (c) => {
 
     await storage.sessions.save(updated);
 
+    let nextAiEventCache: AiEventCacheEnvelope | undefined;
+    if (aiEventCache) {
+      const usedCache = result.eventId.startsWith('ai-')
+        ? recordAiEventUsed(aiEventCache, result.eventId, updated.player.round)
+        : aiEventCache;
+      nextAiEventCache = markAiEventActive(releaseActiveAiEvent(usedCache, updated.player), nextAiEventDef ?? null);
+      try {
+        await saveAiEventCache(c.env.KV, id, nextAiEventCache);
+      } catch (err) {
+        console.warn('[AI events] cache update failed:', err);
+      }
+    }
+
     if (ai.active && updated.status === 'active') {
       const refreshAiEvents = async () => {
-        const key = `ai-events:${id}`;
-        const preservePendingAiEvent = async () => {
-          if (pendingAiEventDef) {
-            await c.env.KV.put(key, JSON.stringify([pendingAiEventDef]), { expirationTtl: 43200 });
-          }
-        };
+        const baseCache = nextAiEventCache ?? aiEventCache ?? await loadAiEventCache(c.env.KV, id, updated);
+        const preservePendingAiEvent = async () => saveAiEventCache(c.env.KV, id, baseCache);
         const writeMergedAiEvents = async (generated: EventDef[]) => {
-          const merged = [
-            ...(pendingAiEventDef ? [pendingAiEventDef] : []),
-            ...generated.filter((e) => e.id !== pendingAiEventDef?.id),
-          ];
-          await c.env.KV.put(key, JSON.stringify(merged), { expirationTtl: 43200 });
+          await saveAiEventCache(
+            c.env.KV,
+            id,
+            mergeGeneratedAiEvents(baseCache, generated, updated.player, updated.history),
+          );
         };
 
         try {
@@ -498,7 +555,7 @@ app.get('/game/meta/rules', (c) =>
 app.get('/game/:sessionId/tournaments', async (c) => {
   const id = c.req.param('sessionId');
   const storage = makeStorage(c.env);
-  const session = await storage.sessions.load(id);
+  let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
   session.player = refreshQualificationExpiry(session.player);
   const playerPoints =
@@ -525,7 +582,7 @@ app.post('/game/:sessionId/signup', async (c) => {
     return c.json({ error: 'tournamentId 必填' }, 400);
   }
   const storage = makeStorage(c.env);
-  const session = await storage.sessions.load(id);
+  let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
   session.player = refreshQualificationExpiry(session.player);
 
@@ -754,11 +811,29 @@ app.post('/game/:sessionId/action', async (c) => {
   if (!session) return c.json({ error: 'session not found' }, 404);
 
   try {
-    const { actionResult, player } = applyAction(session, actionId);
+    let aiEventCache: AiEventCacheEnvelope | undefined;
+    let aiEvents: EventDef[] | undefined;
+    try {
+      aiEventCache = await loadAiEventCache(c.env.KV, id, session);
+      aiEventCache = releaseActiveAiEvent(aiEventCache, session.player);
+      aiEvents = aiEventsFromCache(aiEventCache);
+    } catch {}
+
+    const { actionResult, player, currentEvent, pickedEvent } = applyAction(session, actionId, aiEvents, aiEventCache);
     session.player = player;
+    session.currentEvent = currentEvent;
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
-    return c.json({ actionResult, player });
+
+    if (aiEventCache) {
+      try {
+        await saveAiEventCache(c.env.KV, id, markAiEventActive(aiEventCache, pickedEvent));
+      } catch (err) {
+        console.warn('[AI events] action pickup cache update failed:', err);
+      }
+    }
+
+    return c.json({ actionResult, player, currentEvent });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
@@ -939,7 +1014,7 @@ app.post('/game/:sessionId/team-response', async (c) => {
   }
 
   const storage = makeStorage(c.env);
-  const session = await storage.sessions.load(id);
+  let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
 
   try {
@@ -952,14 +1027,10 @@ app.post('/game/:sessionId/team-response', async (c) => {
       };
     }
     session.player = player;
-    // When accepting, update the player's leaderboard entry to reflect the real team name/tag/region.
-    if (accept && player.team && session.leaderboard) {
-      session.leaderboard = session.leaderboard.map((t) =>
-        t.isPlayer
-          ? { ...t, name: player.team!.name, tag: player.team!.tag, region: player.team!.region }
-          : t,
-      );
+    if (accept && player.team) {
+      session = activateClubRuntime(session, player.team.clubId, 'team-response');
     }
+    session.leaderboard = buildLeaderboard(session);
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
     return c.json({

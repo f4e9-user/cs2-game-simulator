@@ -130,18 +130,22 @@ function deriveTeamChemistry(roster: Player['roster'], teamTrust: number): numbe
   return Math.max(0, Math.min(100, Math.round(weighted - trustPenalty)));
 }
 
-function teamPowerLabel(player: Player): MatchPreviewItem {
+function teamPowerLabel(player: Player, pendingMatch?: PendingMatch | null): MatchPreviewItem {
   if (!player.team) {
-    return { label: '队伍', text: '无队伍，以个人状态参赛', tone: 'neutral' };
+    const tier = pendingMatch?.progressionTier ?? pendingMatch?.tier;
+    const text = tier === 'c' || tier === 'b'
+      ? '临时队参赛，没有固定阵容加成'
+      : '临时队参赛，缺少固定阵容支撑';
+    return { label: '队伍', text, tone: 'neutral' };
   }
   const roster = player.roster ?? [];
   if (roster.length === 0) {
-    return { label: '队友数值', text: '无固定阵容，团队加成缺失', tone: 'down' };
+    return { label: '队友能力', text: '无固定阵容，队伍容错不足', tone: 'down' };
   }
   const avgAgility = roster.reduce((sum, tm) => sum + tm.stats.agility, 0) / roster.length;
-  if (avgAgility >= 14) return { label: '队友数值', text: '火力充足，能分担对枪压力', tone: 'up' };
-  if (avgAgility >= 10) return { label: '队友数值', text: '阵容强度正常', tone: 'neutral' };
-  return { label: '队友数值', text: '火力偏弱，你需要承担更多击杀压力', tone: 'down' };
+  if (avgAgility >= 14) return { label: '队友能力', text: '火力充足，队伍容错更高', tone: 'up' };
+  if (avgAgility >= 10) return { label: '队友能力', text: '阵容强度正常', tone: 'neutral' };
+  return { label: '队友能力', text: '火力偏弱，队伍容错有限', tone: 'down' };
 }
 
 function keyTeammateChemistryLabel(player: Player): MatchPreviewItem | null {
@@ -167,7 +171,7 @@ function keyTeammateChemistryLabel(player: Player): MatchPreviewItem | null {
   return null;
 }
 
-function buildMatchPreview(player: Player): MatchPreviewItem[] {
+function buildMatchPreview(player: Player, pendingMatch?: PendingMatch | null): MatchPreviewItem[] {
   const feel = player.volatile?.feel ?? 0;
   const tilt = player.volatile?.tilt ?? 0;
   const fatigue = player.volatile?.fatigue ?? 0;
@@ -199,26 +203,28 @@ function buildMatchPreview(player: Player): MatchPreviewItem[] {
   else items.push({ label: '心态', text: '抗压表现正常', tone: 'neutral' });
 
   if (!player.team) {
-    items.push(teamPowerLabel(player));
+    items.push(teamPowerLabel(player, pendingMatch));
   }
 
   if (player.team) {
-    if (trust >= 65) items.push({ label: '队伍信任', text: '较高，比赛中更容易互相信任', tone: 'up' });
-    else if (trust <= 15) items.push({ label: '队伍信任', text: '危机，队内不信任会压低默契发挥', tone: 'down' });
-    else if (trust <= 30) items.push({ label: '队伍信任', text: '偏低，沟通容错较差', tone: 'down' });
+    items.push(teamPowerLabel(player, pendingMatch));
+
+    if (trust >= 65) items.push({ label: '队伍信任', text: '较高，默契发挥更稳定', tone: 'up' });
+    else if (trust <= 15) items.push({ label: '队伍信任', text: '危机，会压低队伍默契发挥', tone: 'down' });
+    else if (trust <= 30) items.push({ label: '队伍信任', text: '偏低，队伍容错较差', tone: 'down' });
     else items.push({ label: '队伍信任', text: '一般，是默契发挥的正常环境', tone: 'neutral' });
 
     if (keyChemistry) {
       items.push(keyChemistry);
     } else if (synergy >= 2) {
-      items.push({ label: '团队协同', text: '良好，角色和特质能形成配合', tone: 'up' });
+      items.push({ label: '团队协同', text: '良好，默认配合更顺', tone: 'up' });
     } else if (synergy <= -1) {
-      items.push({ label: '团队协同', text: '存在冲突，沟通和分工会拖累表现', tone: 'down' });
+      items.push({ label: '团队协同', text: '存在冲突，沟通和分工会拖累队伍表现', tone: 'down' });
     } else {
-      items.push({ label: '团队协同', text: '普通，主要看个人发挥', tone: 'neutral' });
+      items.push({ label: '团队协同', text: '普通，没有明显队伍修正', tone: 'neutral' });
     }
 
-    if (teamChemistry >= 70) items.push({ label: '队伍默契', text: '熟练，默认配合会更顺', tone: 'up' });
+    if (teamChemistry >= 70) items.push({ label: '队伍默契', text: '熟练，战术执行更稳', tone: 'up' });
     else if (teamChemistry <= 25) items.push({ label: '队伍默契', text: '生疏，关键局配合容易断档', tone: 'down' });
     else items.push({ label: '队伍默契', text: '一般，战术执行没有明显修正', tone: 'neutral' });
   }
@@ -393,7 +399,7 @@ function PendingMatchCard({
   stage: string;
 }) {
   const hasContract = ['second', 'pro'].includes(stage);
-  const preview = buildMatchPreview(player);
+  const preview = buildMatchPreview(player, pm);
   return (
     <div className="pending-match-card">
       <div className="pending-match-name">{pm.displayName ?? pm.name}</div>

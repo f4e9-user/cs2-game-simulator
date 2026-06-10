@@ -79,6 +79,14 @@ function rng(values: number[]): () => number {
 }
 
 describe('simulateMatch', () => {
+  const bFinalContext = {
+    tier: 'b' as const,
+    progressionTier: 'b' as const,
+    entryType: 'direct_signup' as const,
+    stageIndex: 1,
+    effectiveDifficulty: 3,
+  };
+
   it('rates low-output short samples by per-round contribution instead of K/D alone', () => {
     const result = simulateMatch(
       player({ stats: { agility: 3, intelligence: 2, experience: 0, money: 0, mentality: 2, constitution: 2 } }),
@@ -112,6 +120,85 @@ describe('simulateMatch', () => {
     expect(result.won).toBe(true);
     expect(result.kills).toBeGreaterThan(result.deaths);
     expect(result.rating).toBeGreaterThan(1.1);
+  });
+
+  it('separates team win power from personal headshot output', () => {
+    const base = player({
+      stats: {
+        agility: 9,
+        intelligence: 8,
+        experience: 6,
+        money: 0,
+        mentality: 10,
+        constitution: 8,
+      },
+      volatile: { feel: 1, tilt: 0, fatigue: 20 },
+      stage: 'youth',
+    });
+    const strongTeam = player({
+      ...base,
+      team: {
+        clubId: 'club-cyber-academy',
+        name: '赛博学院',
+        tag: 'CYA',
+        region: '亚太',
+        tier: 'youth',
+        joinedRound: 1,
+        monthlySalary: 10,
+      },
+      roster: [
+        {
+          id: 'slot-1',
+          name: 'caller',
+          role: 'IGL',
+          personality: 'supportive',
+          traits: ['tactical', 'support'],
+          stats: { agility: 8, intelligence: 8, mentality: 8, experience: 8 },
+          growthSpent: 0,
+          chemistry: 80,
+        },
+        {
+          id: 'slot-2',
+          name: 'awp',
+          role: 'AWPer',
+          personality: 'grinder',
+          traits: ['aimer', 'steady'],
+          stats: { agility: 8, intelligence: 8, mentality: 8, experience: 8 },
+          growthSpent: 0,
+          chemistry: 80,
+        },
+        {
+          id: 'slot-3',
+          name: 'support',
+          role: 'Support',
+          personality: 'supportive',
+          traits: ['support', 'selfless'],
+          stats: { agility: 8, intelligence: 8, mentality: 8, experience: 8 },
+          growthSpent: 0,
+          chemistry: 80,
+        },
+        {
+          id: 'slot-4',
+          name: 'lurker',
+          role: 'Lurker',
+          personality: 'strict',
+          traits: ['steady', 'clutch'],
+          stats: { agility: 8, intelligence: 8, mentality: 8, experience: 8 },
+          growthSpent: 0,
+          chemistry: 80,
+        },
+      ],
+      teamTrust: 80,
+    });
+
+    const rolls = [0.45, 0.5, 0.5, 0.5, 0.5, 0.5];
+    const solo = simulateMatch(base, bFinalContext, rng(rolls));
+    const withTeam = simulateMatch(strongTeam, bFinalContext, rng(rolls));
+
+    expect(withTeam.winProb).toBeGreaterThan(solo.winProb);
+    expect(withTeam.won).toBe(true);
+    expect(solo.won).toBe(false);
+    expect(withTeam.headshotRate - solo.headshotRate).toBeLessThan(0.05);
   });
 
   it('consumes pre-match intel on tournament match experience growth', () => {

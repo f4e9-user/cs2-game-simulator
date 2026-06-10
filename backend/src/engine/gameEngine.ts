@@ -7,11 +7,7 @@ import {
 } from '../data/tournaments.js';
 import { generateRivals } from '../data/rivals.js';
 import { generateRoster, generateSingleTeammate } from '../data/roster.js';
-import {
-  addPlayerPoints,
-  buildLeaderboard,
-  tickLeaderboard,
-} from '../data/leaderboard.js';
+import { addPlayerPoints, buildLeaderboard } from '../data/leaderboard.js';
 import { getEventById } from '../data/events/index.js';
 import { TRAITS, getTrait } from '../data/traits.js';
 import { ACTIONS, getAction, type ActionDef, type ComboConsume } from '../data/actions.js';
@@ -103,6 +99,12 @@ import {
 import { type MatchSimResult, simulateMatch } from './matchSimulator.js';
 import { applyStateDeltaModifiers, consumeTriggeredBuffs } from './stateModifiers.js';
 import { applyMoneyDeltaToStats, applyMoneyTransaction } from './money.js';
+import { deriveTeamChemistry } from './synergy.js';
+import {
+  buildAiPickCandidates,
+  resolveAiEventById,
+  type AiEventCacheEnvelope,
+} from '../ai/eventCache.js';
 import {
   addQualificationRewardsByOwnerWithExpiry,
   clearTeamQualifications,
@@ -113,13 +115,18 @@ import {
 } from './qualification.js';
 import {
   canInfluenceByCalling,
+  canInfluenceByStarPower,
   canInfluenceTeamStrategy,
   derivePlayerTeamIdentities,
   deriveTeammateIdentities,
+  findTeamCaller,
+  findTeamStar,
   refreshVisibleTeamIdentities,
 } from './teamIdentity.js';
 import {
   deriveRosterNeed,
+  activateClubRuntime,
+  ensureWorldClubPool,
   previewClubRuntime,
   recordWorldTournamentResult,
   tickWorldClubRuntimes,
@@ -891,6 +898,29 @@ function findTeammateByIdentity(player: Player, identity: TeamIdentity): Teammat
   return (player.roster ?? []).find((tm) => teammateHasIdentity(player, tm, identity));
 }
 
+function applyTargetTeammateChemistryDelta(
+  player: Player,
+  identity: TeamIdentity | undefined,
+  delta: number | undefined,
+): { player: Player; passiveEffect?: string } {
+  if (!player.roster || !identity || typeof delta !== 'number' || delta === 0) {
+    return { player };
+  }
+
+  const target = findTeammateByIdentity(player, identity);
+  if (!target) return { player };
+
+  return {
+    player: {
+      ...player,
+      roster: player.roster.map((tm) =>
+        tm.id === target.id ? adjustTeammateChemistry(tm, delta) : tm,
+      ),
+    },
+    passiveEffect: `${target.name}默契 ${delta > 0 ? '+' : ''}${delta}`,
+  };
+}
+
 function teammateIsCore(player: Player, teammate: Teammate): boolean {
   const roster = player.roster ?? [];
   const identities = deriveTeammateIdentities(teammate, roster);
@@ -926,24 +956,207 @@ export function weekToMonth(week: number): number {
   return Math.min(12, Math.max(1, Math.ceil(week / 4)));
 }
 
+const DEPARTURE_PRESSURE_THRESHOLD = 100;
+const DEPARTURE_INITIAL_PRESSURE = 28;
+const DEPARTURE_INITIAL_LOCK_ROUNDS = 4;
+
+function clampNumber(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(v)));
+}
+
+function departureKeyTiers(teamTier: ClubTier): string[] {
+  if (teamTier === 'youth') return ['b'];
+  if (teamTier === 'semi-pro') return ['a'];
+  return ['s-open', 's-closed', 's-class', 'major'];
+}
+
+function createInitialPendingDeparture(
+  player: Player,
+  rng: () => number,
+  destTeamName: string,
+  slotId: string,
+): PendingDeparture {
+  const baseWindowStartRound = player.round + 20 + Math.floor(rng() * 21);
+  return {
+    slotId,
+    departureRound: baseWindowStartRound,
+    rumorShown: false,
+    revealed: false,
+    destTeamName,
+    earlyRecruit: false,
+    baseWindowStartRound,
+    pressure: DEPARTURE_INITIAL_PRESSURE,
+    pressureThreshold: DEPARTURE_PRESSURE_THRESHOLD,
+    lastPressureRound: player.round,
+    reasonTags: [],
+  };
+}
+
+function recalcPendingDeparture(
+  session: GameSession,
+  player: Player,
+  departure: PendingDeparture,
+): PendingDeparture {
+  if (!player.team || !player.roster) return departure;
+
+  const round = player.round ?? 0;
+  const roster = player.roster;
+  const target = roster.find((tm) => tm.id === departure.slotId);
+  if (!target) return departure;
+
+  const currentPressure = departure.pressure ?? DEPARTURE_INITIAL_PRESSURE;
+  const pressureThreshold = departure.pressureThreshold ?? DEPARTURE_PRESSURE_THRESHOLD;
+  const baseWindowStartRound = departure.baseWindowStartRound
+    ?? Math.max(1, departure.departureRound - 20);
+  const reasonTags = new Set(departure.reasonTags ?? []);
+  let pressure = currentPressure;
+  let projectedDelay = 0;
+
+  if (round >= baseWindowStartRound) {
+    let drift = 2;
+    const trust = player.teamTrust ?? 50;
+    const teamChemistry = deriveTeamChemistry(roster, trust);
+    const targetChemistry = target.chemistry ?? 50;
+    const playerIdentities = derivePlayerTeamIdentities(player, roster);
+    const targetIdentities = deriveTeammateIdentities(target, roster);
+    const targetTeam = player.team;
+    const teamRuntime = session.worldClubs?.runtimeByClubId[targetTeam.clubId];
+
+    drift += Math.round((52 - trust) / 14);
+    drift += Math.round((48 - teamChemistry) / 12);
+    drift += Math.round((50 - targetChemistry) / 12);
+
+    if (target.personality === 'drama') drift += 2;
+    if (target.personality === 'supportive') drift -= 1;
+    if (targetIdentities.includes('problem')) drift += 3;
+    if (targetIdentities.includes('glue')) drift -= 2;
+    if (targetIdentities.includes('caller') && !playerIdentities.includes('caller')) {
+      drift += 4;
+      reasonTags.add('话语权冲突');
+    }
+    if (targetIdentities.includes('star') && !playerIdentities.includes('star')) {
+      drift += 2;
+      reasonTags.add('明星位冲突');
+    }
+    if (playerIdentities.includes('caller')) drift -= 1;
+    if (playerIdentities.includes('star')) drift -= 1;
+
+    if (teamRuntime) {
+      const relevantTiers = departureKeyTiers(targetTeam.tier);
+      const recentResults = teamRuntime.recentResults.filter((result) => relevantTiers.includes(result.tier)).slice(0, 4);
+      for (const result of recentResults) {
+        if (result.result === 'win') {
+          drift -= 8;
+          reasonTags.add('关键赛事夺冠');
+        } else if (result.result === 'deep-run') {
+          drift -= 5;
+          reasonTags.add('关键赛事深轮');
+        } else if (result.result === 'loss') {
+          drift += 5;
+        } else if (result.result === 'early-exit') {
+          drift += 8;
+          reasonTags.add('关键赛事早出局');
+        }
+      }
+      if (teamRuntime.currentForm >= 20) {
+        drift -= 3;
+        reasonTags.add('近期状态火热');
+      }
+      if (teamRuntime.currentForm <= -20) {
+        drift += 4;
+        reasonTags.add('近期状态低迷');
+      }
+      if (teamRuntime.clubTrust >= 65) drift -= 2;
+      if (teamRuntime.clubTrust <= 35) drift += 2;
+      if (teamRuntime.internalChemistry >= 65) drift -= 2;
+      if (teamRuntime.internalChemistry <= 35) drift += 2;
+      if (teamRuntime.rosterStability <= 40) drift += 2;
+    }
+
+    pressure = clampNumber(pressure + drift, 0, pressureThreshold);
+
+    if (teamRuntime?.recentResults[0]) {
+      const latest = teamRuntime.recentResults[0];
+      const relevantTiers = departureKeyTiers(targetTeam.tier);
+      if (relevantTiers.includes(latest.tier) && (latest.result === 'win' || latest.result === 'deep-run')) {
+        const lock = latest.result === 'win' ? 6 : 4;
+        reasonTags.add('赛事表现暂时稳住阵容');
+        return {
+          ...departure,
+          baseWindowStartRound,
+          pressure,
+          pressureThreshold,
+          lastPressureRound: round,
+          lockedUntilRound: Math.max(departure.lockedUntilRound ?? 0, round + lock),
+          reasonTags: [...reasonTags],
+          departureRound: Math.max(
+            round + 1,
+            Math.max(baseWindowStartRound, round + lock),
+          ),
+        };
+      }
+    }
+
+    const remaining = Math.max(0, pressureThreshold - pressure);
+    projectedDelay = Math.max(1, Math.ceil(remaining / Math.max(1, drift > 0 ? drift : 2)));
+  }
+
+  const lockedUntilRound = departure.lockedUntilRound ?? 0;
+  const projectedRound = round + projectedDelay;
+  const departureRound = Math.max(
+    baseWindowStartRound,
+    projectedRound,
+    lockedUntilRound > round ? lockedUntilRound : round + 1,
+  );
+
+  return {
+    ...departure,
+    baseWindowStartRound,
+    pressure,
+    pressureThreshold,
+    lastPressureRound: round,
+    reasonTags: [...reasonTags],
+    departureRound,
+  };
+}
+
+function shouldTriggerPendingDeparture(player: Player, departure: PendingDeparture): boolean {
+  const baseWindowStartRound = departure.baseWindowStartRound ?? Math.max(1, departure.departureRound - 20);
+  const pressureThreshold = departure.pressureThreshold ?? DEPARTURE_PRESSURE_THRESHOLD;
+  return (
+    (departure.pressure ?? DEPARTURE_INITIAL_PRESSURE) >= pressureThreshold &&
+    player.round >= baseWindowStartRound &&
+    player.round >= (departure.lockedUntilRound ?? 0)
+  );
+}
+
 export function createSession(player: Player, rngSeed: number): GameSession {
   const rng = makeRng(rngSeed);
-  const firstEvent = pickEvent({ player, recentEventIds: [], rng, leaderboard: buildLeaderboard(player) });
-
   const id = uuid();
   const apiToken = uuid();
   const ts = nowIso();
-
-  return {
+  const seedSession: GameSession = {
     id,
-    apiToken,
     player,
-    currentEvent: firstEvent ? toPublicEvent(firstEvent, player.rivals, player.roster ?? []) : null,
+    apiToken,
+    currentEvent: null,
     history: [],
     status: 'active',
     createdAt: ts,
     updatedAt: ts,
-    leaderboard: buildLeaderboard(player),
+    leaderboard: [],
+  };
+  const withWorld = ensureWorldClubPool(seedSession);
+  const seededWorld = player.team
+    ? activateClubRuntime(withWorld, player.team.clubId, 'session-start')
+    : withWorld;
+  const leaderboard = buildLeaderboard(seededWorld);
+  const firstEvent = pickEvent({ player, recentEventIds: [], rng, leaderboard });
+
+  return {
+    ...seededWorld,
+    currentEvent: firstEvent ? toPublicEvent(firstEvent, player.rivals, player.roster ?? []) : null,
+    leaderboard,
   };
 }
 
@@ -1097,11 +1310,13 @@ export function applyChoice(
   choiceId: string,
   rollBonus = 0,
   aiEvents?: EventDef[],
+  aiEventCache?: AiEventCacheEnvelope,
 ): ApplyChoiceResult {
   if (session.status !== 'active') throw new Error('session is not active');
   if (!session.currentEvent) throw new Error('no pending event on this session');
 
   const eventDef = getEventById(session.currentEvent.id) ??
+    resolveAiEventById(aiEventCache, session.currentEvent.id) ??
     aiEvents?.find((e) => e.id === session.currentEvent!.id) ??
     // Dynamically-generated prep events aren't in EVENT_POOL — reconstruct from pendingMatch
     (session.currentEvent.id.startsWith('tourney-prep-') && session.player.pendingMatch
@@ -1131,7 +1346,13 @@ export function applyChoice(
       const stage = t?.bracket[stageIdx];
       if (t && stage) {
         const effectiveDiff = t.baseDifficulty + stage.difficultyBonus;
-        pendingMatchSim = simulateMatch(session.player, effectiveDiff, rng);
+        pendingMatchSim = simulateMatch(session.player, {
+          tier: t.tier,
+          progressionTier: t.progressionTier,
+          entryType: t.entryType,
+          stageIndex: stageIdx,
+          effectiveDifficulty: effectiveDiff,
+        }, rng);
         if (session.player.forceMatchResult) {
           pendingMatchSim = applyForcedMatchResult(pendingMatchSim, session.player.forceMatchResult);
         }
@@ -1465,17 +1686,27 @@ export function applyChoice(
       typeof chosenEffects.targetTeammateChemistryDelta === 'number' &&
       chosenEffects.targetTeammateChemistryDelta !== 0
     ) {
-      const target = findTeammateByIdentity(nextPlayer, chosenEffects.targetIdentity);
-      if (target) {
-        nextPlayer.roster = nextPlayer.roster.map((tm) =>
-          tm.id === target.id
-            ? adjustTeammateChemistry(tm, chosenEffects.targetTeammateChemistryDelta!)
-            : tm,
-        );
-        passiveEffects.push(
-          `${target.name}默契 ${chosenEffects.targetTeammateChemistryDelta > 0 ? '+' : ''}${chosenEffects.targetTeammateChemistryDelta}`,
-        );
-      }
+      const applied = applyTargetTeammateChemistryDelta(
+        nextPlayer,
+        chosenEffects.targetIdentity,
+        chosenEffects.targetTeammateChemistryDelta,
+      );
+      nextPlayer = applied.player;
+      if (applied.passiveEffect) passiveEffects.push(applied.passiveEffect);
+    }
+    if (
+      nextPlayer.roster &&
+      chosenEffects.opposingTargetIdentity &&
+      typeof chosenEffects.opposingTargetTeammateChemistryDelta === 'number' &&
+      chosenEffects.opposingTargetTeammateChemistryDelta !== 0
+    ) {
+      const applied = applyTargetTeammateChemistryDelta(
+        nextPlayer,
+        chosenEffects.opposingTargetIdentity,
+        chosenEffects.opposingTargetTeammateChemistryDelta,
+      );
+      nextPlayer = applied.player;
+      if (applied.passiveEffect) passiveEffects.push(applied.passiveEffect);
     }
   }
 
@@ -1784,7 +2015,7 @@ export function applyChoice(
   const ending = checkEnding(nextPlayer, outcome.endRun, outcome.endReason);
 
   // ── 赛事进度 ──
-  let leaderboard = session.leaderboard ?? buildLeaderboard(session.player);
+  let leaderboard = buildLeaderboard(session);
   let worldTournamentResult: { tournament: Tournament; playerWon: boolean; isFinalStage: boolean } | null = null;
   if (
     nextPlayer.pendingMatch &&
@@ -1799,7 +2030,9 @@ export function applyChoice(
       const reward = stageRewardDelta(t, idx, outcome.success);
       const extraPoints = chosenResourceDelta.points;
       const totalPoints = reward.points + extraPoints;
-      if (totalPoints !== 0) leaderboard = addPlayerPoints(leaderboard, totalPoints);
+      if (!nextPlayer.team && totalPoints !== 0) {
+        leaderboard = addPlayerPoints(leaderboard, totalPoints);
+      }
 
       if (idx === 0) {
         const tierPart = { ...(nextPlayer.tierParticipations ?? {}) };
@@ -1925,54 +2158,53 @@ export function applyChoice(
     }
   }
 
-  leaderboard = tickLeaderboard(leaderboard);
-
   // ── 队友转会到期：执行替换 + 重新调度 ────────────────────────────
-  if (
-    nextPlayer.pendingDeparture &&
-    nextPlayer.round >= nextPlayer.pendingDeparture.departureRound &&
-    nextPlayer.roster &&
-    nextPlayer.team &&
-    !nextPlayer.pendingMatch // 赛事进行中延后处理
-  ) {
-    const { slotId, earlyRecruit, destTeamName } = nextPlayer.pendingDeparture;
-    const departingIdx = nextPlayer.roster.findIndex((tm) => tm.id === slotId);
-    if (departingIdx !== -1) {
-      const departingTm = nextPlayer.roster[departingIdx]!;
-      const replaceRng = makeRng(hashString(session.id) ^ (nextPlayer.round * 31337));
-      const newTm = generateSingleTeammate(
-        nextPlayer.team.tier,
-        replaceRng,
-        earlyRecruit ? 'good' : 'poor',
-        slotId,
-      );
-      const newRoster = [...nextPlayer.roster];
-      newRoster[departingIdx] = newTm;
-      nextPlayer.roster = newRoster;
-      const trustDrop = earlyRecruit ? -10 : -20;
-      nextPlayer.teamTrust = clampTeamTrust((nextPlayer.teamTrust ?? 50) + trustDrop);
-      passiveEffects.push(
-        `${departingTm.name} 正式转会至 ${destTeamName}，` +
-        `${earlyRecruit ? '提前招募的新秀' : '临时从青训提拔的'} ${newTm.name} 补位（默契 ${trustDrop}）`,
-      );
-    }
-    // 调度下一次转会（赛季内持续发生）
-    const nextOffset = 20 + Math.floor(rng() * 21);
-    const nextRoster = nextPlayer.roster ?? [];
-    if (nextRoster.length > 0) {
-      const nextSlot = nextRoster[Math.floor(rng() * nextRoster.length)]!.id;
-      const rivals = nextPlayer.rivals.length > 0 ? nextPlayer.rivals : [{ name: '某支战队', tag: '???', region: '' }];
-      const nextDest = rivals[Math.floor(rng() * rivals.length)]!.name;
-      nextPlayer.pendingDeparture = {
-        slotId: nextSlot,
-        departureRound: nextPlayer.round + nextOffset,
-        rumorShown: false,
-        revealed: false,
-        destTeamName: nextDest,
-        earlyRecruit: false,
-      };
-    } else {
-      nextPlayer.pendingDeparture = undefined;
+  if (nextPlayer.pendingDeparture && nextPlayer.roster && nextPlayer.team) {
+    nextPlayer.pendingDeparture = recalcPendingDeparture(
+      { ...session, player: nextPlayer },
+      nextPlayer,
+      nextPlayer.pendingDeparture,
+    );
+    const shouldDepart =
+      !nextPlayer.pendingMatch &&
+      shouldTriggerPendingDeparture(nextPlayer, nextPlayer.pendingDeparture);
+
+    if (shouldDepart) {
+      const { slotId, earlyRecruit, destTeamName } = nextPlayer.pendingDeparture;
+      const departingIdx = nextPlayer.roster.findIndex((tm) => tm.id === slotId);
+      if (departingIdx !== -1) {
+        const departingTm = nextPlayer.roster[departingIdx]!;
+        const replaceRng = makeRng(hashString(session.id) ^ (nextPlayer.round * 31337));
+        const newTm = generateSingleTeammate(
+          nextPlayer.team.tier,
+          replaceRng,
+          earlyRecruit ? 'good' : 'poor',
+          slotId,
+        );
+        const newRoster = [...nextPlayer.roster];
+        newRoster[departingIdx] = newTm;
+        nextPlayer.roster = newRoster;
+        const trustDrop = earlyRecruit ? -10 : -20;
+        nextPlayer.teamTrust = clampTeamTrust((nextPlayer.teamTrust ?? 50) + trustDrop);
+        passiveEffects.push(
+          `${departingTm.name} 正式转会至 ${destTeamName}，` +
+          `${earlyRecruit ? '提前招募的新秀' : '临时从青训提拔的'} ${newTm.name} 补位（默契 ${trustDrop}）`,
+        );
+      }
+      const nextRoster = nextPlayer.roster ?? [];
+      if (nextRoster.length > 0) {
+        const nextSlot = nextRoster[Math.floor(rng() * nextRoster.length)]!.id;
+        const rivals = nextPlayer.rivals.length > 0 ? nextPlayer.rivals : [{ name: '某支战队', tag: '???', region: '' }];
+        const nextDest = rivals[Math.floor(rng() * rivals.length)]!.name;
+        nextPlayer.pendingDeparture = createInitialPendingDeparture(
+          nextPlayer,
+          rng,
+          nextDest,
+          nextSlot,
+        );
+      } else {
+        nextPlayer.pendingDeparture = undefined;
+      }
     }
   }
 
@@ -1989,7 +2221,14 @@ export function applyChoice(
       const t = getTournament(pm.tournamentId);
       if (t) return synthesizeMatchEvent(t, pm.stageIndex);
     }
-    return pickEvent({ player: nextPlayer, recentEventIds: recent, rng, leaderboard, aiEvents });
+    return pickEvent({
+      player: nextPlayer,
+      recentEventIds: recent,
+      rng,
+      leaderboard,
+      aiEvents,
+      aiEventCandidates: buildAiPickCandidates(aiEventCache, nextPlayer, [...session.history, result]),
+    });
   })();
 
   if (nextPlayer.forceNextEvent && nextEventDef?.id === nextPlayer.forceNextEvent) {
@@ -2005,7 +2244,11 @@ export function applyChoice(
     ? (nextPlayer.roster ?? []).find((tm) => tm.id === nextPlayer.pendingDeparture!.slotId)?.name
     : undefined;
 
-  let worldSession = tickWorldClubRuntimes({ ...session, player: nextPlayer }, nextPlayer.round, 'round');
+  let worldSession = { ...session, player: nextPlayer };
+  if (nextPlayer.team) {
+    worldSession = activateClubRuntime(worldSession, nextPlayer.team.clubId, 'player-team-active');
+  }
+  worldSession = tickWorldClubRuntimes(worldSession, nextPlayer.round, 'round');
   if (worldTournamentResult) {
     worldSession = recordWorldTournamentResult(
       worldSession,
@@ -2014,6 +2257,7 @@ export function applyChoice(
       worldTournamentResult.isFinalStage,
     );
   }
+  leaderboard = buildLeaderboard(worldSession, leaderboard);
 
   const updated: GameSession = {
     ...worldSession,
@@ -2069,12 +2313,15 @@ function checkEnding(player: Player, endRun: boolean, endReason?: string): strin
 export interface ApplyActionResult {
   actionResult: ActionResult;
   player: Player;
+  currentEvent: GameEventPublic | null;
+  pickedEvent: EventDef | null;
 }
 
 export function applyAction(
   session: GameSession,
   actionId: string,
   aiEvents?: EventDef[],
+  aiEventCache?: AiEventCacheEnvelope,
 ): ApplyActionResult {
   if (session.status !== 'active') throw new Error('session is not active');
 
@@ -2219,7 +2466,22 @@ export function applyAction(
       .map((combo) => combo.label),
   };
 
-  return { actionResult, player: nextPlayer };
+  const recentEventIds = session.history.slice(-3).map((r) => r.eventId);
+  const nextEvent = pickEvent({
+    player: nextPlayer,
+    recentEventIds,
+    rng,
+    leaderboard: session.leaderboard,
+    aiEvents,
+    aiEventCandidates: buildAiPickCandidates(aiEventCache, nextPlayer, session.history),
+  });
+
+  return {
+    actionResult,
+    player: nextPlayer,
+    currentEvent: nextEvent ? toPublicEvent(nextEvent, nextPlayer.rivals, nextPlayer.roster ?? []) : null,
+    pickedEvent: nextEvent,
+  };
 }
 
 export interface ApplyShopResult {
@@ -2928,12 +3190,22 @@ export function applyRetainCoreTeammate(
   );
   const lowTrustFailure = !check.success && (player.teamTrust ?? 50) < 30;
   const bigFailure = !check.success && (check.naturalRoll === 1 || check.roll <= dc - 5 || lowTrustFailure);
-  const departureDelta = check.success ? 6 : bigFailure ? -2 : 0;
+  const pressureDelta = check.success ? -18 : bigFailure ? 8 : 4;
   const trustDelta = (check.success ? 1 : -4) + sumTeamComboEffect(teamCombos, 'trustDelta');
   const stressDelta = (check.success ? 4 : 8) + sumTeamComboEffect(teamCombos, 'stressDelta');
+  const nextPressure = clampNumber(
+    (departure.pressure ?? DEPARTURE_INITIAL_PRESSURE) + pressureDelta,
+    0,
+    departure.pressureThreshold ?? DEPARTURE_PRESSURE_THRESHOLD,
+  );
   const nextDeparture: PendingDeparture = {
     ...departure,
-    departureRound: Math.max(player.round + 1, departure.departureRound + departureDelta),
+    pressure: nextPressure,
+    lockedUntilRound: check.success ? Math.max(departure.lockedUntilRound ?? 0, player.round + 4) : departure.lockedUntilRound,
+    departureRound: Math.max(
+      player.round + 1,
+      departure.departureRound + (check.success ? 4 : bigFailure ? -1 : 0),
+    ),
     retentionAttempted: true,
     retentionAttemptRound: player.round,
   };
@@ -3102,18 +3374,10 @@ function joinTeamFromOffer(
     : cleanTags;
 
   // 初始化队友转会计划
-  const deptOffset = 20 + Math.floor(rosterRng() * 21); // 20-40 回合后首次转会
   const deptSlot = roster[Math.floor(rosterRng() * roster.length)]!.id;
   const deptRivals = player.rivals.length > 0 ? player.rivals : [{ name: '某支战队', tag: '???', region: '' }];
   const deptDestTeam = deptRivals[Math.floor(rosterRng() * deptRivals.length)]!.name;
-  const initialPendingDeparture: PendingDeparture = {
-    slotId: deptSlot,
-    departureRound: player.round + deptOffset,
-    rumorShown: false,
-    revealed: false,
-    destTeamName: deptDestTeam,
-    earlyRecruit: false,
-  };
+  const initialPendingDeparture = createInitialPendingDeparture(player, rosterRng, deptDestTeam, deptSlot);
 
   return refreshVisibleTeamIdentities({
     ...player,

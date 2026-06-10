@@ -210,6 +210,8 @@ export function PlayerStats({ player, traits }: Props) {
       {player.pendingDeparture && (() => {
         const pd = player.pendingDeparture;
         const roundsLeft = pd.departureRound - player.round;
+        const pressure = pd.pressure ?? 0;
+        const threshold = pd.pressureThreshold ?? 100;
         return (
           <div style={{ marginBottom: 4 }}>
             <div
@@ -238,6 +240,10 @@ export function PlayerStats({ player, traits }: Props) {
               <span className="badge">
                 {roundsLeft <= 1 ? '即将离队' : `${roundsLeft} 回合后离队`}
               </span>
+            </div>
+            <div style={{ marginTop: 4, fontSize: 10, color: 'var(--fg-2)', lineHeight: 1.35 }}>
+              <div>离队压力 {pressure}/{threshold}</div>
+              {pd.reasonTags?.length ? <div>{pd.reasonTags.slice(0, 3).join(' · ')}</div> : null}
             </div>
           </div>
         );

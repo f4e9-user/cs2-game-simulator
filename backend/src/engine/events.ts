@@ -8,6 +8,7 @@ import {
   deriveTeammateIdentities,
 } from './teamIdentity.js';
 import { calcSynergyBonus } from './synergy.js';
+import type { AiEventPickCandidate } from '../ai/eventCache.js';
 import type { EventDef, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier, LeaderboardTeam, TeamIdentity } from '../types.js';
 
 export interface EventContext {
@@ -16,6 +17,7 @@ export interface EventContext {
   rng: () => number;
   leaderboard?: LeaderboardTeam[];
   aiEvents?: EventDef[];
+  aiEventCandidates?: AiEventPickCandidate[];
 }
 
 function playerHasTeamIdentity(player: Player, identity: TeamIdentity): boolean {
@@ -369,10 +371,13 @@ export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
 }
 
 export function pickEvent(ctx: EventContext): EventDef | null {
-  const { player, recentEventIds, rng, aiEvents } = ctx;
+  const { player, recentEventIds, rng, aiEvents, aiEventCandidates } = ctx;
   const realTags = new Set(player.tags);
   const synthTags = new Set([...player.tags, ...dynamicTags(player)]);
-  const pool = [...getEventRegistry().getAll(), ...(aiEvents ?? [])];
+  const weightedAiCandidates = aiEventCandidates ?? aiEvents?.map((event) => ({ event, weightMultiplier: 1 })) ?? [];
+  const candidateAiEvents = weightedAiCandidates.map((candidate) => candidate.event);
+  const aiWeightById = new Map(weightedAiCandidates.map((candidate) => [candidate.event.id, candidate.weightMultiplier]));
+  const pool = [...getEventRegistry().getAll(), ...candidateAiEvents];
 
   if (player.forceNextEvent) {
     const forcedEvent = getEventById(player.forceNextEvent);
@@ -472,9 +477,9 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     return true;
   });
 
-  const aiEligible = eligible.filter((e) => e.id.startsWith('ai-'));
+  const aiEligible = eligible.filter((e) => aiWeightById.has(e.id));
   if (aiEligible.length > 0 && rng() < 0.6) {
-    return weightedPick(aiEligible, rng, (e) => stateWeight(e, player));
+    return weightedPick(aiEligible, rng, (e) => stateWeight(e, player) * (aiWeightById.get(e.id) ?? 1));
   }
 
   if (eligible.length === 0) {
@@ -485,7 +490,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     return weightedPick(fallback, rng, (e) => stateWeight(e, player));
   }
 
-  return weightedPick(eligible, rng, (e) => stateWeight(e, player));
+  return weightedPick(eligible, rng, (e) => stateWeight(e, player) * (aiWeightById.get(e.id) ?? 1));
 }
 
 function weightedPick(

@@ -267,11 +267,13 @@ export interface Teammate {
 
 // Leaderboard entry for the global ranking. Player's team has isPlayer=true.
 export interface LeaderboardTeam {
+  clubId?: string;
   name: string;
   tag: string;
   region: string;
   points: number;
   isPlayer: boolean;
+  kind?: 'club' | 'rival' | 'free-agent';
 }
 
 export interface Player extends DynamicState {

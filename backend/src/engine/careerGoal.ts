@@ -3,7 +3,7 @@ import { buildYearTournaments, type Tournament } from '../data/tournaments.js';
 import { getTrait } from '../data/traits.js';
 import { getClubProfile } from '../data/clubProfiles.js';
 import { getGate } from './stages.js';
-import { canSeeTournamentOpportunity } from './tournamentEligibility.js';
+import { canSeeTournamentOpportunity, tournamentOpportunityStatus } from './tournamentEligibility.js';
 
 export interface CareerGoalProgress {
   id: string;
@@ -17,6 +17,8 @@ export interface CareerGoalOpportunity {
   week: number;
   name: string;
   tier: string;
+  available: boolean;
+  status: string;
 }
 
 export interface CareerGoal {
@@ -46,6 +48,7 @@ const TIER_LABELS: Record<string, string> = {
   's-class': 'S 级赛事',
   major: 'Major',
 };
+const OPPORTUNITY_LOOKAHEAD_WEEKS = 12;
 
 function sumTiers(record: Record<string, number>, tiers: string[]): number {
   return tiers.reduce((sum, tier) => sum + (record[tier] ?? 0), 0);
@@ -58,7 +61,10 @@ function tierLabel(tiers: string[]): string {
 function isUpcomingTournament(player: Player, tournament: Tournament): boolean {
   if (!tournament.stages.includes(player.stage)) return false;
   if (tournament.signupWeeks === 'always') return true;
-  return tournament.signupWeeks.some((week) => week >= player.week);
+  const currentWeek = player.week ?? 1;
+  return tournament.signupWeeks.some((week) => (
+    week >= currentWeek && week <= currentWeek + OPPORTUNITY_LOOKAHEAD_WEEKS
+  ));
 }
 
 function tournamentWeek(tournament: Tournament, currentWeek: number): number {
@@ -73,15 +79,15 @@ function upcomingOpportunities(
 ): CareerGoalOpportunity[] {
   return buildYearTournaments(player.year)
     .filter((tournament) => isUpcomingTournament(player, tournament))
-    .filter((tournament) => canSeeTournamentOpportunity(player, tournament, playerPoints))
     .filter(predicate)
     .map((tournament) => ({
       week: tournamentWeek(tournament, player.week),
       name: tournament.displayName,
       tier: TIER_LABELS[tournament.progressionTier] ?? TIER_LABELS[tournament.tier] ?? tournament.tier,
+      available: canSeeTournamentOpportunity(player, tournament, playerPoints),
+      status: tournamentOpportunityStatus(player, tournament, playerPoints),
     }))
     .sort((a, b) => a.week - b.week || a.name.localeCompare(b.name))
-    .slice(0, 3);
 }
 
 function progress(id: string, label: string, current: number, target: number): CareerGoalProgress {

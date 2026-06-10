@@ -1626,7 +1626,9 @@ input[type='text']:focus {
 .career-opportunity-name {
   flex: 1;
   text-align: right;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .career-opportunity-tier {
@@ -2723,6 +2725,270 @@ input[type='text']:focus {
 
 .mob-only {
   display: none;
+}
+
+/* ── Desktop scaling ≥ 1440px ───────────────────────────────── */
+
+@media (min-width: 1440px) {
+  html,
+  body {
+    font-size: 17px;
+  }
+
+  .layout {
+    max-width: 1280px;
+    padding: 32px 32px 80px;
+  }
+
+  .panel {
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+
+  .hero {
+    padding: 40px 0 20px;
+  }
+
+  .hero h1 {
+    font-size: 34px;
+  }
+
+  .hud-root {
+    grid-template-rows: 82px 1fr 52px;
+  }
+
+  .hud-top,
+  .hud-bottom,
+  .hud-body {
+    width: min(100vw, 1760px);
+    margin-inline: auto;
+  }
+
+  .hud-top {
+    gap: 16px;
+    padding: 0 18px;
+    border-inline: 1px solid var(--border);
+  }
+
+  .hud-bottom {
+    gap: 12px;
+    padding: 0 18px;
+    border-inline: 1px solid var(--border);
+  }
+
+  .hud-body {
+    border-inline: 1px solid var(--border);
+  }
+
+  .hud-left {
+    width: 340px;
+    padding: 14px;
+  }
+
+  .hud-right {
+    width: 300px;
+  }
+
+  .center-tab {
+    padding: 11px 20px;
+    font-size: 13px;
+  }
+
+  .center-tab-pane {
+    padding: 14px 18px;
+  }
+
+  .hud-player-name,
+  .hud-stat-val,
+  .hud-gauge-val,
+  .hud-rank-val {
+    font-size: 16px;
+  }
+
+  .hud-stat-name,
+  .hud-gauge-label,
+  .hud-rank-label,
+  .hud-rank-pts {
+    font-size: 12px;
+  }
+
+  .hud-stat-bar {
+    width: 52px;
+  }
+
+  .hud-buff-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+  }
+
+  .event-panel {
+    padding: 16px 18px;
+    margin-bottom: 10px;
+  }
+
+  .event-title {
+    font-size: 18px;
+  }
+
+  .narrative {
+    font-size: 17px;
+  }
+
+  .result-panel {
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+
+  .result-narrative {
+    font-size: 16px;
+  }
+
+  .cs-choice {
+    padding: 11px 14px 11px 46px;
+  }
+
+  .cs-choice-label {
+    font-size: 15px;
+  }
+
+  .cs-choice-desc,
+  .cs-choice-custom-input {
+    font-size: 14px;
+  }
+
+  .career-goal-panel,
+  .player-card,
+  .feed-item {
+    padding-inline: 14px;
+  }
+
+  .career-goal-title {
+    font-size: 16px;
+  }
+
+  .career-goal-summary,
+  .feed-narrative,
+  .feed-choice {
+    font-size: 13px;
+  }
+
+  .career-goal-label,
+  .career-goal-count,
+  .career-opportunity-name,
+  .career-opportunity-week,
+  .roster-row,
+  .roster-role,
+  .roster-name,
+  .roster-traits,
+  .roster-avg {
+    font-size: 12px;
+  }
+
+  .career-opportunity-tier {
+    font-size: 11px;
+  }
+
+  .feed-title,
+  .tourney-name,
+  .pending-match-name,
+  .hltv-row,
+  .hltv-name,
+  .hltv-pts,
+  .action-btn-title,
+  .shop-item-title {
+    font-size: 15px;
+  }
+
+  .tourney-meta,
+  .pending-match-meta,
+  .hltv-tag,
+  .action-btn-desc,
+  .shop-item-desc {
+    font-size: 13px;
+  }
+}
+
+/* ── Wide desktop scaling ≥ 1800px ──────────────────────────── */
+
+@media (min-width: 1800px) {
+  html,
+  body {
+    font-size: 18px;
+  }
+
+  .layout {
+    max-width: 1440px;
+    padding: 40px 40px 96px;
+  }
+
+  .panel {
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .hero h1 {
+    font-size: 38px;
+  }
+
+  .hud-root {
+    grid-template-rows: 90px 1fr 56px;
+  }
+
+  .hud-top,
+  .hud-bottom,
+  .hud-body {
+    width: min(100vw, 1880px);
+  }
+
+  .hud-top {
+    gap: 18px;
+    padding: 0 22px;
+  }
+
+  .hud-bottom {
+    padding: 0 22px;
+  }
+
+  .hud-left {
+    width: 380px;
+    padding: 16px;
+  }
+
+  .hud-right {
+    width: 340px;
+  }
+
+  .center-tab {
+    padding: 12px 22px;
+  }
+
+  .center-tab-pane {
+    padding: 16px 22px;
+  }
+
+  .event-panel {
+    padding: 18px 20px;
+  }
+
+  .event-title {
+    font-size: 19px;
+  }
+
+  .narrative {
+    font-size: 18px;
+  }
+
+  .result-narrative {
+    font-size: 17px;
+  }
+
+  .hud-player-name,
+  .hud-stat-val,
+  .hud-gauge-val,
+  .hud-rank-val {
+    font-size: 17px;
+  }
 }
 
 /* ── Mobile responsive ≤ 768px ───────────────────────────────── */

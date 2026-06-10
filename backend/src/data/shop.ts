@@ -75,14 +75,14 @@ export const SHOP_ITEMS: ShopItem[] = [
     },
   },
 
-  // ── 服务类（每周每种限购 1 次；长冷却物品仍保留 cooldown）───────
+  // ── 服务类（每周每种限购 1 次；深度恢复服务另有 4-8 回合冷却）───────
   {
     id: 'psych-session',
     name: '心理咨询',
     description: '和运动心理师谈一小时，把压力拆成能处理的碎片。',
     category: 'service',
     priceMoney: 15, // 15K
-    cooldownRounds: 0,
+    cooldownRounds: 6,
     effect: {
       stressDelta: -100,
       buffAdd: {
@@ -99,13 +99,11 @@ export const SHOP_ITEMS: ShopItem[] = [
   {
     id: 'aim-coach',
     name: '枪法私教',
-    description: '请教练盯着你把拉枪和定位一点点抠顺，短期涨得快，但练狠了也容易把手感练乱。',
+    description: '请教练盯着你把拉枪和定位一点点抠顺，短期训练收益更高，但练法不合拍也可能把手感练乱。',
     category: 'service',
     priceMoney: 30,
     cooldownRounds: 0,
     effect: {
-      fatigueDelta: -6,
-      stressDelta: -8,
       buffAdd: {
         id: 'aim-coached',
         label: '枪法私教',
@@ -118,12 +116,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     },
     negativeEvents: [
       {
-        chance: 0.25,
-        effect: { fatigueDelta: 12, stressDelta: 6 },
-        narrative: '私教把训练强度拉得太满，动作是纠了，但手臂和手腕也跟着酸了一整天。',
-      },
-      {
-        chance: 0.15,
+        chance: 0.2,
         effect: { feelReset: true, stressDelta: 8 },
         narrative: '你试着硬改发力习惯，结果原本的节奏被打散了，今天的手感一下子冷了下来。',
       },
@@ -162,7 +155,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: '离开城市两三天，彻底切断与比赛的联系。',
     category: 'service',
     priceMoney: 30, // 30K
-    cooldownRounds: 0,
+    cooldownRounds: 8,
     effect: {
       stressDelta: -35,
       fatigueDelta: -30,
@@ -175,7 +168,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: '让理疗师把肩颈和前臂彻底放松下来，恢复很扎实，但按得太重也可能适得其反。',
     category: 'service',
     priceMoney: 35,
-    cooldownRounds: 0,
+    cooldownRounds: 4,
     effect: {
       fatigueDelta: -20,
       stressDelta: -15,

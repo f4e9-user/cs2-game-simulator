@@ -49,7 +49,7 @@ export function Leaderboard({ teams }: Props) {
       </div>
 
       {top.map((t, i) => (
-        <HltvRow key={t.name} rank={i + 1} t={t} />
+        <HltvRow key={t.clubId ?? t.name} rank={i + 1} t={t} />
       ))}
 
       {!playerInTop && playerRow && (

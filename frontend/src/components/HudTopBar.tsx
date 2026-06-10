@@ -172,7 +172,7 @@ export function HudTopBar({ player, leaderboard }: Props) {
         </div>
 
         {/* 排名 — 新人阶段尚未入队，不参与积分榜 */}
-        {rank > 0 && player.stage !== 'rookie' && (
+        {player.team && rank > 0 && player.stage !== 'rookie' && (
           <div className="hud-rank-badge">
             <span className="hud-rank-label">RANK</span>
             <span className="hud-rank-val">#{rank}</span>

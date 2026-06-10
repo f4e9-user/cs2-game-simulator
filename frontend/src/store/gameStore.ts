@@ -51,6 +51,7 @@ interface GameState {
     leaderboard?: LeaderboardTeam[];
   }) => void;
   setPlayer: (player: Player) => void;
+  setCurrentEvent: (currentEvent: GameEvent | null) => void;
   setPlayerState: (args: {
     player: Player;
     careerGoal?: CareerGoal;
@@ -145,6 +146,7 @@ export const useGameStore = create<GameState>((set) => ({
 
   setAiActive: (v) => set({ aiActive: v }),
   setPlayer: (player) => set({ player, pendingOffer: player.pendingOffer ?? null }),
+  setCurrentEvent: (currentEvent) => set({ currentEvent }),
   setPlayerState: ({ player, careerGoal, leaderboard }) =>
     set((state) => ({
       player,
