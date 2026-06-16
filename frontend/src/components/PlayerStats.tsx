@@ -1,7 +1,7 @@
 'use client';
 
 import type { Player, Stage, Trait } from '@/lib/types';
-import { STAGE_LABELS, formatMoney } from '@/lib/format';
+import { STAGE_LABELS, formatMoney, formatTag } from '@/lib/format';
 
 interface Props {
   player: Player;
@@ -88,8 +88,8 @@ export function PlayerStats({ player, traits }: Props) {
           </div>
           <div>
             {player.tags.map((tag) => (
-              <span key={tag} className="trait-chip">
-                #{tag}
+              <span key={tag} className="trait-chip" title={tag}>
+                #{formatTag(tag)}
               </span>
             ))}
           </div>

@@ -4,7 +4,9 @@
 
 当前分支：`feature/team-management-actions`
 
-状态：待实现
+状态：已完成
+
+实现要点：`worldClubs` 计算并维护 `vrsScore`，排行榜和赛事报名门槛统一读取该分数。
 
 ## 1. 问题
 

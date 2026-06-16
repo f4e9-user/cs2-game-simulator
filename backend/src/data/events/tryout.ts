@@ -38,7 +38,7 @@ export const PROMOTION_EVENTS: EventDef[] = [
             stageSet: 'youth',
           },
           tags: {
-            add: ['signed-second-team'],
+            add: ['just-joined-team'],
           },
         },
         failure: {
@@ -75,7 +75,7 @@ export const PROMOTION_EVENTS: EventDef[] = [
             stageSet: 'youth',
           },
           tags: {
-            add: ['signed-second-team'],
+            add: ['just-joined-team'],
           },
         },
         failure: {
@@ -140,7 +140,7 @@ export const PROMOTION_EVENTS: EventDef[] = [
             teamTierSet: 'semi-pro',
           },
           tags: {
-            add: ['signed-second-team'],
+            add: ['just-joined-team'],
           },
         },
         failure: {
@@ -175,7 +175,7 @@ export const PROMOTION_EVENTS: EventDef[] = [
             teamTierSet: 'semi-pro',
           },
           tags: {
-            add: ['signed-second-team'],
+            add: ['just-joined-team'],
           },
         },
         failure: {

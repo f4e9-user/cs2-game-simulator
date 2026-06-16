@@ -107,7 +107,13 @@ createSession
 
 ### 3. 结束行动阶段
 
-新增接口：
+触发点：
+
+- 语义上，事件应在“行动阶段结束”时才 pickup。
+- 当前 AI cache 的 pickup 触发点也是这个边界：行动阶段结束后再基于最新状态挑选事件。
+- 如果后续代码路径仍暂时复用 `/action` 结算，也只能视为同一个触发点的过渡承载，不能理解成“回合开始预锁事件”。
+
+新增接口（推荐形态）：
 
 ```text
 POST /api/game/:sessionId/end-action-phase
@@ -170,7 +176,7 @@ function endActionPhase(session, aiEvents) {
 
 事件结算仍由 `applyChoice(...)` 负责。
 
-区别是：结算后不再立即 pick 下一回合事件。
+区别是：结算后不再提前锁定下一回合事件；下一次 pickup 仍然发生在下一回合行动阶段结束时。
 
 ```ts
 applyChoice(...)
@@ -200,7 +206,7 @@ AI 事件生成和 pickup 分离：
   和静态事件池一起 pick
 ```
 
-这解决了“上一回合生成的 AI 事件，下一回合行动后已经不合适”的问题。
+这也是当前 AI cache 设计已经采用的 pickup 触发点：不是回合开始提前定事件，而是行动阶段结束时再用最新状态挑选。
 
 后续如果实现 AI 事件缓存 meta，可在 `end-action-phase` 阶段做：
 
@@ -334,7 +340,8 @@ POST /api/game/:sessionId/end-action-phase
 - 新增 `end-action-phase` 接口，在这里 pickEvent。
 - `/choice` 只允许 `phase = 'event'`。
 - 行动、商店、贷款、赛事、战队操作只允许 `phase = 'action'`。
-- AI 事件缓存仍保持当前结构，只是在 end-action-phase 时读取并参与 pick。
+- AI 事件缓存已按行动阶段结束这个触发点读取并参与 pick。
+- 若当前代码路径还复用了 `/action`，也只应视为同一个触发点的过渡承载。
 
 ### v2：AI 事件缓存 meta
 

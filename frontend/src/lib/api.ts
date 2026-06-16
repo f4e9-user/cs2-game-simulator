@@ -7,6 +7,7 @@ import type {
   ClubApplicationSummary,
   GameEvent,
   GameSession,
+  EventSequence,
   LeaderboardTeam,
   Loan,
   MatchStats,
@@ -137,9 +138,15 @@ export const api = {
       method: 'POST',
     }, apiToken),
   submitAction: (sessionId: string, actionId: string, apiToken?: string) =>
-    request<{ actionResult: ActionResult; player: Player; currentEvent: GameEvent | null }>(
+    request<{ actionResult: ActionResult; player: Player; phase: 'action' | 'event'; currentEvent: GameEvent | null }>(
       `/api/game/${sessionId}/action`,
       { method: 'POST', body: JSON.stringify({ actionId }) },
+      apiToken,
+    ),
+  endActionPhase: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; phase: 'event'; currentEvent: GameEvent | null; activeEventSequence?: EventSequence | null }>(
+      `/api/game/${sessionId}/end-action-phase`,
+      { method: 'POST' },
       apiToken,
     ),
   buyShopItem: (sessionId: string, itemId: string, apiToken?: string) =>

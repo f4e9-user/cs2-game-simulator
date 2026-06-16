@@ -202,10 +202,10 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const apiToken = useGameStore((s) => s.apiToken);
-  const setCurrentEvent = useGameStore((s) => s.setCurrentEvent);
 
   const ap = player.actionPoints ?? 0;
   const activeComboIds = new Set((player.roundCombos ?? []).map((combo) => combo.id));
+  const isResting = (player.restRounds ?? 0) > 0;
 
   const isTournamentWeek =
     player.pendingMatch !== null &&
@@ -221,7 +221,6 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
       const moneyChange = res.actionResult.newStats.money - prevMoney;
       onActionResult?.(res.actionResult, moneyChange);
       onPlayerUpdate(res.player);
-      setCurrentEvent(res.currentEvent);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -233,6 +232,8 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
     ? (disabledReason ?? '先完成本回合事件决策')
     : isTournamentWeek
     ? '赛事比赛周 — 行动力冻结'
+    : isResting
+    ? '休养期间不能进行日常行动'
     : null;
 
   return (

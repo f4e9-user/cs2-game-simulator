@@ -73,6 +73,42 @@ function mockPlayer(): Player {
 }
 
 describe('AI event generation parsing', () => {
+  it('accepts tournament context events with context phase metadata', () => {
+    const parsed = parseAiEvents(JSON.stringify([
+      {
+        id: 'ai-tournament-pressure',
+        type: 'tournament-context',
+        contextPhase: ['pre-match'],
+        triggerReason: 'pending tournament and high stress',
+        title: '赛前压力',
+        narrative: '比赛前一晚，你发现自己一直在回想上一场失败的残局。',
+        stages: ['rookie'],
+        difficulty: 3,
+        choices: [
+          {
+            id: 'reset',
+            label: '重新整理',
+            description: '你把注意力拉回当前比赛。',
+            check: { primary: 'mentality', dc: 8 },
+            success: { narrative: '你把思路收回来，呼吸也慢了下来。', stateDelta: { stress: -3 } },
+            failure: { narrative: '越想整理越乱，脑子里只剩失败画面。', stateDelta: { stress: 4 } },
+          },
+          {
+            id: 'ignore',
+            label: '硬顶过去',
+            description: '你不处理这些念头，直接睡觉。',
+            check: { primary: 'constitution', dc: 8 },
+            success: { narrative: '你勉强睡着，醒来后状态还算完整。' },
+            failure: { narrative: '你睡得很浅，醒来后更加疲惫。', stateDelta: { fatigue: 6 } },
+          },
+        ],
+      },
+    ]));
+
+    expect(parsed.valid).toHaveLength(1);
+    expect(parsed.valid[0]?.type).toBe('tournament-context');
+  });
+
   it('extracts JSON arrays from common LLM wrappers', () => {
     const raw = [
       {

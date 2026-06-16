@@ -46,6 +46,8 @@ export interface QualificationMilestone {
 export interface TournamentStage {
   name: string;
   difficultyBonus: number;
+  seriesType?: 'bo1' | 'bo3' | 'bo5';
+  mapPool?: string[];
   // 0..1: portion of reward awarded if the player is eliminated *after winning*
   // this stage but losing the next one. The final stage means full reward on win.
   rewardShareOnEarlyExit: number;
@@ -54,24 +56,24 @@ export interface TournamentStage {
 // Default stage progressions by "depth": small tourneys are 2 stages, Major is 6.
 const TWO_STAGE: TournamentStage[] = [
   { name: '入围赛', difficultyBonus: -1, rewardShareOnEarlyExit: 0.2 },
-  { name: '决赛', difficultyBonus: 1, rewardShareOnEarlyExit: 0.5 },
+  { name: '决赛', difficultyBonus: 1, rewardShareOnEarlyExit: 0.5, seriesType: 'bo3' },
 ];
 const ONE_STAGE: TournamentStage[] = [
   { name: '决赛', difficultyBonus: 0, rewardShareOnEarlyExit: 0.5 },
 ];
 const FOUR_STAGE: TournamentStage[] = [
   { name: '入围赛', difficultyBonus: -1, rewardShareOnEarlyExit: 0.1 },
-  { name: '小组赛', difficultyBonus: 0, rewardShareOnEarlyExit: 0.25 },
-  { name: '半决赛', difficultyBonus: 1, rewardShareOnEarlyExit: 0.5 },
-  { name: '决赛', difficultyBonus: 2, rewardShareOnEarlyExit: 0.7 },
+  { name: '小组赛', difficultyBonus: 0, rewardShareOnEarlyExit: 0.25, seriesType: 'bo3' },
+  { name: '半决赛', difficultyBonus: 1, rewardShareOnEarlyExit: 0.5, seriesType: 'bo3' },
+  { name: '决赛', difficultyBonus: 2, rewardShareOnEarlyExit: 0.7, seriesType: 'bo3' },
 ];
 const SIX_STAGE: TournamentStage[] = [
   { name: '入围赛', difficultyBonus: -2, rewardShareOnEarlyExit: 0.05 },
   { name: '小组赛', difficultyBonus: -1, rewardShareOnEarlyExit: 0.15 },
-  { name: '淘汰赛', difficultyBonus: 0, rewardShareOnEarlyExit: 0.3 },
-  { name: '八强赛', difficultyBonus: 1, rewardShareOnEarlyExit: 0.5 },
-  { name: '半决赛', difficultyBonus: 1, rewardShareOnEarlyExit: 0.7 },
-  { name: '决赛', difficultyBonus: 2, rewardShareOnEarlyExit: 0.85 },
+  { name: '淘汰赛', difficultyBonus: 0, rewardShareOnEarlyExit: 0.3, seriesType: 'bo3' },
+  { name: '八强赛', difficultyBonus: 1, rewardShareOnEarlyExit: 0.5, seriesType: 'bo3' },
+  { name: '半决赛', difficultyBonus: 1, rewardShareOnEarlyExit: 0.7, seriesType: 'bo3' },
+  { name: '决赛', difficultyBonus: 2, rewardShareOnEarlyExit: 0.85, seriesType: 'bo5' },
 ];
 
 const B_MAIN_A_OPEN_MILESTONES: QualificationMilestone[] = [

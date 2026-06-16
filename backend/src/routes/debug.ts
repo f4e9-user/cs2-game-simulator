@@ -1,13 +1,16 @@
 import { Hono } from 'hono';
 import { getEventById } from '../data/events/index.js';
+import { buildLeaderboard } from '../data/leaderboard.js';
 import { LlmLogger } from '../ai/logger.js';
 import { makeStorage } from '../storage/index.js';
+import { createClubRuntimeState } from '../engine/worldClubs.js';
 import {
   aiEventCacheKey,
   aiEventsFromCache,
   legacyAiEventCacheKey,
   parseAiEventCache,
 } from '../ai/eventCache.js';
+import { computeClubVrsScore } from '../engine/worldClubs.js';
 import type {
   ClubTier,
   Env,
@@ -21,6 +24,7 @@ const app = new Hono<{ Bindings: Env }>();
 const STAGES: Stage[] = ['rookie', 'youth', 'second', 'pro', 'retired'];
 const CLUB_TIERS: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
 const FORCED_MATCH_RESULTS: ForcedMatchResult[] = ['win', 'loss'];
+const DEBUG_CORE_STATS = ['intelligence', 'agility', 'experience', 'mentality', 'constitution'] as const;
 
 function isLocalDebugRequest(url: string): boolean {
   const hostname = new URL(url).hostname.toLowerCase();
@@ -44,6 +48,10 @@ function isPendingMatch(value: unknown): value is PendingMatch {
     && Number.isInteger(pendingMatch.stageIndex);
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 app.post('/debug/:sessionId', async (c) => {
   if (!isLocalDebugRequest(c.req.url)) {
     return c.json({ error: 'not found' }, 404);
@@ -55,6 +63,9 @@ app.post('/debug/:sessionId', async (c) => {
   const session = await storage.sessions.load(id);
 
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (session.activeEventSequence?.status === 'active' && Object.keys(body ?? {}).length > 0) {
+    return c.json({ error: '当前事件流程未结束，不能通过 debug 修改 session' }, 400);
+  }
 
   const {
     money,
@@ -67,8 +78,11 @@ app.post('/debug/:sessionId', async (c) => {
     pendingMatch,
     forceNextEvent,
     forceMatchResult,
+    stats,
+    tags,
     teamMonthlySalary,
     teamTier,
+    teamVrsScore,
   } = body ?? {};
 
   if (money !== undefined && !Number.isFinite(money)) {
@@ -105,8 +119,25 @@ app.post('/debug/:sessionId', async (c) => {
       return c.json({ error: 'forceMatchResult 必须为 win 或 loss' }, 400);
     }
   }
+  if (stats !== undefined) {
+    if (!isObject(stats)) {
+      return c.json({ error: 'stats 必须是对象' }, 400);
+    }
+    const allowed = new Set<string>(DEBUG_CORE_STATS);
+    for (const [key, value] of Object.entries(stats)) {
+      if (!allowed.has(key)) {
+        return c.json({ error: `stats.${key} 不支持调试修改` }, 400);
+      }
+      if (!Number.isFinite(value)) {
+        return c.json({ error: `stats.${key} 必须是数字` }, 400);
+      }
+    }
+  }
+  if (tags !== undefined && (!Array.isArray(tags) || tags.some((tag) => typeof tag !== 'string'))) {
+    return c.json({ error: 'tags 必须是字符串数组' }, 400);
+  }
 
-  if ((teamMonthlySalary !== undefined || teamTier !== undefined) && !session.player.team) {
+  if ((teamMonthlySalary !== undefined || teamTier !== undefined || teamVrsScore !== undefined) && !session.player.team) {
     return c.json({ error: '玩家当前没有战队，不能覆盖战队合同字段' }, 400);
   }
   if (teamMonthlySalary !== undefined && !Number.isFinite(teamMonthlySalary)) {
@@ -115,27 +146,65 @@ app.post('/debug/:sessionId', async (c) => {
   if (teamTier !== undefined && (typeof teamTier !== 'string' || !CLUB_TIERS.includes(teamTier as ClubTier))) {
     return c.json({ error: 'teamTier 无效' }, 400);
   }
+  if (teamVrsScore !== undefined && (!Number.isFinite(teamVrsScore) || teamVrsScore < 0)) {
+    return c.json({ error: 'teamVrsScore 必须是非负数字' }, 400);
+  }
 
   if (money !== undefined) session.player.stats.money = money;
   if (stage !== undefined) session.player.stage = stage;
   if (fame !== undefined) session.player.fame = fame;
   if (stress !== undefined) session.player.stress = stress;
   if (ownedItems !== undefined) session.player.ownedItems = [...new Set(ownedItems as string[])];
+  if (tags !== undefined) session.player.tags = [...new Set((tags as string[]).map((tag) => tag.trim()).filter(Boolean))];
   if (round !== undefined) session.player.round = round;
   if (consecutiveLosses !== undefined) session.player.consecutiveLosses = consecutiveLosses;
   if (pendingMatch !== undefined) session.player.pendingMatch = pendingMatch;
   if (forceNextEvent !== undefined) session.player.forceNextEvent = forceNextEvent === null ? null : forceNextEvent;
   if (forceMatchResult !== undefined) session.player.forceMatchResult = forceMatchResult === null ? null : forceMatchResult;
+  if (stats !== undefined && isObject(stats)) {
+    for (const key of DEBUG_CORE_STATS) {
+      const value = stats[key];
+      if (value !== undefined && typeof value === 'number') {
+        session.player.stats[key] = value;
+      }
+    }
+  }
 
   if (session.player.team) {
     if (teamMonthlySalary !== undefined) session.player.team.monthlySalary = teamMonthlySalary;
     if (teamTier !== undefined) session.player.team.tier = teamTier;
+    if (teamVrsScore !== undefined) {
+      const clubId = session.player.team.clubId;
+      const worldClubs = session.worldClubs ?? {
+        season: session.player.year ?? 1,
+        activeClubIds: [],
+        relevantClubIds: [],
+        staticClubIds: [],
+        runtimeByClubId: {},
+        processedTickKeysByClubId: {},
+      };
+      const existing = worldClubs.runtimeByClubId[clubId] ?? createClubRuntimeState(session, clubId);
+      const targetVrs = Math.round(teamVrsScore);
+      const computedWithoutBaseline = computeClubVrsScore({
+        ...existing,
+        baselineVrsScore: 0,
+      });
+      worldClubs.runtimeByClubId[clubId] = {
+        ...existing,
+        baselineVrsScore: targetVrs - computedWithoutBaseline,
+        vrsScore: targetVrs,
+        updatedRound: session.player.round ?? existing.updatedRound,
+      };
+      if (!worldClubs.activeClubIds.includes(clubId)) worldClubs.activeClubIds = [...worldClubs.activeClubIds, clubId];
+      session.worldClubs = worldClubs;
+      session.leaderboard = buildLeaderboard(session);
+    }
   }
 
   session.updatedAt = new Date().toISOString();
   await storage.sessions.save(session);
 
-  return c.json({ player: session.player });
+  return c.json({ player: session.player, leaderboard: session.leaderboard });
 });
 
 app.get('/debug/sessions', async (c) => {

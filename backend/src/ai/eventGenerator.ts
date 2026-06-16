@@ -94,7 +94,9 @@ export function buildEventGenPrompt(input: AiEventGenInput): string {
     '',
     '【设计要求】',
     '- 生成 2-3 个事件，每个事件必须包含：id, type, title, narrative, stages, difficulty, choices(2-4个)',
-    `- type 必须是以下之一：life / media / stress / rival / team`,
+    `- type 必须是以下之一：life / media / stress / rival / team / tournament-context`,
+    '- 如果玩家有 pendingMatch，优先生成 tournament-context；必须包含 contextPhase:["pre-match"] 或 ["post-match"]，并包含 triggerReason',
+    '- tournament-context 只能写赛前准备、赛后复盘、媒体、更衣室和个人压力；禁止写正在比赛中的内容',
     '- stages 必须包含当前阶段',
     '- difficulty 范围 0-10',
     '- narrative 使用第二人称"你"，20-120字',
@@ -113,9 +115,13 @@ export function buildEventGenPrompt(input: AiEventGenInput): string {
     '- 队内指挥只能影响战术、默认配合和沟通；不能生成经理权限',
     '- trial/rotation 队内定位下，事件语气要体现试训或轮换的不确定性',
     '- id 必须以 ai- 开头，后面接小写字母和连字符',
+    '- 如果生成多步骤 AI 事件，只允许 sequenceType 为 family-crisis / team-conflict / tournament-context',
+    '- 多步骤 AI 事件必须包含 maxSteps(1-4) 和 steps 数组；steps 中每步包含 title、narrative、choices',
+    '- 多步骤 AI 事件不能代替比赛结算，不能包含 tournament-* 比赛结果，不能修改 stage',
     '',
     '严格输出 JSON 数组，不加任何其他内容：',
     '[{"id":"ai-example","type":"life","title":"...","narrative":"...","stages":["rookie"],"difficulty":3,"choices":[{"id":"c1","label":"...","description":"...","check":{"primary":"mentality","dc":8},"success":{"narrative":"...","coreGrowth":{"mentality":1}},"failure":{"narrative":"...","stateDelta":{"stress":2}}}]}]',
+    '[{"id":"ai-tournament-example","type":"tournament-context","contextPhase":["pre-match"],"triggerReason":"当前有报名赛事且压力偏高","title":"...","narrative":"...","stages":["youth"],"difficulty":3,"choices":[{"id":"c1","label":"...","description":"...","check":{"primary":"mentality","dc":8},"success":{"narrative":"...","stateDelta":{"stress":-3}},"failure":{"narrative":"...","stateDelta":{"stress":4}}}]}]',
   ].join('\n');
 }
 

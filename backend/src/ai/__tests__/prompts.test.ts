@@ -285,6 +285,7 @@ describe('buildSocialFeedPrompt', () => {
         stageBefore: 'rookie',
         stageAfter: 'youth',
         tagsAdded: [],
+        tagsRemoved: [],
         passiveEffects: [],
         qualificationChanges: [],
         stressChange: 0,

@@ -72,7 +72,7 @@ export function tournamentOpportunityStatus(
     return `名气不足 ${player.fame ?? 0}/${tournament.fameRequired}`;
   }
   if (tournament.pointsRequired !== undefined && playerPoints < tournament.pointsRequired) {
-    return `积分不足 ${playerPoints}/${tournament.pointsRequired}`;
+    return `VRS 不足 ${playerPoints}/${tournament.pointsRequired}`;
   }
   if (tournament.signupWeeks !== 'always' && !tournament.signupWeeks.includes(week)) {
     return '未到报名周';

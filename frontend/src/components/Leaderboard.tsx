@@ -33,7 +33,7 @@ export function Leaderboard({ teams }: Props) {
             color: 'var(--fg-3)',
           }}
         >
-          积分榜
+          VRS 排行
         </span>
         {playerRow && !playerInTop && (
           <span style={{ fontSize: 10, color: 'var(--accent)' }}>
@@ -45,7 +45,7 @@ export function Leaderboard({ teams }: Props) {
       <div className="hltv-header">
         <span className="hltv-rank">#</span>
         <span style={{ flex: 1 }}>战队</span>
-        <span>分</span>
+        <span>VRS</span>
       </div>
 
       {top.map((t, i) => (

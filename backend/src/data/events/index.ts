@@ -18,6 +18,7 @@ import { BAILOUT_EVENTS } from './bailout.js';
 import { CHAIN_EVENTS } from './chains.js';
 import { SKIN_EVENTS } from './skins.js';
 import { AGENT_EVENTS } from './agent.js';
+import { TOURNAMENT_CONTEXT_EVENTS } from './tournamentContext.js';
 
 export { PROMOTION_EVENTS };
 
@@ -75,6 +76,7 @@ registry.register('bailout', BAILOUT_EVENTS);
 registry.register('chains', CHAIN_EVENTS);
 registry.register('skins', SKIN_EVENTS);
 registry.register('agent', AGENT_EVENTS);
+registry.register('tournament-context', TOURNAMENT_CONTEXT_EVENTS);
 
 export const EVENT_POOL: EventDef[] = registry.getAll();
 
@@ -82,7 +84,7 @@ export function getEventById(id: string): EventDef | undefined {
   if (id.startsWith('promotion-')) {
     return PROMOTION_EVENTS.find((e) => e.id === id);
   }
-  if (id.startsWith('tournament-')) {
+  if (id.startsWith('tournament-') && !id.startsWith('tournament-context-')) {
     const rest = id.slice('tournament-'.length);
     const sep = rest.lastIndexOf('--');
     if (sep < 0) return undefined;

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Player, Trait } from '@/lib/types';
-import { ENDING_LABELS, STAGE_LABELS, STAT_LABELS } from '@/lib/format';
+import { ENDING_LABELS, STAGE_LABELS, STAT_LABELS, formatTag } from '@/lib/format';
 
 const TIER_LABELS: Record<string, string> = {
   c: 'C 级赛事',
@@ -220,7 +220,7 @@ export function EndingPanel({ player, traits, ending }: Props) {
           <div className="ending-section-title">生涯标签</div>
           <div className="ending-tags-list">
             {visibleTags.map((tag) => (
-              <span key={tag} className="ending-tag-chip">#{tag}</span>
+              <span key={tag} className="ending-tag-chip" title={tag}>#{formatTag(tag)}</span>
             ))}
           </div>
         </div>

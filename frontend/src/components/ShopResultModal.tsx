@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { formatTag } from '@/lib/format';
 import type { Player } from '@/lib/types';
 
 interface Props {
@@ -56,6 +58,21 @@ export function ShopResultModal({
 }: Props) {
   const narrative = shopNarrative || '购买成功。';
   const isNegative = shopNarrativePositive === false;
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   const diffs: StatDiff[] = [
     { label: '资金', value: newPlayer.stats.money - prevPlayer.stats.money },
@@ -131,13 +148,13 @@ export function ShopResultModal({
             </div>
             <div className="chips-row">
               {shopTagsAdded?.map((tag) => (
-                <span key={`+${tag}`} className="chip chip-buff">
-                  标签 +{tag}
+                <span key={`+${tag}`} className="chip chip-buff" title={tag}>
+                  标签 +{formatTag(tag)}
                 </span>
               ))}
               {shopTagsRemoved?.map((tag) => (
-                <span key={`-${tag}`} className="chip chip-down">
-                  标签 -{tag}
+                <span key={`-${tag}`} className="chip chip-down" title={tag}>
+                  标签 -{formatTag(tag)}
                 </span>
               ))}
             </div>

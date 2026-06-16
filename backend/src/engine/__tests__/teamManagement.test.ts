@@ -606,6 +606,23 @@ describe('team management actions', () => {
     expect(resolved.result.passiveEffects).toContain('明星队友默契 -3');
   });
 
+  it('removes team-trust when team trust drops below 40', () => {
+    const base = {
+      ...player(),
+      tags: [...player().tags, 'team-trust'],
+      teamTrust: 40,
+    };
+    const event = getEventById('team-politics-star-vs-caller')!;
+    const session = createSession(base, 1);
+    session.currentEvent = toPublicEvent(event, base.rivals, base.roster ?? []);
+
+    const resolved = applyChoice(session, 'demand-freedom', -100);
+
+    expect(resolved.session.player.teamTrust).toBeLessThan(40);
+    expect(resolved.session.player.tags).not.toContain('team-trust');
+    expect(resolved.result.tagsRemoved).toContain('team-trust');
+  });
+
   it('promotes expiring trial or rotation status to starter with feedback', () => {
     const base = {
       ...player(),

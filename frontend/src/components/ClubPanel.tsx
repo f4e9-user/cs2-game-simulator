@@ -211,6 +211,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
   const hasTeam = player.team !== null;
   const hasPending = player.pendingApplication !== null;
   const ap = player.actionPoints ?? 0;
+  const isResting = (player.restRounds ?? 0) > 0;
   const hasPendingMatch = player.pendingMatch !== null && player.pendingMatch !== undefined;
   const inMatchWeek = hasPendingMatch
     && player.pendingMatch?.resolveYear === (player.year ?? 1)
@@ -296,7 +297,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
         )}
         {eligibleClubs.map((c) => {
           const rookieBlock = rookieCheck !== null && !rookieCheck.eligible;
-          const canApply = enabled && !hasPending && ap >= 25 && !loading && !rookieBlock;
+          const canApply = enabled && !isResting && !hasPending && ap >= 25 && !loading && !rookieBlock;
           return (
             <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: 6, background: 'var(--bg-2)' }}>
               <div>
@@ -483,7 +484,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                 <button
                   type="button"
                   className="ghost-button"
-                  disabled={!enabled || inMatchWeek || !!busyAction || ap < 30 || teamActionCount('team-meeting') >= 1}
+                  disabled={!enabled || isResting || inMatchWeek || !!busyAction || ap < 30 || teamActionCount('team-meeting') >= 1}
                   onClick={() => runTeamAction(
                     'team-meeting',
                     () => api.teamMeeting(sessionId, apiToken ?? undefined),
@@ -495,7 +496,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                 <button
                   type="button"
                   className="ghost-button"
-                  disabled={!enabled || inMatchWeek || !!busyAction || ap < 25 || teamActionCount('locker-room-talk') >= 1 || (!player.tags.includes('locker-tension') && (player.teamTrust ?? 50) >= 30)}
+                  disabled={!enabled || isResting || inMatchWeek || !!busyAction || ap < 25 || teamActionCount('locker-room-talk') >= 1 || (!player.tags.includes('locker-tension') && (player.teamTrust ?? 50) >= 30)}
                   onClick={() => runTeamAction(
                     'locker-room-talk',
                     () => api.lockerRoomTalk(sessionId, apiToken ?? undefined),
@@ -533,7 +534,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                       key={option.id}
                       type="button"
                       className="ghost-button"
-                      disabled={!enabled || inMatchWeek || !!busyAction || ap < 20}
+                      disabled={!enabled || isResting || inMatchWeek || !!busyAction || ap < 20}
                       onClick={() => runTeamAction(
                         `team-training-focus:${option.id}`,
                         () => api.teamTrainingFocus(sessionId, option.id, apiToken ?? undefined),
@@ -597,10 +598,10 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
                 type="button"
                 className="ghost-button"
                 onClick={() => setConfirmLeave(true)}
-                disabled={!enabled || hasPendingMatch}
+                disabled={!enabled || isResting || hasPendingMatch}
                 style={{ fontSize: 11, padding: '4px 10px', alignSelf: 'flex-start', color: 'var(--fg-2)' }}
               >
-                {hasPendingMatch ? '赛事中无法离队' : '申请离队'}
+                {isResting ? '休养中无法离队' : hasPendingMatch ? '赛事中无法离队' : '申请离队'}
               </button>
             )}
 

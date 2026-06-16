@@ -253,13 +253,16 @@ export default function LlmDebugPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 20, color: '#e6edf3' }}>LLM Debug</h1>
+          <h1 style={{ margin: 0, fontSize: 20, color: '#e6edf3' }}>Debug Dashboard</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#8b949e' }}>
-            查看最近 100 条 LLM 调用的 prompt / response
+            调整 session 属性、强制事件，查看最近 100 条 LLM 调用的 prompt / response
           </p>
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Link href="/debug/sessions" className="primary-button" style={{ display: 'inline-flex' }}>
+              Session 调试 / 改属性
+            </Link>
             <Link href="/debug/sessions" className="ghost-button" style={{ display: 'inline-flex' }}>
-              会话总览
+              会话列表
             </Link>
           </div>
         </div>

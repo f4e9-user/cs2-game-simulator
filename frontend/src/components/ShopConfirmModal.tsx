@@ -1,6 +1,7 @@
 'use client';
 
-import { formatMoney } from '@/lib/format';
+import { useEffect } from 'react';
+import { formatMoney, formatTag } from '@/lib/format';
 import type { Player, ShopItem, ShopNegativeEvent } from '@/lib/types';
 
 interface Props {
@@ -81,11 +82,11 @@ function parseEffectChips(item: ShopItem): EffectChip[] {
   }
 
   if (e.tagAdd) {
-    chips.push({ label: `获得标签: ${e.tagAdd}`, variant: 'neu' });
+    chips.push({ label: `获得标签: ${formatTag(e.tagAdd)}`, variant: 'neu' });
   }
 
   if (e.tagRemove) {
-    chips.push({ label: `移除标签: ${e.tagRemove}`, variant: 'neu' });
+    chips.push({ label: `移除标签: ${formatTag(e.tagRemove)}`, variant: 'neu' });
   }
 
   return chips;
@@ -94,6 +95,21 @@ function parseEffectChips(item: ShopItem): EffectChip[] {
 export function ShopConfirmModal({ item, price, player, onConfirm, onCancel }: Props) {
   const effectChips = parseEffectChips(item);
   const negativeEvents = item.negativeEvents ?? [];
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onCancel();
+        return;
+      }
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      onConfirm();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onCancel, onConfirm]);
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>

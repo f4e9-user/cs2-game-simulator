@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { TypewriterText } from '@/components/TypewriterText';
 import type { ActionResult, MatchStats, RoundResult, StatKey } from '@/lib/types';
 import {
@@ -10,6 +11,7 @@ import {
   describeFameChange,
   describeStatChange,
   describeBuffAdded,
+  formatTag,
 } from '@/lib/format';
 
 export interface SettlementActionResult {
@@ -37,6 +39,7 @@ interface Props {
   shopResults?: SettlementShopResult[];
   shopNarratives?: Record<string, string>;
   onEnterNextRound?: () => void;
+  hideNextRound?: boolean;
 }
 
 export function ResultPanel({
@@ -48,12 +51,15 @@ export function ResultPanel({
   shopResults = [],
   shopNarratives = {},
   onEnterNextRound,
+  hideNextRound = false,
 }: Props) {
   const deltas = Object.entries(result.statChanges) as [StatKey, number][];
   const stageChanged = result.stageBefore !== result.stageAfter;
   const passives = Array.from(new Set(result.passiveEffects ?? []));
   const qualificationChanges = result.qualificationChanges ?? [];
   const buffsAdded = result.buffsAdded ?? [];
+  const tagsAdded = result.tagsAdded ?? [];
+  const tagsRemoved = result.tagsRemoved ?? [];
   const stressChange = result.stressChange ?? 0;
   const fameChange = result.fameChange ?? 0;
   const feelChange = result.feelChange ?? 0;
@@ -66,10 +72,23 @@ export function ResultPanel({
   const pendingShopNarratives = shopResults.some((shop) => !(shop.itemId in shopNarratives));
   const loadingActive = Boolean(settlementLoading || isNarrating || pendingShopNarratives);
 
+  useEffect(() => {
+    if (loadingActive || !onEnterNextRound || hideNextRound) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      onEnterNextRound();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [hideNextRound, loadingActive, onEnterNextRound]);
+
   const hasChips =
     deltas.length > 0 ||
     stageChanged ||
     buffsAdded.length > 0 ||
+    tagsAdded.length > 0 ||
+    tagsRemoved.length > 0 ||
     stressChange !== 0 ||
     fameChange !== 0 ||
     feelChange !== 0 ||
@@ -187,6 +206,16 @@ export function ResultPanel({
               {describeBuffAdded(b)}
             </span>
           ))}
+          {tagsAdded.map((tag) => (
+            <span key={`tag-add-${tag}`} className="chip chip-up" title={tag}>
+              标签 +{formatTag(tag)}
+            </span>
+          ))}
+          {tagsRemoved.map((tag) => (
+            <span key={`tag-rm-${tag}`} className="chip chip-down" title={tag}>
+              标签 -{formatTag(tag)}
+            </span>
+          ))}
         </div>
       )}
 
@@ -266,10 +295,10 @@ export function ResultPanel({
                           <span key={`rm-${label}`} className="chip chip-down">Buff -{label}</span>
                         ))}
                         {shop.shopTagsAdded?.map((label) => (
-                          <span key={`tag-add-${label}`} className="chip chip-up">标签 +{label}</span>
+                          <span key={`tag-add-${label}`} className="chip chip-up" title={label}>标签 +{formatTag(label)}</span>
                         ))}
                         {shop.shopTagsRemoved?.map((label) => (
-                          <span key={`tag-rm-${label}`} className="chip chip-down">标签 -{label}</span>
+                          <span key={`tag-rm-${label}`} className="chip chip-down" title={label}>标签 -{formatTag(label)}</span>
                         ))}
                       </div>
                     </div>
@@ -281,7 +310,7 @@ export function ResultPanel({
         </div>
       )}
 
-      {!loadingActive && onEnterNextRound && (
+      {!loadingActive && onEnterNextRound && !hideNextRound && (
         <div className="settlement-footer">
           <button type="button" className="primary-button" onClick={onEnterNextRound}>
             进入下一回合 →
