@@ -201,6 +201,40 @@ describe('simulateMatch', () => {
     expect(withTeam.headshotRate - solo.headshotRate).toBeLessThan(0.05);
   });
 
+  it('lowers win probability against a strong concrete opponent', () => {
+    const p = player({
+      stats: {
+        agility: 14,
+        intelligence: 12,
+        experience: 10,
+        money: 0,
+        mentality: 12,
+        constitution: 10,
+      },
+      volatile: { feel: 1, tilt: 0, fatigue: 10 },
+      stage: 'pro',
+    });
+    const baseContext = {
+      tier: 's-open' as const,
+      progressionTier: 's-qualifier' as const,
+      entryType: 'direct_signup' as const,
+      stageIndex: 1,
+      effectiveDifficulty: 4,
+    };
+
+    const generic = simulateMatch(p, baseContext, rng([0.5, 0.5, 0.5, 0.5, 0.5, 0.5]));
+    const concrete = simulateMatch(p, {
+      ...baseContext,
+      opponent: {
+        power: 16,
+        vrsScore: 180,
+        form: 35,
+      },
+    }, rng([0.5, 0.5, 0.5, 0.5, 0.5, 0.5]));
+
+    expect(concrete.winProb).toBeLessThan(generic.winProb);
+  });
+
   it('consumes pre-match intel on tournament match experience growth', () => {
     const p = player({
       stats: {

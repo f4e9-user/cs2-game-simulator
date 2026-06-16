@@ -177,6 +177,18 @@ export interface PendingMatch {
   resolveWeek: number;
   // For multi-stage tournaments: the current stage index within Tournament.stages.
   stageIndex: number;
+  opponent?: PendingMatchOpponent;
+}
+
+export interface PendingMatchOpponent {
+  clubId: string;
+  name: string;
+  tag: string;
+  region: string;
+  tier: ClubTier;
+  vrsScore: number;
+  power: number;
+  form: number;
 }
 
 // Rival teams generated at session creation. Used in event narratives.

@@ -1,13 +1,15 @@
 import { CLUBS, getClub } from '../data/clubs.js';
 import { getClubProfile } from '../data/clubProfiles.js';
-import type { Tournament } from '../data/tournaments.js';
+import { buildYearTournaments, getTournament, type Tournament } from '../data/tournaments.js';
 import type {
   Club,
+  ClubDisplayInfo,
   ClubPlayer,
   ClubRuntimeState,
   ClubSeasonSummary,
   ClubTier,
   GameSession,
+  PendingMatch,
   PersonalityTag,
   RosterNeed,
   RosterStyle,
@@ -34,6 +36,12 @@ const TIER_STAT_RANGE: Record<ClubTier, [number, number]> = {
   'semi-pro': [5, 9],
   pro: [8, 13],
   top: [11, 16],
+};
+const BASELINE_VRS_RANGE: Record<ClubTier, [number, number]> = {
+  youth: [0, 8],
+  'semi-pro': [8, 40],
+  pro: [45, 120],
+  top: [120, 220],
 };
 const CN_SURNAMES = ['李', '王', '张', '刘', '陈', '杨', '赵', '黄', '周', '吴'];
 const CN_GIVENS = ['Zero', 'Fox', 'Stone', 'Rain', 'Dusk', 'Ming', 'K', 'Lance', 'Nova', 'Wave'];
@@ -73,6 +81,36 @@ function randomName(club: Club, index: number, rng: () => number): string {
 
 function rollStat(min: number, max: number, rng: () => number): number {
   return min + Math.floor(rng() * (max - min + 1));
+}
+
+function baselineVrsScore(session: GameSession, club: Club): number {
+  const [min, max] = BASELINE_VRS_RANGE[club.tier];
+  const rng = makeRng(hashString(`${session.id}:club-baseline-vrs:${club.id}:${session.player.year ?? 1}`));
+  return min + Math.floor(rng() * (max - min + 1));
+}
+
+function rivalDisplayIdentity(session: GameSession, club: Club): Pick<ClubRuntimeState, 'displayName' | 'displayTag' | 'displayRegion'> {
+  if (!club.isRival || typeof club.rivalIndex !== 'number') return {};
+  const rival = session.player.rivals[club.rivalIndex];
+  if (rival) {
+    return {
+      displayName: rival.name,
+      displayTag: rival.tag,
+      displayRegion: rival.region,
+    };
+  }
+  const fallbackByTier: Record<ClubTier, { name: string; tag: string; region: string }> = {
+    youth: { name: 'Academy Rival', tag: 'ARV', region: 'Global' },
+    'semi-pro': { name: 'Regional Rival', tag: 'RRV', region: 'Global' },
+    pro: { name: 'Pro Rival', tag: 'PRV', region: 'Global' },
+    top: { name: 'Elite Rival', tag: 'ERV', region: 'Global' },
+  };
+  const fallback = fallbackByTier[club.tier];
+  return {
+    displayName: fallback.name,
+    displayTag: fallback.tag,
+    displayRegion: fallback.region,
+  };
 }
 
 function randomStats(tier: ClubTier, rng: () => number): TeammateStats {
@@ -199,12 +237,15 @@ export function createClubRuntimeState(session: GameSession, clubId: string): Cl
   if (!club) throw new Error(`未知俱乐部: ${clubId}`);
   const profile = getClubProfile(club.id, club.tier);
   const baseline = styleBaseline(profile.rosterStyle);
-  return {
+  return withVrsScore({
     clubId,
     tier: club.tier,
+    ...rivalDisplayIdentity(session, club),
+    baselineVrsScore: baselineVrsScore(session, club),
     fullRoster: generateFullRoster(session, club),
     ...baseline,
     seasonPoints: 0,
+    vrsScore: 0,
     qualificationState: {
       eligibleTiers: eligibleTiersForClub(club.tier),
       openQualifierTickets: [],
@@ -213,7 +254,7 @@ export function createClubRuntimeState(session: GameSession, clubId: string): Cl
     recentResults: [],
     pendingStoryFlags: [],
     updatedRound: session.player.round ?? 0,
-  };
+  });
 }
 
 function unique(ids: string[]): string[] {
@@ -238,6 +279,93 @@ function pointValueForTier(tier: TournamentTier): number {
   if (tier === 'a') return 12;
   if (tier === 'b') return 8;
   return 4;
+}
+
+function worldTournamentResultValue(tier: TournamentTier, result: 'win' | 'deep-run' | 'early-exit' | 'loss'): number {
+  const base = pointValueForTier(tier);
+  if (result === 'win') return Math.max(base, Math.round(base * 1.4));
+  if (result === 'deep-run') return Math.max(1, Math.round(base * 0.7));
+  if (result === 'early-exit') return -Math.max(1, Math.round(base * 0.25));
+  return -Math.max(1, Math.round(base * 0.4));
+}
+
+export function computeClubVrsScore(
+  club: Pick<
+    ClubRuntimeState,
+    'baselineVrsScore' | 'seasonPoints' | 'currentForm' | 'clubTrust' | 'internalChemistry' | 'rosterStability' | 'qualificationState' | 'activeStorylines' | 'recentResults'
+  >,
+): number {
+  const recentResultBonus = club.recentResults.slice(0, 4).reduce((sum, result) => {
+    if (result.result === 'win') return sum + 6;
+    if (result.result === 'deep-run') return sum + 4;
+    if (result.result === 'early-exit') return sum - 4;
+    return sum - 2;
+  }, 0);
+
+  const storylineBonus =
+    (club.activeStorylines.includes('dark-horse-run') ? 6 : 0) +
+    (club.activeStorylines.includes('system-clicking') ? 4 : 0) +
+    (club.activeStorylines.includes('star-breakout') ? 3 : 0) -
+    (club.activeStorylines.includes('chemistry-crisis') ? 5 : 0) -
+    (club.activeStorylines.includes('fallen-giant') ? 5 : 0);
+
+  const pathBonus = club.qualificationState.majorPathProgress
+    ? (club.qualificationState.majorPathProgress === 'major-champion' ? 10 : 6)
+    : 0;
+
+  const score =
+    (club.baselineVrsScore ?? 0) +
+    club.seasonPoints * 1.3 +
+    club.currentForm / 5 +
+    (club.clubTrust - 50) / 6 +
+    (club.internalChemistry - 50) / 6 +
+    (club.rosterStability - 50) / 8 +
+    recentResultBonus +
+    storylineBonus +
+    pathBonus;
+
+  return Math.max(0, Math.round(score));
+}
+
+export function resolveClubDisplayInfo(session: GameSession, clubId: string): ClubDisplayInfo | null {
+  const club = getClub(clubId);
+  if (!club) return null;
+  const runtime = session.worldClubs?.runtimeByClubId[clubId];
+  if (runtime?.displayName && runtime.displayTag && runtime.displayRegion) {
+    return {
+      clubId,
+      name: runtime.displayName,
+      tag: runtime.displayTag,
+      region: runtime.displayRegion,
+      tier: runtime.tier,
+    };
+  }
+  if (club.isRival && typeof club.rivalIndex === 'number') {
+    const rival = session.player.rivals[club.rivalIndex];
+    if (rival) {
+      return {
+        clubId,
+        name: rival.name,
+        tag: rival.tag,
+        region: rival.region,
+        tier: club.tier,
+      };
+    }
+  }
+  return {
+    clubId,
+    name: club.name,
+    tag: club.tag,
+    region: club.region,
+    tier: club.tier,
+  };
+}
+
+function withVrsScore(club: ClubRuntimeState): ClubRuntimeState {
+  return {
+    ...club,
+    vrsScore: computeClubVrsScore(club),
+  };
 }
 
 export function calculateClubPower(club: ClubRuntimeState): number {
@@ -289,7 +417,7 @@ function updateQualificationFromResult(
       majorPathProgress: result === 'win' ? 'major-champion' : 'major-deep-run',
     };
   }
-  return { ...club, qualificationState };
+  return withVrsScore({ ...club, qualificationState });
 }
 
 function applyRuntimeResult(
@@ -301,7 +429,7 @@ function applyRuntimeResult(
 ): ClubRuntimeState {
   const positive = result === 'win' || result === 'deep-run';
   const points = positive ? pointValueForTier(tournament.tier) : -Math.floor(pointValueForTier(tournament.tier) / 3);
-  let next: ClubRuntimeState = {
+  let next: ClubRuntimeState = withVrsScore({
     ...club,
     currentForm: clamp(club.currentForm + (positive ? 9 : -10), -100, 100),
     clubTrust: clamp(club.clubTrust + (positive ? 2 : -3), 0, 100),
@@ -319,7 +447,7 @@ function applyRuntimeResult(
       ...club.recentResults,
     ].slice(0, 6),
     updatedRound: round,
-  };
+  });
   next = updateQualificationFromResult(next, tournament, result);
   if (next.currentForm >= 45 && next.internalChemistry >= 60) {
     next = { ...next, activeStorylines: addUnique(next.activeStorylines, 'dark-horse-run') };
@@ -327,7 +455,7 @@ function applyRuntimeResult(
   if (next.clubTrust <= 25 || next.internalChemistry <= 25) {
     next = { ...next, activeStorylines: addUnique(next.activeStorylines, 'chemistry-crisis') };
   }
-  return next;
+  return withVrsScore(next);
 }
 
 function tickRuntime(
@@ -363,7 +491,7 @@ function tickRuntime(
     rosterStability -= currentForm < -30 ? 2 : 0;
   }
 
-  let next: ClubRuntimeState = {
+  let next: ClubRuntimeState = withVrsScore({
     ...club,
     currentForm: clamp(currentForm, -100, 100),
     clubTrust: clamp(clubTrust, 0, 100),
@@ -371,14 +499,97 @@ function tickRuntime(
     internalChemistry: clamp(internalChemistry, 0, 100),
     seasonPoints: Math.max(0, club.seasonPoints + (currentForm > 20 ? 1 : 0) + (power >= 14 ? 1 : 0)),
     updatedRound: tickRound,
-  };
+  });
   if (next.currentForm >= 45 && next.internalChemistry >= 65) {
     next = { ...next, activeStorylines: addUnique(next.activeStorylines, 'dark-horse-run') };
   }
   if (next.currentForm <= -45 && next.clubTrust <= 35) {
     next = { ...next, activeStorylines: addUnique(next.activeStorylines, 'chemistry-crisis') };
   }
-  return next;
+  return withVrsScore(next);
+}
+
+function applyWorldTournamentTick(session: GameSession, tickRound: number, tickType: string): GameSession {
+  const pool = session.worldClubs;
+  if (!pool || tickType !== 'round') return session;
+  const week = ((Math.max(1, tickRound) - 1) % 48) + 1;
+  const year = session.player.year ?? pool.season;
+  const tournaments = buildYearTournaments(year).filter((tournament) =>
+    tournament.signupWeeks === 'always' || tournament.signupWeeks.includes(week),
+  );
+  if (tournaments.length === 0) return session;
+
+  let nextSession = session;
+  let runtimeByClubId = { ...pool.runtimeByClubId };
+  let processedTickKeysByClubId = { ...pool.processedTickKeysByClubId };
+  const candidateIds = unique([...pool.activeClubIds, ...pool.relevantClubIds, ...pool.staticClubIds]).slice(0, 32);
+  const playerClubId = session.player.team?.clubId;
+
+  for (const tournament of tournaments) {
+    const eligibleIds = candidateIds
+      .filter((clubId) => clubId !== playerClubId)
+      .filter((clubId) => {
+        const runtime = runtimeByClubId[clubId] ?? createClubRuntimeState(nextSession, clubId);
+        return runtime.qualificationState.eligibleTiers.includes(tournament.tier);
+      })
+      .sort((a, b) => {
+        const aRuntime = runtimeByClubId[a] ?? createClubRuntimeState(nextSession, a);
+        const bRuntime = runtimeByClubId[b] ?? createClubRuntimeState(nextSession, b);
+        return computeClubVrsScore(bRuntime) - computeClubVrsScore(aRuntime);
+      })
+      .slice(0, 6);
+
+    for (const clubId of eligibleIds) {
+      const tickKey = `world-tournament:${tournament.id}:${tickRound}`;
+      const processed = processedTickKeysByClubId[clubId] ?? [];
+      if (processed.includes(tickKey)) continue;
+      const rng = makeRng(hashString(`${session.id}:world-tournament:${tournament.id}:${clubId}:${tickRound}`));
+      const runtime = runtimeByClubId[clubId] ?? createClubRuntimeState(nextSession, clubId);
+      const power = calculateClubPower(runtime);
+      const score = computeClubVrsScore(runtime);
+      const strength = power + score / 25 + runtime.currentForm / 25 + rng() * 4;
+      const result: 'win' | 'deep-run' | 'early-exit' | 'loss' =
+        strength >= 18 ? 'win' :
+        strength >= 12 ? 'deep-run' :
+        strength >= 8 ? 'early-exit' :
+        'loss';
+      const points = worldTournamentResultValue(tournament.tier, result);
+      const positive = result === 'win' || result === 'deep-run';
+      runtimeByClubId = {
+        ...runtimeByClubId,
+        [clubId]: withVrsScore({
+          ...runtime,
+          seasonPoints: Math.max(0, runtime.seasonPoints + points),
+          currentForm: clamp(runtime.currentForm + (positive ? 5 : -4), -100, 100),
+          internalChemistry: clamp(runtime.internalChemistry + (positive ? 1 : -1), 0, 100),
+          recentResults: [
+            {
+              round: tickRound,
+              tournamentId: tournament.id,
+              tier: tournament.tier,
+              result,
+              note: `${tournament.displayName} 世界赛程抽象结果`,
+            },
+            ...runtime.recentResults,
+          ].slice(0, 6),
+          updatedRound: tickRound,
+        }),
+      };
+      processedTickKeysByClubId = {
+        ...processedTickKeysByClubId,
+        [clubId]: [...processed, tickKey].slice(-24),
+      };
+    }
+  }
+
+  return {
+    ...nextSession,
+    worldClubs: {
+      ...pool,
+      runtimeByClubId,
+      processedTickKeysByClubId,
+    },
+  };
 }
 
 function pickOpponentClubId(session: GameSession, tournament: Tournament): string | null {
@@ -408,6 +619,42 @@ function pickOpponentClubId(session: GameSession, tournament: Tournament): strin
     if (roll <= 0) return item.clubId;
   }
   return weightedCandidates[weightedCandidates.length - 1]!.clubId;
+}
+
+export function assignPendingMatchOpponent(
+  session: GameSession,
+  pendingMatch: PendingMatch,
+): { session: GameSession; pendingMatch: PendingMatch } {
+  if (pendingMatch.opponent) return { session, pendingMatch };
+  const tournament = getTournamentForPending(pendingMatch);
+  if (!tournament) return { session, pendingMatch };
+  let nextSession = ensureWorldClubPool(session);
+  const opponentClubId = pickOpponentClubId(nextSession, tournament);
+  if (!opponentClubId) return { session: nextSession, pendingMatch };
+  nextSession = activateClubRuntime(nextSession, opponentClubId, 'pending-match-opponent');
+  const runtime = nextSession.worldClubs!.runtimeByClubId[opponentClubId]!;
+  const display = resolveClubDisplayInfo(nextSession, opponentClubId);
+  if (!display) return { session: nextSession, pendingMatch };
+  return {
+    session: nextSession,
+    pendingMatch: {
+      ...pendingMatch,
+      opponent: {
+        clubId: opponentClubId,
+        name: display.name,
+        tag: display.tag,
+        region: display.region,
+        tier: display.tier,
+        vrsScore: computeClubVrsScore(runtime),
+        power: calculateClubPower(runtime),
+        form: runtime.currentForm,
+      },
+    },
+  };
+}
+
+function getTournamentForPending(pendingMatch: PendingMatch): Tournament | undefined {
+  return pendingMatch.tournamentId ? (getTournament(pendingMatch.tournamentId) ?? undefined) : undefined;
 }
 
 export function ensureWorldClubPool(session: GameSession): GameSession {
@@ -531,13 +778,13 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
 
     runtimeByClubId = {
       ...runtimeByClubId,
-      [clubId]: {
+      [clubId]: withVrsScore({
         ...next,
         currentForm: clamp(next.currentForm * 0.5, -100, 100),
         seasonPoints: 0,
         recentResults: next.recentResults.slice(0, 3),
         updatedRound: tickRound,
-      },
+      }),
     };
   }
 
@@ -568,7 +815,9 @@ export function tickWorldClubRuntimes(
 ): GameSession {
   let nextSession = ensureWorldClubPool(session);
   nextSession = rolloverWorldClubSeason(nextSession, tickRound);
-  if (tickType === 'round' && tickRound % 4 !== 0) return nextSession;
+  if (tickType === 'round' && tickRound % 4 !== 0) {
+    return applyWorldTournamentTick(nextSession, tickRound, tickType);
+  }
   const pool = nextSession.worldClubs!;
   const tickIds = unique([...pool.activeClubIds, ...pool.relevantClubIds]).slice(0, 24);
   let runtimeByClubId = { ...pool.runtimeByClubId };
@@ -589,7 +838,7 @@ export function tickWorldClubRuntimes(
     };
   }
 
-  return {
+  const tickedSession = {
     ...nextSession,
     worldClubs: {
       ...pool,
@@ -598,6 +847,7 @@ export function tickWorldClubRuntimes(
       lastGlobalTickRound: tickRound,
     },
   };
+  return applyWorldTournamentTick(tickedSession, tickRound, tickType);
 }
 
 export function recordWorldTournamentResult(
@@ -605,6 +855,7 @@ export function recordWorldTournamentResult(
   tournament: Tournament,
   playerWon: boolean,
   isFinalStage: boolean,
+  opponentClubId?: string,
 ): GameSession {
   let nextSession = ensureWorldClubPool(session);
   const round = nextSession.player.round ?? 0;
@@ -633,11 +884,11 @@ export function recordWorldTournamentResult(
     };
   }
 
-  const opponentClubId = pickOpponentClubId(nextSession, tournament);
-  if (!opponentClubId) return nextSession;
-  nextSession = activateClubRuntime(nextSession, opponentClubId, 'recent-opponent');
+  const resolvedOpponentClubId = opponentClubId ?? pickOpponentClubId(nextSession, tournament);
+  if (!resolvedOpponentClubId) return nextSession;
+  nextSession = activateClubRuntime(nextSession, resolvedOpponentClubId, 'recent-opponent');
   const pool = nextSession.worldClubs!;
-  const opponentRuntime = pool.runtimeByClubId[opponentClubId]!;
+  const opponentRuntime = pool.runtimeByClubId[resolvedOpponentClubId]!;
   const opponentResult = playerWon ? 'early-exit' : 'deep-run';
   return {
     ...nextSession,
@@ -645,7 +896,7 @@ export function recordWorldTournamentResult(
       ...pool,
       runtimeByClubId: {
         ...pool.runtimeByClubId,
-        [opponentClubId]: applyRuntimeResult(
+        [resolvedOpponentClubId]: applyRuntimeResult(
           opponentRuntime,
           tournament,
           opponentResult,

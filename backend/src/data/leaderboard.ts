@@ -1,5 +1,5 @@
 import { getClub } from './clubs.js';
-import { previewClubRuntime } from '../engine/worldClubs.js';
+import { computeClubVrsScore, previewClubRuntime, resolveClubDisplayInfo } from '../engine/worldClubs.js';
 import type { GameSession, LeaderboardTeam, Player, WorldClubPool } from '../types.js';
 import { generateRivals, type Rival } from './rivals.js';
 
@@ -75,17 +75,24 @@ export function buildLeaderboard(
       seen.add(clubId);
       const club = getClub(clubId);
       if (!club) continue;
+      const display = resolveClubDisplayInfo({
+        id: session.id,
+        player: session.player,
+        worldClubs: session.worldClubs,
+      } as GameSession, clubId);
+      if (!display) continue;
       const runtime = session.worldClubs.runtimeByClubId[clubId] ?? previewClubRuntime({
         id: session.id,
         player: session.player,
         worldClubs: session.worldClubs,
       } as GameSession, clubId);
+      const vrsScore = computeClubVrsScore(runtime);
       all.push({
         clubId,
-        name: club.name,
-        tag: club.tag,
-        region: club.region,
-        points: runtime.seasonPoints,
+        name: display.name,
+        tag: display.tag,
+        region: display.region,
+        points: vrsScore,
         isPlayer: playerTeamId === clubId,
         kind: 'club',
         players: runtime.fullRoster
@@ -101,7 +108,7 @@ export function buildLeaderboard(
         name: session.player.team.name,
         tag: session.player.team.tag,
         region: session.player.team.region,
-        points: runtime?.seasonPoints ?? 0,
+        points: runtime ? computeClubVrsScore(runtime) : 0,
         isPlayer: true,
         kind: 'club',
       });

@@ -80,7 +80,14 @@ import {
   growthFactor,
   passiveStressFromMentality,
 } from './constants.js';
-import { buildTournamentPrepEvent, pickEvent, ROLE_STAT_REQUIREMENT, substituteRivals, substituteTeammates, toPublicEvent } from './events.js';
+import { buildInjuryAwareTournamentEvent, buildTournamentPrepEvent, pickEvent, ROLE_STAT_REQUIREMENT, substituteRivals, substituteTeammates, toPublicEvent } from './events.js';
+import {
+  advanceEventSequence,
+  getCurrentSequenceStep,
+  isSequenceFinalStep,
+  resolveSequenceEventForStep,
+  sequenceResultFields,
+} from './eventSequence.js';
 import { checkTournamentPromotion } from './stages.js';
 import {
   applyDelta,
@@ -124,6 +131,19 @@ import {
   refreshVisibleTeamIdentities,
 } from './teamIdentity.js';
 import {
+  advanceTournamentContextStage,
+  cleanupTournamentContext,
+  markTournamentContextEventConsumed,
+  recordTournamentContextMatchResult,
+} from './tournamentContext.js';
+import {
+  createTournamentSeriesSequence,
+  requiredWins,
+  type TournamentMapResult,
+  type TournamentSeriesContext,
+} from './tournamentSeries.js';
+import {
+  assignPendingMatchOpponent,
   deriveRosterNeed,
   activateClubRuntime,
   ensureWorldClubPool,
@@ -136,7 +156,89 @@ const WEEKLY_SHOP_LIMITS: Partial<Record<ShopCategory, number>> = {
   consumable: 2,
   service: 1,
 };
+const INJURY_STATE_TAGS = ['minor-injury-risk', 'injury-warning', 'injury-limited', 'forced-rest'] as const;
+type InjuryStateTag = typeof INJURY_STATE_TAGS[number];
 const PROMOTION_DECLINE_COOLDOWN_ROUNDS = 4;
+const DEFAULT_TAG_LIFETIME_ROUNDS: Partial<Record<string, number>> = {
+  'team-trust': 12,
+  'clean-record': 24,
+  'dirty-money': 24,
+  'banned': 24,
+  'cheater': 24,
+  'scammed': 24,
+  'phished': 24,
+  'social-circle': 18,
+  'trusted-trader': 18,
+  'suspicious-debt': 18,
+  'gambling-spiral': 18,
+  'fan-favorite': 18,
+  'highlight-clip': 18,
+  'media-backlash': 18,
+  'bad-rep': 18,
+  'family-strain': 18,
+  'guilt-spiral': 18,
+  'guilt-processed': 18,
+  'abandoned-family': 18,
+  'family-support': 12,
+  'injured': 12,
+  'minor-injury-risk': 12,
+  'injury-warning': 12,
+  'injury-limited': 12,
+  'forced-rest': 12,
+  'broke': 12,
+  'veteran': 72,
+  'star-player': 72,
+  'natural-igl': 24,
+  'role-confusion': 12,
+  'caller-discipline': 12,
+  'caller-star-aligned': 12,
+  'star-freedom': 12,
+  'team-carries-through-you': 12,
+  'shared-calling': 12,
+  'star-system-ready': 12,
+  'late-round-clarity': 12,
+  'coach-neutral': 12,
+  'coach-backs-star': 12,
+  'coach-lost-control': 12,
+  'main-awper': 24,
+  'team-focus-firepower': 12,
+  'team-focus-tactics': 12,
+  'team-focus-defense': 12,
+  'team-focus-mental': 12,
+  'team-tactical-ready': 12,
+  'team-meeting-ready': 12,
+  'locker-tension': 8,
+  'suppressed-anger': 12,
+  'team-conflict': 12,
+  'team-positive-voice-cd': 8,
+  'team-resource-tilt-cd': 8,
+  'team-lineup-advice-cd': 8,
+  'team-ordinary-politics-cd': 8,
+  'team-politics-cd': 8,
+  'team-conflict-cd': 8,
+  'club-rejected-notify': 12,
+  'application-response-ready': 8,
+  'application-path-open-match': 12,
+  'application-path-talent': 12,
+  'interview-pending': 8,
+  'interview-ready': 8,
+  'just-joined-team': 4,
+  'old-teammate-contact': 36,
+  'role-transition-active': 12,
+  'role-transition-cd': 24,
+  'transfer-ban': 24,
+  'loan-default': 24,
+  'scouted': 12,
+  'promote-offer-cd': 24,
+  'rival-scout-cd': 12,
+  'poach-cd': 12,
+  'trash-talk-cd': 8,
+  'contract-cd': 48,
+  'old-friend-cd': 24,
+  'team-finance-cd': 12,
+  'tournament-winner': 72,
+  'major-champion': 72,
+};
 
 export interface InitInput {
   name: string;
@@ -213,6 +315,43 @@ function consumeRoundCombos(roundCombos: RoundCombo[], consumedIds: Set<string>)
         : combo,
     )
     .filter((combo) => combo.remainingUses > 0);
+}
+
+function consumeMatchBuffsForScope(
+  buffs: Buff[],
+  scope: 'series' | 'per-map',
+): Buff[] {
+  return buffs
+    .map((buff) => {
+      if (buff.consumeOn !== 'match') return buff;
+      if (buff.actionTag !== 'match' && buff.actionTag !== 'all') return buff;
+      const matchScope = buff.matchScope ?? 'series';
+      if (matchScope !== scope) return buff;
+      return { ...buff, remainingUses: buff.remainingUses - 1 };
+    })
+    .filter((buff) => buff.remainingUses > 0);
+}
+
+function matchBuffsForScope(
+  buffs: Buff[],
+  scope: 'series' | 'per-map',
+): Buff[] {
+  return buffs.filter((buff) =>
+    buff.remainingUses > 0 &&
+    buff.consumeOn === 'match' &&
+    (buff.actionTag === 'match' || buff.actionTag === 'all') &&
+    (buff.matchScope ?? 'series') === scope
+  );
+}
+
+function playerWithSeriesBuffSnapshot(player: Player, context: TournamentSeriesContext): Player {
+  const seriesBuffs = context.seriesBuffSnapshot ?? [];
+  const perMapBuffs = matchBuffsForScope(player.buffs ?? [], 'per-map');
+  const nonMatchBuffs = (player.buffs ?? []).filter((buff) => buff.consumeOn !== 'match');
+  return {
+    ...player,
+    buffs: [...nonMatchBuffs, ...seriesBuffs, ...perMapBuffs],
+  };
 }
 
 function addOpenedCombos(
@@ -773,6 +912,84 @@ function currentClubProfile(player: Player) {
   return player.team ? getClubProfile(player.team.clubId, player.team.tier) : null;
 }
 
+function highestInjuryState(player: Player): InjuryStateTag | null {
+  for (const tag of [...INJURY_STATE_TAGS].reverse()) {
+    if (player.tags.includes(tag)) return tag;
+  }
+  return null;
+}
+
+function setInjuryState(player: Player, next: InjuryStateTag | null): void {
+  player.tags = player.tags.filter((tag) => !INJURY_STATE_TAGS.includes(tag as InjuryStateTag));
+  if (next) player.tags = dedupe([...player.tags, next]);
+  if (next === 'forced-rest' && (player.restRounds ?? 0) <= 0) {
+    player.restRounds = Math.max(1, INJURY_REST_ROUNDS);
+  }
+  if (next !== 'forced-rest' && (player.restRounds ?? 0) <= 0) {
+    player.tags = player.tags.filter((tag) => tag !== 'injured');
+  }
+}
+
+function applyInjuryRiskTick(
+  player: Player,
+  context: 'routine' | 'match' | 'rest' | 'shop',
+  effects: string[],
+): Player {
+  const next = { ...player, tags: [...player.tags], volatile: { ...player.volatile } };
+  if ((next.restRounds ?? 0) > 0) {
+    setInjuryState(next, 'forced-rest');
+    if (!next.tags.includes('injured')) next.tags.push('injured');
+    return next;
+  }
+
+  const fatigue = next.volatile.fatigue ?? 0;
+  const constitution = next.stats.constitution ?? 0;
+  const current = highestInjuryState(next);
+
+  if (context === 'rest' || context === 'shop') {
+    if (fatigue <= 45) {
+      if (current) effects.push('伤病风险解除');
+      setInjuryState(next, null);
+    } else if (current === 'injury-limited') {
+      setInjuryState(next, 'injury-warning');
+      effects.push('伤病状态缓解');
+    } else if (current === 'injury-warning') {
+      setInjuryState(next, 'minor-injury-risk');
+      effects.push('伤病警告缓解');
+    }
+    return next;
+  }
+
+  const highStrain =
+    fatigue >= 82 ||
+    constitution <= 4 ||
+    (context === 'match' && fatigue >= 70);
+  const mediumStrain =
+    fatigue >= 70 ||
+    constitution <= 6 ||
+    context === 'match';
+
+  if (!mediumStrain) return next;
+
+  if (current === 'injury-limited' && highStrain) {
+    next.restRounds = Math.max(next.restRounds ?? 0, 2);
+    setInjuryState(next, 'forced-rest');
+    if (!next.tags.includes('injured')) next.tags.push('injured');
+    effects.push('强制休养：伤病风险升级');
+  } else if (current === 'injury-warning' && highStrain) {
+    setInjuryState(next, 'injury-limited');
+    effects.push('伤病状态受限');
+  } else if (current === 'minor-injury-risk' && highStrain) {
+    setInjuryState(next, 'injury-warning');
+    effects.push('队医警告：继续硬练可能伤停');
+  } else if (!current && mediumStrain) {
+    setInjuryState(next, highStrain ? 'injury-warning' : 'minor-injury-risk');
+    effects.push(highStrain ? '队医警告：身体风险上升' : '轻微伤病风险');
+  }
+
+  return next;
+}
+
 function isCurrentMatchWeek(player: Player): boolean {
   const pm = player.pendingMatch;
   return !!pm && pm.resolveYear === (player.year ?? 1) && pm.resolveWeek === (player.week ?? 1);
@@ -814,6 +1031,9 @@ function bumpWeeklyTeamAction(player: Player, key: string): Record<string, { yea
 function assertTeamActionAvailable(player: Player, apCost: number): void {
   if (!player.team || !player.roster || player.roster.length === 0) {
     throw new Error('当前没有可管理的战队阵容');
+  }
+  if ((player.restRounds ?? 0) > 0) {
+    throw new Error('休养期间不能进行队伍管理');
   }
   if ((player.actionPoints ?? 0) < apCost) throw new Error('行动力不足');
   if (isCurrentMatchWeek(player)) throw new Error('赛事比赛周无法进行队伍管理');
@@ -1131,7 +1351,6 @@ function shouldTriggerPendingDeparture(player: Player, departure: PendingDepartu
 }
 
 export function createSession(player: Player, rngSeed: number): GameSession {
-  const rng = makeRng(rngSeed);
   const id = uuid();
   const apiToken = uuid();
   const ts = nowIso();
@@ -1139,6 +1358,7 @@ export function createSession(player: Player, rngSeed: number): GameSession {
     id,
     player,
     apiToken,
+    phase: 'action',
     currentEvent: null,
     history: [],
     status: 'active',
@@ -1151,11 +1371,11 @@ export function createSession(player: Player, rngSeed: number): GameSession {
     ? activateClubRuntime(withWorld, player.team.clubId, 'session-start')
     : withWorld;
   const leaderboard = buildLeaderboard(seededWorld);
-  const firstEvent = pickEvent({ player, recentEventIds: [], rng, leaderboard });
 
   return {
     ...seededWorld,
-    currentEvent: firstEvent ? toPublicEvent(firstEvent, player.rivals, player.roster ?? []) : null,
+    phase: 'action',
+    currentEvent: null,
     leaderboard,
   };
 }
@@ -1191,6 +1411,9 @@ function buildMatchResolveResult(
   // Win a final still costs stress at high tiers; loss is always stressful.
   const winStressDelta = isFinal ? (r.stressDelta ?? 0) * 5 : 0;
   const lossStressDelta = ((r.stressDelta ?? 1) + 2) * 5;
+  const matchStressMultiplier = (player.buffs ?? [])
+    .filter((buff) => buff.consumeOn === 'match' && (buff.actionTag === 'match' || buff.actionTag === 'all'))
+    .reduce((acc, buff) => acc * (buff.matchStressMultiplier ?? 1), 1);
 
   // 奖金分成：签约战队后俱乐部从奖金抽成
   const playerShare = player.team
@@ -1237,7 +1460,7 @@ function buildMatchResolveResult(
       feel: sim.feelDelta,
       tilt: sim.tiltDelta,
       fatigue: sim.fatigueDelta,
-      stress: won ? winStressDelta : lossStressDelta,
+      stress: Math.round((won ? winStressDelta : lossStressDelta) * matchStressMultiplier),
     },
     resourceDelta: {
       fame: won ? winFame : lossFame,
@@ -1273,6 +1496,262 @@ function buildMatchResolveResult(
   };
 }
 
+function buildTournamentMapResolveResult(
+  player: Player,
+  sim: MatchSimResult,
+): ReturnType<typeof resolveChoice> {
+  const chosenOutcome: Outcome = {
+    narrative: sim.summary,
+    stateDelta: {
+      feel: sim.feelDelta,
+      tilt: sim.tiltDelta,
+      fatigue: sim.fatigueDelta,
+      stress: sim.won ? 0 : 5,
+    },
+  };
+
+  return {
+    success: sim.won,
+    resultTier: sim.won ? 'success' : 'failure',
+    roll: Math.round(sim.rating * 100),
+    dc: 50,
+    naturalRoll: Math.round(sim.rating * 100),
+    chosenOutcome,
+    nextStats: player.stats,
+    stageAfter: player.stage,
+    tagsAdded: [],
+    tagsRemoved: [],
+    endRun: false,
+    endReason: undefined,
+    feelDelta: sim.feelDelta,
+    tiltDelta: sim.tiltDelta,
+    fatigueDelta: sim.fatigueDelta,
+    moneyDelta: 0,
+    growthApplied: 0,
+    growthKey: undefined,
+  };
+}
+
+function buildTournamentForfeitResolveResult(player: Player, narrative: string): ReturnType<typeof resolveChoice> {
+  const chosenOutcome: Outcome = {
+    narrative,
+    stateDelta: { stress: 8, fatigue: -6 },
+    resourceDelta: { fame: -2 },
+  };
+  return {
+    success: false,
+    resultTier: 'failure',
+    roll: 0,
+    dc: 0,
+    naturalRoll: 0,
+    chosenOutcome,
+    nextStats: player.stats,
+    stageAfter: player.stage,
+    tagsAdded: [],
+    tagsRemoved: [],
+    endRun: false,
+    endReason: undefined,
+    feelDelta: 0,
+    tiltDelta: 0,
+    fatigueDelta: -6,
+    moneyDelta: 0,
+    growthApplied: 0,
+    growthKey: undefined,
+  };
+}
+
+function injuryAdjustedPlayer(player: Player, mode: 'play-injured' | 'reduce-role'): Player {
+  const statPenalty = mode === 'play-injured' ? 2 : 1;
+  const fatiguePenalty = mode === 'play-injured' ? 18 : 10;
+  return {
+    ...player,
+    stats: {
+      ...player.stats,
+      agility: Math.max(0, player.stats.agility - statPenalty),
+      mentality: Math.max(0, player.stats.mentality - (mode === 'play-injured' ? 1 : 0)),
+    },
+    volatile: {
+      ...player.volatile,
+      fatigue: Math.min(100, player.volatile.fatigue + fatiguePenalty),
+      feel: Math.max(-3, player.volatile.feel - 1),
+    },
+  };
+}
+
+export function aggregateSeriesMatchResult(
+  player: Player,
+  context: TournamentSeriesContext,
+): MatchSimResult {
+  const maps = context.maps;
+  const totals = maps.reduce(
+    (acc, map) => ({
+      kills: acc.kills + map.kills,
+      deaths: acc.deaths + map.deaths,
+      assists: acc.assists + map.assists,
+      teamScore: acc.teamScore + map.teamScore,
+      enemyScore: acc.enemyScore + map.enemyScore,
+      headshotRate: acc.headshotRate + map.headshotRate,
+      rating: acc.rating + map.rating,
+    }),
+    { kills: 0, deaths: 0, assists: 0, teamScore: 0, enemyScore: 0, headshotRate: 0, rating: 0 },
+  );
+  const count = Math.max(1, maps.length);
+  if (context.playerMapWins === context.opponentMapWins) {
+    throw new Error('series resolved with tied map wins; overtime should prevent this');
+  }
+  const won = context.playerMapWins > context.opponentMapWins;
+  const seriesWinBonus = won ? 0.02 : -0.02;
+  const sweepBonus =
+    (won && context.playerMapWins >= 2 && context.opponentMapWins === 0) ||
+    (!won && context.opponentMapWins >= 2 && context.playerMapWins === 0)
+      ? 0.03
+      : 0;
+  return {
+    won,
+    kills: totals.kills,
+    deaths: totals.deaths,
+    assists: totals.assists,
+    teamScore: totals.teamScore,
+    enemyScore: totals.enemyScore,
+    headshotRate: Math.round((totals.headshotRate / count) * 100) / 100,
+    rating: Math.round(((totals.rating / count) + seriesWinBonus + sweepBonus) * 100) / 100,
+    feelDelta: won ? 1 : -1,
+    tiltDelta: won ? 0 : 1,
+    fatigueDelta: Math.min(35, 8 * count),
+    winProb: won ? 1 : 0,
+    summary: `系列赛${won ? '获胜' : '失利'}，总比分 ${context.playerMapWins}-${context.opponentMapWins}。` +
+      maps.map((map, index) => ` Map${index + 1} ${map.mapName} ${map.teamScore}:${map.enemyScore}`).join('；'),
+  };
+}
+
+function matchSimToTournamentMapResult(mapName: string, sim: MatchSimResult): TournamentMapResult {
+  return {
+    mapName,
+    won: sim.won,
+    teamScore: sim.teamScore,
+    enemyScore: sim.enemyScore,
+    kills: sim.kills,
+    deaths: sim.deaths,
+    assists: sim.assists,
+    headshotRate: sim.headshotRate,
+    rating: sim.rating,
+  };
+}
+
+function buildSequencePromptEvent(
+  id: string,
+  type: EventDef['type'],
+  title: string,
+  narrative: string,
+): EventDef {
+  return {
+    id,
+    type,
+    title,
+    narrative,
+    stages: ['rookie', 'youth', 'second', 'pro'],
+    difficulty: 1,
+    choices: [
+      {
+        id: 'continue',
+        label: '继续',
+        description: '继续处理这段事件。',
+        check: { primary: 'mentality', dc: 0 },
+        success: { narrative },
+        failure: { narrative },
+      },
+    ],
+  };
+}
+
+function createNarrativeSequence(
+  sequenceId: string,
+  type: NonNullable<GameSession['activeEventSequence']>['type'],
+  startedRound: number,
+  steps: EventDef[],
+): NonNullable<GameSession['activeEventSequence']> {
+  return {
+    id: sequenceId,
+    type,
+    currentIndex: 0,
+    startedRound,
+    mustCompleteInCurrentRound: true,
+    status: 'active',
+    context: {},
+    steps: steps.map((generatedEvent, index) => ({
+      id: `step-${index + 1}`,
+      generatedEvent,
+      completeSequenceAfter: index === steps.length - 1,
+    })),
+  };
+}
+
+function createAiSequenceFromEvent(
+  event: EventDef,
+  startedRound: number,
+): NonNullable<GameSession['activeEventSequence']> | null {
+  const raw = event as unknown as {
+    sequenceType?: string;
+    steps?: Array<{
+      title?: string;
+      narrative?: string;
+      choices?: EventDef['choices'];
+    }>;
+    maxSteps?: number;
+  };
+  if (!raw.sequenceType || !Array.isArray(raw.steps) || raw.steps.length === 0) return null;
+  if (!['family-crisis', 'team-conflict', 'tournament-context'].includes(raw.sequenceType)) return null;
+  const maxSteps = Math.min(Math.max(raw.maxSteps ?? raw.steps.length, 1), 4);
+  const generatedSteps = raw.steps.slice(0, maxSteps).map((step, index) => ({
+    ...event,
+    id: `${event.id}-step-${index + 1}`,
+    title: step.title || `${event.title} ${index + 1}`,
+    narrative: step.narrative || event.narrative,
+    choices: Array.isArray(step.choices) && step.choices.length > 0 ? step.choices : event.choices,
+  }));
+  return createNarrativeSequence(
+    `ai-sequence-${event.id}-${startedRound}`,
+    raw.sequenceType as NonNullable<GameSession['activeEventSequence']>['type'],
+    startedRound,
+    [...generatedSteps, event],
+  );
+}
+
+function restoreTournamentSeriesSequenceFromEvent(
+  currentEventId: string,
+  player: Player,
+): NonNullable<GameSession['activeEventSequence']> | null {
+  const mapMatch = /^tournament-series-(.+)-(\d+)-map-(\d+)$/.exec(currentEventId);
+  const finalMatch = /^tournament-(.+)--(\d+)$/.exec(currentEventId);
+  const match = mapMatch ?? finalMatch;
+  if (!match) return null;
+
+  const tournamentId = match[1]!;
+  const stageIndex = parseInt(match[2]!, 10);
+  const tournament = getTournament(tournamentId);
+  const stage = tournament?.bracket[stageIndex];
+  if (!tournament || !stage || (stage.seriesType !== 'bo3' && stage.seriesType !== 'bo5')) return null;
+
+  const sequence = createTournamentSeriesSequence(
+    tournament,
+    stageIndex,
+    matchBuffsForScope(player.buffs ?? [], 'series'),
+  );
+  const currentIndex = mapMatch
+    ? parseInt(mapMatch[3]!, 10) - 1
+    : sequence.steps.length - 1;
+  if (currentIndex < 0 || currentIndex >= sequence.steps.length) return null;
+
+  const currentStep = sequence.steps[currentIndex];
+  const currentEvent = currentStep?.generatedEvent;
+  if (!currentStep || !currentEvent || currentEvent.id !== currentEventId) return null;
+
+  return {
+    ...sequence,
+    currentIndex,
+  };
+}
+
 function applyForcedMatchResult(sim: MatchSimResult, forcedResult: 'win' | 'loss'): MatchSimResult {
   if ((forcedResult === 'win') === sim.won) {
     return {
@@ -1305,6 +1784,12 @@ export interface ApplyChoiceResult {
   result: RoundResult;
 }
 
+export function assertNoActiveEventSequence(session: GameSession): void {
+  if (session.activeEventSequence?.status === 'active') {
+    throw new Error('当前事件流程未结束，不能进行其他操作');
+  }
+}
+
 export function applyChoice(
   session: GameSession,
   choiceId: string,
@@ -1313,15 +1798,42 @@ export function applyChoice(
   aiEventCache?: AiEventCacheEnvelope,
 ): ApplyChoiceResult {
   if (session.status !== 'active') throw new Error('session is not active');
+  const sessionPhase = session.currentEvent ? 'event' : (session.phase ?? 'action');
+  if (sessionPhase !== 'event') throw new Error('not in event phase');
   if (!session.currentEvent) throw new Error('no pending event on this session');
 
-  const eventDef = getEventById(session.currentEvent.id) ??
-    resolveAiEventById(aiEventCache, session.currentEvent.id) ??
-    aiEvents?.find((e) => e.id === session.currentEvent!.id) ??
+  const resolveEventById = (eventId: string): EventDef | null => getEventById(eventId) ??
+    resolveAiEventById(aiEventCache, eventId) ??
+    aiEvents?.find((e) => e.id === eventId) ??
     // Dynamically-generated prep events aren't in EVENT_POOL — reconstruct from pendingMatch
-    (session.currentEvent.id.startsWith('tourney-prep-') && session.player.pendingMatch
+    (eventId.startsWith('tourney-prep-') && session.player.pendingMatch
       ? buildTournamentPrepEvent(session.player.pendingMatch)
+      : eventId.startsWith('tourney-injury-') && session.player.pendingMatch
+        ? buildInjuryAwareTournamentEvent(session.player.pendingMatch)
       : null);
+
+  const activeSequence = session.activeEventSequence?.status === 'active'
+    ? session.activeEventSequence
+    : undefined;
+  const restoredTournamentSeries = !activeSequence && session.currentEvent
+    ? restoreTournamentSeriesSequenceFromEvent(session.currentEvent.id, session.player)
+    : null;
+  const effectiveActiveSequence = activeSequence ?? restoredTournamentSeries ?? undefined;
+  const activeSequenceStep = effectiveActiveSequence ? getCurrentSequenceStep(effectiveActiveSequence) : null;
+  if (effectiveActiveSequence && activeSequenceStep) {
+    const activeStepEvent = resolveSequenceEventForStep(activeSequenceStep, resolveEventById);
+    if (activeStepEvent && activeStepEvent.id !== session.currentEvent.id) {
+      throw new Error('current event does not match active event sequence');
+    }
+  }
+  if (effectiveActiveSequence && !activeSequenceStep) {
+    throw new Error('active event sequence has no current step');
+  }
+  const shouldAdvanceRound = effectiveActiveSequence ? isSequenceFinalStep(effectiveActiveSequence) : true;
+
+  const eventDef = effectiveActiveSequence
+    ? resolveSequenceEventForStep(activeSequenceStep!, resolveEventById)
+    : resolveEventById(session.currentEvent.id);
   if (!eventDef) throw new Error(`unknown event: ${session.currentEvent.id}`);
 
   const choiceDef = eventDef.choices.find((c) => c.id === choiceId);
@@ -1337,9 +1849,88 @@ export function applyChoice(
 
   // ── 比赛模拟拦截（tournament-* 事件走数值模拟而非 d20）──
   let pendingMatchSim: MatchSimResult | undefined;
+  let tournamentSeriesMapResult: TournamentMapResult | undefined;
+  let injuryMatchResolved = false;
+  let injuryForfeit = false;
   const tournamentMatch = /^tournament-(.+)--(\d+)$/.exec(eventDef.id);
 
   const outcome = (() => {
+    if (effectiveActiveSequence?.type === 'tournament-series' && activeSequenceStep?.dynamicEventKind === 'tournament-map') {
+      const context = effectiveActiveSequence.context as unknown as TournamentSeriesContext;
+      const t = getTournament(context.tournamentId);
+      const stageIdx = context.stageIndex;
+      const stage = t?.bracket[stageIdx];
+      if (t && stage) {
+        const matchPlayer = playerWithSeriesBuffSnapshot(session.player, context);
+        const effectiveDiff = t.baseDifficulty + stage.difficultyBonus;
+        pendingMatchSim = simulateMatch(matchPlayer, {
+          tier: t.tier,
+          progressionTier: t.progressionTier,
+          entryType: t.entryType,
+          stageIndex: stageIdx,
+          effectiveDifficulty: effectiveDiff,
+          opponent: session.player.pendingMatch?.opponent,
+        }, rng);
+        if (session.player.forceMatchResult) {
+          pendingMatchSim = applyForcedMatchResult(pendingMatchSim, session.player.forceMatchResult);
+        }
+        const mapIndex = context.maps.length;
+        const mapName = context.mapPool[mapIndex] ?? `Map ${mapIndex + 1}`;
+        tournamentSeriesMapResult = matchSimToTournamentMapResult(mapName, pendingMatchSim);
+        return buildTournamentMapResolveResult(session.player, pendingMatchSim);
+      }
+    }
+
+    if (effectiveActiveSequence?.type === 'tournament-series' && activeSequenceStep?.dynamicEventKind === 'tournament-series-decider') {
+      const context = effectiveActiveSequence.context as unknown as TournamentSeriesContext;
+      const t = getTournament(context.tournamentId);
+      const stageIdx = context.stageIndex;
+      if (t) {
+        const matchPlayer = playerWithSeriesBuffSnapshot(session.player, context);
+        pendingMatchSim = aggregateSeriesMatchResult(matchPlayer, context);
+        return buildMatchResolveResult(matchPlayer, pendingMatchSim, t, stageIdx);
+      }
+    }
+
+    if (eventDef.id.startsWith('tourney-injury-') && session.player.pendingMatch) {
+      const t = getTournament(session.player.pendingMatch.tournamentId);
+      const stageIdx = session.player.pendingMatch.stageIndex;
+      const stage = t?.bracket[stageIdx];
+      if (choiceDef.id === 'forfeit-injury') {
+        injuryForfeit = true;
+        return buildTournamentForfeitResolveResult(session.player, choiceDef.success.narrative);
+      }
+      if (t && stage) {
+        const effectiveDiff = t.baseDifficulty + stage.difficultyBonus + (choiceDef.id === 'play-injured' ? 1 : 0);
+        const adjusted = injuryAdjustedPlayer(
+          session.player,
+          choiceDef.id === 'reduce-role' ? 'reduce-role' : 'play-injured',
+        );
+        pendingMatchSim = simulateMatch(adjusted, {
+          tier: t.tier,
+          progressionTier: t.progressionTier,
+          entryType: t.entryType,
+          stageIndex: stageIdx,
+          effectiveDifficulty: effectiveDiff,
+          opponent: session.player.pendingMatch?.opponent,
+        }, rng);
+        if (session.player.forceMatchResult) {
+          pendingMatchSim = applyForcedMatchResult(pendingMatchSim, session.player.forceMatchResult);
+        }
+        injuryMatchResolved = true;
+        const resolved = buildMatchResolveResult(session.player, pendingMatchSim, t, stageIdx);
+        resolved.chosenOutcome = {
+          ...resolved.chosenOutcome,
+          narrative: `${choiceDef.id === 'reduce-role' ? '你降低了承担，避开最吃身体的关键位。' : '你带伤上场，手腕和肩颈都在提醒你这不是正常状态。'}${resolved.chosenOutcome.narrative}`,
+          progression: {
+            ...(resolved.chosenOutcome.progression ?? {}),
+            injuryRestRounds: Math.max(1, session.player.restRounds ?? 1),
+          },
+        };
+        return resolved;
+      }
+    }
+
     if (tournamentMatch) {
       const t = getTournament(tournamentMatch[1]!);
       const stageIdx = parseInt(tournamentMatch[2]!, 10);
@@ -1352,6 +1943,7 @@ export function applyChoice(
           entryType: t.entryType,
           stageIndex: stageIdx,
           effectiveDifficulty: effectiveDiff,
+          opponent: session.player.pendingMatch?.opponent,
         }, rng);
         if (session.player.forceMatchResult) {
           pendingMatchSim = applyForcedMatchResult(pendingMatchSim, session.player.forceMatchResult);
@@ -1485,6 +2077,18 @@ export function applyChoice(
     buffs = [...buffs, chosenEffects.buffAdd];
   }
 
+  if (eventDef.type === 'match') {
+    if (effectiveActiveSequence?.type === 'tournament-series') {
+      if (activeSequenceStep?.dynamicEventKind === 'tournament-map') {
+        buffs = consumeMatchBuffsForScope(buffs, 'per-map');
+      } else if (activeSequenceStep?.dynamicEventKind === 'tournament-series-decider') {
+        buffs = consumeMatchBuffsForScope(buffs, 'series');
+      }
+    } else if (tournamentMatch) {
+      buffs = consumeMatchBuffsForScope(buffs, 'series');
+    }
+  }
+
   // ── 状态系统更新（feel / tilt / fatigue）──
   const feelCap = session.player.feelCap ?? FEEL_CAP_DEFAULT;
   let feel = clampFeel(volatile.feel + feelDeltaRaw, feelCap);
@@ -1523,14 +2127,6 @@ export function applyChoice(
     if (!tagsAdded.includes('injured')) tagsAdded.push('injured');
     passiveEffects.push('physical-collapse-rest');
   }
-  if (restRounds > 0 && eventDef.type === 'rest') {
-    restRounds -= 1;
-    if (restRounds === 0) {
-      if (!tagsRemoved.includes('injured')) tagsRemoved.push('injured');
-      passiveEffects.push('rest-completed');
-    }
-  }
-
   // ── 压力崩溃检查 ──
   let stressMaxRounds = session.player.stressMaxRounds ?? 0;
   if (stress >= STRESS_MAX) {
@@ -1550,7 +2146,7 @@ export function applyChoice(
     if (Math.abs(diff) > 0.001) statChanges[k] = diff;
   }
 
-  const nextRound = session.player.round + 1;
+  const nextRound = session.player.round + (shouldAdvanceRound ? 1 : 0);
 
   // 连败追踪（基于本回合赛事结果）
   let consecutiveLosses = session.player.consecutiveLosses ?? 0;
@@ -1570,7 +2166,7 @@ export function applyChoice(
 
   // ── 冷却 tag 处理 ──────────────────────────────────────────────
   // 1. 先剪掉已过期的冷却 tag
-  const nextTagExpiry: Record<string, number> = { ...(session.player.tagExpiry ?? {}) };
+  let nextTagExpiry: Record<string, number> = { ...(session.player.tagExpiry ?? {}) };
   const expiredCdTags = Object.entries(nextTagExpiry)
     .filter(([, exp]) => exp <= nextRound)
     .map(([t]) => t);
@@ -1588,11 +2184,19 @@ export function applyChoice(
     if (!nextTags.includes(tag)) nextTags.push(tag);
     nextTagExpiry[tag] = nextRound + duration;
   }
+  nextTagExpiry = refreshTagExpiry(nextTags, nextTagExpiry, nextRound, tagsAdded);
 
-  const { year: nextYear, week: nextWeek } = advanceWeek(
-    session.player.year ?? 1,
-    session.player.week ?? 1,
-  );
+  const { year: nextYear, week: nextWeek } = shouldAdvanceRound
+    ? advanceWeek(session.player.year ?? 1, session.player.week ?? 1)
+    : { year: session.player.year ?? 1, week: session.player.week ?? 1 };
+
+  if (shouldAdvanceRound && restRounds > 0) {
+    restRounds -= 1;
+    if (restRounds === 0) {
+      if (!tagsRemoved.includes('injured')) tagsRemoved.push('injured');
+      passiveEffects.push('rest-completed');
+    }
+  }
 
   const fallbackQualificationExpiry = defaultQualificationExpiry(nextYear, nextWeek);
   const normalizedPlayerQualifications = normalizeQualificationBatches(
@@ -1631,7 +2235,9 @@ export function applyChoice(
     pm.resolveYear === nextYear &&
     pm.resolveWeek === nextWeek;
   const isInterviewPhase = nextTags.includes('interview-pending');
-  const nextActionPoints = isMatchWeek ? 0 : isInterviewPhase ? 50 : 100;
+  const nextActionPoints = shouldAdvanceRound
+    ? isMatchWeek ? 0 : isInterviewPhase ? 50 : 100
+    : session.player.actionPoints;
 
   // ── 商店冷却修剪（过期 round 已过）──────────────────────────────
   const nextShopCooldowns: Record<string, number> = {};
@@ -1657,7 +2263,7 @@ export function applyChoice(
     year: nextYear,
     week: nextWeek,
     actionPoints: nextActionPoints,
-    roundCombos: [],
+    roundCombos: shouldAdvanceRound ? [] : session.player.roundCombos,
     shopCooldowns: nextShopCooldowns,
     qualificationSlots: nextQualificationSlots,
     teamQualificationSlots: nextTeamQualificationSlots,
@@ -1784,7 +2390,7 @@ export function applyChoice(
 
   // 月薪入账：每 4 回合结算一次，入队后从 salaryTracker.lastPayRound 起算
   // 必须在 processRecoverySystems 之前结算，确保到期的家人危机检查能看到当回合薪资
-  if (nextPlayer.team && nextPlayer.salaryTracker) {
+  if (shouldAdvanceRound && nextPlayer.team && nextPlayer.salaryTracker) {
     if (
       nextPlayer.salaryTracker.salaryRestoreRound &&
       nextPlayer.round >= nextPlayer.salaryTracker.salaryRestoreRound
@@ -1826,8 +2432,10 @@ export function applyChoice(
   }
 
   const recoveryEffects: string[] = [];
-  processRecoverySystems(nextPlayer, eventDef.id, recoveryEffects, choiceDef);
-  passiveEffects.push(...recoveryEffects);
+  if (shouldAdvanceRound || eventDef.id.startsWith('bailout-')) {
+    processRecoverySystems(nextPlayer, eventDef.id, recoveryEffects, choiceDef);
+    passiveEffects.push(...recoveryEffects);
+  }
 
   if (!nextPlayer.team && nextPlayer.roster) {
     nextPlayer.roster = null;
@@ -1854,7 +2462,7 @@ export function applyChoice(
     }
   }
 
-  if (nextPlayer.activeRole) {
+  if (shouldAdvanceRound && nextPlayer.activeRole) {
     nextPlayer.activeRoleRounds = (nextPlayer.activeRoleRounds ?? 0) + 1;
     if (
       nextPlayer.activeRoleRounds >= 24 &&
@@ -1939,7 +2547,7 @@ export function applyChoice(
   }
 
   // 队友后台成长
-  if (nextPlayer.roster) {
+  if (shouldAdvanceRound && nextPlayer.roster) {
     const growthRng = makeRng(
       hashString(session.id) ^ (nextRound * 1299709),
     );
@@ -1961,6 +2569,20 @@ export function applyChoice(
     nextPlayer = refreshVisibleTeamIdentities(nextPlayer);
   }
 
+  if (eventDef.type === 'tournament-context') {
+    nextPlayer = markTournamentContextEventConsumed(nextPlayer, eventDef.id);
+  }
+
+  nextPlayer = applyInjuryRiskTick(
+    nextPlayer,
+    eventDef.type === 'match'
+      ? 'match'
+      : eventDef.type === 'rest'
+        ? 'rest'
+        : 'routine',
+    passiveEffects,
+  );
+
   const teamSnapshot = session.player.team
     ? {
         clubId: session.player.team.clubId,
@@ -1970,6 +2592,8 @@ export function applyChoice(
         tier: session.player.team.tier,
       }
     : undefined;
+
+  nextPlayer = applyAutomaticTagCleanup(nextPlayer, tagsRemoved);
 
   const result: RoundResult = {
     round: nextPlayer.round,
@@ -1990,6 +2614,7 @@ export function applyChoice(
     stageBefore,
     stageAfter: outcome.stageAfter,
     tagsAdded,
+    tagsRemoved,
     passiveEffects,
     qualificationChanges,
     stressChange: stress - stressBefore,
@@ -2009,6 +2634,7 @@ export function applyChoice(
           enemyScore: pendingMatchSim.enemyScore,
         } satisfies MatchStats
       : undefined,
+    ...(activeSequence ? sequenceResultFields(activeSequence) : {}),
     createdAt: nowIso(),
   };
 
@@ -2016,18 +2642,30 @@ export function applyChoice(
 
   // ── 赛事进度 ──
   let leaderboard = buildLeaderboard(session);
-  let worldTournamentResult: { tournament: Tournament; playerWon: boolean; isFinalStage: boolean } | null = null;
-  if (
+  let worldTournamentResult: { tournament: Tournament; playerWon: boolean; isFinalStage: boolean; opponentClubId?: string } | null = null;
+  let worldStateSession: GameSession = session;
+  const resolvesPendingTournament =
     nextPlayer.pendingMatch &&
-    eventDef.id.startsWith(`tournament-${nextPlayer.pendingMatch.tournamentId}--`)
-  ) {
+    (
+      eventDef.id.startsWith(`tournament-${nextPlayer.pendingMatch.tournamentId}--`) ||
+      injuryMatchResolved ||
+      injuryForfeit
+    );
+  if (resolvesPendingTournament && nextPlayer.pendingMatch) {
     const t = getTournament(nextPlayer.pendingMatch.tournamentId);
     const idx = nextPlayer.pendingMatch.stageIndex;
     const isFinal = t ? idx >= t.bracket.length - 1 : true;
 
     if (t) {
-      worldTournamentResult = { tournament: t, playerWon: outcome.success, isFinalStage: isFinal };
-      const reward = stageRewardDelta(t, idx, outcome.success);
+      worldTournamentResult = {
+        tournament: t,
+        playerWon: outcome.success,
+        isFinalStage: isFinal,
+        opponentClubId: nextPlayer.pendingMatch.opponent?.clubId,
+      };
+      const reward = injuryForfeit
+        ? { points: 0, fame: 0 }
+        : stageRewardDelta(t, idx, outcome.success);
       const extraPoints = chosenResourceDelta.points;
       const totalPoints = reward.points + extraPoints;
       if (!nextPlayer.team && totalPoints !== 0) {
@@ -2100,15 +2738,33 @@ export function applyChoice(
     }
 
     if (!t || !outcome.success || isFinal) {
+      if (t) {
+        nextPlayer = recordTournamentContextMatchResult(
+          nextPlayer,
+          result.matchStats,
+          outcome.success,
+          isFinal,
+          isFinal && outcome.success,
+        );
+      }
       nextPlayer.pendingMatch = null;
     } else {
       const adv = advanceWeek(nextYear, nextWeek);
-      nextPlayer.pendingMatch = {
+      const nextPendingMatch = {
         ...nextPlayer.pendingMatch,
         stageIndex: idx + 1,
         resolveYear: adv.year,
         resolveWeek: adv.week,
+        opponent: undefined,
       };
+      const opponentAssigned = assignPendingMatchOpponent(
+        { ...session, player: nextPlayer },
+        nextPendingMatch,
+      );
+      worldStateSession = opponentAssigned.session;
+      nextPlayer = opponentAssigned.session.player;
+      nextPlayer.pendingMatch = opponentAssigned.pendingMatch;
+      nextPlayer = advanceTournamentContextStage(nextPlayer, nextPlayer.pendingMatch, t);
     }
 
     if (!nextPlayer.promotionPending) {
@@ -2159,7 +2815,7 @@ export function applyChoice(
   }
 
   // ── 队友转会到期：执行替换 + 重新调度 ────────────────────────────
-  if (nextPlayer.pendingDeparture && nextPlayer.roster && nextPlayer.team) {
+  if (shouldAdvanceRound && nextPlayer.pendingDeparture && nextPlayer.roster && nextPlayer.team) {
     nextPlayer.pendingDeparture = recalcPendingDeparture(
       { ...session, player: nextPlayer },
       nextPlayer,
@@ -2213,38 +2869,80 @@ export function applyChoice(
     nextPlayer.pendingDeparture = undefined;
   }
 
-  const recent = [...session.history.slice(-2).map((r) => r.eventId), eventDef.id];
-  const nextEventDef = (() => {
-    if (ending) return null;
-    const pm = nextPlayer.pendingMatch;
-    if (pm && pm.resolveYear === nextYear && pm.resolveWeek === nextWeek) {
-      const t = getTournament(pm.tournamentId);
-      if (t) return synthesizeMatchEvent(t, pm.stageIndex);
-    }
-    return pickEvent({
-      player: nextPlayer,
-      recentEventIds: recent,
-      rng,
-      leaderboard,
-      aiEvents,
-      aiEventCandidates: buildAiPickCandidates(aiEventCache, nextPlayer, [...session.history, result]),
-    });
-  })();
-
-  if (nextPlayer.forceNextEvent && nextEventDef?.id === nextPlayer.forceNextEvent) {
+  if (nextPlayer.forceNextEvent && nextPlayer.forceNextEvent === eventDef.id) {
     nextPlayer.forceNextEvent = null;
   }
+
+  if (shouldAdvanceRound) {
+    nextPlayer = cleanupTournamentContext(nextPlayer);
+  }
+
+  nextPlayer = applyAutomaticTagCleanup(nextPlayer, tagsRemoved);
 
   result.narrative = substituteRivals(result.narrative, nextPlayer.rivals);
   result.narrative = substituteTeammates(result.narrative, nextPlayer.roster ?? []);
   result.eventTitle = substituteRivals(result.eventTitle, nextPlayer.rivals);
   result.eventTitle = substituteTeammates(result.eventTitle, nextPlayer.roster ?? []);
 
-  const transferTarget = nextPlayer.pendingDeparture
-    ? (nextPlayer.roster ?? []).find((tm) => tm.id === nextPlayer.pendingDeparture!.slotId)?.name
-    : undefined;
+  if (effectiveActiveSequence) {
+    let sequenceForAdvance = effectiveActiveSequence;
+    if (effectiveActiveSequence.type === 'tournament-series' && tournamentSeriesMapResult) {
+      const context = effectiveActiveSequence.context as unknown as TournamentSeriesContext;
+      const maps = [...context.maps, tournamentSeriesMapResult];
+      const playerMapWins = context.playerMapWins + (tournamentSeriesMapResult.won ? 1 : 0);
+      const opponentMapWins = context.opponentMapWins + (tournamentSeriesMapResult.won ? 0 : 1);
+      sequenceForAdvance = {
+        ...effectiveActiveSequence,
+        context: {
+          ...context,
+          maps,
+          playerMapWins,
+          opponentMapWins,
+        } as unknown as Record<string, unknown>,
+      };
+    }
+    const sequenceAdvance = advanceEventSequence(sequenceForAdvance, result, nextPlayer, resolveEventById);
+    if (sequenceAdvance.nextStepEvent && sequenceAdvance.sequence) {
+      const transferTarget = nextPlayer.pendingDeparture
+        ? (nextPlayer.roster ?? []).find((tm) => tm.id === nextPlayer.pendingDeparture!.slotId)?.name
+        : undefined;
+      const updated: GameSession = {
+        ...session,
+        player: nextPlayer,
+        phase: 'event',
+        currentEvent: toPublicEvent(
+          sequenceAdvance.nextStepEvent,
+          nextPlayer.rivals,
+          nextPlayer.roster ?? [],
+          transferTarget,
+        ),
+        activeEventSequence: sequenceAdvance.sequence,
+        history: [...session.history, result],
+        status: ending ? 'ended' : 'active',
+        ending: ending ?? session.ending,
+        updatedAt: nowIso(),
+      };
+      return { session: updated, result };
+    }
 
-  let worldSession = { ...session, player: nextPlayer };
+    if (sequenceAdvance.cancelled) {
+      passiveEffects.push(`事件流程取消：${sequenceAdvance.cancelReason ?? 'unknown'}`);
+      const updated: GameSession = {
+        ...session,
+        player: nextPlayer,
+        phase: 'action',
+        currentEvent: null,
+        activeEventSequence: undefined,
+        history: [...session.history, result],
+        status: ending ? 'ended' : 'active',
+        ending: ending ?? session.ending,
+        updatedAt: nowIso(),
+      };
+      return { session: updated, result };
+    }
+  }
+
+  let worldSession = { ...worldStateSession, player: nextPlayer };
   if (nextPlayer.team) {
     worldSession = activateClubRuntime(worldSession, nextPlayer.team.clubId, 'player-team-active');
   }
@@ -2255,6 +2953,7 @@ export function applyChoice(
       worldTournamentResult.tournament,
       worldTournamentResult.playerWon,
       worldTournamentResult.isFinalStage,
+      worldTournamentResult.opponentClubId,
     );
   }
   leaderboard = buildLeaderboard(worldSession, leaderboard);
@@ -2262,7 +2961,9 @@ export function applyChoice(
   const updated: GameSession = {
     ...worldSession,
     player: nextPlayer,
-    currentEvent: nextEventDef ? toPublicEvent(nextEventDef, nextPlayer.rivals, nextPlayer.roster ?? [], transferTarget) : null,
+    phase: 'action',
+    currentEvent: null,
+    activeEventSequence: undefined,
     history: [...session.history, result],
     status: ending ? 'ended' : 'active',
     ending: ending ?? session.ending,
@@ -2271,6 +2972,146 @@ export function applyChoice(
   };
 
   return { session: updated, result };
+}
+
+export interface EndActionPhaseResult {
+  session: GameSession;
+  pickedEvent: EventDef | null;
+}
+
+export function endActionPhase(
+  session: GameSession,
+  aiEvents?: EventDef[],
+  aiEventCache?: AiEventCacheEnvelope,
+): EndActionPhaseResult {
+  if (session.status !== 'active') throw new Error('session is not active');
+  assertNoActiveEventSequence(session);
+  const sessionPhase = session.phase ?? (session.currentEvent ? 'event' : 'action');
+  if (sessionPhase !== 'action') throw new Error('not in action phase');
+
+  const nextPlayer = session.player;
+  const recentEventIds = session.history.slice(-2).map((r) => r.eventId);
+  const rng = makeRng(
+    hashString(session.id) ^ (((nextPlayer.round ?? 0) * 1000 + (nextPlayer.actionPoints ?? 0) + 17) * 2654435761),
+  );
+  let pickedEvent = pickEvent({
+    player: nextPlayer,
+    recentEventIds,
+    rng,
+    leaderboard: session.leaderboard,
+    aiEvents,
+    aiEventCandidates: buildAiPickCandidates(aiEventCache, nextPlayer, session.history),
+  });
+
+  const transferTarget = nextPlayer.pendingDeparture
+    ? (nextPlayer.roster ?? []).find((tm) => tm.id === nextPlayer.pendingDeparture!.slotId)?.name
+    : undefined;
+
+  let activeEventSequence = session.activeEventSequence;
+  const tournamentMatch = pickedEvent ? /^tournament-(.+)--(\d+)$/.exec(pickedEvent.id) : null;
+  if (tournamentMatch) {
+    const tournament = getTournament(tournamentMatch[1]!);
+    const stageIndex = parseInt(tournamentMatch[2]!, 10);
+    const stage = tournament?.bracket[stageIndex];
+    if (tournament && stage && (stage.seriesType === 'bo3' || stage.seriesType === 'bo5')) {
+      activeEventSequence = {
+        ...createTournamentSeriesSequence(tournament, stageIndex, matchBuffsForScope(nextPlayer.buffs ?? [], 'series')),
+        startedRound: nextPlayer.round,
+      };
+      pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
+    }
+  }
+  const interviewIds = new Set([
+    'chain-club-interview',
+    'chain-club-interview-open-match',
+    'chain-club-interview-talent',
+  ]);
+  if (!activeEventSequence && pickedEvent && interviewIds.has(pickedEvent.id)) {
+    activeEventSequence = createNarrativeSequence(
+      `club-interview-${nextPlayer.round}`,
+      'club-interview',
+      nextPlayer.round,
+      [
+        buildSequencePromptEvent(
+          `club-interview-${nextPlayer.round}-question-1`,
+          'tryout',
+          '面试问题：你的定位',
+          '战队没有马上进入合同细节，而是先问你怎么看自己的队内定位。',
+        ),
+        buildSequencePromptEvent(
+          `club-interview-${nextPlayer.round}-question-2`,
+          'tryout',
+          '面试问题：压力和目标',
+          '第二个问题更直接：如果成绩不顺，你准备怎么证明自己值得这个名额。',
+        ),
+        pickedEvent,
+      ],
+    );
+    pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
+  }
+  if (!activeEventSequence && pickedEvent?.id === 'family-crisis-illness') {
+    activeEventSequence = createNarrativeSequence(
+      `family-crisis-${nextPlayer.round}`,
+      'family-crisis',
+      nextPlayer.round,
+      [
+        buildSequencePromptEvent(
+          `family-crisis-${nextPlayer.round}-call`,
+          'life',
+          '家里的未接来电',
+          '训练间隙，手机屏幕亮了又灭。家里连续打来几个电话，你意识到这不是普通问候。',
+        ),
+        buildSequencePromptEvent(
+          `family-crisis-${nextPlayer.round}-pressure`,
+          'life',
+          '需要立刻决定',
+          '消息讲清楚后，压力一下压到眼前。你必须决定职业节奏和家里状况哪个先处理。',
+        ),
+        pickedEvent,
+      ],
+    );
+    pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
+  }
+  if (!activeEventSequence && pickedEvent?.id === 'chain-team-conflict') {
+    activeEventSequence = createNarrativeSequence(
+      `team-conflict-${nextPlayer.round}`,
+      'team-conflict',
+      nextPlayer.round,
+      [
+        buildSequencePromptEvent(
+          `team-conflict-${nextPlayer.round}-review`,
+          'team',
+          '复盘室里的火药味',
+          '复盘刚开始，几个关键回合就被反复拖回进度条。你能感觉到这次不是普通争论。',
+        ),
+        buildSequencePromptEvent(
+          `team-conflict-${nextPlayer.round}-private`,
+          'team',
+          '私下表态',
+          '会议暂停后，有人单独找你聊了几句。你知道接下来的表态会影响更衣室站位。',
+        ),
+        pickedEvent,
+      ],
+    );
+    pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
+  }
+  if (!activeEventSequence && pickedEvent?.id.startsWith('ai-')) {
+    const aiSequence = createAiSequenceFromEvent(pickedEvent, nextPlayer.round);
+    if (aiSequence) {
+      activeEventSequence = aiSequence;
+      pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
+    }
+  }
+
+  const updated: GameSession = {
+    ...session,
+    phase: 'event',
+    currentEvent: pickedEvent ? toPublicEvent(pickedEvent, nextPlayer.rivals, nextPlayer.roster ?? [], transferTarget) : null,
+    activeEventSequence,
+    updatedAt: nowIso(),
+  };
+
+  return { session: updated, pickedEvent };
 }
 
 function checkEnding(player: Player, endRun: boolean, endReason?: string): string | undefined {
@@ -2324,10 +3165,16 @@ export function applyAction(
   aiEventCache?: AiEventCacheEnvelope,
 ): ApplyActionResult {
   if (session.status !== 'active') throw new Error('session is not active');
+  assertNoActiveEventSequence(session);
+  const sessionPhase = session.phase ?? (session.currentEvent ? 'event' : 'action');
+  if (sessionPhase !== 'action') throw new Error('not in action phase');
 
   const actionDef = getAction(actionId);
   if (!actionDef) throw new Error(`未知行动: ${actionId}`);
 
+  if ((session.player.restRounds ?? 0) > 0) {
+    throw new Error('休养期间不能进行日常行动');
+  }
   const ap = session.player.actionPoints ?? 0;
   if (ap < actionDef.apCost) throw new Error('行动力不足');
 
@@ -2434,7 +3281,7 @@ export function applyAction(
     outcome.success,
   );
 
-  const nextPlayer: Player = {
+  let nextPlayer: Player = {
     ...session.player,
     stats: outcome.nextStats,
     volatile: newVolatile,
@@ -2444,6 +3291,14 @@ export function applyAction(
     actionPoints: ap - actionDef.apCost,
     roundCombos,
   };
+  const injuryEffects: string[] = [];
+  const injuryContext =
+    actionId.includes('rest') ||
+    actionId.includes('vacation') ||
+    newVolatile.fatigue < volatile.fatigue
+      ? 'rest'
+      : 'routine';
+  nextPlayer = applyInjuryRiskTick(nextPlayer, injuryContext, injuryEffects);
 
   const actionResult: ActionResult = {
     actionId,
@@ -2452,7 +3307,9 @@ export function applyAction(
     roll: outcome.roll,
     dc: outcome.dc,
     naturalRoll: outcome.naturalRoll,
-    narrative: outcome.chosenOutcome.narrative,
+    narrative: injuryEffects.length > 0
+      ? `${outcome.chosenOutcome.narrative} ${injuryEffects.join('。')}`
+      : outcome.chosenOutcome.narrative,
     feelChange: feel - volatile.feel,
     fatigueChange: fatigue - volatile.fatigue,
     stressChange: stress - (session.player.stress ?? 0),
@@ -2466,21 +3323,11 @@ export function applyAction(
       .map((combo) => combo.label),
   };
 
-  const recentEventIds = session.history.slice(-3).map((r) => r.eventId);
-  const nextEvent = pickEvent({
-    player: nextPlayer,
-    recentEventIds,
-    rng,
-    leaderboard: session.leaderboard,
-    aiEvents,
-    aiEventCandidates: buildAiPickCandidates(aiEventCache, nextPlayer, session.history),
-  });
-
   return {
     actionResult,
     player: nextPlayer,
-    currentEvent: nextEvent ? toPublicEvent(nextEvent, nextPlayer.rivals, nextPlayer.roster ?? []) : null,
-    pickedEvent: nextEvent,
+    currentEvent: null,
+    pickedEvent: null,
   };
 }
 
@@ -2500,11 +3347,15 @@ export function applyShopPurchase(
   itemId: string,
 ): ApplyShopResult {
   if (session.status !== 'active') throw new Error('session is not active');
+  assertNoActiveEventSequence(session);
 
   const item = getShopItem(itemId);
   if (!item) throw new Error(`未知商品: ${itemId}`);
 
   const player = session.player;
+  if ((player.restRounds ?? 0) > 0) {
+    throw new Error('休养期间不能购买商店物品');
+  }
   const round = player.round;
   const weeklyLimit = WEEKLY_SHOP_LIMITS[item.category];
   const purchaseRecord = (player.weeklyShopPurchases ?? {})[itemId];
@@ -2686,7 +3537,15 @@ export function applyShopPurchase(
     }
   }
 
-  const nextPlayer: Player = {
+  let tagExpiry = refreshTagExpiry(
+    tags,
+    player.tagExpiry ?? {},
+    round,
+    [effect.tagAdd, shopNarrative ? item.negativeEvents?.find((neg) => neg.narrative === shopNarrative)?.effect.tagAdd : undefined]
+      .filter((tag): tag is string => Boolean(tag)),
+  );
+
+  let nextPlayer: Player = {
     ...player,
     stats,
     volatile: { feel, tilt, fatigue },
@@ -2694,12 +3553,16 @@ export function applyShopPurchase(
     stress,
     fame,
     tags,
+    tagExpiry,
     shopCooldowns: nextShopCooldowns,
     weeklyShopPurchases: nextWeeklyShopPurchases,
     ownedItems: item.category === 'equipment' && !(player.ownedItems ?? []).includes(itemId)
       ? [...(player.ownedItems ?? []), itemId]
       : player.ownedItems,
   };
+  const shopTagsRemoved: string[] = effect.tagRemove ? [effect.tagRemove] : [];
+  nextPlayer = applyAutomaticTagCleanup(nextPlayer, shopTagsRemoved);
+  tagExpiry = nextPlayer.tagExpiry ?? tagExpiry;
 
   return {
     player: nextPlayer,
@@ -2718,7 +3581,7 @@ export function applyShopPurchase(
       ? (player.buffs ?? []).filter((b) => b.id === effect.buffRemoveId).map((b) => b.label)
       : undefined,
     shopTagsAdded: effect.tagAdd ? [effect.tagAdd] : undefined,
-    shopTagsRemoved: effect.tagRemove ? [effect.tagRemove] : undefined,
+    shopTagsRemoved: shopTagsRemoved.length > 0 ? shopTagsRemoved : undefined,
   };
 }
 
@@ -2795,6 +3658,9 @@ export function applyClubRequest(
   if (!club) throw new Error('未知俱乐部');
 
   const player = session.player;
+  if ((player.restRounds ?? 0) > 0) {
+    throw new Error('休养期间不能申请战队');
+  }
   if (player.tags.includes('transfer-ban')) {
     throw new Error('因贷款违约，你目前被禁止转会（还有' + ((player.tagExpiry?.['transfer-ban'] ?? player.round) - player.round) + '回合）');
   }
@@ -2862,6 +3728,9 @@ export function respondTeamOffer(
 ): Player {
   if (session.status !== 'active') throw new Error('session is not active');
   const player = session.player;
+  if ((player.restRounds ?? 0) > 0) {
+    throw new Error('休养期间不能处理入队邀请');
+  }
   const offer = player.pendingOffer;
   if (!offer) throw new Error('没有待处理的入队邀请');
 
@@ -2888,6 +3757,7 @@ export function applyTeamPractice(
   teammateId: string,
 ): { player: Player; result: TeamActionResult } {
   if (session.status !== 'active') throw new Error('session is not active');
+  assertNoActiveEventSequence(session);
   if (!teammateId) throw new Error('teammateId 必填');
   const player = session.player;
   assertTeamActionAvailable(player, TEAM_PRACTICE_AP_COST);
@@ -2980,6 +3850,7 @@ export function applyTeamMeeting(
   session: GameSession,
 ): { player: Player; result: TeamActionResult } {
   if (session.status !== 'active') throw new Error('session is not active');
+  assertNoActiveEventSequence(session);
   const player = session.player;
   assertTeamActionAvailable(player, TEAM_MEETING_AP_COST);
   const actionKey = 'team-meeting';
@@ -3072,6 +3943,7 @@ export function applyLockerRoomTalk(
   session: GameSession,
 ): { player: Player; result: TeamActionResult } {
   if (session.status !== 'active') throw new Error('session is not active');
+  assertNoActiveEventSequence(session);
   const player = session.player;
   assertTeamActionAvailable(player, LOCKER_ROOM_TALK_AP_COST);
   if (!player.tags.includes('locker-tension') && (player.teamTrust ?? 50) >= 30) {
@@ -3428,6 +4300,85 @@ export { ACTIONS, SHOP_ITEMS };
 
 function dedupe(xs: string[]): string[] {
   return Array.from(new Set(xs));
+}
+
+function hasBuff(player: Player, buffId: string): boolean {
+  return (player.buffs ?? []).some((buff) => buff.id === buffId);
+}
+
+function refreshTagExpiry(
+  tags: string[],
+  tagExpiry: Record<string, number>,
+  currentRound: number,
+  addedTags: string[] = [],
+): Record<string, number> {
+  const next = { ...tagExpiry };
+  const added = new Set(addedTags);
+  for (const tag of tags) {
+    const duration = DEFAULT_TAG_LIFETIME_ROUNDS[tag];
+    if (!duration) continue;
+    if (added.has(tag) || next[tag] === undefined) {
+      next[tag] = currentRound + duration;
+    }
+  }
+  for (const tag of Object.keys(next)) {
+    if (!tags.includes(tag)) delete next[tag];
+  }
+  return next;
+}
+
+function applyAutomaticTagCleanup(
+  player: Player,
+  removedTags: string[] = [],
+): Player {
+  const remove = new Set<string>();
+  const addRemove = (tag: string) => {
+    if (player.tags.includes(tag)) {
+      remove.add(tag);
+      if (!removedTags.includes(tag)) removedTags.push(tag);
+    }
+  };
+
+  if (!player.team || (player.teamTrust ?? 0) < 40) addRemove('team-trust');
+  if (!player.team) {
+    [
+      'locker-tension',
+      'suppressed-anger',
+      'role-confusion',
+      'caller-discipline',
+      'caller-star-aligned',
+      'star-freedom',
+      'team-carries-through-you',
+      'shared-calling',
+      'star-system-ready',
+      'late-round-clarity',
+      'coach-neutral',
+      'coach-backs-star',
+      'coach-lost-control',
+      'main-awper',
+      'team-focus-firepower',
+      'team-focus-tactics',
+      'team-focus-defense',
+      'team-focus-mental',
+      'team-tactical-ready',
+      'team-meeting-ready',
+    ].forEach(addRemove);
+  }
+  if ((player.stats.money ?? 0) > 0) addRemove('broke');
+  if ((player.restRounds ?? 0) <= 0) addRemove('injured');
+  if (!hasBuff(player, 'agent-support')) addRemove('has-agent');
+  if (!player.pendingApplication) {
+    addRemove('application-response-ready');
+    addRemove('application-path-open-match');
+    addRemove('application-path-talent');
+  }
+  if (!player.roleTransition) addRemove('role-transition-active');
+
+  if (remove.size === 0) return player;
+  const tags = player.tags.filter((tag) => !remove.has(tag));
+  const tagExpiry = { ...(player.tagExpiry ?? {}) };
+  for (const tag of remove) delete tagExpiry[tag];
+  return { ...player, tags, tagExpiry };
 }
 
 function hashString(s: string): number {

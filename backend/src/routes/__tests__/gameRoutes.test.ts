@@ -1,13 +1,177 @@
 import { describe, expect, it } from 'vitest';
 import app from '../../index.js';
+import type { Env, GameSession } from '../../types.js';
+
+class MemoryStatement {
+  private values: unknown[] = [];
+
+  constructor(
+    private readonly sessions: Map<string, GameSession>,
+    private readonly query: string,
+  ) {}
+
+  bind(...values: unknown[]): MemoryStatement {
+    this.values = values;
+    return this;
+  }
+
+  async run(): Promise<object> {
+    if (this.query.includes('INSERT INTO sessions')) {
+      for (const data of this.values) {
+        if (typeof data !== 'string') continue;
+        try {
+          const session = JSON.parse(data) as Partial<GameSession>;
+          if (typeof session.id === 'string' && session.player) {
+            this.sessions.set(session.id, session as GameSession);
+            break;
+          }
+        } catch {
+          // Non-JSON bind values include id/name/stage fields.
+        }
+      }
+    }
+    return {};
+  }
+
+  async first<T>(): Promise<T | null> {
+    if (this.query.includes('SELECT data FROM sessions WHERE id = ?')) {
+      const id = this.values[0];
+      const session = typeof id === 'string' ? this.sessions.get(id) : undefined;
+      return session ? ({ data: JSON.stringify(session) } as T) : null;
+    }
+    return null;
+  }
+
+  async all<T>(): Promise<{ results: T[] }> {
+    return { results: [] };
+  }
+}
+
+function makeEnv(): Env {
+  const sessions = new Map<string, GameSession>();
+  return {
+    DB: {
+      prepare(query: string) {
+        return new MemoryStatement(sessions, query);
+      },
+    } as unknown as D1Database,
+    KV: {
+      get: async () => null,
+      put: async () => undefined,
+      delete: async () => undefined,
+      list: async () => ({ keys: [], list_complete: true, cursor: undefined }),
+    } as unknown as KVNamespace,
+    AI_PROVIDER: 'none',
+  } as Env;
+}
 
 describe('game routes', () => {
   it('allows trait rolling before a session exists', async () => {
-    const res = await app.request('/api/game/roll-traits', { method: 'POST' });
+    const res = await app.request('https://localhost/api/game/roll-traits', { method: 'POST' });
     const body = await res.json() as { traits?: unknown[]; error?: string };
 
     expect(res.status).toBe(200);
     expect(body.error).toBeUndefined();
     expect(body.traits).toHaveLength(3);
+  });
+
+  it('updates core stats through the local debug endpoint', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Debug Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string };
+
+    const debugRes = await app.request(`https://localhost/api/debug/${started.sessionId}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        stats: {
+          intelligence: 11,
+          agility: 12,
+          experience: 13,
+          mentality: 14,
+          constitution: 15,
+        },
+      }),
+    }, env);
+    const body = await debugRes.json() as { player?: GameSession['player']; error?: string };
+
+    expect(debugRes.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.player?.stats).toMatchObject({
+      intelligence: 11,
+      agility: 12,
+      experience: 13,
+      mentality: 14,
+      constitution: 15,
+    });
+    expect(body.player?.stats.money).toBe(0);
+  });
+
+  it('refreshes leaderboard VRS after debug updates the player club VRS', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'VRS Debugger',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string };
+
+    const initialRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const initial = await initialRes.json() as GameSession;
+    const clubId = 'club-cyber-academy';
+    const team = {
+      clubId,
+      name: '赛博学院',
+      tag: 'CYA',
+      region: 'CN',
+      tier: 'youth' as const,
+      monthlySalary: 12,
+      joinedRound: initial.player.round,
+    };
+    await app.request(`https://localhost/api/debug/${started.sessionId}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        stage: 'youth',
+        teamTier: 'youth',
+        teamMonthlySalary: 12,
+      }),
+    }, env);
+
+    const seeded: GameSession = {
+      ...initial,
+      player: {
+        ...initial.player,
+        stage: 'youth',
+        team,
+      },
+      leaderboard: [],
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const debugRes = await app.request(`https://localhost/api/debug/${started.sessionId}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ teamVrsScore: 33 }),
+    }, env);
+    const body = await debugRes.json() as { leaderboard?: GameSession['leaderboard']; error?: string };
+
+    expect(debugRes.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.leaderboard?.find((row) => row.isPlayer)?.points).toBe(33);
   });
 });

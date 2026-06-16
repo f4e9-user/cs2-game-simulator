@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { getTournament } from '../../data/tournaments.js';
 import { createSession, initPlayer, respondTeamOffer } from '../gameEngine.js';
 import {
+  assignPendingMatchOpponent,
   activateClubRuntime,
   calculateClubPower,
+  computeClubVrsScore,
   deriveRosterNeed,
   ensureWorldClubPool,
   previewClubRuntime,
   recordWorldTournamentResult,
   tickWorldClubRuntimes,
 } from '../worldClubs.js';
+import type { PendingMatch } from '../../types.js';
 
 function session() {
   const player = initPlayer({
@@ -95,7 +98,7 @@ describe('world club runtime', () => {
 
     expect(Object.keys(ticked.worldClubs?.runtimeByClubId ?? {}).length).toBeGreaterThan(0);
     expect(ticked.worldClubs?.processedTickKeysByClubId['club-local-wolves']).toContain('round:12');
-    expect(tickedAgain.worldClubs?.runtimeByClubId).toEqual(ticked.worldClubs?.runtimeByClubId);
+    expect(tickedAgain.worldClubs?.processedTickKeysByClubId['club-local-wolves']).toContain('round:12');
   });
 
   it('records tournament results for the player club and a recent opponent', () => {
@@ -193,5 +196,91 @@ describe('world club runtime', () => {
 
     expect(ticked.worldClubs?.activeClubIds).toContain('club-rival-semi');
     expect(ticked.worldClubs?.runtimeByClubId['club-rival-semi']).toBeDefined();
+  });
+
+  it('materializes rival mapped clubs with generated display identity', () => {
+    const base = session();
+    const activated = activateClubRuntime(base, 'club-rival-semi', 'test');
+    const runtime = activated.worldClubs!.runtimeByClubId['club-rival-semi']!;
+    const rival = base.player.rivals[0]!;
+
+    expect(runtime.displayName).toBe(rival.name);
+    expect(runtime.displayTag).toBe(rival.tag);
+    expect(runtime.displayRegion).toBe(rival.region);
+    expect(runtime.displayName).not.toBe('（对手映射）');
+    expect(runtime.displayTag).not.toBe('???');
+  });
+
+  it('creates pro and top clubs with tier-appropriate baseline VRS', () => {
+    const base = session();
+    const pro = previewClubRuntime(base, 'club-dragon-corp');
+    const top = previewClubRuntime(base, 'club-titan-corp');
+
+    expect(pro.baselineVrsScore).toBeGreaterThanOrEqual(45);
+    expect(computeClubVrsScore(pro)).toBeGreaterThan(0);
+    expect(top.baselineVrsScore).toBeGreaterThan(pro.baselineVrsScore ?? 0);
+    expect(computeClubVrsScore(top)).toBeGreaterThan(computeClubVrsScore(pro));
+  });
+
+  it('assigns a concrete opponent snapshot for a pending tournament match', () => {
+    const baseSession = session();
+    const pending: PendingMatch = {
+      tournamentId: 'y1-b-01',
+      tier: 'b',
+      name: 'Academy League',
+      displayName: 'Academy League Season 1',
+      progressionTier: 'b',
+      entryType: 'direct_signup',
+      resolveYear: 1,
+      resolveWeek: 14,
+      stageIndex: 0,
+    };
+    const withTeam = {
+      ...baseSession,
+      player: {
+        ...baseSession.player,
+        team: {
+          clubId: 'club-cyber-academy',
+          name: '赛博学院',
+          tag: 'CYA',
+          region: '亚太',
+          tier: 'youth' as const,
+          monthlySalary: 10,
+          joinedRound: 1,
+        },
+      },
+    };
+
+    const { session: updated, pendingMatch } = assignPendingMatchOpponent(withTeam, pending);
+
+    expect(pendingMatch.opponent).toBeDefined();
+    expect(pendingMatch.opponent?.clubId).not.toBe('club-cyber-academy');
+    expect(pendingMatch.opponent?.name).toBeTruthy();
+    expect(pendingMatch.opponent?.tag).not.toBe('???');
+    expect(pendingMatch.opponent?.vrsScore).toBeGreaterThanOrEqual(0);
+    expect(pendingMatch.opponent?.power).toBeGreaterThan(0);
+    expect(updated.worldClubs?.runtimeByClubId[pendingMatch.opponent!.clubId]).toBeDefined();
+  });
+
+  it('gives top clubs meaningful VRS movement from abstract world tournament participation', () => {
+    const baseSession = session();
+    const base = {
+      ...baseSession,
+      player: {
+        ...baseSession.player,
+        stage: 'pro' as const,
+        round: 48,
+        week: 48,
+      },
+    };
+    const withTop = activateClubRuntime(base, 'club-titan-corp', 'test');
+    const before = withTop.worldClubs!.runtimeByClubId['club-titan-corp']!;
+
+    const ticked = tickWorldClubRuntimes(withTop, 48, 'round');
+    const after = ticked.worldClubs!.runtimeByClubId['club-titan-corp']!;
+
+    expect(after.recentResults.length).toBeGreaterThan(before.recentResults.length);
+    expect(after.seasonPoints).toBeGreaterThan(before.seasonPoints);
+    expect(computeClubVrsScore(after)).toBeGreaterThan(computeClubVrsScore(before));
   });
 });

@@ -32,6 +32,11 @@ export interface MatchContext {
   entryType: TournamentEntryType;
   stageIndex: number;
   effectiveDifficulty: number;
+  opponent?: {
+    power: number;
+    vrsScore: number;
+    form: number;
+  };
 }
 
 function clamp(v: number, min: number, max: number): number {
@@ -40,6 +45,18 @@ function clamp(v: number, min: number, max: number): number {
 
 function round2(v: number): number {
   return Math.round(v * 100) / 100;
+}
+
+function matchBuffs(player: Player) {
+  return (player.buffs ?? []).filter((buff) =>
+    buff.remainingUses > 0 &&
+    buff.consumeOn === 'match' &&
+    (buff.actionTag === 'match' || buff.actionTag === 'all')
+  );
+}
+
+function product(values: number[]): number {
+  return values.reduce((acc, value) => acc * value, 1);
 }
 
 function normalizeMatchContext(contextOrDifficulty: MatchContext | number): MatchContext {
@@ -97,6 +114,17 @@ function pickupTeamPower(context: MatchContext): number {
   return 35;
 }
 
+function deriveEnemyPower(context: MatchContext): number {
+  const base = 25 + context.effectiveDifficulty * 8;
+  if (!context.opponent) return clamp(base, 20, 90);
+  const opponent = context.opponent;
+  const powerComponent = (opponent.power - 8) * 3;
+  const vrsComponent = Math.min(18, Math.sqrt(Math.max(0, opponent.vrsScore)) * 1.4);
+  const formComponent = opponent.form / 12;
+  const stageComponent = Math.max(0, context.stageIndex) * 1.5;
+  return clamp(base + powerComponent + vrsComponent + formComponent + stageComponent, 20, 90);
+}
+
 export function deriveTeamPower(player: Player, context: MatchContext): number {
   const roster = player.roster ?? [];
   if (!player.team || roster.length === 0) return pickupTeamPower(context);
@@ -118,6 +146,7 @@ export function simulateMatch(
   const context = normalizeMatchContext(contextOrDifficulty);
   const { stats, volatile } = player;
   const { feel, tilt, fatigue } = volatile;
+  const activeMatchBuffs = matchBuffs(player);
 
   // ── 派生 AIM ──────────────────────────────────────────────────
   const aimBase = (stats.agility * 0.7 + stats.experience * 0.3) / 20 * 100;
@@ -132,15 +161,16 @@ export function simulateMatch(
   const teamPower = deriveTeamPower(player, context);
 
   // ── 对手强度 ──────────────────────────────────────────────────
-  const enemyPower = Math.max(20, Math.min(90, 25 + context.effectiveDifficulty * 8));
+  const enemyPower = deriveEnemyPower(context);
 
   // ── 胜率 ──────────────────────────────────────────────────────
   const weights = matchWeights(context.progressionTier);
   const matchPower = personalPower * weights.personal + teamPower * weights.team;
   const powerAdv = matchPower - enemyPower;
   const stabilityBonus = (stats.mentality / 20 - 0.5) * 0.08;
+  const matchWinrateDelta = activeMatchBuffs.reduce((sum, buff) => sum + (buff.matchWinrateDelta ?? 0), 0);
   const winProb = Math.max(0.05, Math.min(0.95,
-    0.5 + powerAdv / 60 + stabilityBonus,
+    0.5 + powerAdv / 60 + stabilityBonus + matchWinrateDelta,
   ));
   const won = rng() < winProb;
 
@@ -206,24 +236,34 @@ export function simulateMatch(
   const actualKpr = kills / totalRounds;
   const actualDpr = deaths / totalRounds;
   const actualApr = assists / totalRounds;
-  const decisionMod = (decisionBase - 50) / 100 * 0.12;
-  const resultModifier = won ? 0.03 : -0.03;
+  const decisionMod = (decisionBase - 50) / 100 * 0.10;
+  const resultModifier = won ? 0.05 : -0.05;
+  const marginBonus =
+    Math.abs(teamScore - enemyScore) >= 8 ? 0.05 :
+    Math.abs(teamScore - enemyScore) >= 5 ? 0.03 :
+    Math.abs(teamScore - enemyScore) >= 2 ? 0.01 :
+    0;
   const rawRating =
-    0.30 +
-    actualKpr * 0.95 -
-    actualDpr * 0.35 +
-    actualApr * 0.25 +
-    headshotRate * 0.12 +
+    0.34 +
+    actualKpr * 0.98 -
+    actualDpr * 0.24 +
+    actualApr * 0.18 +
+    headshotRate * 0.10 +
     decisionMod +
-    resultModifier;
-  const rating = round2(clamp(rawRating, 0.50, 2.50));
+    resultModifier +
+    marginBonus;
+  const matchRatingDelta = activeMatchBuffs.reduce((sum, buff) => sum + (buff.matchRatingDelta ?? 0), 0);
+  const rating = round2(clamp(rawRating + matchRatingDelta, 0.50, 2.50));
 
   // ── 状态变化 ─────────────────────────────────────────────────
   const ratingVsAvg = rating - 1.0;
   // feelDelta: 0.5 步进，由表现驱动
   const feelDelta = Math.max(-2, Math.min(2, Math.round(ratingVsAvg * 3 * 2) / 2));
   // fatigueDelta: 比赛消耗，20–32
-  const fatigueDelta = Math.round(20 + (totalRounds - 16) * 1.5);
+  const fatigueMultiplier = product(activeMatchBuffs
+    .map((buff) => buff.matchFatigueMultiplier)
+    .filter((value): value is number => typeof value === 'number'));
+  const fatigueDelta = Math.round((20 + (totalRounds - 16) * 1.5) * fatigueMultiplier);
   // tiltDelta: 爆冷输球 → 心态波动
   let tiltDelta = 0;
   if (!won && winProb > 0.65) tiltDelta += 1;

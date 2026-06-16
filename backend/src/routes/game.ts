@@ -15,8 +15,10 @@ import {
   applyLockerRoomTalk,
   applyRetainCoreTeammate,
   applyTeamTrainingFocus,
+  assertNoActiveEventSequence,
   computeTraitMods,
   createSession,
+  endActionPhase,
   initPlayer,
   generateTeamOffer,
   pawnItem,
@@ -28,7 +30,8 @@ import { checkTournamentPromotion } from '../engine/stages.js';
 import { buildCareerGoal } from '../engine/careerGoal.js';
 import { applyMoneyTransaction } from '../engine/money.js';
 import { canSignUpForTournament, playerTeamMeetsRequirement } from '../engine/tournamentEligibility.js';
-import { activateClubRuntime, deriveRosterNeed, previewClubRuntime } from '../engine/worldClubs.js';
+import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime } from '../engine/worldClubs.js';
+import { createTournamentContext } from '../engine/tournamentContext.js';
 import {
   derivePlayerIdentityScores,
   deriveTeammateIdentityScores,
@@ -66,12 +69,34 @@ import {
   parseAiEventCache,
   recordAiEventUsed,
   releaseActiveAiEvent,
-  resolveAiEventById,
   type AiEventCacheEnvelope,
 } from '../ai/eventCache.js';
 import type { ClubApplicationSummary, ClubRuntimeState, ClubStoryline, ClubTier, Env, EventDef, GameSession, MatchStats, Player, PlayerTeam, Stats, TeamIdentityDebug } from '../types.js';
 
 const AI_EVENT_CACHE_TTL_SECONDS = 43200;
+const TEAM_LIFECYCLE_TAGS = [
+  'team-trust',
+  'locker-tension',
+  'suppressed-anger',
+  'role-confusion',
+  'caller-discipline',
+  'caller-star-aligned',
+  'star-freedom',
+  'team-carries-through-you',
+  'shared-calling',
+  'star-system-ready',
+  'late-round-clarity',
+  'coach-neutral',
+  'coach-backs-star',
+  'coach-lost-control',
+  'main-awper',
+  'team-focus-firepower',
+  'team-focus-tactics',
+  'team-focus-defense',
+  'team-focus-mental',
+  'team-tactical-ready',
+  'team-meeting-ready',
+] as const;
 
 async function loadAiEventCache(
   kv: KVNamespace,
@@ -199,6 +224,17 @@ function validateApiToken(authHeader: string | undefined, sessionToken: string):
   return token === sessionToken;
 }
 
+function getSessionPhase(session: GameSession): 'action' | 'event' {
+  return session.phase ?? (session.currentEvent ? 'event' : 'action');
+}
+
+function requireSessionPhase(session: GameSession, expected: 'action' | 'event'): void {
+  const phase = getSessionPhase(session);
+  if (phase !== expected) {
+    throw new Error(expected === 'action' ? '当前不在行动阶段' : '当前不在事件阶段');
+  }
+}
+
 // 所有 session 状态变更路由统一鉴权中间件
 // 排除 /start（session 刚创建，还没有 token）和 GET 请求（只读）
 app.use('/game/:sessionId/*', async (c, next) => {
@@ -278,6 +314,7 @@ app.post('/game/start', async (c) => {
       sessionId: session.id,
       apiToken: session.apiToken,
       player: session.player,
+      phase: session.phase,
       currentEvent: session.currentEvent,
       careerGoal: buildCareerGoal(session.player, 0),
       leaderboard: session.leaderboard,
@@ -297,6 +334,7 @@ app.get('/game/:sessionId', async (c) => {
   const promotion = checkTournamentPromotion(session.player);
   return c.json({
     ...session,
+    phase: getSessionPhase(session),
     promotion,
     careerGoal: buildCareerGoal(
       session.player,
@@ -336,6 +374,9 @@ app.post('/game/:sessionId/choice', async (c) => {
   if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
     return c.json({ error: '无效的 API Token' }, 401);
   }
+  if (getSessionPhase(session) !== 'event') {
+    return c.json({ error: '当前不在事件阶段' }, 400);
+  }
 
   const ai = makeAiService(c.env, c.executionCtx);
 
@@ -373,6 +414,10 @@ app.post('/game/:sessionId/choice', async (c) => {
     let aiEvents: EventDef[] | undefined;
     try {
       aiEventCache = await loadAiEventCache(c.env.KV, id, session);
+      if (session.currentEvent?.id.startsWith('ai-')) {
+        aiEventCache = recordAiEventUsed(aiEventCache, session.currentEvent.id, session.player.round);
+      }
+      aiEventCache = releaseActiveAiEvent(aiEventCache, session.player);
       aiEvents = aiEventsFromCache(aiEventCache);
     } catch {}
 
@@ -380,9 +425,6 @@ app.post('/game/:sessionId/choice', async (c) => {
     // 提前保存，供下方生成入队邀请时使用
     const preChoicePendingApplication = session.player.pendingApplication;
     const { session: updated, result } = applyChoice(session, choiceId, customRollBonus, aiEvents, aiEventCache);
-    const nextAiEventDef = updated.currentEvent?.id.startsWith('ai-')
-      ? resolveAiEventById(aiEventCache, updated.currentEvent.id) ?? aiEvents?.find((e) => e.id === updated.currentEvent!.id)
-      : undefined;
 
     // 自由行动时：用自定义行动作为叙事重写依据，不拼接默认叙事
     if (customNarrativePrefix) {
@@ -475,10 +517,7 @@ app.post('/game/:sessionId/choice', async (c) => {
 
     let nextAiEventCache: AiEventCacheEnvelope | undefined;
     if (aiEventCache) {
-      const usedCache = result.eventId.startsWith('ai-')
-        ? recordAiEventUsed(aiEventCache, result.eventId, updated.player.round)
-        : aiEventCache;
-      nextAiEventCache = markAiEventActive(releaseActiveAiEvent(usedCache, updated.player), nextAiEventDef ?? null);
+      nextAiEventCache = releaseActiveAiEvent(aiEventCache, updated.player);
       try {
         await saveAiEventCache(c.env.KV, id, nextAiEventCache);
       } catch (err) {
@@ -529,7 +568,9 @@ app.post('/game/:sessionId/choice', async (c) => {
     return c.json({
       result,
       player: updated.player,
+      phase: updated.phase,
       currentEvent: updated.currentEvent,
+      activeEventSequence: updated.activeEventSequence,
       status: updated.status,
       ending: updated.ending,
       promotion: checkTournamentPromotion(updated.player),
@@ -557,6 +598,14 @@ app.get('/game/:sessionId/tournaments', async (c) => {
   const storage = makeStorage(c.env);
   let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  try {
+    assertNoActiveEventSequence(session);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : '当前事件流程未结束，不能报名赛事' }, 400);
+  }
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
   session.player = refreshQualificationExpiry(session.player);
   const playerPoints =
     session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0;
@@ -584,43 +633,48 @@ app.post('/game/:sessionId/signup', async (c) => {
   const storage = makeStorage(c.env);
   let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
-  session.player = refreshQualificationExpiry(session.player);
+  const activeSession = session;
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
+  activeSession.player = refreshQualificationExpiry(activeSession.player);
+  const player = activeSession.player;
 
   const t = getTournament(tournamentId);
   if (!t) return c.json({ error: '未知赛事' }, 400);
-  if (!t.stages.includes(session.player.stage)) {
+  if (!t.stages.includes(player.stage)) {
     return c.json({ error: '当前阶段不符合参赛资格' }, 400);
   }
   if (
     t.fameRequired !== undefined &&
-    (session.player.fame ?? 0) < t.fameRequired
+    (player.fame ?? 0) < t.fameRequired
   ) {
     return c.json(
-      { error: `名气不足，需要 ≥ ${t.fameRequired}（当前 ${session.player.fame}）` },
+      { error: `名气不足，需要 ≥ ${t.fameRequired}（当前 ${player.fame}）` },
       400,
     );
   }
-  const playerPoints = session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0;
+  const playerPoints = activeSession.leaderboard?.find((t) => t.isPlayer)?.points ?? 0;
   if (t.pointsRequired !== undefined && playerPoints < t.pointsRequired) {
     return c.json(
-      { error: `战队积分不足，需要 ≥ ${t.pointsRequired}（当前 ${playerPoints}）` },
+      { error: `战队 VRS 不足，需要 ≥ ${t.pointsRequired}（当前 ${playerPoints}）` },
       400,
     );
   }
   // 战队门槛校验：持有该赛事所需资格门票时可破格参加（只要有战队即可）
   const teamReq = t.teamRequirement ?? null;
-  if (teamReq !== null && !playerTeamMeetsRequirement(session.player.team, teamReq)) {
+  if (teamReq !== null && !playerTeamMeetsRequirement(player.team, teamReq)) {
     const hasQualTicket = !!t.qualificationTargets?.length &&
       t.qualificationTargets
         .flatMap((slot) => qualificationFallbackSlots(slot))
         .some((slot) => {
           const owner = qualificationSlotOwner(slot);
           const pool = owner === 'team'
-            ? (session.player.teamQualificationSlots ?? {})
-            : (session.player.qualificationSlots ?? {});
+            ? (player.teamQualificationSlots ?? {})
+            : (player.qualificationSlots ?? {});
           return (pool[slot] ?? 0) > 0;
         });
-    if (!session.player.team) {
+    if (!player.team) {
       return c.json({ error: `该赛事需要签约战队才能参加` }, 400);
     }
     if (!hasQualTicket) {
@@ -631,18 +685,18 @@ app.post('/game/:sessionId/signup', async (c) => {
         top: '职业队',
       };
       return c.json(
-        { error: `该赛事需要 ${tierLabels[teamReq]} 及以上战队（当前 ${tierLabels[session.player.team.tier]}），或持有资格门票破格参加` },
+        { error: `该赛事需要 ${tierLabels[teamReq]} 及以上战队（当前 ${tierLabels[player.team.tier]}），或持有资格门票破格参加` },
         400,
       );
     }
   }
-  const week = session.player.week ?? 1;
+  const week = player.week ?? 1;
   const inWindow =
     t.signupWeeks === 'always' || t.signupWeeks.includes(week);
   if (!inWindow) {
     return c.json({ error: '当前周不在该赛事报名窗口' }, 400);
   }
-  if (session.player.pendingMatch) {
+  if (player.pendingMatch) {
     return c.json({ error: '已经报名了一项赛事，先打完再说' }, 400);
   }
   let usedQualificationSlot: string | undefined;
@@ -653,8 +707,8 @@ app.post('/game/:sessionId/signup', async (c) => {
       .flatMap((slot) => qualificationFallbackSlots(slot))
       .some((slot) => {
         if (qualificationSlotOwner(slot) !== 'team') return false;
-        return ((session.player.teamQualificationSlots ?? {})[slot] ?? 0) > 0;
-      }) && session.player.team?.teamStatus !== 'starter';
+        return ((player.teamQualificationSlots ?? {})[slot] ?? 0) > 0;
+      }) && player.team?.teamStatus !== 'starter';
     if (hasBlockedTeamTicket) {
       return c.json({ error: '当前队内定位不是首发，不能使用战队资格门票报名' }, 400);
     }
@@ -663,8 +717,8 @@ app.post('/game/:sessionId/signup', async (c) => {
       .find((slot) => {
         const owner = qualificationSlotOwner(slot);
         const pool = owner === 'team'
-          ? (session.player.teamQualificationSlots ?? {})
-          : (session.player.qualificationSlots ?? {});
+          ? (player.teamQualificationSlots ?? {})
+          : (player.qualificationSlots ?? {});
         return (pool[slot] ?? 0) > 0;
       });
     if (!usedSlot) {
@@ -706,7 +760,7 @@ app.post('/game/:sessionId/signup', async (c) => {
       ? { year: adv1.year + 1, week: 1 }
       : { year: adv1.year, week: adv1.week + 1 };
 
-  session.player.pendingMatch = {
+  const pendingMatch = {
     tournamentId: t.id,
     tier: t.tier,
     name: t.name,
@@ -720,6 +774,10 @@ app.post('/game/:sessionId/signup', async (c) => {
     resolveWeek: next.week,
     stageIndex: 0,
   };
+  const opponentAssigned = assignPendingMatchOpponent(session, pendingMatch);
+  session = opponentAssigned.session;
+  session.player.pendingMatch = opponentAssigned.pendingMatch;
+  session.player.tournamentContext = createTournamentContext(session.player, session.player.pendingMatch, t);
   session.updatedAt = new Date().toISOString();
   await storage.sessions.save(session);
 
@@ -734,6 +792,14 @@ app.post('/game/:sessionId/withdraw', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  try {
+    assertNoActiveEventSequence(session);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : '当前事件流程未结束，不能退赛' }, 400);
+  }
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
   session.player = refreshQualificationExpiry(session.player);
   if (!session.player.pendingMatch) return c.json({ error: '当前没有报名中的赛事' }, 400);
 
@@ -792,6 +858,7 @@ app.post('/game/:sessionId/withdraw', async (c) => {
   }
 
   session.player.pendingMatch = null;
+  session.player.tournamentContext = undefined;
   session.updatedAt = new Date().toISOString();
   await storage.sessions.save(session);
   return c.json({ player: session.player, penalties });
@@ -809,6 +876,57 @@ app.post('/game/:sessionId/action', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  try {
+    assertNoActiveEventSequence(session);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : '当前事件流程未结束，不能离队' }, 400);
+  }
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
+
+  try {
+    let aiEventCache: AiEventCacheEnvelope | undefined;
+    try {
+      aiEventCache = await loadAiEventCache(c.env.KV, id, session);
+      aiEventCache = releaseActiveAiEvent(aiEventCache, session.player);
+    } catch {}
+
+    const { actionResult, player } = applyAction(session, actionId, undefined, aiEventCache);
+    session.player = player;
+    session.phase = 'action';
+    session.currentEvent = null;
+    session.updatedAt = new Date().toISOString();
+    await storage.sessions.save(session);
+
+    if (aiEventCache) {
+      try {
+        await saveAiEventCache(c.env.KV, id, aiEventCache);
+      } catch (err) {
+        console.warn('[AI events] action cache update failed:', err);
+      }
+    }
+
+    return c.json({ actionResult, player, phase: session.phase, currentEvent: null });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+app.post('/game/:sessionId/end-action-phase', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  try {
+    assertNoActiveEventSequence(session);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : '当前事件流程未结束，不能离队' }, 400);
+  }
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     let aiEventCache: AiEventCacheEnvelope | undefined;
@@ -819,21 +937,28 @@ app.post('/game/:sessionId/action', async (c) => {
       aiEvents = aiEventsFromCache(aiEventCache);
     } catch {}
 
-    const { actionResult, player, currentEvent, pickedEvent } = applyAction(session, actionId, aiEvents, aiEventCache);
-    session.player = player;
-    session.currentEvent = currentEvent;
-    session.updatedAt = new Date().toISOString();
+    const { session: updated, pickedEvent } = endActionPhase(session, aiEvents, aiEventCache);
+    session.player = updated.player;
+    session.phase = updated.phase;
+    session.currentEvent = updated.currentEvent;
+    session.activeEventSequence = updated.activeEventSequence;
+    session.updatedAt = updated.updatedAt;
     await storage.sessions.save(session);
 
     if (aiEventCache) {
       try {
         await saveAiEventCache(c.env.KV, id, markAiEventActive(aiEventCache, pickedEvent));
       } catch (err) {
-        console.warn('[AI events] action pickup cache update failed:', err);
+        console.warn('[AI events] end-action cache update failed:', err);
       }
     }
 
-    return c.json({ actionResult, player, currentEvent });
+    return c.json({
+      player: session.player,
+      phase: session.phase,
+      currentEvent: session.currentEvent,
+      activeEventSequence: session.activeEventSequence ?? null,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
@@ -852,6 +977,9 @@ app.post('/game/:sessionId/shop', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const {
@@ -895,6 +1023,9 @@ app.post('/game/:sessionId/pawn', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const result = pawnItem(session.player, itemId);
@@ -923,6 +1054,9 @@ app.post('/game/:sessionId/loan', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const result = applyForLoan(session.player, amount);
@@ -950,6 +1084,9 @@ app.post('/game/:sessionId/friend-loan', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const result = applyFriendLoan(session.player, amount);
@@ -990,6 +1127,9 @@ app.post('/game/:sessionId/apply-club', async (c) => {
   const storage = makeStorage(c.env);
   let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const player = applyClubRequest(session, clubId);
@@ -1016,6 +1156,9 @@ app.post('/game/:sessionId/team-response', async (c) => {
   const storage = makeStorage(c.env);
   let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const player = respondTeamOffer(session, accept);
@@ -1058,6 +1201,9 @@ app.post('/game/:sessionId/team-practice', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const { player, result } = applyTeamPractice(session, teammateId);
@@ -1076,6 +1222,9 @@ app.post('/game/:sessionId/team-meeting', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const { player, result } = applyTeamMeeting(session);
@@ -1094,6 +1243,9 @@ app.post('/game/:sessionId/locker-room-talk', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const { player, result } = applyLockerRoomTalk(session);
@@ -1112,6 +1264,9 @@ app.post('/game/:sessionId/retain-core-teammate', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const { player, result } = applyRetainCoreTeammate(session);
@@ -1135,6 +1290,9 @@ app.post('/game/:sessionId/team-training-focus', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   try {
     const { player, result } = applyTeamTrainingFocus(session, focus);
@@ -1154,6 +1312,14 @@ app.post('/game/:sessionId/leave-team', async (c) => {
   const storage = makeStorage(c.env);
   const session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
+  try {
+    assertNoActiveEventSequence(session);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : '当前事件流程未结束，不能离队' }, 400);
+  }
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
 
   if (!session.player.team) return c.json({ error: '当前没有战队' }, 400);
   if (session.player.pendingMatch) return c.json({ error: '赛事进行中，不能离队' }, 400);
@@ -1162,6 +1328,10 @@ app.post('/game/:sessionId/leave-team', async (c) => {
   session.player.team = null;
   session.player.consecutiveLosses = 0;
   session.player.fame = Math.max(0, (session.player.fame ?? 0) - 5);
+  session.player.tags = session.player.tags.filter((tag) => !TEAM_LIFECYCLE_TAGS.includes(tag as typeof TEAM_LIFECYCLE_TAGS[number]));
+  for (const tag of TEAM_LIFECYCLE_TAGS) {
+    delete session.player.tagExpiry[tag];
+  }
   session.updatedAt = new Date().toISOString();
   await storage.sessions.save(session);
   return c.json({ player: session.player });
@@ -1380,6 +1550,9 @@ app.post('/game/:sessionId/narrate-stream', async (c) => {
   if (!session) return c.json({ error: 'session not found' }, 404);
   if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
     return c.json({ error: '无效的 API Token' }, 401);
+  }
+  if (getSessionPhase(session) !== 'event') {
+    return c.json({ error: '当前不在事件阶段' }, 400);
   }
 
   const body = await c.req.json().catch(() => ({})) as {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getClub } from '../clubs.js';
 import { buildLeaderboard } from '../leaderboard.js';
-import { activateClubRuntime } from '../../engine/worldClubs.js';
+import { activateClubRuntime, computeClubVrsScore } from '../../engine/worldClubs.js';
 import { createSession, initPlayer } from '../../engine/gameEngine.js';
 
 function makeSession() {
@@ -77,6 +77,7 @@ describe('leaderboard generation', () => {
     joined.worldClubs!.runtimeByClubId[club.id] = {
       ...runtime,
       seasonPoints: 28,
+      vrsScore: 42,
     };
 
     const board = buildLeaderboard(joined);
@@ -84,7 +85,21 @@ describe('leaderboard generation', () => {
 
     expect(playerRow?.clubId).toBe(club.id);
     expect(playerRow?.name).toBe(club.name);
-    expect(playerRow?.points).toBe(28);
+    expect(playerRow?.points).toBe(computeClubVrsScore(joined.worldClubs!.runtimeByClubId[club.id]!));
     expect(board.some((row) => row.clubId === 'free-agent')).toBe(false);
+  });
+
+  it('uses materialized rival display identity instead of placeholder club data', () => {
+    const session = activateClubRuntime(makeSession(), 'club-rival-semi', 'test');
+    const rival = session.player.rivals[0]!;
+
+    const board = buildLeaderboard(session);
+    const rivalRow = board.find((row) => row.clubId === 'club-rival-semi');
+
+    expect(rivalRow?.name).toBe(rival.name);
+    expect(rivalRow?.tag).toBe(rival.tag);
+    expect(rivalRow?.region).toBe(rival.region);
+    expect(rivalRow?.name).not.toBe('（对手映射）');
+    expect(rivalRow?.tag).not.toBe('???');
   });
 });
