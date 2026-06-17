@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyChoice, createSession, initPlayer, validateAllocation } from '../gameEngine.js';
+import { applyChoice, applyShopPurchase, createSession, initPlayer, validateAllocation } from '../gameEngine.js';
 import { toPublicEvent } from '../events.js';
 import { BASE_STATS, OPENING_STAT_INVEST_MAX, POINT_POOL } from '../constants.js';
 import { applyCareerExperienceGrowth } from '../resolver.js';
@@ -38,6 +38,60 @@ describe('career experience progression', () => {
     };
 
     expect(validateAllocation(stats, floor)).toMatch(/经验不能通过开局点数分配/);
+  });
+
+  it('turns clamped negative opening overflow into temporary recovery tags', () => {
+    const player = initPlayer({
+      name: 'OverflowTester',
+      traitIds: ['fragile-star', 'introvert', 'addicted'],
+      backgroundId: '',
+      stats: {
+        agility: 6,
+        intelligence: 8,
+        mentality: 0,
+        constitution: 0,
+        experience: 0,
+        money: 0,
+      },
+    });
+
+    expect(player.stats.mentality).toBe(0);
+    expect(player.stats.constitution).toBe(0);
+    expect(player.tags).toEqual(expect.arrayContaining([
+      'opening-mental-scar',
+      'opening-physical-debt',
+    ]));
+    expect(player.tagExpiry['opening-mental-scar']).toBeGreaterThan(player.round);
+    expect(player.tagExpiry['opening-physical-debt']).toBeGreaterThan(player.round);
+    expect(player.stress).toBeGreaterThan(0);
+    expect(player.volatile.fatigue).toBeGreaterThan(0);
+  });
+
+  it('lets the player pay to remove opening overflow recovery tags', () => {
+    const player = initPlayer({
+      name: 'RecoveryTester',
+      traitIds: ['fragile-star', 'introvert', 'addicted'],
+      backgroundId: '',
+      stats: {
+        agility: 6,
+        intelligence: 8,
+        mentality: 0,
+        constitution: 0,
+        experience: 0,
+        money: 0,
+      },
+    });
+    player.stats.money = 50;
+
+    const result = applyShopPurchase(createSession(player, 1), 'foundation-rehab');
+
+    expect(result.player.stats.money).toBe(32);
+    expect(result.player.tags).not.toContain('opening-mental-scar');
+    expect(result.player.tags).not.toContain('opening-physical-debt');
+    expect(result.shopTagsRemoved).toEqual(expect.arrayContaining([
+      'opening-mental-scar',
+      'opening-physical-debt',
+    ]));
   });
 
   it('grows experience from career sources with slower high-end gains', () => {

@@ -13,6 +13,7 @@ export interface ShopEffect {
   buffAdd?: Buff;
   buffRemoveId?: string;
   tagRemove?: string;
+  tagRemoveAny?: string[];
   tagAdd?: string;
 }
 
@@ -180,6 +181,24 @@ export const SHOP_ITEMS: ShopItem[] = [
         narrative: '这次手法有点重，刚按完是松了，但过一会儿反而有种隐隐发酸的迟滞感。',
       },
     ],
+  },
+  {
+    id: 'foundation-rehab',
+    name: '基础矫正计划',
+    description: '花一段时间请教练、理疗师和心理师重建入门短板，提前移除开局负面溢出带来的恢复标签。',
+    category: 'service',
+    priceMoney: 18,
+    cooldownRounds: 0,
+    effect: {
+      stressDelta: -8,
+      fatigueDelta: -8,
+      tagRemoveAny: [
+        'opening-mental-scar',
+        'opening-physical-debt',
+        'opening-tactical-gap',
+        'opening-mechanical-gap',
+      ],
+    },
   },
 
   // ── 装备类（外设升级，特殊分支，price 由 peripheralTier 动态决定）──────

@@ -581,6 +581,7 @@ export interface ShopEffect {
   buffAdd?: Buff;
   buffRemoveId?: string;
   tagRemove?: string;
+  tagRemoveAny?: string[];
   tagAdd?: string;
 }
 

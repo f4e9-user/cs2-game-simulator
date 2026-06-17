@@ -242,7 +242,81 @@ const DEFAULT_TAG_LIFETIME_ROUNDS: Partial<Record<string, number>> = {
   'team-finance-cd': 12,
   'tournament-winner': 72,
   'major-champion': 72,
+  'opening-mental-scar': 48,
+  'opening-physical-debt': 48,
+  'opening-tactical-gap': 48,
+  'opening-mechanical-gap': 48,
 };
+
+const OPENING_OVERFLOW_TAG_BY_STAT: Partial<Record<Exclude<StatKey, 'money' | 'experience'>, string>> = {
+  mentality: 'opening-mental-scar',
+  constitution: 'opening-physical-debt',
+  intelligence: 'opening-tactical-gap',
+  agility: 'opening-mechanical-gap',
+};
+
+function openingNegativeOverflow(
+  allocation: Stats,
+  negative: Stats,
+  backgroundBias: StatDelta,
+): Partial<Record<Exclude<StatKey, 'money' | 'experience'>, number>> {
+  const out: Partial<Record<Exclude<StatKey, 'money' | 'experience'>, number>> = {};
+  for (const k of ALLOCATABLE_STAT_KEYS as Array<Exclude<StatKey, 'money' | 'experience'>>) {
+    const raw = allocation[k] + (negative[k] ?? 0) + (backgroundBias[k] ?? 0);
+    if (raw < 0) out[k] = Math.abs(raw);
+  }
+  return out;
+}
+
+function applyOpeningStaticDeltas(
+  allocation: Stats,
+  negative: Stats,
+  backgroundBias: StatDelta,
+): Stats {
+  const out = { ...allocation };
+  for (const k of STAT_KEYS) {
+    if (k === 'money') continue;
+    out[k] += (negative[k] ?? 0) + (backgroundBias[k] ?? 0);
+  }
+  return clampStats(out);
+}
+
+function applyOpeningOverflowPenalties(
+  player: Player,
+  overflow: Partial<Record<Exclude<StatKey, 'money' | 'experience'>, number>>,
+): Player {
+  const entries = Object.entries(overflow) as [Exclude<StatKey, 'money' | 'experience'>, number][];
+  if (entries.length === 0) return player;
+
+  const tags = [...player.tags];
+  const tagExpiry = { ...(player.tagExpiry ?? {}) };
+  let stress = player.stress ?? 0;
+  let fatigue = player.volatile?.fatigue ?? 0;
+
+  for (const [stat, amount] of entries) {
+    const tag = OPENING_OVERFLOW_TAG_BY_STAT[stat];
+    if (tag && !tags.includes(tag)) tags.push(tag);
+    if (tag) tagExpiry[tag] = player.round + (DEFAULT_TAG_LIFETIME_ROUNDS[tag] ?? 48);
+    if (stat === 'mentality' || stat === 'intelligence') {
+      stress = clampStress(stress + Math.ceil(amount * 8));
+    }
+    if (stat === 'constitution' || stat === 'agility') {
+      fatigue = clampFatigue(fatigue + Math.ceil(amount * 12));
+    }
+  }
+
+  const nextPlayer: Player = {
+    ...player,
+    tags,
+    tagExpiry,
+    stress,
+    volatile: {
+      ...(player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 }),
+      fatigue,
+    },
+  };
+  return nextPlayer;
+}
 
 function championshipTierKeys(tournament: Tournament): string[] {
   if (tournament.tier === 'c') return ['c'];
@@ -759,10 +833,9 @@ export function initPlayer(input: InitInput): Player {
   const err = validateAllocation(allocation, floor);
   if (err) throw new Error(err);
 
-  let finalStats = applyDelta(allocation, negative);
-  finalStats = applyDelta(finalStats, bg.statBias);
+  const finalStats = applyOpeningStaticDeltas(allocation, negative, bg.statBias);
 
-  return {
+  const player: Player = {
     name: input.name.trim() || 'nameless',
     stats: clampStats(finalStats),
     volatile: { feel: 0, tilt: 0, fatigue: 0 },
@@ -824,6 +897,11 @@ export function initPlayer(input: InitInput): Player {
     promotionCooldown: 0,
     roundCombos: [],
   };
+
+  return applyOpeningOverflowPenalties(
+    player,
+    openingNegativeOverflow(allocation, negative, bg.statBias),
+  );
 }
 
 const TEAM_ACTION_LIMITS: Record<string, number> = {
@@ -3546,6 +3624,10 @@ export function applyShopPurchase(
   // Tag removal / addition
   let tags = [...player.tags];
   if (effect.tagRemove) tags = tags.filter((t) => t !== effect.tagRemove);
+  if (effect.tagRemoveAny?.length) {
+    const remove = new Set(effect.tagRemoveAny);
+    tags = tags.filter((t) => !remove.has(t));
+  }
   if (effect.tagAdd && !tags.includes(effect.tagAdd)) tags.push(effect.tagAdd);
 
   // Record cooldown
@@ -3604,7 +3686,10 @@ export function applyShopPurchase(
       ? [...(player.ownedItems ?? []), itemId]
       : player.ownedItems,
   };
-  const shopTagsRemoved: string[] = effect.tagRemove ? [effect.tagRemove] : [];
+  const shopTagsRemoved: string[] = [
+    ...(effect.tagRemove ? [effect.tagRemove] : []),
+    ...(effect.tagRemoveAny ?? []).filter((tag) => player.tags.includes(tag)),
+  ];
   nextPlayer = applyAutomaticTagCleanup(nextPlayer, shopTagsRemoved);
   tagExpiry = nextPlayer.tagExpiry ?? tagExpiry;
 

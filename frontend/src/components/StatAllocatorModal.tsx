@@ -59,6 +59,12 @@ function randomAbove(floor: Stats, pool = POINT_POOL): Stats {
   return s;
 }
 
+function negativeOverflowLabels(stats: Stats, negative: Stats): string[] {
+  return TRAIT_STAT_ORDER
+    .filter((k) => stats[k] + negative[k] < 0)
+    .map((k) => STAT_LABELS[k]);
+}
+
 interface Props {
   open: boolean;
   traits: Trait[];
@@ -100,6 +106,19 @@ export function StatAllocatorModal({
       if (delta > 0 && remaining <= 0) return cur;
       return { ...cur, [k]: next };
     });
+  };
+
+  const confirmAllocation = () => {
+    const overflowLabels = negativeOverflowLabels(stats, negative);
+    if (
+      overflowLabels.length > 0 &&
+      !window.confirm(
+        `以下属性会被压到 0 以下：${overflowLabels.join('、')}。系统会保留 0 下限，但开局会获得可恢复的负面状态，需要花费游戏资源或等待时间移除。是否继续？`,
+      )
+    ) {
+      return;
+    }
+    onConfirm(stats);
   };
 
   return (
@@ -248,7 +267,7 @@ export function StatAllocatorModal({
             type="button"
             className="primary-button"
             disabled={!canConfirm}
-            onClick={() => onConfirm(stats)}
+            onClick={confirmAllocation}
           >
             确认
           </button>
