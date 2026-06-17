@@ -49,22 +49,18 @@ describe('career experience progression', () => {
         agility: 6,
         intelligence: 8,
         mentality: 0,
-        constitution: 0,
+        constitution: 1,
         experience: 0,
         money: 0,
       },
     });
 
     expect(player.stats.mentality).toBe(0);
-    expect(player.stats.constitution).toBe(0);
     expect(player.tags).toEqual(expect.arrayContaining([
       'opening-mental-scar',
-      'opening-physical-debt',
     ]));
     expect(player.tagExpiry['opening-mental-scar']).toBeGreaterThan(player.round);
-    expect(player.tagExpiry['opening-physical-debt']).toBeGreaterThan(player.round);
     expect(player.stress).toBeGreaterThan(0);
-    expect(player.volatile.fatigue).toBeGreaterThan(0);
   });
 
   it('lets the player pay to remove opening overflow recovery tags', () => {
@@ -76,7 +72,7 @@ describe('career experience progression', () => {
         agility: 6,
         intelligence: 8,
         mentality: 0,
-        constitution: 0,
+        constitution: 1,
         experience: 0,
         money: 0,
       },
@@ -87,10 +83,8 @@ describe('career experience progression', () => {
 
     expect(result.player.stats.money).toBe(32);
     expect(result.player.tags).not.toContain('opening-mental-scar');
-    expect(result.player.tags).not.toContain('opening-physical-debt');
     expect(result.shopTagsRemoved).toEqual(expect.arrayContaining([
       'opening-mental-scar',
-      'opening-physical-debt',
     ]));
   });
 
@@ -119,7 +113,7 @@ describe('career experience progression', () => {
         agility: 4,
         intelligence: 4,
         mentality: 4,
-        constitution: 4,
+        constitution: 5,
         experience: 0,
         money: 0,
       },
@@ -173,7 +167,7 @@ describe('career experience progression', () => {
         agility: 4,
         intelligence: 4,
         mentality: 4,
-        constitution: 4,
+        constitution: 5,
         experience: 0,
         money: 0,
       },

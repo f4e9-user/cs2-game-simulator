@@ -14,7 +14,7 @@ function basePlayer(): Player {
       intelligence: 5,
       mentality: 5,
       experience: 0,
-      constitution: 0,
+      constitution: 1,
       money: 0,
     },
   });
