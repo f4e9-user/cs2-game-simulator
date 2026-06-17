@@ -53,7 +53,8 @@ export const BASE_STATS: Stats = {
   constitution: 0, // 基础体能底线：所有人都有基本的身体素质，不花属性点
 };
 
-export const POINT_POOL = 12;
+export const POINT_POOL = 10;
+export const OPENING_STAT_INVEST_MAX = 8;
 export const PER_STAT_MAX = 12;
 export const STAT_MIN = 0;
 export const STAT_MAX = 20;

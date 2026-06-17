@@ -1,11 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { applyChoice, createSession, initPlayer, validateAllocation } from '../gameEngine.js';
 import { toPublicEvent } from '../events.js';
-import { BASE_STATS } from '../constants.js';
+import { BASE_STATS, OPENING_STAT_INVEST_MAX, POINT_POOL } from '../constants.js';
 import { applyCareerExperienceGrowth } from '../resolver.js';
 import type { EventDef } from '../../types.js';
 
 describe('career experience progression', () => {
+  it('uses a 10 point opening pool with an 8 point per-stat investment cap', () => {
+    const floor = { ...BASE_STATS };
+    expect(POINT_POOL).toBe(10);
+    expect(OPENING_STAT_INVEST_MAX).toBe(8);
+    expect(validateAllocation({
+      ...floor,
+      agility: 4,
+      intelligence: 3,
+      mentality: 2,
+      constitution: 1,
+    }, floor)).toBeNull();
+    expect(validateAllocation({
+      ...floor,
+      agility: 9,
+      intelligence: 1,
+      mentality: 0,
+      constitution: 0,
+    }, floor)).toMatch(/最多/);
+  });
+
   it('does not allow opening allocation points to be spent on experience', () => {
     const floor = { ...BASE_STATS };
     const stats = {
@@ -42,10 +62,10 @@ describe('career experience progression', () => {
       traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
       backgroundId: '',
       stats: {
-        agility: 5,
-        intelligence: 5,
-        mentality: 5,
-        constitution: 3,
+        agility: 4,
+        intelligence: 4,
+        mentality: 4,
+        constitution: 4,
         experience: 0,
         money: 0,
       },
@@ -96,10 +116,10 @@ describe('career experience progression', () => {
       traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
       backgroundId: '',
       stats: {
-        agility: 5,
-        intelligence: 5,
-        mentality: 5,
-        constitution: 3,
+        agility: 4,
+        intelligence: 4,
+        mentality: 4,
+        constitution: 4,
         experience: 0,
         money: 0,
       },

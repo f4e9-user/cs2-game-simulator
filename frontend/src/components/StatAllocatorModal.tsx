@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Stats, StatKey, Trait } from '@/lib/types';
 import {
+  OPENING_STAT_INVEST_MAX,
   PER_STAT_MAX,
   POINT_POOL,
   STAT_DESCRIPTION,
@@ -49,7 +50,7 @@ function randomAbove(floor: Stats, pool = POINT_POOL): Stats {
   const s = { ...floor };
   let remaining = pool;
   while (remaining > 0) {
-    const avail = ALLOCATABLE_STAT_ORDER.filter((k) => s[k] < floor[k] + POINT_POOL);
+    const avail = ALLOCATABLE_STAT_ORDER.filter((k) => s[k] < floor[k] + OPENING_STAT_INVEST_MAX);
     if (avail.length === 0) break;
     const pick = avail[Math.floor(Math.random() * avail.length)]!;
     s[pick] += 1;
@@ -95,7 +96,7 @@ export function StatAllocatorModal({
     setStats((cur) => {
       const next = cur[k] + delta;
       if (next < floor[k]) return cur;
-      if (next > floor[k] + POINT_POOL) return cur;
+      if (next > floor[k] + OPENING_STAT_INVEST_MAX) return cur;
       if (delta > 0 && remaining <= 0) return cur;
       return { ...cur, [k]: next };
     });
@@ -135,7 +136,7 @@ export function StatAllocatorModal({
           const v = stats[k];
           const floorV = floor[k];
           const negV = negative[k];
-          const canInc = remaining > 0 && v < floorV + POINT_POOL;
+          const canInc = remaining > 0 && v < floorV + OPENING_STAT_INVEST_MAX;
           const canDec = v > floorV;
           const final = Math.max(0, Math.min(PER_STAT_MAX * 2, v + negV));
           return (

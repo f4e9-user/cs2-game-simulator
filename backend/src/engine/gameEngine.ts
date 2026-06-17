@@ -70,6 +70,7 @@ import {
   PERIPHERAL_SUCCESS_CHANCE,
   CORE_STAT_KEYS,
   ALLOCATABLE_STAT_KEYS,
+  OPENING_STAT_INVEST_MAX,
   POINT_POOL,
   STAGE_ORDER,
   STAT_KEYS,
@@ -562,7 +563,7 @@ function randomStatsWithFloor(floor: Stats): Stats {
   const stats: Stats = { ...floor };
   let remaining = POINT_POOL;
   while (remaining > 0) {
-    const available = ALLOCATABLE_STAT_KEYS.filter((k) => stats[k] < floor[k] + POINT_POOL);
+    const available = ALLOCATABLE_STAT_KEYS.filter((k) => stats[k] < floor[k] + OPENING_STAT_INVEST_MAX);
     if (available.length === 0) break;
     const pick = available[Math.floor(Math.random() * available.length)]!;
     stats[pick] += 1;
@@ -580,7 +581,7 @@ export function validateAllocation(stats: Stats, floor: Stats): string | null {
     const v = stats[k];
     if (!Number.isInteger(v)) return `属性 ${k} 必须是整数`;
     if (v < floor[k]) return `属性 ${k} 不能低于特质底线 ${floor[k]}`;
-    if (v > floor[k] + POINT_POOL) return `属性 ${k} 最多 ${floor[k] + POINT_POOL}`;
+    if (v > floor[k] + OPENING_STAT_INVEST_MAX) return `属性 ${k} 最多 ${floor[k] + OPENING_STAT_INVEST_MAX}`;
     aboveFloor += v - floor[k];
   }
   if (aboveFloor !== POINT_POOL) {
