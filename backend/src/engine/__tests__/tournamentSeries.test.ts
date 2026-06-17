@@ -42,6 +42,20 @@ function pendingFinal(): PendingMatch {
   };
 }
 
+function pendingPglMajorFinal(): PendingMatch {
+  return {
+    tournamentId: 'y1-major-02',
+    tier: 'major',
+    name: 'PGL Major',
+    displayName: 'PGL Major',
+    progressionTier: 'major',
+    entryType: 'invite',
+    resolveYear: 1,
+    resolveWeek: 20,
+    stageIndex: 5,
+  };
+}
+
 describe('tournament series', () => {
   it('runs a bo3 in one round and pays rewards only on final step', () => {
     const p = {
@@ -76,6 +90,75 @@ describe('tournament series', () => {
     expect(final.session.player.tournamentChampionships).toBeGreaterThan(0);
     expect(final.result.sequenceFinal).toBe(true);
     expect(final.result.matchStats?.kills).toBeGreaterThan(0);
+  });
+
+  it('records championship counts by tier and S-tier series', () => {
+    const p = {
+      ...player(),
+      stage: 'pro' as const,
+      pendingMatch: pendingPglMajorFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    const map2 = applyChoice(map1.session, 'match-play');
+    const map3 = applyChoice(map2.session, 'match-play');
+    const final = applyChoice(map3.session, 'series-confirm');
+
+    expect(final.session.player.tierChampionships.major).toBe(1);
+    expect(final.session.player.tierChampionships.s).toBe(1);
+    expect(final.session.player.championshipSeries?.pgl).toBe(1);
+    expect(final.session.player.championshipSeries?.major).toBe(1);
+  });
+
+  it('requires PGL, BLAST, and Major championships for the legend ending', () => {
+    const base = {
+      ...player(),
+      stage: 'pro' as const,
+      round: 575,
+      fame: 100,
+      pendingMatch: null,
+    };
+    const event = {
+      id: 'test-final-week',
+      type: 'life' as const,
+      title: '最后一周',
+      narrative: '赛季结束前，你做最后一次复盘。',
+      stages: ['pro' as const],
+      difficulty: 1,
+      choices: [{
+        id: 'finish',
+        label: '结束',
+        description: '结束生涯。',
+        check: { primary: 'mentality' as const, dc: 1 },
+        success: { narrative: '你完成了最后一周。' },
+        failure: { narrative: '你完成了最后一周。' },
+      }],
+    };
+
+    const missingBlast = applyChoice({
+      ...createSession({
+        ...base,
+        championshipSeries: { pgl: 1, major: 1 },
+      }, 1),
+      currentEvent: event,
+      phase: 'event' as const,
+    }, 'finish', 20, [event]);
+    const grandSlam = applyChoice({
+      ...createSession({
+        ...base,
+        championshipSeries: { pgl: 1, blast: 1, major: 1 },
+      }, 1),
+      currentEvent: event,
+      phase: 'event' as const,
+    }, 'finish', 20, [event]);
+
+    expect(missingBlast.session.ending).not.toBe('legend');
+    expect(grandSlam.session.ending).toBe('legend');
   });
 
   it('rejects a tied series because overtime should prevent that state', () => {

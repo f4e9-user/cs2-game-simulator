@@ -50,6 +50,7 @@ import type {
 import {
   BASE_STATS,
   BROKE_MENTALITY_DRAIN,
+  CAREER_TIME_EXPERIENCE_RAW,
   CONSTITUTION_COLLAPSE,
   FAME_MAX,
   FAME_MIN,
@@ -68,6 +69,7 @@ import {
   PERIPHERAL_PRICES,
   PERIPHERAL_SUCCESS_CHANCE,
   CORE_STAT_KEYS,
+  ALLOCATABLE_STAT_KEYS,
   POINT_POOL,
   STAGE_ORDER,
   STAT_KEYS,
@@ -91,6 +93,7 @@ import {
 import { checkTournamentPromotion } from './stages.js';
 import {
   applyDelta,
+  applyCareerExperienceGrowth,
   applyGrowth,
   clampStats,
   makeRng,
@@ -239,6 +242,37 @@ const DEFAULT_TAG_LIFETIME_ROUNDS: Partial<Record<string, number>> = {
   'tournament-winner': 72,
   'major-champion': 72,
 };
+
+function championshipTierKeys(tournament: Tournament): string[] {
+  if (tournament.tier === 'c') return ['c'];
+  if (tournament.tier === 'b') return ['b'];
+  if (tournament.tier === 'a') return ['a'];
+  if (tournament.tier === 'major') return ['s', 'major'];
+  if (
+    tournament.tier === 's-open' ||
+    tournament.tier === 's-closed' ||
+    tournament.tier === 's-class' ||
+    tournament.progressionTier === 's-qualifier' ||
+    tournament.progressionTier === 's-main'
+  ) {
+    return ['s'];
+  }
+  return [tournament.tier];
+}
+
+function championshipSeriesKeys(tournament: Tournament): string[] {
+  const out: string[] = [];
+  const brand = tournament.brand.toLowerCase();
+  if (brand.includes('pgl')) out.push('pgl');
+  if (brand.includes('blast')) out.push('blast');
+  if (tournament.tier === 'major' || tournament.subtype === 'major') out.push('major');
+  return out;
+}
+
+function hasGrandSlam(player: Player): boolean {
+  const series = player.championshipSeries ?? {};
+  return (series.pgl ?? 0) > 0 && (series.blast ?? 0) > 0 && (series.major ?? 0) > 0;
+}
 
 export interface InitInput {
   name: string;
@@ -528,7 +562,7 @@ function randomStatsWithFloor(floor: Stats): Stats {
   const stats: Stats = { ...floor };
   let remaining = POINT_POOL;
   while (remaining > 0) {
-    const available = CORE_STAT_KEYS.filter((k) => stats[k] < floor[k] + POINT_POOL);
+    const available = ALLOCATABLE_STAT_KEYS.filter((k) => stats[k] < floor[k] + POINT_POOL);
     if (available.length === 0) break;
     const pick = available[Math.floor(Math.random() * available.length)]!;
     stats[pick] += 1;
@@ -539,7 +573,10 @@ function randomStatsWithFloor(floor: Stats): Stats {
 
 export function validateAllocation(stats: Stats, floor: Stats): string | null {
   let aboveFloor = 0;
-  for (const k of CORE_STAT_KEYS) {
+  if (stats.experience !== floor.experience) {
+    return '经验不能通过开局点数分配';
+  }
+  for (const k of ALLOCATABLE_STAT_KEYS) {
     const v = stats[k];
     if (!Number.isInteger(v)) return `属性 ${k} 必须是整数`;
     if (v < floor[k]) return `属性 ${k} 不能低于特质底线 ${floor[k]}`;
@@ -1425,25 +1462,15 @@ function buildMatchResolveResult(
     : rawMoney;
 
   // Apply stat changes via translateStatDelta for consistency
-  const legacy = translateStatDelta({
-    experience: won ? (winReward.experience ?? 0) : (lossReward.experience ?? 0),
-  });
+  const careerExperienceRaw = won ? (winReward.experience ?? 0) : (lossReward.experience ?? 0);
   let nextStats = { ...player.stats };
   nextStats = applyMoneyDeltaToStats(nextStats, moneyDelta);
 
   let growthApplied = 0;
   let growthKey: StatKey | undefined;
-  if (legacy.expGrowth > 0) {
-    const res = applyGrowth(
-      nextStats,
-      'experience',
-      legacy.expGrowth,
-      player.growthSpent,
-      player.buffs,
-      'match',
-    );
+  if (careerExperienceRaw > 0) {
+    const res = applyCareerExperienceGrowth(nextStats, careerExperienceRaw);
     nextStats = res.stats;
-    growthApplied = res.grown;
     growthKey = 'experience';
   }
   nextStats = clampStats(nextStats);
@@ -2065,7 +2092,10 @@ export function applyChoice(
   }
 
   let buffs: Buff[] = consumeTriggeredBuffs(existingBuffs, stateContext, {
-    growthApplied: outcome.growthApplied > 0,
+    growthApplied: outcome.growthApplied > 0 || (
+      outcome.growthKey === 'experience' &&
+      Math.abs((statsAfterGrowth.experience ?? 0) - (session.player.stats.experience ?? 0)) > 0.001
+    ),
     growthKey: outcome.growthKey,
     fatigueApplied: modifiedState.fatigueApplied,
     stressApplied: modifiedState.stressApplied,
@@ -2139,14 +2169,21 @@ export function applyChoice(
     tagsRemoved.push('breaking-down');
   }
 
+  const nextRound = session.player.round + (shouldAdvanceRound ? 1 : 0);
+  let careerExperienceGrowth = 0;
+  if (shouldAdvanceRound) {
+    const careerGrowth = applyCareerExperienceGrowth(statsAfterGrowth, CAREER_TIME_EXPERIENCE_RAW);
+    statsAfterGrowth = careerGrowth.stats;
+    careerExperienceGrowth = careerGrowth.grown;
+    if (careerExperienceGrowth > 0) passiveEffects.push('career-time-experience');
+  }
+
   // ── 属性变化 delta（用于 RoundResult）──
   const statChanges: Partial<Stats> = {};
   for (const k of STAT_KEYS) {
     const diff = statsAfterGrowth[k] - session.player.stats[k];
     if (Math.abs(diff) > 0.001) statChanges[k] = diff;
   }
-
-  const nextRound = session.player.round + (shouldAdvanceRound ? 1 : 0);
 
   // 连败追踪（基于本回合赛事结果）
   let consecutiveLosses = session.player.consecutiveLosses ?? 0;
@@ -2704,9 +2741,15 @@ export function applyChoice(
       }
       if (isFinal && outcome.success) {
         const tierChamp = { ...(nextPlayer.tierChampionships ?? {}) };
-        tierChamp[t.tier] = (tierChamp[t.tier] ?? 0) + 1;
-        tierChamp[t.progressionTier] = (tierChamp[t.progressionTier] ?? 0) + 1;
+        for (const key of dedupe([t.tier, t.progressionTier, ...championshipTierKeys(t)])) {
+          tierChamp[key] = (tierChamp[key] ?? 0) + 1;
+        }
         nextPlayer.tierChampionships = tierChamp;
+        const championshipSeries = { ...(nextPlayer.championshipSeries ?? {}) };
+        for (const key of championshipSeriesKeys(t)) {
+          championshipSeries[key] = (championshipSeries[key] ?? 0) + 1;
+        }
+        nextPlayer.championshipSeries = championshipSeries;
         nextPlayer.tournamentChampionships = (nextPlayer.tournamentChampionships ?? 0) + 1;
         if (t.qualificationRewards?.length) {
           const rewardsByOwner = addQualificationRewardsByOwnerWithExpiry(
@@ -3143,7 +3186,7 @@ function checkEnding(player: Player, endRun: boolean, endReason?: string): strin
         (player.contractRenewals ?? 0) >= 3) {
       return 'loyal-veteran';
     }
-    if (isProPlus && (player.fame ?? 0) >= LEGEND_FAME_THRESHOLD) return 'legend';
+    if (isProPlus && (player.fame ?? 0) >= LEGEND_FAME_THRESHOLD && hasGrandSlam(player)) return 'legend';
     if (isSemiProPlus && player.tags.includes('major-champion')) return 'champion';
     return 'retired_on_top';
   }

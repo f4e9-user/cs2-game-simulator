@@ -6,20 +6,27 @@ const TIER_LABELS: Record<string, string> = {
   c: 'C 级赛事',
   b: 'B 级赛事',
   a: 'A 级赛事',
+  s: 'S 级赛事',
   's-qualifier': 'S 级预选',
   's-main': 'S 级正赛',
   's-class': 'S 级联赛',
   major: 'Major',
 };
 
-const TIER_ORDER = [
-  'major',
-  's-main',
-  's-class',
-  'a',
-  'b',
+const CHAMPIONSHIP_TIER_ORDER = [
   'c',
+  'b',
+  'a',
+  's',
 ];
+
+const S_SERIES_LABELS: Record<string, string> = {
+  pgl: 'PGL',
+  blast: 'BLAST',
+  major: 'Major',
+};
+
+const S_SERIES_ORDER = ['pgl', 'blast', 'major'];
 
 const CORE_STATS = [
   'intelligence',
@@ -41,10 +48,6 @@ export function EndingPanel({ player, traits, ending }: Props) {
     .filter((t): t is Trait => Boolean(t));
 
   const visibleTags = player.tags.filter((tag) => !tag.endsWith('-cd'));
-
-  const champTiers = TIER_ORDER.filter(
-    (tier) => (player.tierChampionships?.[tier] ?? 0) > 0,
-  );
 
   const totalRounds = player.round;
   const years = player.year ?? 1;
@@ -188,15 +191,20 @@ export function EndingPanel({ player, traits, ending }: Props) {
             夺冠 <strong>{player.tournamentChampionships ?? 0}</strong> 次
           </span>
         </div>
-        {champTiers.length > 0 && (
-          <div className="ending-champ-list">
-            {champTiers.map((tier) => (
-              <span key={tier} className="ending-champ-chip">
-                {TIER_LABELS[tier] ?? tier} ×{player.tierChampionships[tier]}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="ending-champ-list">
+          {CHAMPIONSHIP_TIER_ORDER.map((tier) => (
+            <span key={tier} className="ending-champ-chip">
+              {TIER_LABELS[tier]} ×{player.tierChampionships?.[tier] ?? 0}
+            </span>
+          ))}
+        </div>
+        <div className="ending-champ-list">
+          {S_SERIES_ORDER.map((series) => (
+            <span key={series} className="ending-champ-chip">
+              {S_SERIES_LABELS[series]} ×{player.championshipSeries?.[series] ?? 0}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Traits */}

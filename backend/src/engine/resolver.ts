@@ -23,6 +23,7 @@ import {
   DAILY_GROWTH_MAX,
   DAILY_GROWTH_MIN,
   EVENT_EXP_GROWTH_PER_DELTA,
+  EXPERIENCE_SOFT_CAP,
   FEEL_MAX,
   FEEL_MIN,
   FATIGUE_MAX,
@@ -105,7 +106,8 @@ export function clampStats(stats: Stats): Stats {
 // 应用静态 delta（不走成长曲线，用于背景加成、特质负面）
 export function applyDelta(stats: Stats, delta: StatDelta): Stats {
   const out = { ...stats };
-  for (const k of CORE_STAT_KEYS as Array<Exclude<StatKey, 'money'>>) {
+  for (const k of STAT_KEYS) {
+    if (k === 'money') continue;
     const v = delta[k];
     if (typeof v === 'number') out[k] += v;
   }
@@ -165,6 +167,27 @@ export function applyGrowth(
   const newStats = { ...stats };
   newStats[growthKey] = Math.round((current + applied) * 1000) / 1000; // preserve fraction
   return { stats: clampStats(newStats), grown: applied };
+}
+
+export function applyCareerExperienceGrowth(
+  stats: Stats,
+  rawAmount: number,
+): { stats: Stats; grown: number } {
+  if (rawAmount <= 0) return { stats, grown: 0 };
+  const current = stats.experience ?? 0;
+  const factor =
+    current < 5 ? 1 :
+    current < 10 ? 0.75 :
+    current < 15 ? 0.45 :
+    current < EXPERIENCE_SOFT_CAP ? 0.25 :
+    0.1;
+  const applied = Math.min(rawAmount * factor, STAT_MAX - current);
+  if (applied <= 0) return { stats, grown: 0 };
+  const next = {
+    ...stats,
+    experience: Math.round((current + applied) * 1000) / 1000,
+  };
+  return { stats: clampStats(next), grown: applied };
 }
 
 // ── 旧版 statDelta → 状态效果转译 ────────────────────────────

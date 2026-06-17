@@ -9,13 +9,13 @@ import {
   STAT_LABELS,
 } from '@/lib/format';
 
-const STAT_ORDER: StatKey[] = [
+const ALLOCATABLE_STAT_ORDER: StatKey[] = [
   'intelligence',
   'agility',
-  'experience',
   'mentality',
   'constitution',
 ];
+const TRAIT_STAT_ORDER: StatKey[] = [...ALLOCATABLE_STAT_ORDER, 'experience'];
 
 function zeroStats(): Stats {
   return {
@@ -35,7 +35,7 @@ function computeFloorAndNegative(traits: Trait[]): {
   const floor = zeroStats();
   const negative = zeroStats();
   for (const t of traits) {
-    for (const k of STAT_ORDER) {
+    for (const k of TRAIT_STAT_ORDER) {
       const v = t.modifiers[k];
       if (typeof v !== 'number') continue;
       if (v > 0) floor[k] += v;
@@ -49,7 +49,7 @@ function randomAbove(floor: Stats, pool = POINT_POOL): Stats {
   const s = { ...floor };
   let remaining = pool;
   while (remaining > 0) {
-    const avail = STAT_ORDER.filter((k) => s[k] < floor[k] + POINT_POOL);
+    const avail = ALLOCATABLE_STAT_ORDER.filter((k) => s[k] < floor[k] + POINT_POOL);
     if (avail.length === 0) break;
     const pick = avail[Math.floor(Math.random() * avail.length)]!;
     s[pick] += 1;
@@ -83,7 +83,7 @@ export function StatAllocatorModal({
   }, [open, floor]);
 
   const used = useMemo(
-    () => STAT_ORDER.reduce((a, k) => a + (stats[k] - floor[k]), 0),
+    () => ALLOCATABLE_STAT_ORDER.reduce((a, k) => a + (stats[k] - floor[k]), 0),
     [stats, floor],
   );
   const remaining = POINT_POOL - used;
@@ -131,7 +131,7 @@ export function StatAllocatorModal({
           ）在确认后应用，可用点数抵消。
         </div>
 
-        {STAT_ORDER.map((k) => {
+        {ALLOCATABLE_STAT_ORDER.map((k) => {
           const v = stats[k];
           const floorV = floor[k];
           const negV = negative[k];
@@ -184,6 +184,38 @@ export function StatAllocatorModal({
             </div>
           );
         })}
+
+        {(floor.experience > 0 || negative.experience < 0) && (
+          <div className="stepper">
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className="stat-label">{STAT_LABELS.experience}</div>
+              <div className="stat-desc">
+                {STAT_DESCRIPTION.experience}。经验不消耗开局点数，进入生涯后由赛事和时间增长。
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 4,
+                  flexWrap: 'wrap',
+                  marginTop: 4,
+                }}
+              >
+                {floor.experience > 0 && (
+                  <span className="delta-chip up">特质 +{floor.experience}</span>
+                )}
+                {negative.experience < 0 && (
+                  <span className="delta-chip down">特质 {negative.experience}</span>
+                )}
+                <span className="delta-chip">
+                  初始 = {Math.max(0, Math.min(PER_STAT_MAX * 2, floor.experience + negative.experience))}
+                </span>
+              </div>
+            </div>
+            <div className="stepper-controls">
+              <div className="stepper-value">{floor.experience}</div>
+            </div>
+          </div>
+        )}
 
         <div
           style={{

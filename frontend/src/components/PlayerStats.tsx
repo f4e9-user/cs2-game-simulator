@@ -31,6 +31,14 @@ export function PlayerStats({ player, traits }: Props) {
         >
           夺冠 {player.tournamentChampionships ?? 0}
         </span>
+        <span className="badge">
+          A/B/C/S {[
+            player.tierChampionships?.a ?? 0,
+            player.tierChampionships?.b ?? 0,
+            player.tierChampionships?.c ?? 0,
+            player.tierChampionships?.s ?? 0,
+          ].join('/')}
+        </span>
         {player.restRounds > 0 && (
           <span className="badge danger">休养 {player.restRounds}回</span>
         )}

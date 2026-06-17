@@ -622,6 +622,7 @@ export interface Player extends DynamicState {
   tournamentChampionships: number;
   tierParticipations: Record<string, number>;
   tierChampionships: Record<string, number>;
+  championshipSeries?: Record<string, number>;
   promotionPending: Stage | null;
   promotionCooldown: number;
   pendingOffer: TeamOffer | null;

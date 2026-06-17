@@ -13,7 +13,7 @@ export const STAT_LABELS: Record<StatKey, string> = {
 export const STAT_DESCRIPTION: Record<StatKey, string> = {
   intelligence: '战术理解、应变、残局决策',
   agility: '枪法底子、反应速度、对枪能力',
-  experience: '比赛阅历、版本适应、大赛稳定性',
+  experience: '由赛事次数和生涯时间积累的比赛阅历',
   money: '训练资源、设备条件、生活水平',
   mentality: '高压局发挥、逆风承压、舆论承受',
   constitution: '手腕、颈椎、体能储备——能撑多久',

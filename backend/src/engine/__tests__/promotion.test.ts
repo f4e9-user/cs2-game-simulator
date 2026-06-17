@@ -13,8 +13,8 @@ function basePlayer(): Player {
       agility: 6,
       intelligence: 5,
       mentality: 5,
-      experience: 1,
-      constitution: 1,
+      experience: 0,
+      constitution: 2,
       money: 0,
     },
   });
