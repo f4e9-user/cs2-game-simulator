@@ -84,9 +84,13 @@ export function StatAllocatorModal({
   );
 
   const [stats, setStats] = useState<Stats>(() => ({ ...floor }));
+  const [overflowConfirmOpen, setOverflowConfirmOpen] = useState(false);
 
   useEffect(() => {
-    if (open) setStats({ ...floor });
+    if (open) {
+      setStats({ ...floor });
+      setOverflowConfirmOpen(false);
+    }
   }, [open, floor]);
 
   const used = useMemo(
@@ -95,6 +99,10 @@ export function StatAllocatorModal({
   );
   const remaining = POINT_POOL - used;
   const canConfirm = remaining === 0;
+  const overflowLabels = useMemo(
+    () => negativeOverflowLabels(stats, negative),
+    [stats, negative],
+  );
 
   if (!open) return null;
 
@@ -109,15 +117,15 @@ export function StatAllocatorModal({
   };
 
   const confirmAllocation = () => {
-    const overflowLabels = negativeOverflowLabels(stats, negative);
-    if (
-      overflowLabels.length > 0 &&
-      !window.confirm(
-        `以下属性会被压到 0 以下：${overflowLabels.join('、')}。系统会保留 0 下限，但开局会获得可恢复的负面状态，需要花费游戏资源或等待时间移除。是否继续？`,
-      )
-    ) {
+    if (overflowLabels.length > 0) {
+      setOverflowConfirmOpen(true);
       return;
     }
+    onConfirm(stats);
+  };
+
+  const confirmOverflowAllocation = () => {
+    setOverflowConfirmOpen(false);
     onConfirm(stats);
   };
 
@@ -273,6 +281,116 @@ export function StatAllocatorModal({
           </button>
         </div>
       </div>
+
+      {overflowConfirmOpen && (
+        <div className="modal-backdrop" onClick={() => setOverflowConfirmOpen(false)}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 480 }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: 'var(--fg-2)',
+                marginBottom: 4,
+              }}
+            >
+              属性风险
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: 12,
+                gap: 8,
+              }}
+            >
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--fg)' }}>
+                确认带伤开局？
+              </div>
+              <span className="badge danger" style={{ fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                负面溢出
+              </span>
+            </div>
+
+            <div
+              style={{
+                fontSize: 14,
+                color: 'var(--fg-2)',
+                lineHeight: 1.6,
+                marginBottom: 14,
+              }}
+            >
+              以下属性会被压到 0 以下。系统会保留 0 下限，但开局会获得可恢复的负面状态。
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: 'var(--fg-2)',
+                  marginBottom: 8,
+                }}
+              >
+                影响属性
+              </div>
+              <div className="chips-row">
+                {overflowLabels.map((label) => (
+                  <span key={label} className="chip chip-down">
+                    {label}
+                  </span>
+                ))}
+                <span className="chip chip-neu">可等待自动恢复</span>
+                <span className="chip chip-neu">可花费资源提前移除</span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(210, 153, 34, 0.08)',
+                border: '1px solid rgba(210, 153, 34, 0.25)',
+                borderRadius: 8,
+                padding: '12px 14px',
+                marginBottom: 16,
+                fontSize: 13,
+                color: 'var(--fg-2)',
+                lineHeight: 1.5,
+              }}
+            >
+              这些负面状态不会永久跟随整局游戏，但需要付出游戏成本处理，或等待一段生涯时间自然消退。
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setOverflowConfirmOpen(false)}
+                style={{ flex: 1 }}
+              >
+                返回调整
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={confirmOverflowAllocation}
+                style={{ flex: 2 }}
+              >
+                确认继续
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
