@@ -610,6 +610,7 @@ describe('team management actions', () => {
     const base = {
       ...player(),
       tags: [...player().tags, 'team-trust'],
+      team: team(),
       teamTrust: 40,
     };
     const event = getEventById('team-politics-star-vs-caller')!;

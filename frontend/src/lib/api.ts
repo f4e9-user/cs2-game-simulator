@@ -12,6 +12,7 @@ import type {
   Loan,
   MatchStats,
   Player,
+  RoundPhase,
   SessionSummary,
   RollTraitsResponse,
   ShopItem,
@@ -187,7 +188,14 @@ export const api = {
       apiToken,
     ),
   respondOffer: (sessionId: string, accept: boolean, apiToken?: string) =>
-    request<{ player: Player; leaderboard?: LeaderboardTeam[]; careerGoal?: CareerGoal }>(
+    request<{
+      player: Player;
+      phase?: RoundPhase;
+      currentEvent?: GameEvent | null;
+      activeEventSequence?: EventSequence | null;
+      leaderboard?: LeaderboardTeam[];
+      careerGoal?: CareerGoal;
+    }>(
       `/api/game/${sessionId}/team-response`,
       { method: 'POST', body: JSON.stringify({ accept }) },
       apiToken,

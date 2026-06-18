@@ -673,6 +673,7 @@ export type EventSequenceType =
   | 'test-sequence'
   | 'tournament-series'
   | 'club-interview'
+  | 'team-onboarding'
   | 'family-crisis'
   | 'team-conflict'
   | 'tournament-context'

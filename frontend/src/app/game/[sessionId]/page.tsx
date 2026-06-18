@@ -578,6 +578,9 @@ export default function GamePage() {
                 careerGoal: res.careerGoal,
                 leaderboard: res.leaderboard,
               });
+              setCurrentEvent(res.currentEvent ?? null);
+              setActiveEventSequence(res.activeEventSequence ?? null);
+              setPhase(res.phase ?? 'action');
               clearOffer();
             } catch (e) {
               setError(e instanceof Error ? e.message : String(e));
@@ -593,6 +596,9 @@ export default function GamePage() {
                 player: res.player,
                 careerGoal: res.careerGoal,
               });
+              setCurrentEvent(res.currentEvent ?? null);
+              setActiveEventSequence(res.activeEventSequence ?? null);
+              setPhase(res.phase ?? 'action');
               clearOffer();
             } catch (e) {
               setError(e instanceof Error ? e.message : String(e));

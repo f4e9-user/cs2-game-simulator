@@ -2562,7 +2562,11 @@ export function applyChoice(
     nextPlayer.teamTrust = 0;
   }
 
-  if (eventDef.id === 'chain-team-joined' && outcome.success) {
+  if ([
+    'chain-team-joined',
+    'chain-team-promotion-onboarding',
+    'chain-team-transfer-onboarding',
+  ].includes(eventDef.id) && outcome.success) {
     if (choiceDef.id === 'accept-role' && nextPlayer.roster) {
       const filledRoles = new Set(nextPlayer.roster.map((tm) => tm.role));
       const allRoles: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];

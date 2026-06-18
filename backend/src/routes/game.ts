@@ -41,6 +41,7 @@ import {
 import { CLUBS, clubsForStage, getClub } from '../data/clubs.js';
 import { buildLeaderboard } from '../data/leaderboard.js';
 import { getClubProfile } from '../data/clubProfiles.js';
+import { getEventById } from '../data/events/index.js';
 import {
   buildYearTournaments,
   getTournament,
@@ -58,6 +59,7 @@ import {
 } from '../engine/qualification.js';
 import { POINT_POOL } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
+import { toPublicEvent } from '../engine/events.js';
 import { makeAiService } from '../ai/service.js';
 import type { SocialFeedPost } from '../ai/prompts.js';
 import {
@@ -74,6 +76,18 @@ import {
 import type { ClubApplicationSummary, ClubRuntimeState, ClubStoryline, ClubTier, Env, EventDef, GameSession, MatchStats, Player, PlayerTeam, Stats, TeamIdentityDebug } from '../types.js';
 
 const AI_EVENT_CACHE_TTL_SECONDS = 43200;
+const TEAM_ONBOARDING_EVENTS = {
+  first: 'chain-team-joined',
+  promotion: 'chain-team-promotion-onboarding',
+  transfer: 'chain-team-transfer-onboarding',
+} as const;
+type TeamOnboardingKind = keyof typeof TEAM_ONBOARDING_EVENTS;
+const CLUB_TIER_ORDER: Record<ClubTier, number> = {
+  youth: 0,
+  'semi-pro': 1,
+  pro: 2,
+  top: 3,
+};
 const TEAM_LIFECYCLE_TAGS = [
   'team-trust',
   'locker-tension',
@@ -97,6 +111,47 @@ const TEAM_LIFECYCLE_TAGS = [
   'team-tactical-ready',
   'team-meeting-ready',
 ] as const;
+
+function deriveTeamOnboardingKind(previousPlayer: Player, nextPlayer: Player): TeamOnboardingKind {
+  if (!previousPlayer.everHadTeam && !previousPlayer.team) return 'first';
+  const previousTier = previousPlayer.team?.tier;
+  const nextTier = nextPlayer.team?.tier;
+  if (
+    previousTier &&
+    nextTier &&
+    CLUB_TIER_ORDER[nextTier] > CLUB_TIER_ORDER[previousTier]
+  ) {
+    return 'promotion';
+  }
+  return 'transfer';
+}
+
+function startTeamOnboardingSequence(session: GameSession, kind: TeamOnboardingKind): GameSession {
+  const eventId = TEAM_ONBOARDING_EVENTS[kind];
+  const event = getEventById(eventId);
+  if (!event) return session;
+  return {
+    ...session,
+    phase: 'event',
+    currentEvent: toPublicEvent(event, session.player.rivals, session.player.roster ?? []),
+    activeEventSequence: {
+      id: `team-onboarding-${session.player.round}`,
+      type: 'team-onboarding',
+      currentIndex: 0,
+      startedRound: session.player.round,
+      mustCompleteInCurrentRound: true,
+      status: 'active',
+      context: { onboardingKind: kind },
+      steps: [
+        {
+          id: 'team-joined',
+          eventId,
+          completeSequenceAfter: true,
+        },
+      ],
+    },
+  };
+}
 
 async function loadAiEventCache(
   kv: KVNamespace,
@@ -1161,6 +1216,7 @@ app.post('/game/:sessionId/team-response', async (c) => {
   }
 
   try {
+    const previousPlayer = session.player;
     const player = respondTeamOffer(session, accept);
     if (accept && player.team) {
       player.salaryTracker = {
@@ -1172,11 +1228,17 @@ app.post('/game/:sessionId/team-response', async (c) => {
     session.player = player;
     if (accept && player.team) {
       session = activateClubRuntime(session, player.team.clubId, 'team-response');
+      session = startTeamOnboardingSequence(
+        session,
+        deriveTeamOnboardingKind(previousPlayer, player),
+      );
     }
     session.leaderboard = buildLeaderboard(session);
     session.updatedAt = new Date().toISOString();
     await storage.sessions.save(session);
     return c.json({
+      ...session,
+      phase: getSessionPhase(session),
       player,
       leaderboard: session.leaderboard,
       careerGoal: buildCareerGoal(

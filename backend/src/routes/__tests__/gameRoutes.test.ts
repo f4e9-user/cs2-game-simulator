@@ -174,4 +174,181 @@ describe('game routes', () => {
     expect(body.error).toBeUndefined();
     expect(body.leaderboard?.find((row) => row.isPlayer)?.points).toBe(33);
   });
+
+  it('starts team onboarding event immediately after accepting a team offer', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Offer Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        pendingOffer: {
+          clubId: 'club-cyber-academy',
+          clubName: '赛博学院',
+          tag: 'CYA',
+          region: '亚太',
+          tier: 'youth',
+          monthlySalary: 12,
+        },
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/team-response`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${session.apiToken}`,
+      },
+      body: JSON.stringify({ accept: true }),
+    }, env);
+    const body = await res.json() as {
+      player?: GameSession['player'];
+      phase?: GameSession['phase'];
+      currentEvent?: GameSession['currentEvent'];
+      activeEventSequence?: GameSession['activeEventSequence'];
+      error?: string;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.player?.team).toBeTruthy();
+    expect(body.phase).toBe('event');
+    expect(body.currentEvent?.id).toBe('chain-team-joined');
+    expect(body.activeEventSequence?.type).toBe('team-onboarding');
+  });
+
+  it('starts promotion onboarding when accepting a higher-tier team offer from an existing team', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Promotion Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        stage: 'youth',
+        everHadTeam: true,
+        team: {
+          clubId: 'club-cyber-academy',
+          name: '赛博学院',
+          tag: 'CYA',
+          region: '亚太',
+          tier: 'youth',
+          monthlySalary: 12,
+          joinedRound: session.player.round - 10,
+        },
+        pendingOffer: {
+          clubId: 'club-titan-corp',
+          clubName: 'Titan Corp',
+          tag: 'TIT',
+          region: '欧洲',
+          tier: 'semi-pro',
+          monthlySalary: 25,
+        },
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/team-response`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${session.apiToken}`,
+      },
+      body: JSON.stringify({ accept: true }),
+    }, env);
+    const body = await res.json() as GameSession & { error?: string };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.currentEvent?.id).toBe('chain-team-promotion-onboarding');
+    expect(body.activeEventSequence?.context).toMatchObject({ onboardingKind: 'promotion' });
+  });
+
+  it('starts transfer onboarding when accepting another team offer without a tier promotion', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Transfer Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        stage: 'second',
+        everHadTeam: true,
+        team: {
+          clubId: 'club-titan-corp',
+          name: 'Titan Corp',
+          tag: 'TIT',
+          region: '欧洲',
+          tier: 'semi-pro',
+          monthlySalary: 25,
+          joinedRound: session.player.round - 12,
+        },
+        pendingOffer: {
+          clubId: 'club-neon-dynasty',
+          clubName: 'Neon Dynasty',
+          tag: 'NEO',
+          region: '亚太',
+          tier: 'semi-pro',
+          monthlySalary: 26,
+        },
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/team-response`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${session.apiToken}`,
+      },
+      body: JSON.stringify({ accept: true }),
+    }, env);
+    const body = await res.json() as GameSession & { error?: string };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.currentEvent?.id).toBe('chain-team-transfer-onboarding');
+    expect(body.activeEventSequence?.context).toMatchObject({ onboardingKind: 'transfer' });
+  });
 });
