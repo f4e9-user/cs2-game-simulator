@@ -9,7 +9,7 @@ import { generateRivals } from '../data/rivals.js';
 import { generateRoster, generateSingleTeammate } from '../data/roster.js';
 import { addPlayerPoints, buildLeaderboard } from '../data/leaderboard.js';
 import { getEventById } from '../data/events/index.js';
-import { roleFitScore } from '../data/roleProfiles.js';
+import { getRoleProfile, roleFitScore } from '../data/roleProfiles.js';
 import { canCrystallizeRole, deriveRolePressure } from './roleTransition.js';
 import { TRAITS, getTrait } from '../data/traits.js';
 import { ACTIONS, getAction, type ActionDef, type ComboConsume } from '../data/actions.js';
@@ -1290,6 +1290,13 @@ function settleSalaryOnDeparture(player: Player): number {
   return settlement;
 }
 
+function resolveRoleMatchBonus(text: string): number {
+  if (text.includes('统治') || text.includes('关键回合') || text.includes('稳定')) return 2;
+  if (text.includes('上限') || text.includes('执行') || text.includes('信息') || text.includes('容错')) return 1;
+  if (text.includes('失误') || text.includes('拖低') || text.includes('模糊') || text.includes('脱节')) return -1;
+  return 0;
+}
+
 export function weekToMonth(week: number): number {
   return Math.min(12, Math.max(1, Math.ceil(week / 4)));
 }
@@ -1532,6 +1539,16 @@ function buildMatchResolveResult(
   const matchStressMultiplier = (player.buffs ?? [])
     .filter((buff) => buff.consumeOn === 'match' && (buff.actionTag === 'match' || buff.actionTag === 'all'))
     .reduce((acc, buff) => acc * (buff.matchStressMultiplier ?? 1), 1);
+  const roleProfile = player.activeRole ? getRoleProfile(player.activeRole) : null;
+  const roleTrustDelta = roleProfile
+    ? resolveRoleMatchBonus(roleProfile.matchContributions.primary) +
+      resolveRoleMatchBonus(roleProfile.matchContributions.secondary) +
+      resolveRoleMatchBonus(roleProfile.matchContributions.risk)
+    : 0;
+  const roleChemistryDelta = roleProfile
+    ? resolveRoleMatchBonus(roleProfile.matchContributions.secondary) +
+      Math.floor(resolveRoleMatchBonus(roleProfile.matchContributions.primary) / 2)
+    : 0;
 
   // 奖金分成：签约战队后俱乐部从奖金抽成
   const playerShare = player.team
@@ -1575,6 +1592,10 @@ function buildMatchResolveResult(
     },
     tags: {
       add: tagAdds,
+    },
+    effects: {
+      teamTrustDelta: roleTrustDelta !== 0 ? roleTrustDelta : undefined,
+      teamChemistryDelta: roleChemistryDelta !== 0 ? roleChemistryDelta : undefined,
     },
   };
 

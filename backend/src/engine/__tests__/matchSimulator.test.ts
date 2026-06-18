@@ -3,6 +3,7 @@ import { applyChoice, createSession } from '../gameEngine.js';
 import { toPublicEvent } from '../events.js';
 import { simulateMatch } from '../matchSimulator.js';
 import type { Player } from '../../types.js';
+import { getEventById } from '../../data/events/index.js';
 
 function player(overrides: Partial<Player>): Player {
   return {
@@ -199,6 +200,57 @@ describe('simulateMatch', () => {
     expect(withTeam.won).toBe(true);
     expect(solo.won).toBe(false);
     expect(withTeam.headshotRate - solo.headshotRate).toBeLessThan(0.05);
+  });
+
+  it('applies role profile match contribution as team-side match effects', () => {
+    const p = player({
+      activeRole: 'IGL',
+      preferredRole: 'IGL',
+      roleCrystallized: true,
+      stats: {
+        agility: 10,
+        intelligence: 16,
+        experience: 12,
+        money: 0,
+        mentality: 14,
+        constitution: 10,
+      },
+      team: {
+        clubId: 'club-cyber-academy',
+        name: '赛博学院',
+        tag: 'CYA',
+        region: '亚太',
+        tier: 'youth',
+        joinedRound: 1,
+        monthlySalary: 10,
+      },
+      roster: [
+        {
+          id: 'slot-1',
+          name: 'caller',
+          role: 'IGL',
+          personality: 'supportive',
+          traits: ['tactical', 'support'],
+          stats: { agility: 8, intelligence: 8, mentality: 8, experience: 8 },
+          growthSpent: 0,
+          chemistry: 80,
+        },
+        {
+          id: 'slot-2',
+          name: 'awp',
+          role: 'AWPer',
+          personality: 'grinder',
+          traits: ['aimer', 'steady'],
+          stats: { agility: 8, intelligence: 8, mentality: 8, experience: 8 },
+          growthSpent: 0,
+          chemistry: 80,
+        },
+      ],
+    });
+    const session = createSession(p, 1);
+    session.currentEvent = toPublicEvent(getEventById('routine-standard')!);
+    const resolved = applyChoice(session, 'structured-training', 20);
+    expect(typeof resolved.result.passiveEffects.join(' ')).toBe('string');
   });
 
   it('lowers win probability against a strong concrete opponent', () => {
