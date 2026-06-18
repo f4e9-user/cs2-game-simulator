@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyChoice, createSession, initPlayer } from '../gameEngine.js';
 import { toPublicEvent } from '../events.js';
+import { makeCachedAiEvent, markAiEventActive } from '../../ai/eventCache.js';
 import type { EventDef } from '../../types.js';
 
 function aiEvent(): EventDef {
@@ -58,5 +59,24 @@ describe('AI events in game engine', () => {
     session.currentEvent = toPublicEvent(event, player.rivals, player.roster ?? []);
 
     expect(() => applyChoice(session, 'review', 0, [])).toThrow('unknown event: ai-rival-shadow');
+  });
+
+  it('resolves the current AI event from the active cache envelope', () => {
+    const player = initPlayer({
+      name: 'TestPlayer',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    const event = aiEvent();
+    const session = createSession(player, 1);
+    session.currentEvent = toPublicEvent(event, player.rivals, player.roster ?? []);
+    const cache = markAiEventActive({
+      version: 2,
+      active: null,
+      entries: [makeCachedAiEvent(event, player, [])],
+    }, event);
+
+    const resolved = applyChoice(session, 'review', 0, [], cache);
+    expect(resolved.result.eventId).toBe('ai-rival-shadow');
   });
 });

@@ -45,6 +45,7 @@ function mockPlayer(): Player {
     actionPoints: 100,
     shopCooldowns: {},
     weeklyShopPurchases: {},
+    weeklyTeamActions: {},
     team: null,
     pendingApplication: null,
     qualificationSlots: {},
@@ -72,6 +73,42 @@ function mockPlayer(): Player {
 }
 
 describe('AI event generation parsing', () => {
+  it('accepts tournament context events with context phase metadata', () => {
+    const parsed = parseAiEvents(JSON.stringify([
+      {
+        id: 'ai-tournament-pressure',
+        type: 'tournament-context',
+        contextPhase: ['pre-match'],
+        triggerReason: 'pending tournament and high stress',
+        title: '赛前压力',
+        narrative: '比赛前一晚，你发现自己一直在回想上一场失败的残局。',
+        stages: ['rookie'],
+        difficulty: 3,
+        choices: [
+          {
+            id: 'reset',
+            label: '重新整理',
+            description: '你把注意力拉回当前比赛。',
+            check: { primary: 'mentality', dc: 8 },
+            success: { narrative: '你把思路收回来，呼吸也慢了下来。', stateDelta: { stress: -3 } },
+            failure: { narrative: '越想整理越乱，脑子里只剩失败画面。', stateDelta: { stress: 4 } },
+          },
+          {
+            id: 'ignore',
+            label: '硬顶过去',
+            description: '你不处理这些念头，直接睡觉。',
+            check: { primary: 'constitution', dc: 8 },
+            success: { narrative: '你勉强睡着，醒来后状态还算完整。' },
+            failure: { narrative: '你睡得很浅，醒来后更加疲惫。', stateDelta: { fatigue: 6 } },
+          },
+        ],
+      },
+    ]));
+
+    expect(parsed.valid).toHaveLength(1);
+    expect(parsed.valid[0]?.type).toBe('tournament-context');
+  });
+
   it('extracts JSON arrays from common LLM wrappers', () => {
     const raw = [
       {
@@ -101,6 +138,59 @@ describe('AI event generation parsing', () => {
     expect(prompt).toContain('"coreGrowth":{"mentality":1}');
     expect(prompt).not.toContain('"statChanges":{"stressDelta"');
     expect(prompt).not.toContain('"stressDelta":2');
+  });
+
+  it('injects team identity and V4 permission boundaries into the prompt', () => {
+    const prompt = buildEventGenPrompt({
+      player: {
+        ...mockPlayer(),
+        team: {
+          clubId: 'club-cyber-academy',
+          name: '赛博学院',
+          tag: 'CYA',
+          region: '亚太',
+          tier: 'youth',
+          monthlySalary: 10,
+          joinedRound: 1,
+          teamStatus: 'rotation',
+          teamStatusUntilRound: 12,
+        },
+        visibleTeamIdentity: 'star',
+        roster: [
+          {
+            id: 'slot-1',
+            name: '指挥队友',
+            role: 'IGL',
+            personality: 'strict',
+            traits: ['igl'],
+            stats: { agility: 5, intelligence: 12, mentality: 8, experience: 9 },
+            growthSpent: 0,
+            chemistry: 40,
+            visibleIdentity: 'caller',
+          },
+        ],
+      },
+      recentHistory: [],
+      gaps: [],
+    });
+
+    expect(prompt).toContain('队内定位：rotation');
+    expect(prompt).toContain('玩家队内身份：star');
+    expect(prompt).toContain('指挥队友:caller');
+    expect(prompt).toContain('不能决定训练方向、换人、转会、合同或预算');
+  });
+
+  it('injects world storylines as read-only event context', () => {
+    const prompt = buildEventGenPrompt({
+      player: mockPlayer(),
+      recentHistory: [],
+      gaps: [],
+      worldStorylines: ['赛博学院: storylines=dark-horse-run; recent=deep-run/b'],
+    });
+
+    expect(prompt).toContain('【世界战队故事线】');
+    expect(prompt).toContain('dark-horse-run');
+    expect(prompt).toContain('不允许直接改写世界战队状态');
   });
 
   it('normalizes common LLM shape mistakes before validation', () => {

@@ -1,4 +1,127 @@
-import type { EventDef } from '../../types.js';
+import type { ChoiceDef, EventDef } from '../../types.js';
+
+const TEAM_ONBOARDING_CHOICES: ChoiceDef[] = [
+  {
+    id: 'accept-role',
+    label: '接受教练安排的位置',
+    description: '教练根据队伍现状给你分配了最适合的位置。',
+    check: {
+      primary: 'mentality',
+      dc: 6,
+      traitBonuses: { support: 2, selfless: 2, steady: 1 },
+      traitPenalties: { ego: 2, solo: 1 },
+    },
+    success: {
+      narrative: '教练给你指了位置。你点头应下，队友们也松了口气——空缺终于有人填上了。',
+      stateDelta: {
+        feel: 1,
+      },
+      tags: {
+        remove: ['just-joined-team'],
+        add: ['team-trust'],
+      },
+    },
+    failure: {
+      narrative: '你有点犹豫，但教练拍了拍你的肩膀说"刚开始，先试试看。"',
+      stateDelta: {
+        feel: -0.5,
+      },
+      tags: {
+        remove: ['just-joined-team'],
+      },
+    },
+  },
+  {
+    id: 'stay-flexible',
+    label: '保持灵活，不打固定位',
+    description: '你更习惯根据局势切换角色，不想被框死。',
+    check: {
+      primary: 'mentality',
+      dc: 4,
+      traitBonuses: { solo: 2, mechanical: 1 },
+      traitPenalties: { support: 1 },
+    },
+    success: {
+      narrative: '"全能选手？也行。"教练在战术板上写了你的名字，旁边打了个问号。',
+      stateDelta: {
+        feel: 0.5,
+      },
+      tags: {
+        remove: ['just-joined-team'],
+      },
+    },
+    failure: {
+      narrative: '教练皱了皱眉，但还是尊重了你的选择。不过能感觉到他希望你尽快定下来。',
+      stateDelta: {
+        stress: 5,
+      },
+      tags: {
+        remove: ['just-joined-team'],
+      },
+    },
+  },
+  {
+    id: 'introduce-self',
+    label: '大方自我介绍',
+    description: '第一印象很重要。',
+    check: {
+      primary: 'mentality',
+      dc: 7,
+      traitBonuses: { support: 2, selfless: 1, media: 1 },
+      traitPenalties: { shy: 2, ego: 1 },
+    },
+    success: {
+      narrative: '你简单介绍了自己的打法风格和擅长位置。IGL 点了点头，把你加进了战术讨论组。',
+      stateDelta: {
+        feel: 1,
+      },
+      tags: {
+        remove: ['just-joined-team'],
+        add: ['team-trust'],
+      },
+    },
+    failure: {
+      narrative: '你一紧张没说太多。教练拍了拍你的肩膀说"刚开始，不急。"',
+      stateDelta: {
+        feel: -0.5,
+      },
+      tags: {
+        remove: ['just-joined-team'],
+      },
+    },
+  },
+  {
+    id: 'show-skill',
+    label: '直接开一局，用实力说话',
+    description: '不说废话，用枪杆子证明自己。',
+    check: {
+      primary: 'agility',
+      dc: 8,
+      traitBonuses: { solo: 2, mechanical: 2 },
+      traitPenalties: { support: 1 },
+    },
+    success: {
+      narrative: '一局下来你拿了 25 杀。会议室里有人吹了个口哨，这次是佩服的那种。',
+      stateDelta: {
+        feel: 1.5,
+      },
+      tags: {
+        remove: ['just-joined-team'],
+        add: ['highlight-clip'],
+      },
+    },
+    failure: {
+      narrative: '你太想表现反而手抖了几波。有好几个该拿下的击杀都错过了。',
+      stateDelta: {
+        feel: -1,
+        stress: 5,
+      },
+      tags: {
+        remove: ['just-joined-team'],
+      },
+    },
+  },
+];
 
 export const CHAIN_EVENTS: EventDef[] = [
   // ── locker-tension → confrontation ──────────────────────────────
@@ -1125,114 +1248,6 @@ export const CHAIN_EVENTS: EventDef[] = [
     ],
   },
 
-  // ── signed-second-team → debut ───────────────────────────────────
-  {
-    id: 'chain-second-team-debut',
-    type: 'team',
-    title: '新队的第一场正式赛',
-    narrative:
-      '转会手续一个月前完成，今天终于上场了。新队友和观众都在打量你，看你能不能配得上那份合同。',
-    stages: ['second', 'pro'],
-    difficulty: 3,
-    weight: 1.0,
-    requireTags: ['signed-second-team'],
-    choices: [
-      {
-        id: 'prove-yourself',
-        label: '全力发挥，用表现堵住悬念',
-        description: '新队第一印象，关键时刻拼一把。',
-        check: {
-          primary: 'agility',
-          secondary: 'mentality',
-          dc: 9,
-          traitBonuses: { grinder: 3, ego: 1 },
-        },
-        success: {
-          narrative: '你打出了近期最好的一场。赛后更衣室气氛很好，新队友主动加了你联系方式。',
-          stateDelta: {
-            feel: 1.6,
-            stress: -5,
-          },
-          resourceDelta: {
-            fame: 2,
-          },
-          tags: {
-            remove: ['signed-second-team'],
-            add: ['team-trust'],
-          },
-        },
-        failure: {
-          narrative: '关键局手抖了。教练保持着职业性的沉默，但你知道今天没有发挥应有水平。',
-          stateDelta: {
-            feel: -0.5,
-            stress: 10,
-            tilt: 1,
-          },
-          tags: {
-            remove: ['signed-second-team'],
-          },
-        },
-      },
-      {
-        id: 'play-safe',
-        label: '稳健为主，先适应队伍节奏',
-        description: '不冒险，先把自己嵌进去。',
-        check: {
-          primary: 'intelligence',
-          dc: 7,
-          traitBonuses: { steady: 3, tactical: 2 },
-        },
-        success: {
-          narrative: '你没有亮点，但也没有失误。IGL 说"你很好融入"，这已经够了。',
-          tags: {
-            remove: ['signed-second-team'],
-          },
-        },
-        failure: {
-          narrative: '太稳了以至于失去了攻击性。新队感觉你还在适应，上场时间被压缩。',
-          stateDelta: {
-            feel: -0.5,
-            stress: 5,
-          },
-          tags: {
-            remove: ['signed-second-team'],
-          },
-        },
-      },
-      {
-        id: 'bond-teammates',
-        label: '赛前主动找每个人聊一下',
-        description: '先建立信任，游戏里的配合会更顺畅。',
-        check: {
-          primary: 'intelligence',
-          secondary: 'mentality',
-          dc: 7,
-          traitBonuses: { selfless: 3, support: 2 },
-        },
-        success: {
-          narrative: '赛前那二十分钟很有效。打的时候你们的沟通比第一场正式打的队伍要顺很多。',
-          stateDelta: {
-            feel: 0.5,
-            stress: -5,
-          },
-          tags: {
-            remove: ['signed-second-team'],
-            add: ['team-trust'],
-          },
-        },
-        failure: {
-          narrative: '有人比较封闭，没太想搭理你。比赛里默契也出了问题。',
-          stateDelta: {
-            stress: 5,
-          },
-          tags: {
-            remove: ['signed-second-team'],
-          },
-        },
-      },
-    ],
-  },
-
   // ── family-strain → resolution ───────────────────────────────────
   {
     id: 'chain-family-strain-resolution',
@@ -1809,128 +1824,35 @@ export const CHAIN_EVENTS: EventDef[] = [
     difficulty: 1,
     weight: 0,
     requireTags: ['just-joined-team'],
-    choices: [
-      {
-        id: 'accept-role',
-        label: '接受教练安排的位置',
-        description: '教练根据队伍现状给你分配了最适合的位置。',
-        check: {
-          primary: 'mentality',
-          dc: 6,
-          traitBonuses: { support: 2, selfless: 2, steady: 1 },
-          traitPenalties: { ego: 2, solo: 1 },
-        },
-        success: {
-          narrative: '教练给你指了位置。你点头应下，队友们也松了口气——空缺终于有人填上了。',
-          stateDelta: {
-            feel: 1,
-          },
-          tags: {
-            remove: ['just-joined-team'],
-            add: ['team-trust'],
-          },
-        },
-        failure: {
-          narrative: '你有点犹豫，但教练拍了拍你的肩膀说"刚开始，先试试看。"',
-          stateDelta: {
-            feel: -0.5,
-          },
-          tags: {
-            remove: ['just-joined-team'],
-          },
-        },
-      },
-      {
-        id: 'stay-flexible',
-        label: '保持灵活，不打固定位',
-        description: '你更习惯根据局势切换角色，不想被框死。',
-        check: {
-          primary: 'mentality',
-          dc: 4,
-          traitBonuses: { solo: 2, mechanical: 1 },
-          traitPenalties: { support: 1 },
-        },
-        success: {
-          narrative: '"全能选手？也行。"教练在战术板上写了你的名字，旁边打了个问号。',
-          stateDelta: {
-            feel: 0.5,
-          },
-          tags: {
-            remove: ['just-joined-team'],
-          },
-        },
-        failure: {
-          narrative: '教练皱了皱眉，但还是尊重了你的选择。不过能感觉到他希望你尽快定下来。',
-          stateDelta: {
-            stress: 5,
-          },
-          tags: {
-            remove: ['just-joined-team'],
-          },
-        },
-      },
-      {
-        id: 'introduce-self',
-        label: '大方自我介绍',
-        description: '第一印象很重要。',
-        check: {
-          primary: 'mentality',
-          dc: 7,
-          traitBonuses: { support: 2, selfless: 1, media: 1 },
-          traitPenalties: { shy: 2, ego: 1 },
-        },
-        success: {
-          narrative: '你简单介绍了自己的打法风格和擅长位置。IGL 点了点头，把你加进了战术讨论组。',
-          stateDelta: {
-            feel: 1,
-          },
-          tags: {
-            remove: ['just-joined-team'],
-            add: ['team-trust'],
-          },
-        },
-        failure: {
-          narrative: '你一紧张没说太多。教练拍了拍你的肩膀说"刚开始，不急。"',
-          stateDelta: {
-            feel: -0.5,
-          },
-          tags: {
-            remove: ['just-joined-team'],
-          },
-        },
-      },
-      {
-        id: 'show-skill',
-        label: '直接开一局，用实力说话',
-        description: '不说废话，用枪杆子证明自己。',
-        check: {
-          primary: 'agility',
-          dc: 8,
-          traitBonuses: { solo: 2, mechanical: 2 },
-          traitPenalties: { support: 1 },
-        },
-        success: {
-          narrative: '一局下来你拿了 25 杀。会议室里有人吹了个口哨，这次是佩服的那种。',
-          stateDelta: {
-            feel: 1.5,
-          },
-          tags: {
-            remove: ['just-joined-team'],
-            add: ['highlight-clip'],
-          },
-        },
-        failure: {
-          narrative: '你太想表现反而手抖了几波。有好几个该拿下的击杀都错过了。',
-          stateDelta: {
-            feel: -1,
-            stress: 5,
-          },
-          tags: {
-            remove: ['just-joined-team'],
-          },
-        },
-      },
-    ],
+    choices: TEAM_ONBOARDING_CHOICES,
+  },
+
+  // ── 升档入队欢迎 ────────────────────────────────────────────────
+  {
+    id: 'chain-team-promotion-onboarding',
+    type: 'team',
+    title: '更高一级的训练室',
+    narrative:
+      '你拖着外设箱走进新基地。这里的复盘节奏、训练强度和队友眼神都和上一支队伍不一样。教练把你叫到战术板前："欢迎升级，但这里没有适应期。" ',
+    stages: ['second', 'pro'],
+    difficulty: 2,
+    weight: 0,
+    requireTags: ['just-joined-team'],
+    choices: TEAM_ONBOARDING_CHOICES,
+  },
+
+  // ── 转会入队欢迎 ────────────────────────────────────────────────
+  {
+    id: 'chain-team-transfer-onboarding',
+    type: 'team',
+    title: '转会后的第一天',
+    narrative:
+      '你刚从上一支队伍的聊天群退出，新队经理已经把训练日程发了过来。会议室里气氛礼貌但谨慎，所有人都在判断你会不会改变这套体系。',
+    stages: ['youth', 'second', 'pro'],
+    difficulty: 2,
+    weight: 0,
+    requireTags: ['just-joined-team'],
+    choices: TEAM_ONBOARDING_CHOICES,
   },
 
   // ── 合约续约 ──────────────────────────────────────────────────
@@ -2279,7 +2201,7 @@ export const CHAIN_EVENTS: EventDef[] = [
     id: 'chain-rival-scout',
     type: 'tryout',
     title: '星探来访',
-    narrative: '一位来自半职业俱乐部的星探联系了你——你在公开赛的表现引起了他们的注意。',
+    narrative: '一位来自二线俱乐部的星探联系了你——你在公开赛的表现引起了他们的注意。',
     stages: ['rookie', 'youth', 'second'],
     difficulty: 2,
     weight: 2,

@@ -1,0 +1,184 @@
+import { describe, expect, it } from 'vitest';
+import { getTournament } from '../../data/tournaments.js';
+import { applyChoice, createSession, initPlayer } from '../gameEngine.js';
+import { pickEvent, toPublicEvent } from '../events.js';
+import { createTournamentContext } from '../tournamentContext.js';
+import type { PendingMatch, Player, Stage } from '../../types.js';
+
+function player(): Player {
+  return {
+    ...initPlayer({
+      name: 'TournamentContextTester',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    }),
+    stats: {
+      agility: 10,
+      intelligence: 10,
+      mentality: 10,
+      experience: 10,
+      constitution: 10,
+      money: 20,
+    },
+    round: 4,
+    year: 1,
+    week: 4,
+    actionPoints: 100,
+    stage: 'rookie',
+    team: null,
+    roster: null,
+    teamTrust: 0,
+  };
+}
+
+function pendingMatch(): PendingMatch {
+  return {
+    tournamentId: 'y1-c-01',
+    tier: 'c',
+    name: 'Faceit Rookie Night',
+    displayName: 'Faceit Rookie Night Asia',
+    progressionTier: 'c',
+    entryType: 'direct_signup',
+    resolveYear: 1,
+    resolveWeek: 6,
+    stageIndex: 0,
+  };
+}
+
+describe('tournament context events', () => {
+  it('picks tournament context before default prep during pending match', () => {
+    const t = getTournament('y1-c-01');
+    expect(t).toBeDefined();
+    const pm = pendingMatch();
+    const p = {
+      ...player(),
+      pendingMatch: pm,
+    };
+    p.tournamentContext = createTournamentContext(p, pm, t!);
+
+    const picked = pickEvent({
+      player: p,
+      recentEventIds: [],
+      rng: () => 0.1,
+    });
+
+    expect(picked?.type).toBe('tournament-context');
+    expect(picked?.id).toBe('tournament-context-goal-setting');
+  });
+
+  it('does not write team fields for no-team tournament context settlement', () => {
+    const t = getTournament('y1-c-01')!;
+    const pm = pendingMatch();
+    const p = {
+      ...player(),
+      pendingMatch: pm,
+    };
+    p.tournamentContext = {
+      ...createTournamentContext(p, pm, t),
+      phase: 'pre-match',
+      consumedContextEventIds: ['tournament-context-goal-setting'],
+      contextEventQueue: [],
+    };
+    const event = pickEvent({
+      player: p,
+      recentEventIds: [],
+      rng: () => 0.1,
+    });
+    expect(event).toBeDefined();
+
+    const session = {
+      ...createSession(p, 1),
+      phase: 'event' as const,
+      currentEvent: toPublicEvent(event!),
+    };
+    const settled = applyChoice(session, event!.choices[0]!.id);
+
+    expect(settled.session.player.team).toBeNull();
+    expect(settled.session.player.roster).toBeNull();
+    expect(settled.session.player.teamTrust).toBe(0);
+    expect(settled.session.player.tournamentContext?.consumedContextEventIds)
+      .toContain('tournament-context-goal-setting');
+  });
+
+  it('uses baseline prep from tournament context queue instead of dynamic prep fallback', () => {
+    const t = getTournament('y1-c-01')!;
+    const pm = pendingMatch();
+    const p = {
+      ...player(),
+      pendingMatch: pm,
+    };
+    p.tournamentContext = {
+      ...createTournamentContext(p, pm, t),
+      phase: 'pre-match',
+      consumedContextEventIds: ['tournament-context-goal-setting'],
+    };
+
+    const event = pickEvent({
+      player: p,
+      recentEventIds: [],
+      rng: () => 0.1,
+    });
+
+    expect(event?.type).toBe('tournament-context');
+    expect(event?.id).toBe('tournament-context-baseline-prep');
+    expect(event?.choices.map((choice) => choice.id)).toEqual([
+      'demo-review',
+      'physical-prep',
+      'mental-reset',
+    ]);
+  });
+
+  it('enqueues and consumes ai tournament-context events', () => {
+    const t = getTournament('y1-c-01')!;
+    const pm = pendingMatch();
+    const aiEvent = {
+      id: 'ai-tournament-context-1',
+      type: 'tournament-context' as const,
+      title: 'AI 赛前试探',
+      narrative: 'AI generated',
+      stages: ['rookie'] as Stage[],
+      difficulty: 1,
+      contextPhase: ['pre-match'],
+      triggerReason: 'test',
+      choices: [
+        {
+          id: 'choose',
+          label: '选择',
+          description: 'test',
+          check: { primary: 'mentality' as const, dc: 0 },
+          success: { narrative: 'ok' },
+          failure: { narrative: 'nope' },
+        },
+      ],
+    };
+    const p = {
+      ...player(),
+      pendingMatch: pm,
+    };
+    p.tournamentContext = {
+      ...createTournamentContext(p, pm, t),
+      phase: 'pre-match',
+      consumedContextEventIds: ['tournament-context-goal-setting'],
+      contextEventQueue: [
+        {
+          eventId: 'ai-tournament-context-1',
+          phase: 'pre-match',
+          stageIndex: 0,
+          priority: 99,
+          generatedEvent: aiEvent,
+        },
+      ],
+    };
+
+    const session = {
+      ...createSession(p, 1),
+      phase: 'event' as const,
+      currentEvent: toPublicEvent(aiEvent),
+      activeEventSequence: undefined,
+    };
+    const settled = applyChoice(session, 'choose', 0, [aiEvent]);
+
+    expect(settled.session.player.tournamentContext?.consumedContextEventIds)
+      .toContain('ai-tournament-context-1');
+  });
+});

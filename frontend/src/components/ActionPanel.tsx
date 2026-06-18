@@ -205,6 +205,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
 
   const ap = player.actionPoints ?? 0;
   const activeComboIds = new Set((player.roundCombos ?? []).map((combo) => combo.id));
+  const isResting = (player.restRounds ?? 0) > 0;
 
   const isTournamentWeek =
     player.pendingMatch !== null &&
@@ -231,6 +232,8 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
     ? (disabledReason ?? '先完成本回合事件决策')
     : isTournamentWeek
     ? '赛事比赛周 — 行动力冻结'
+    : isResting
+    ? '休养期间不能进行日常行动'
     : null;
 
   return (

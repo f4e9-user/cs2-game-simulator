@@ -3,6 +3,7 @@ import type {
   CareerGoal,
   GameEvent,
   GameSession,
+  EventSequence,
   LeaderboardTeam,
   Player,
   PromotionCheck,
@@ -16,6 +17,7 @@ interface GameState {
   apiToken: string | null;
   player: Player | null;
   currentEvent: GameEvent | null;
+  activeEventSequence: EventSequence | null;
   history: RoundResult[];
   status: SessionStatus;
   ending: string | null;
@@ -44,6 +46,7 @@ interface GameState {
     result: RoundResult;
     player: Player;
     currentEvent: GameEvent | null;
+    activeEventSequence?: EventSequence;
     status: SessionStatus;
     ending?: string;
     promotion?: PromotionCheck;
@@ -51,6 +54,8 @@ interface GameState {
     leaderboard?: LeaderboardTeam[];
   }) => void;
   setPlayer: (player: Player) => void;
+  setCurrentEvent: (currentEvent: GameEvent | null) => void;
+  setActiveEventSequence: (activeEventSequence: EventSequence | null) => void;
   setPlayerState: (args: {
     player: Player;
     careerGoal?: CareerGoal;
@@ -71,6 +76,7 @@ export const useGameStore = create<GameState>((set) => ({
   apiToken: null,
   player: null,
   currentEvent: null,
+  activeEventSequence: null,
   history: [],
   status: 'active',
   ending: null,
@@ -91,6 +97,7 @@ export const useGameStore = create<GameState>((set) => ({
       apiToken: session.apiToken,
       player: session.player,
       currentEvent: session.currentEvent,
+      activeEventSequence: session.activeEventSequence ?? null,
       history: session.history,
       status: session.status,
       ending: session.ending ?? null,
@@ -99,8 +106,7 @@ export const useGameStore = create<GameState>((set) => ({
       careerGoal: session.careerGoal ?? null,
       leaderboard: session.leaderboard ?? [],
       pendingOffer: session.player.pendingOffer ?? null,
-      // 第一回合（从未做过选择）自动进入行动阶段，让玩家先熟悉面板再面对随机事件
-      actionsPhase: session.history.length === 0,
+      actionsPhase: session.phase === 'action',
       error: null,
     }),
 
@@ -109,6 +115,7 @@ export const useGameStore = create<GameState>((set) => ({
       sessionId,
       player,
       currentEvent,
+      activeEventSequence: null,
       history: [],
       status: 'active',
       ending: null,
@@ -122,6 +129,7 @@ export const useGameStore = create<GameState>((set) => ({
     result,
     player,
     currentEvent,
+    activeEventSequence,
     status,
     ending,
     promotion,
@@ -131,6 +139,7 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => ({
       player,
       currentEvent,
+      activeEventSequence: activeEventSequence ?? null,
       status,
       ending: ending ?? state.ending,
       history: [...state.history, result],
@@ -145,6 +154,8 @@ export const useGameStore = create<GameState>((set) => ({
 
   setAiActive: (v) => set({ aiActive: v }),
   setPlayer: (player) => set({ player, pendingOffer: player.pendingOffer ?? null }),
+  setCurrentEvent: (currentEvent) => set({ currentEvent }),
+  setActiveEventSequence: (activeEventSequence) => set({ activeEventSequence }),
   setPlayerState: ({ player, careerGoal, leaderboard }) =>
     set((state) => ({
       player,
@@ -164,6 +175,7 @@ export const useGameStore = create<GameState>((set) => ({
       sessionId: null,
       player: null,
       currentEvent: null,
+      activeEventSequence: null,
       history: [],
       status: 'active',
       ending: null,

@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
-import type { GameSession, SessionSummary } from '@/lib/types';
+import { formatTag } from '@/lib/format';
+import type { GameSession, SessionSummary, StatKey } from '@/lib/types';
 
 type DebugAiStatus = {
   provider: string;
@@ -14,19 +15,44 @@ type DebugAiStatus = {
 };
 
 type FormState = {
+  intelligence: string;
+  agility: string;
+  experience: string;
+  mentality: string;
+  constitution: string;
   money: string;
   stage: string;
   fame: string;
   stress: string;
   ownedItems: string;
+  tags: string;
   round: string;
   consecutiveLosses: string;
   forceNextEvent: string;
   forceMatchResult: '' | 'win' | 'loss';
   teamMonthlySalary: string;
   teamTier: string;
+  teamVrsScore: string;
   pendingMatch: string;
 };
+
+const CORE_STAT_FIELDS: Array<{ key: Exclude<StatKey, 'money'>; label: string; hint: string }> = [
+  { key: 'intelligence', label: '智力', hint: '战术、复盘、决策' },
+  { key: 'agility', label: '敏捷', hint: '枪法、反应、定位' },
+  { key: 'experience', label: '经验', hint: '比赛经验、稳定输出' },
+  { key: 'mentality', label: '心态', hint: '抗压、稳定性' },
+  { key: 'constitution', label: '体能', hint: '疲劳、伤病、连续作战' },
+];
+
+const GROWTH_CAP = 30;
+
+const RESOURCE_FIELDS: Array<{ key: keyof Pick<FormState, 'money' | 'fame' | 'stress' | 'round' | 'consecutiveLosses'>; label: string; hint: string }> = [
+  { key: 'money', label: '资金', hint: '1 点约等于 1K' },
+  { key: 'fame', label: '名气', hint: '0-100' },
+  { key: 'stress', label: '压力', hint: '0-100' },
+  { key: 'round', label: '回合', hint: '调试时间推进' },
+  { key: 'consecutiveLosses', label: '连败', hint: '影响部分事件' },
+];
 
 function pretty(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -34,17 +60,26 @@ function pretty(value: unknown): string {
 
 function initForm(session: GameSession): FormState {
   return {
+    intelligence: String(session.player.stats.intelligence ?? 0),
+    agility: String(session.player.stats.agility ?? 0),
+    experience: String(session.player.stats.experience ?? 0),
+    mentality: String(session.player.stats.mentality ?? 0),
+    constitution: String(session.player.stats.constitution ?? 0),
     money: String(session.player.stats.money ?? 0),
     stage: session.player.stage,
     fame: String(session.player.fame ?? 0),
     stress: String(session.player.stress ?? 0),
     ownedItems: session.player.ownedItems.join(', '),
+    tags: (session.player.tags ?? []).join(', '),
     round: String(session.player.round ?? 0),
     consecutiveLosses: String(session.player.consecutiveLosses ?? 0),
     forceNextEvent: session.player.forceNextEvent ?? '',
     forceMatchResult: session.player.forceMatchResult ?? '',
     teamMonthlySalary: session.player.team ? String(session.player.team.monthlySalary) : '',
     teamTier: session.player.team?.tier ?? '',
+    teamVrsScore: session.player.team
+      ? String(session.worldClubs?.runtimeByClubId[session.player.team.clubId]?.vrsScore ?? 0)
+      : '',
     pendingMatch: session.player.pendingMatch ? pretty(session.player.pendingMatch) : '',
   };
 }
@@ -112,6 +147,47 @@ export default function DebugSessionPage() {
     };
   }, [session]);
 
+  const growthRemaining = useMemo(() => {
+    if (!session) return 0;
+    return Math.max(0, GROWTH_CAP - (session.player.growthSpent ?? 0));
+  }, [session]);
+
+  const worldClubRows = useMemo(() => {
+    if (!session?.worldClubs) return [];
+    const pool = session.worldClubs;
+    return Object.values(pool.runtimeByClubId)
+      .sort((a, b) => b.updatedRound - a.updatedRound)
+      .slice(0, 12)
+      .map((runtime) => ({
+        ...runtime,
+        tickKeys: pool.processedTickKeysByClubId[runtime.clubId] ?? [],
+      }));
+  }, [session]);
+
+  const queuedState = useMemo(() => {
+    if (!session) return [];
+    const tags = new Set(session.player.tags ?? []);
+    return [
+      'family-crisis-queued',
+      'club-interview-queued',
+      'team-conflict-queued',
+      'bailout-queued',
+      'promotion-narrative-queued',
+    ].map((tag) => ({ tag, active: tags.has(tag) }));
+  }, [session]);
+
+  const injuryState = useMemo(() => {
+    if (!session) return [];
+    const tags = new Set(session.player.tags ?? []);
+    return [
+      'minor-injury-risk',
+      'injury-warning',
+      'injury-limited',
+      'forced-rest',
+      'injured',
+    ].map((tag) => ({ tag, active: tags.has(tag) }));
+  }, [session]);
+
   const submit = async () => {
     if (!session || !form) return;
     setSaving(true);
@@ -119,11 +195,22 @@ export default function DebugSessionPage() {
     setNotice(null);
     try {
       const body: Record<string, unknown> = {
+        stats: {
+          intelligence: Number(form.intelligence),
+          agility: Number(form.agility),
+          experience: Number(form.experience),
+          mentality: Number(form.mentality),
+          constitution: Number(form.constitution),
+        },
         money: Number(form.money),
         stage: form.stage,
         fame: Number(form.fame),
         stress: Number(form.stress),
         ownedItems: form.ownedItems
+          .split(',')
+          .map((v) => v.trim())
+          .filter(Boolean),
+        tags: form.tags
           .split(',')
           .map((v) => v.trim())
           .filter(Boolean),
@@ -136,6 +223,7 @@ export default function DebugSessionPage() {
       if (session.player.team) {
         body.teamMonthlySalary = form.teamMonthlySalary.trim() ? Number(form.teamMonthlySalary) : session.player.team.monthlySalary;
         body.teamTier = form.teamTier || session.player.team.tier;
+        body.teamVrsScore = form.teamVrsScore.trim() ? Number(form.teamVrsScore) : 0;
       }
       await api.updateDebugSession(sessionId, body);
       setNotice('已保存调试字段');
@@ -208,6 +296,11 @@ export default function DebugSessionPage() {
             <div className="panel-title">更新时间</div>
             <div className="stat-label">{new Date(summary.updatedAt).toLocaleString('zh-CN', { hour12: false })}</div>
           </div>
+          <div className="panel" style={{ marginBottom: 0 }}>
+            <div className="panel-title">成长上限</div>
+            <div className="stat-label">{session.player.growthSpent ?? 0} / {GROWTH_CAP}</div>
+            <div className="stat-desc">剩余 {growthRemaining} 点，只计算五项核心属性。</div>
+          </div>
         </div>
       )}
 
@@ -219,45 +312,132 @@ export default function DebugSessionPage() {
         <div className="panel">
           <div className="panel-title">可编辑调试字段</div>
           {form && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-              {([
-                ['money', 'money'],
-                ['stage', 'stage'],
-                ['fame', 'fame'],
-                ['stress', 'stress'],
-                ['round', 'round'],
-                ['consecutiveLosses', 'consecutiveLosses'],
-                ['forceNextEvent', 'forceNextEvent'],
-                ['forceMatchResult', 'forceMatchResult'],
-                ['teamMonthlySalary', 'teamMonthlySalary'],
-                ['teamTier', 'teamTier'],
-              ] as const).map(([key, label]) => (
-                <label key={key} style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#8b949e' }}>
-                  <span>{label}</span>
-                  {key === 'stage' ? (
-                    <select value={form.stage} onChange={(e) => setField('stage', e.target.value as FormState['stage'])} style={inputStyle}>
+            <div style={{ display: 'grid', gap: 16 }}>
+              <section style={sectionStyle}>
+                <div style={sectionHeaderStyle}>
+                  <span>核心属性</span>
+                  <span>直接写入 player.stats，不经过成长上限。</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                  {CORE_STAT_FIELDS.map((field) => (
+                    <label key={field.key} style={labelStyle}>
+                      <span>{field.label}</span>
+                      <input
+                        type="number"
+                        value={form[field.key]}
+                        onChange={(e) => setField(field.key, e.target.value)}
+                        style={inputStyle}
+                      />
+                      <span style={hintStyle}>{field.hint}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+
+              <section style={sectionStyle}>
+                <div style={sectionHeaderStyle}>
+                  <span>资源和进度</span>
+                  <span>用于快速构造经济、压力、名气和时间状态。</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                  <label style={labelStyle}>
+                    <span>阶段</span>
+                    <select value={form.stage} onChange={(e) => setField('stage', e.target.value)} style={inputStyle}>
                       {['rookie', 'youth', 'second', 'pro', 'retired'].map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
-                  ) : key === 'forceMatchResult' ? (
+                    <span style={hintStyle}>会影响事件和赛事门槛。</span>
+                  </label>
+                  {RESOURCE_FIELDS.map((field) => (
+                    <label key={field.key} style={labelStyle}>
+                      <span>{field.label}</span>
+                      <input
+                        type="number"
+                        value={form[field.key]}
+                        onChange={(e) => setField(field.key, e.target.value)}
+                        style={inputStyle}
+                      />
+                      <span style={hintStyle}>{field.hint}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+
+              <section style={sectionStyle}>
+                <div style={sectionHeaderStyle}>
+                  <span>高级控制</span>
+                  <span>强制事件、比赛结果、战队合同和赛事 JSON。</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                  <label style={labelStyle}>
+                    <span>强制下个事件 ID</span>
+                    <input value={form.forceNextEvent} onChange={(e) => setField('forceNextEvent', e.target.value)} style={inputStyle} />
+                    <span style={hintStyle}>留空会清除 forceNextEvent。</span>
+                  </label>
+
+                  <label style={labelStyle}>
+                    <span>强制比赛结果</span>
                     <select value={form.forceMatchResult} onChange={(e) => setField('forceMatchResult', e.target.value as FormState['forceMatchResult'])} style={inputStyle}>
                       <option value="">(空)</option>
                       <option value="win">win</option>
                       <option value="loss">loss</option>
                     </select>
-                  ) : (
+                    <span style={hintStyle}>只影响后续比赛结算。</span>
+                  </label>
+
+                  <label style={labelStyle}>
+                    <span>战队月薪</span>
                     <input
-                      value={String(form[key])}
-                      onChange={(e) => setField(key, e.target.value as never)}
-                      disabled={(key === 'teamMonthlySalary' || key === 'teamTier') && !session.player.team}
+                      type="number"
+                      value={form.teamMonthlySalary}
+                      onChange={(e) => setField('teamMonthlySalary', e.target.value)}
+                      disabled={!session.player.team}
                       style={inputStyle}
                     />
-                  )}
-                </label>
-              ))}
+                    <span style={hintStyle}>{session.player.team ? '当前队伍合同字段。' : '没有战队时不可用。'}</span>
+                  </label>
+
+                  <label style={labelStyle}>
+                    <span>战队等级</span>
+                    <select
+                      value={form.teamTier}
+                      onChange={(e) => setField('teamTier', e.target.value)}
+                      disabled={!session.player.team}
+                      style={inputStyle}
+                    >
+                      <option value="">(无)</option>
+                      {['youth', 'semi-pro', 'pro', 'top'].map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                    <span style={hintStyle}>{session.player.team ? '影响赛事和合同调试。' : '没有战队时不可用。'}</span>
+                  </label>
+
+                  <label style={labelStyle}>
+                    <span>战队 VRS</span>
+                    <input
+                      type="number"
+                      value={form.teamVrsScore}
+                      onChange={(e) => setField('teamVrsScore', e.target.value)}
+                      disabled={!session.player.team}
+                      style={inputStyle}
+                    />
+                    <span style={hintStyle}>{session.player.team ? `写入 ${session.player.team.name} 的 worldClub VRS。` : '没有战队时不可用。'}</span>
+                  </label>
+                </div>
+              </section>
 
               <label style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#8b949e' }}>
                 <span>ownedItems（逗号分隔）</span>
                 <input value={form.ownedItems} onChange={(e) => setForm((p) => p ? { ...p, ownedItems: e.target.value } : p)} style={inputStyle} />
+              </label>
+
+              <label style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#8b949e' }}>
+                <span>tags（逗号分隔，编辑后保存即可新增或删除）</span>
+                <textarea
+                  value={form.tags}
+                  onChange={(e) => setForm((p) => p ? { ...p, tags: e.target.value } : p)}
+                  rows={4}
+                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace' }}
+                />
+                <span style={hintStyle}>示例：team-trust, tournament-winner, minor-injury-risk。</span>
               </label>
 
               <label style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#8b949e' }}>
@@ -289,10 +469,106 @@ export default function DebugSessionPage() {
             <div style={{ display: 'grid', gap: 8, fontSize: 13, color: '#8b949e' }}>
               <div>sessionId: <span style={{ color: '#e6edf3' }}>{session.id}</span></div>
               <div>apiToken: <span style={{ color: '#e6edf3', fontFamily: 'monospace' }}>{session.apiToken}</span></div>
+              <div>growthSpent: <span style={{ color: '#e6edf3' }}>{session.player.growthSpent ?? 0}</span></div>
+              <div>growthCap: <span style={{ color: '#e6edf3' }}>{GROWTH_CAP}</span></div>
+              <div>growthRemaining: <span style={{ color: '#e6edf3' }}>{growthRemaining}</span></div>
               <div>currentEvent: <span style={{ color: '#e6edf3' }}>{session.currentEvent ? session.currentEvent.id : '(none)'}</span></div>
               <div>forceNextEvent: <span style={{ color: '#e6edf3' }}>{session.player.forceNextEvent ?? '(none)'}</span></div>
               <div>forceMatchResult: <span style={{ color: '#e6edf3' }}>{session.player.forceMatchResult ?? '(none)'}</span></div>
               <div>pendingMatch: <span style={{ color: '#e6edf3' }}>{session.player.pendingMatch ? 'yes' : 'no'}</span></div>
+              <div>teamVrs: <span style={{ color: '#e6edf3' }}>{session.player.team ? (session.worldClubs?.runtimeByClubId[session.player.team.clubId]?.vrsScore ?? 0) : '(no team)'}</span></div>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">事件流程 Debug</div>
+            {session.activeEventSequence ? (
+              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                <div>
+                  <span style={{ color: '#e6edf3', fontWeight: 600 }}>{session.activeEventSequence.id}</span>
+                  {' '}· {session.activeEventSequence.type}
+                  {' '}· step {session.activeEventSequence.currentIndex + 1}/{session.activeEventSequence.steps.length}
+                  {' '}· {session.activeEventSequence.status}
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {session.activeEventSequence.steps.map((step, index) => (
+                    <div
+                      key={step.id}
+                      style={{
+                        border: index === session.activeEventSequence?.currentIndex ? '1px solid rgba(88,166,255,0.5)' : '1px solid #21262d',
+                        borderRadius: 6,
+                        padding: 8,
+                      }}
+                    >
+                      <div style={{ color: '#e6edf3' }}>
+                        {index + 1}. {step.id}
+                        {step.completeSequenceAfter ? ' · final' : ''}
+                      </div>
+                      <div>eventId: {step.eventId ?? step.generatedEvent?.id ?? '(dynamic)'}</div>
+                      <div>generatedEvent: {step.generatedEvent ? 'yes' : 'no'}</div>
+                      {step.skipIf && <div>skipIf: {pretty(step.skipIf)}</div>}
+                    </div>
+                  ))}
+                </div>
+                <pre style={preStyle}>{pretty(session.activeEventSequence.context)}</pre>
+              </div>
+            ) : (
+              <div style={{ color: '#8b949e', fontSize: 13 }}>当前没有 activeEventSequence。</div>
+            )}
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">赛事上下文 Debug</div>
+            {session.player.tournamentContext ? (
+              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                <div>
+                  <span style={{ color: '#e6edf3', fontWeight: 600 }}>{session.player.tournamentContext.tournamentId}</span>
+                  {' '}· stage {session.player.tournamentContext.stageIndex}
+                  {' '}· {session.player.tournamentContext.phase}
+                </div>
+                <div>
+                  queue {session.player.tournamentContext.contextEventQueue.length}
+                  {' '}· consumed {session.player.tournamentContext.consumedContextEventIds.length}
+                  {' '}· expires {session.player.tournamentContext.expiresAtRound ?? '(none)'}
+                </div>
+                {session.player.tournamentContext.lastMatchResult && (
+                  <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
+                    lastMatch: {session.player.tournamentContext.lastMatchResult.won ? 'win' : 'loss'}
+                    {' '}· {session.player.tournamentContext.lastMatchResult.teamScore}:{session.player.tournamentContext.lastMatchResult.enemyScore}
+                    {' '}· rating {session.player.tournamentContext.lastMatchResult.rating}
+                  </div>
+                )}
+                <pre style={preStyle}>{pretty(session.player.tournamentContext.contextEventQueue)}</pre>
+              </div>
+            ) : (
+              <div style={{ color: '#8b949e', fontSize: 13 }}>当前没有 tournamentContext。</div>
+            )}
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">Queued / 伤病状态</div>
+            <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+              <div>
+                <div style={{ color: '#e6edf3', fontWeight: 600, marginBottom: 6 }}>queued</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {queuedState.map((item) => (
+                    <span key={item.tag} className={`badge ${item.active ? 'success' : ''}`} title={item.tag}>
+                      {formatTag(item.tag)}: {item.active ? 'yes' : 'no'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: '#e6edf3', fontWeight: 600, marginBottom: 6 }}>injury</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {injuryState.map((item) => (
+                    <span key={item.tag} className={`badge ${item.active ? 'danger' : ''}`} title={item.tag}>
+                      {formatTag(item.tag)}: {item.active ? 'yes' : 'no'}
+                    </span>
+                  ))}
+                  <span className="badge">restRounds: {session.player.restRounds ?? 0}</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -306,6 +582,96 @@ export default function DebugSessionPage() {
                 : ''}
             </div>
             <pre style={preStyle}>{pretty(aiEvents)}</pre>
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">世界战队运行态</div>
+            {session.worldClubs ? (
+              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                <div>
+                  season {session.worldClubs.season} · active {session.worldClubs.activeClubIds.length} · relevant {session.worldClubs.relevantClubIds.length} · static {session.worldClubs.staticClubIds.length} · lastTick {session.worldClubs.lastGlobalTickRound ?? '(none)'}
+                </div>
+                {session.worldClubs.seasonSummaries?.[0] && (
+                  <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10 }}>
+                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>season summary {session.worldClubs.seasonSummaries[0].season}</div>
+                    <div>darkHorse: {session.worldClubs.seasonSummaries[0].darkHorseClubIds.join(', ') || '(none)'}</div>
+                    <div>promoted: {session.worldClubs.seasonSummaries[0].promotedClubIds.join(', ') || '(none)'}</div>
+                    <div>fallen: {session.worldClubs.seasonSummaries[0].fallenClubIds.join(', ') || '(none)'}</div>
+                  </div>
+                )}
+                {worldClubRows.length > 0 ? worldClubRows.map((club) => (
+                  <div key={club.clubId} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>{club.clubId} · {club.tier} · round {club.updatedRound}</div>
+                    <div>form {club.currentForm} · trust {club.clubTrust} · chemistry {club.internalChemistry} · stability {club.rosterStability} · points {club.seasonPoints}</div>
+                    <div>storylines: {club.activeStorylines.length > 0 ? club.activeStorylines.join(', ') : '(none)'}</div>
+                    <div>recent: {club.recentResults[0] ? `${club.recentResults[0].result} ${club.recentResults[0].tier} r${club.recentResults[0].round}` : '(none)'}</div>
+                    <div>ticks: {club.tickKeys.length > 0 ? club.tickKeys.join(', ') : '(none)'}</div>
+                  </div>
+                )) : (
+                  <div>尚未激活任何战队运行态。</div>
+                )}
+              </div>
+            ) : (
+              <div style={{ color: '#8b949e', fontSize: 13 }}>worldClubs 未初始化</div>
+            )}
+          </div>
+
+          <div className="panel">
+            <div className="panel-title">队内身份 Debug</div>
+            {session.debugTeamIdentity ? (
+              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>
+                    player · visible {session.debugTeamIdentity.player.visibleIdentity ?? '(none)'} · since {session.debugTeamIdentity.player.sinceRound ?? '(none)'}
+                  </div>
+                  <div>
+                    scores: {session.debugTeamIdentity.player.scores.length > 0
+                      ? session.debugTeamIdentity.player.scores.map((score) => `${score.identity}:${score.score}`).join(', ')
+                      : '(none)'}
+                  </div>
+                  {session.debugTeamIdentity.player.scores.map((score) => (
+                    <div key={`player-${score.identity}`}>
+                      {score.identity} reasons: {score.reasons.join(' / ') || '(none)'}
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div>
+                    caller: {session.debugTeamIdentity.caller
+                      ? `${session.debugTeamIdentity.caller.label} (${session.debugTeamIdentity.caller.type}, score ${session.debugTeamIdentity.caller.score})`
+                      : '(none)'}
+                  </div>
+                  <div>
+                    star: {session.debugTeamIdentity.star
+                      ? `${session.debugTeamIdentity.star.label} (${session.debugTeamIdentity.star.type}, score ${session.debugTeamIdentity.star.score})`
+                      : '(none)'}
+                  </div>
+                </div>
+
+                {session.debugTeamIdentity.teammates.length > 0 ? session.debugTeamIdentity.teammates.map((tm) => (
+                  <div key={tm.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>
+                      {tm.name} · {tm.id} · visible {tm.visibleIdentity ?? '(none)'} · since {tm.sinceRound ?? '(none)'}
+                    </div>
+                    <div>
+                      scores: {tm.scores.length > 0
+                        ? tm.scores.map((score) => `${score.identity}:${score.score}`).join(', ')
+                        : '(none)'}
+                    </div>
+                    {tm.scores.map((score) => (
+                      <div key={`${tm.id}-${score.identity}`}>
+                        {score.identity} reasons: {score.reasons.join(' / ') || '(none)'}
+                      </div>
+                    ))}
+                  </div>
+                )) : (
+                  <div>当前没有 roster。</div>
+                )}
+              </div>
+            ) : (
+              <div style={{ color: '#8b949e', fontSize: 13 }}>debugTeamIdentity 未返回</div>
+            )}
           </div>
 
           <div className="panel">
@@ -334,6 +700,37 @@ const inputStyle: CSSProperties = {
   borderRadius: 6,
   padding: '9px 10px',
   fontSize: 13,
+};
+
+const labelStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  fontSize: 12,
+  color: '#8b949e',
+};
+
+const hintStyle: CSSProperties = {
+  color: '#3d444d',
+  fontSize: 11,
+  lineHeight: 1.4,
+};
+
+const sectionStyle: CSSProperties = {
+  border: '1px solid #21262d',
+  borderRadius: 8,
+  padding: 12,
+  display: 'grid',
+  gap: 12,
+};
+
+const sectionHeaderStyle: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: 12,
+  color: '#e6edf3',
+  fontSize: 13,
+  fontWeight: 700,
 };
 
 const preStyle: CSSProperties = {

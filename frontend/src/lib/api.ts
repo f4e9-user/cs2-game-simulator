@@ -4,17 +4,22 @@ import type {
   CareerGoal,
   ChoiceResponse,
   Club,
+  ClubApplicationSummary,
+  GameEvent,
   GameSession,
+  EventSequence,
   LeaderboardTeam,
   Loan,
   MatchStats,
   Player,
+  RoundPhase,
   SessionSummary,
   RollTraitsResponse,
   ShopItem,
   SocialPost,
   StartGameResponse,
   Stats,
+  TeamActionResult,
   TournamentsResponse,
   Trait,
 } from './types';
@@ -134,9 +139,15 @@ export const api = {
       method: 'POST',
     }, apiToken),
   submitAction: (sessionId: string, actionId: string, apiToken?: string) =>
-    request<{ actionResult: ActionResult; player: Player }>(
+    request<{ actionResult: ActionResult; player: Player; phase: 'action' | 'event'; currentEvent: GameEvent | null }>(
       `/api/game/${sessionId}/action`,
       { method: 'POST', body: JSON.stringify({ actionId }) },
+      apiToken,
+    ),
+  endActionPhase: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; phase: 'event'; currentEvent: GameEvent | null; activeEventSequence?: EventSequence | null }>(
+      `/api/game/${sessionId}/end-action-phase`,
+      { method: 'POST' },
       apiToken,
     ),
   buyShopItem: (sessionId: string, itemId: string, apiToken?: string) =>
@@ -168,6 +179,8 @@ export const api = {
     request<{ items: ShopItem[] }>('/api/game/meta/shop'),
   listClubs: () =>
     request<{ clubs: Club[] }>('/api/game/meta/clubs'),
+  listSessionClubs: (sessionId: string) =>
+    request<{ clubs: ClubApplicationSummary[] }>(`/api/game/${sessionId}/clubs`),
   applyClub: (sessionId: string, clubId: string, apiToken?: string) =>
     request<{ player: Player }>(
       `/api/game/${sessionId}/apply-club`,
@@ -175,13 +188,50 @@ export const api = {
       apiToken,
     ),
   respondOffer: (sessionId: string, accept: boolean, apiToken?: string) =>
-    request<{ player: Player; leaderboard?: LeaderboardTeam[]; careerGoal?: CareerGoal }>(
+    request<{
+      player: Player;
+      phase?: RoundPhase;
+      currentEvent?: GameEvent | null;
+      activeEventSequence?: EventSequence | null;
+      leaderboard?: LeaderboardTeam[];
+      careerGoal?: CareerGoal;
+    }>(
       `/api/game/${sessionId}/team-response`,
       { method: 'POST', body: JSON.stringify({ accept }) },
       apiToken,
     ),
   leaveTeam: (sessionId: string, apiToken?: string) =>
     request<{ player: Player }>(`/api/game/${sessionId}/leave-team`, { method: 'POST' }, apiToken),
+  teamPractice: (sessionId: string, teammateId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/team-practice`,
+      { method: 'POST', body: JSON.stringify({ teammateId }) },
+      apiToken,
+    ),
+  teamMeeting: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/team-meeting`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  lockerRoomTalk: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/locker-room-talk`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  retainCoreTeammate: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/retain-core-teammate`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  teamTrainingFocus: (sessionId: string, focus: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/team-training-focus`,
+      { method: 'POST', body: JSON.stringify({ focus }) },
+      apiToken,
+    ),
   getIntro: (sessionId: string, apiToken?: string) =>
     request<{ intro: string }>(`/api/game/${sessionId}/intro`, {}, apiToken),
   getSummary: (sessionId: string, apiToken?: string) =>

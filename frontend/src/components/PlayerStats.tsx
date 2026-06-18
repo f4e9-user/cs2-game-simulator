@@ -1,12 +1,18 @@
 'use client';
 
-import type { Player, Trait } from '@/lib/types';
-import { STAGE_LABELS, formatMoney } from '@/lib/format';
+import type { Player, Stage, Trait } from '@/lib/types';
+import { STAGE_LABELS, formatMoney, formatTag } from '@/lib/format';
 
 interface Props {
   player: Player;
   traits: Trait[];
 }
+
+const PROMOTION_PENDING_LABEL: Partial<Record<Stage, string>> = {
+  youth: '青训考察',
+  second: '合同邀约',
+  pro: '职业邀约',
+};
 
 export function PlayerStats({ player, traits }: Props) {
   const playerTraits = player.traits
@@ -25,6 +31,14 @@ export function PlayerStats({ player, traits }: Props) {
         >
           夺冠 {player.tournamentChampionships ?? 0}
         </span>
+        <span className="badge">
+          A/B/C/S {[
+            player.tierChampionships?.a ?? 0,
+            player.tierChampionships?.b ?? 0,
+            player.tierChampionships?.c ?? 0,
+            player.tierChampionships?.s ?? 0,
+          ].join('/')}
+        </span>
         {player.restRounds > 0 && (
           <span className="badge danger">休养 {player.restRounds}回</span>
         )}
@@ -37,7 +51,7 @@ export function PlayerStats({ player, traits }: Props) {
       {player.promotionPending ? (
         <div style={{ marginBottom: 6 }}>
           <span className="status-alert warn">
-            考察来了 → {STAGE_LABELS[player.promotionPending]}
+            {PROMOTION_PENDING_LABEL[player.promotionPending] ?? '晋级机会'} → {STAGE_LABELS[player.promotionPending]}
           </span>
         </div>
       ) : null}
@@ -82,8 +96,8 @@ export function PlayerStats({ player, traits }: Props) {
           </div>
           <div>
             {player.tags.map((tag) => (
-              <span key={tag} className="trait-chip">
-                #{tag}
+              <span key={tag} className="trait-chip" title={tag}>
+                #{formatTag(tag)}
               </span>
             ))}
           </div>
@@ -204,6 +218,8 @@ export function PlayerStats({ player, traits }: Props) {
       {player.pendingDeparture && (() => {
         const pd = player.pendingDeparture;
         const roundsLeft = pd.departureRound - player.round;
+        const pressure = pd.pressure ?? 0;
+        const threshold = pd.pressureThreshold ?? 100;
         return (
           <div style={{ marginBottom: 4 }}>
             <div
@@ -232,6 +248,10 @@ export function PlayerStats({ player, traits }: Props) {
               <span className="badge">
                 {roundsLeft <= 1 ? '即将离队' : `${roundsLeft} 回合后离队`}
               </span>
+            </div>
+            <div style={{ marginTop: 4, fontSize: 10, color: 'var(--fg-2)', lineHeight: 1.35 }}>
+              <div>离队压力 {pressure}/{threshold}</div>
+              {pd.reasonTags?.length ? <div>{pd.reasonTags.slice(0, 3).join(' · ')}</div> : null}
             </div>
           </div>
         );

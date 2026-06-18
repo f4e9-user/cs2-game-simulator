@@ -1,5 +1,5 @@
 import type { StatKey, Trait } from '@/lib/types';
-import { STAT_LABELS, formatDelta } from '@/lib/format';
+import { STAT_LABELS, formatDelta, formatTag } from '@/lib/format';
 
 interface Props {
   traits: Trait[];
@@ -65,8 +65,8 @@ export function TraitRoll({ traits, rerollsLeft, onReroll, rolling }: Props) {
               )}
               <div style={{ marginTop: 6 }}>
                 {t.tags.map((tag) => (
-                  <span key={tag} className="trait-chip">
-                    #{tag}
+                  <span key={tag} className="trait-chip" title={tag}>
+                    #{formatTag(tag)}
                   </span>
                 ))}
               </div>

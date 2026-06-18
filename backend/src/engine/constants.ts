@@ -9,14 +9,15 @@ export const STAT_KEYS: StatKey[] = [
   'constitution',
 ];
 
-// 核心属性 key（money 单独处理，不计入成长系统）
+// 核心成长属性 key（experience 是履历属性，money 单独处理）
 export const CORE_STAT_KEYS: StatKey[] = [
   'intelligence',
   'agility',
-  'experience',
   'mentality',
   'constitution',
 ];
+
+export const ALLOCATABLE_STAT_KEYS: StatKey[] = CORE_STAT_KEYS;
 
 export const STAT_LABELS: Record<StatKey, string> = {
   intelligence: '智力',
@@ -52,15 +53,18 @@ export const BASE_STATS: Stats = {
   constitution: 0, // 基础体能底线：所有人都有基本的身体素质，不花属性点
 };
 
-export const POINT_POOL = 12;
+export const POINT_POOL = 10;
+export const OPENING_STAT_INVEST_MAX = 8;
 export const PER_STAT_MAX = 12;
 export const STAT_MIN = 0;
 export const STAT_MAX = 20;
 export const MONEY_MAX = 999;
 
 // ── 成长系统 ──────────────────────────────────────────────────
-// 生涯总成长上限（money 不计入）
+// 生涯总成长上限（money 和 experience 不计入）
 export const GROWTH_CAP = 30;
+export const EXPERIENCE_SOFT_CAP = 20;
+export const CAREER_TIME_EXPERIENCE_RAW = 0.08;
 
 // 队友成长上限（低于玩家的 30，队友成长空间略小）
 export const TEAMMATE_GROWTH_CAP = 20;

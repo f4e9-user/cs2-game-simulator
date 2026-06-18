@@ -22,6 +22,7 @@ export function CareerGoalPanel({ goal }: Props) {
       </div>
 
       <div className="career-goal-summary">{goal.summary}</div>
+      {goal.teamHint && <div className="career-goal-summary">{goal.teamHint}</div>}
 
       {goal.goals.length > 0 && (
         <div className="career-goal-block">
@@ -40,7 +41,7 @@ export function CareerGoalPanel({ goal }: Props) {
       )}
 
       <div className="career-goal-block">
-        <div className="career-goal-block-title">近期机会</div>
+        <div className="career-goal-block-title">未来 12 周晋级赛程</div>
         {goal.opportunities.length > 0 ? (
           <div className="career-opportunity-list">
             {goal.opportunities.map((opportunity) => (
@@ -48,11 +49,17 @@ export function CareerGoalPanel({ goal }: Props) {
                 <span className="career-opportunity-week">第 {opportunity.week} 周</span>
                 <span className="career-opportunity-tier">{opportunity.tier}</span>
                 <span className="career-opportunity-name">{opportunity.name}</span>
+                <span
+                  className="career-opportunity-tier"
+                  title={opportunity.status}
+                >
+                  {opportunity.available === false ? '无法报名' : '可报名'}
+                </span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="career-goal-empty">当前赛季暂无直接机会</div>
+          <div className="career-goal-empty">未来暂无符合当前晋级目标的赛事</div>
         )}
       </div>
     </section>

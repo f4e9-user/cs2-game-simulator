@@ -22,13 +22,8 @@ import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { LoanModal } from '@/components/LoanModal';
 import { useGameStore } from '@/store/gameStore';
-import type { ActionResult, Player, SocialPost, Teammate, Trait } from '@/lib/types';
+import type { ActionResult, Player, SocialPost, Trait } from '@/lib/types';
 import type { SettlementActionResult, SettlementShopResult } from '@/components/ResultPanel';
-
-function statAvg(tm: Teammate): number {
-  const s = tm.stats;
-  return Math.round(((s.agility + s.intelligence + s.mentality + s.experience) / 4) * 10) / 10;
-}
 
 export default function GamePage() {
   const params = useParams<{ sessionId: string }>();
@@ -38,6 +33,7 @@ export default function GamePage() {
     player,
     apiToken,
     currentEvent,
+    activeEventSequence,
     history,
     status,
     ending,
@@ -52,6 +48,8 @@ export default function GamePage() {
     error,
     hydrateFromSession,
     applyChoiceResponse,
+    setCurrentEvent,
+    setActiveEventSequence,
     setPlayer,
     setPlayerState,
     setAiActive,
@@ -105,7 +103,7 @@ export default function GamePage() {
         hydrateFromSession(session);
         setTraits(t.traits);
         if (health) setAiActive(health.ai.active);
-        setPhase('action');
+        setPhase(session.phase ?? 'action');
         setActionResults([]);
         setShopResults([]);
         setShopNarratives({});
@@ -171,8 +169,23 @@ export default function GamePage() {
 
   const isActionPhase = phase === 'action';
 
-  const handleEndActionPhase = () => {
-    setPhase('event');
+  const handleEndActionPhase = async () => {
+    if (loading || transitioning || choiceSubmitting || !player) return;
+    setError(null);
+    setLoading(true);
+    setTransitioning(true);
+    try {
+      const res = await api.endActionPhase(sessionId, apiToken ?? undefined);
+      setPlayer(res.player);
+      setCurrentEvent(res.currentEvent);
+      setActiveEventSequence(res.activeEventSequence ?? null);
+      setPhase(res.phase);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTransitioning(false);
+      setLoading(false);
+    }
   };
 
   const handleActionResult = (result: ActionResult, moneyChange: number) => {
@@ -214,7 +227,14 @@ export default function GamePage() {
       const res = await api.submitChoice(sessionId, choiceId, customAction, apiToken ?? undefined);
       applyChoiceResponse(res);
 
-      setPhase('settlement');
+      const hasNextSequenceEvent = res.phase === 'event' && !!res.currentEvent;
+      setPhase(hasNextSequenceEvent ? 'event' : 'settlement');
+      if (hasNextSequenceEvent) {
+        setStreamingNarrative(null);
+        setIsNarrating(false);
+        setSettlementLoading(false);
+        return;
+      }
 
       const settlementTasks: Promise<unknown>[] = [];
 
@@ -335,6 +355,12 @@ export default function GamePage() {
 
   const ended = status === 'ended';
   const isCritical = (player.stress ?? 0) >= 100;
+  const isResting = (player.restRounds ?? 0) > 0;
+  const actionLockedReason = isResting
+    ? '休养期间不能进行日常行动、商店购买或队伍管理'
+    : phase === 'settlement'
+      ? '结算中，暂不可操作'
+      : '先完成本回合事件决策';
 
   return (
     <div className={`hud-root${isCritical ? ' stress-critical' : ''}${shaking ? ' stress-shaking' : ''}`}>
@@ -366,10 +392,10 @@ export default function GamePage() {
                 key={player.round}
                 sessionId={sessionId}
                 player={player}
-                enabled={isActionPhase && !loading && !settlementLoading}
+                enabled={isActionPhase && !loading && !settlementLoading && !isResting}
                 onPlayerUpdate={(p: Player) => setPlayer(p)}
                 onActionResult={handleActionResult}
-                disabledReason={phase === 'settlement' ? '结算中，暂不可执行' : '先完成本回合事件决策'}
+                disabledReason={actionLockedReason}
               />
             </>
           )}
@@ -426,6 +452,7 @@ export default function GamePage() {
                         shopResults={shopResults}
                         shopNarratives={shopNarratives}
                         onEnterNextRound={handleEnterNextRound}
+                        hideNextRound={Boolean(lastResult?.sequenceId) && !lastResult.sequenceFinal}
                       />
                     )}
                     {phase === 'action' ? (
@@ -455,7 +482,7 @@ export default function GamePage() {
                       lastResult ? null : <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>结算中…</div>
                     ) : phase === 'event' && currentEvent ? (
                       <>
-                        <EventCard event={currentEvent} />
+                        <EventCard event={currentEvent} sequence={activeEventSequence} />
                         <div style={{ marginTop: 8, marginBottom: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
                           选择行动
                         </div>
@@ -475,34 +502,17 @@ export default function GamePage() {
                     onPlayerUpdate={(p: Player) => setPlayer(p)}
                     onRequestLoan={() => setShowLoan(true)}
                     onShopResult={handleShopResult}
-                    enabled={isActionPhase && !loading && !settlementLoading}
-                    disabledReason={phase === 'settlement' ? '结算中，暂不可购买' : '先完成本回合事件决策'}
+                    enabled={isActionPhase && !loading && !settlementLoading && !isResting}
+                    disabledReason={actionLockedReason}
                   />
                 )}
 
                 {centerTab === 'team' && (
                   <>
-                    {player.roster && player.roster.length > 0 && (
-                      <div style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)', marginBottom: 6 }}>
-                          阵容
-                        </div>
-                        <div className="roster-list">
-                          {player.roster.map((tm) => (
-                            <div key={tm.id} className="roster-row">
-                              <span className="roster-role">[{tm.role}]</span>
-                              <span className="roster-name">{tm.name}</span>
-                              <span className="roster-traits">{tm.traits.join(' / ')}</span>
-                              <span className="roster-avg">均值 {statAvg(tm)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                     <ClubPanel
                       sessionId={sessionId}
                       player={player}
-                      enabled={isActionPhase && !loading && !settlementLoading}
+                      enabled={isActionPhase && !loading && !settlementLoading && !isResting}
                       onPlayerUpdate={(p: Player) => setPlayer(p)}
                     />
                   </>
@@ -568,6 +578,9 @@ export default function GamePage() {
                 careerGoal: res.careerGoal,
                 leaderboard: res.leaderboard,
               });
+              setCurrentEvent(res.currentEvent ?? null);
+              setActiveEventSequence(res.activeEventSequence ?? null);
+              setPhase(res.phase ?? 'action');
               clearOffer();
             } catch (e) {
               setError(e instanceof Error ? e.message : String(e));
@@ -583,6 +596,9 @@ export default function GamePage() {
                 player: res.player,
                 careerGoal: res.careerGoal,
               });
+              setCurrentEvent(res.currentEvent ?? null);
+              setActiveEventSequence(res.activeEventSequence ?? null);
+              setPhase(res.phase ?? 'action');
               clearOffer();
             } catch (e) {
               setError(e instanceof Error ? e.message : String(e));

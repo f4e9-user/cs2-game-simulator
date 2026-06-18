@@ -144,6 +144,7 @@ export function ShopPanel({
   const cooldowns = player.shopCooldowns ?? {};
   const weeklyPurchases = player.weeklyShopPurchases ?? {};
   const hasAgent = player.tags.includes('has-agent');
+  const isResting = (player.restRounds ?? 0) > 0;
 
   const TOURNAMENT_LOCKED_ITEMS = new Set(['team-dinner', 'fan-meetup', 'short-trip']);
 
@@ -165,12 +166,25 @@ export function ShopPanel({
     if (!enabled) {
       return { ok: false, reason: disabledReason ?? '结算中，暂不可购买' };
     }
+    if (isResting) {
+      return { ok: false, reason: '休养期间不能购买商店物品' };
+    }
     if (item.id === 'pro-peripherals') {
       const tier = player.peripheralTier ?? 0;
       if (tier >= PERIPHERAL_PRICES.length) return { ok: false, reason: '外设已满级' };
       const price = PERIPHERAL_PRICES[tier] ?? 0;
       if (player.stats.money < price) return { ok: false, reason: `资金不足（需 ${price}K）` };
       return { ok: true };
+    }
+    if (item.category === 'equipment') {
+      const owned = new Set(player.ownedItems ?? []);
+      const pawned = new Set(player.pawnedItemIds ?? []);
+      if (owned.has(item.id) && !pawned.has(item.id)) {
+        return { ok: false, reason: '已经拥有该装备' };
+      }
+      if (pawned.has(item.id)) {
+        return { ok: false, reason: '该装备已永久典当，无法重新购买' };
+      }
     }
     if (item.id === 'hire-agent' && hasAgent) {
       return { ok: false, reason: '已签约经纪人' };

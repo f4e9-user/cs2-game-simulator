@@ -1,5 +1,10 @@
-import type { ClubTier, Player } from '../types.js';
-import { calcSynergyBonus, calcTrustModifier } from './synergy.js';
+import type { Player, Teammate } from '../types.js';
+import type {
+  TournamentEntryType,
+  TournamentProgressionTier,
+  TournamentTier,
+} from '../data/tournaments.js';
+import { calcSynergyBonus, calcTeamChemistryModifier, deriveTeamChemistry } from './synergy.js';
 
 export interface MatchStats {
   kills: number;
@@ -21,13 +26,17 @@ export interface MatchSimResult extends MatchStats {
   winProb: number;
 }
 
-// effectiveDifficulty = tournament.baseDifficulty + stage.difficultyBonus
-// Range in practice: early B-tier entry stages to Major finals.
-
-function rosterTeamBonus(player: Player): number {
-  if (!player.roster || player.roster.length === 0) return 0;
-  const sum = player.roster.reduce((s, tm) => s + tm.stats.agility, 0);
-  return Math.floor(sum / 4 / 4);
+export interface MatchContext {
+  tier: TournamentTier;
+  progressionTier: TournamentProgressionTier;
+  entryType: TournamentEntryType;
+  stageIndex: number;
+  effectiveDifficulty: number;
+  opponent?: {
+    power: number;
+    vrsScore: number;
+    form: number;
+  };
 }
 
 function clamp(v: number, min: number, max: number): number {
@@ -38,13 +47,106 @@ function round2(v: number): number {
   return Math.round(v * 100) / 100;
 }
 
+function matchBuffs(player: Player) {
+  return (player.buffs ?? []).filter((buff) =>
+    buff.remainingUses > 0 &&
+    buff.consumeOn === 'match' &&
+    (buff.actionTag === 'match' || buff.actionTag === 'all')
+  );
+}
+
+function product(values: number[]): number {
+  return values.reduce((acc, value) => acc * value, 1);
+}
+
+function normalizeMatchContext(contextOrDifficulty: MatchContext | number): MatchContext {
+  if (typeof contextOrDifficulty !== 'number') return contextOrDifficulty;
+  return {
+    tier: 'b',
+    progressionTier: 'b',
+    entryType: 'direct_signup',
+    stageIndex: 0,
+    effectiveDifficulty: contextOrDifficulty,
+  };
+}
+
+function matchWeights(progressionTier: TournamentProgressionTier): { personal: number; team: number } {
+  if (progressionTier === 'c') return { personal: 0.82, team: 0.18 };
+  if (progressionTier === 'b') return { personal: 0.75, team: 0.25 };
+  if (progressionTier === 'a') return { personal: 0.68, team: 0.32 };
+  if (progressionTier === 'major') return { personal: 0.55, team: 0.45 };
+  return { personal: 0.60, team: 0.40 };
+}
+
+function expectedRosterPowerByTier(progressionTier: TournamentProgressionTier, stageIndex: number): number {
+  const lateStage = stageIndex >= 1;
+  switch (progressionTier) {
+    case 'c':
+      return lateStage ? 4 : 3.5;
+    case 'b':
+      return lateStage ? 5 : 4.5;
+    case 'a':
+      return lateStage ? 8 : 7;
+    case 'major':
+      return lateStage ? 14 : 13;
+    case 's-qualifier':
+    case 's-main':
+      return lateStage ? 11 : 10;
+    default:
+      return lateStage ? 8 : 7;
+  }
+}
+
+function rosterAveragePower(roster: Teammate[]): number {
+  const total = roster.reduce((sum, tm) => (
+    sum +
+    tm.stats.agility * 0.45 +
+    tm.stats.intelligence * 0.25 +
+    tm.stats.experience * 0.20 +
+    tm.stats.mentality * 0.10
+  ), 0);
+  return total / roster.length;
+}
+
+function pickupTeamPower(context: MatchContext): number {
+  if (context.progressionTier === 'c') return 45;
+  if (context.progressionTier === 'b') return 40;
+  return 35;
+}
+
+function deriveEnemyPower(context: MatchContext): number {
+  const base = 25 + context.effectiveDifficulty * 8;
+  if (!context.opponent) return clamp(base, 20, 90);
+  const opponent = context.opponent;
+  const powerComponent = (opponent.power - 8) * 3;
+  const vrsComponent = Math.min(18, Math.sqrt(Math.max(0, opponent.vrsScore)) * 1.4);
+  const formComponent = opponent.form / 12;
+  const stageComponent = Math.max(0, context.stageIndex) * 1.5;
+  return clamp(base + powerComponent + vrsComponent + formComponent + stageComponent, 20, 90);
+}
+
+export function deriveTeamPower(player: Player, context: MatchContext): number {
+  const roster = player.roster ?? [];
+  if (!player.team || roster.length === 0) return pickupTeamPower(context);
+
+  const expected = expectedRosterPowerByTier(context.progressionTier, context.stageIndex);
+  const rosterPower = clamp((rosterAveragePower(roster) - expected) * 3, -12, 12);
+  const synergyPower = clamp(calcSynergyBonus(player, roster) * 2, -6, 8);
+  const chemistryPower =
+    calcTeamChemistryModifier(deriveTeamChemistry(roster, player.teamTrust ?? 50)) * 4;
+
+  return clamp(50 + rosterPower + synergyPower + chemistryPower, 20, 80);
+}
+
 export function simulateMatch(
   player: Player,
-  effectiveDifficulty: number,
+  contextOrDifficulty: MatchContext | number,
   rng: () => number,
 ): MatchSimResult {
+  const context = normalizeMatchContext(contextOrDifficulty);
   const { stats, volatile } = player;
   const { feel, tilt, fatigue } = volatile;
+  const activeMatchBuffs = matchBuffs(player);
 
   // ── 派生 AIM ──────────────────────────────────────────────────
   const aimBase = (stats.agility * 0.7 + stats.experience * 0.3) / 20 * 100;
@@ -53,22 +155,22 @@ export function simulateMatch(
   const feelEffect = feel * 3;
   const fatigueDebuff = Math.max(0, (fatigue - 60) * 0.2);
   const tiltDebuff = tilt * 3;
-  const rawTeamBonus = rosterTeamBonus(player);
-  const synergyBonus = player.roster ? calcSynergyBonus(player, player.roster) : 0;
-  const trustModifier = calcTrustModifier(player.teamTrust ?? 50);
-  const teamBonus = rawTeamBonus + synergyBonus + trustModifier;
-  const effectiveAim = Math.max(5, Math.min(99,
-    aimBase + feelEffect - fatigueDebuff - tiltDebuff + teamBonus,
+  const personalPower = Math.max(5, Math.min(99,
+    aimBase + feelEffect - fatigueDebuff - tiltDebuff,
   ));
+  const teamPower = deriveTeamPower(player, context);
 
   // ── 对手强度 ──────────────────────────────────────────────────
-  const enemyAim = Math.max(20, Math.min(90, 25 + effectiveDifficulty * 8));
+  const enemyPower = deriveEnemyPower(context);
 
   // ── 胜率 ──────────────────────────────────────────────────────
-  const aimAdv = effectiveAim - enemyAim;
+  const weights = matchWeights(context.progressionTier);
+  const matchPower = personalPower * weights.personal + teamPower * weights.team;
+  const powerAdv = matchPower - enemyPower;
   const stabilityBonus = (stats.mentality / 20 - 0.5) * 0.08;
+  const matchWinrateDelta = activeMatchBuffs.reduce((sum, buff) => sum + (buff.matchWinrateDelta ?? 0), 0);
   const winProb = Math.max(0.05, Math.min(0.95,
-    0.5 + aimAdv / 60 + stabilityBonus,
+    0.5 + powerAdv / 60 + stabilityBonus + matchWinrateDelta,
   ));
   const won = rng() < winProb;
 
@@ -87,10 +189,10 @@ export function simulateMatch(
   const totalRounds = teamScore + enemyScore;
 
   // ── 个人 K / D / A：按每回合参与生成，避免短局被 K/D 下限抬高 ───────
-  const aimScore = effectiveAim / 100;
+  const aimScore = personalPower / 100;
   const decisionScore = decisionBase / 100;
   const stabilityScore = stats.mentality / 20;
-  const enemyPressure = enemyAim / 100;
+  const enemyPressure = enemyPower / 100;
   const lostRoundPressure = enemyScore / totalRounds;
 
   const kpr = clamp(
@@ -134,24 +236,34 @@ export function simulateMatch(
   const actualKpr = kills / totalRounds;
   const actualDpr = deaths / totalRounds;
   const actualApr = assists / totalRounds;
-  const decisionMod = (decisionBase - 50) / 100 * 0.12;
-  const resultModifier = won ? 0.03 : -0.03;
+  const decisionMod = (decisionBase - 50) / 100 * 0.10;
+  const resultModifier = won ? 0.05 : -0.05;
+  const marginBonus =
+    Math.abs(teamScore - enemyScore) >= 8 ? 0.05 :
+    Math.abs(teamScore - enemyScore) >= 5 ? 0.03 :
+    Math.abs(teamScore - enemyScore) >= 2 ? 0.01 :
+    0;
   const rawRating =
-    0.30 +
-    actualKpr * 0.95 -
-    actualDpr * 0.35 +
-    actualApr * 0.25 +
-    headshotRate * 0.12 +
+    0.34 +
+    actualKpr * 0.98 -
+    actualDpr * 0.24 +
+    actualApr * 0.18 +
+    headshotRate * 0.10 +
     decisionMod +
-    resultModifier;
-  const rating = round2(clamp(rawRating, 0.50, 2.50));
+    resultModifier +
+    marginBonus;
+  const matchRatingDelta = activeMatchBuffs.reduce((sum, buff) => sum + (buff.matchRatingDelta ?? 0), 0);
+  const rating = round2(clamp(rawRating + matchRatingDelta, 0.50, 2.50));
 
   // ── 状态变化 ─────────────────────────────────────────────────
   const ratingVsAvg = rating - 1.0;
   // feelDelta: 0.5 步进，由表现驱动
   const feelDelta = Math.max(-2, Math.min(2, Math.round(ratingVsAvg * 3 * 2) / 2));
   // fatigueDelta: 比赛消耗，20–32
-  const fatigueDelta = Math.round(20 + (totalRounds - 16) * 1.5);
+  const fatigueMultiplier = product(activeMatchBuffs
+    .map((buff) => buff.matchFatigueMultiplier)
+    .filter((value): value is number => typeof value === 'number'));
+  const fatigueDelta = Math.round((20 + (totalRounds - 16) * 1.5) * fatigueMultiplier);
   // tiltDelta: 爆冷输球 → 心态波动
   let tiltDelta = 0;
   if (!won && winProb > 0.65) tiltDelta += 1;

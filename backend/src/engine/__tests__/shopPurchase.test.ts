@@ -48,6 +48,72 @@ describe('applyShopPurchase', () => {
       .toThrow('本周购买次数已达上限（1/1）');
   });
 
+  it('adds multi-round cooldowns to deep recovery services', () => {
+    const player = initPlayer({
+      name: 'TestPlayer',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    player.stats.money = 100;
+    player.round = 10;
+    player.week = 4;
+
+    const session = createSession(player, 1);
+    const first = applyShopPurchase(session, 'psych-session');
+
+    expect(first.player.shopCooldowns['psych-session']).toBe(16);
+
+    const nextWeekPlayer = {
+      ...first.player,
+      round: 12,
+      week: 5,
+    };
+    expect(() => applyShopPurchase({ ...session, player: nextWeekPlayer }, 'psych-session'))
+      .toThrow('商品冷却中，还需 4 回合');
+
+    const cooledDownPlayer = {
+      ...first.player,
+      stats: { ...first.player.stats, money: 100 },
+      round: 16,
+      week: 5,
+    };
+    const second = applyShopPurchase({ ...session, player: cooledDownPlayer }, 'psych-session');
+    expect(second.player.shopCooldowns['psych-session']).toBe(22);
+  });
+
+  it('makes aim coaching a buff-only baseline service', () => {
+    const player = initPlayer({
+      name: 'TestPlayer',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    player.stats.money = 100;
+    player.stress = 45;
+    player.volatile.fatigue = 60;
+    player.volatile.feel = 2;
+
+    const session = createSession(player, 1);
+    const originalRandom = Math.random;
+    Math.random = () => 1;
+    try {
+      const result = applyShopPurchase(session, 'aim-coach');
+
+      expect(result.player.stats.money).toBe(70);
+      expect(result.player.stress).toBe(45);
+      expect(result.player.volatile.fatigue).toBe(60);
+      expect(result.player.volatile.feel).toBe(2);
+      expect(result.player.buffs).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 'aim-coached',
+          growthKey: 'agility',
+          growthMultiplier: 1.18,
+        }),
+      ]));
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
   it('consumes painkiller fatigue buff on the next positive fatigue action', () => {
     const player = initPlayer({
       name: 'TestPlayer',

@@ -22,7 +22,8 @@ function clamp(val: number, min: number, max: number): number {
 
 const ALLOWED_CHECK_STATS = new Set(['intelligence', 'agility', 'experience', 'money', 'mentality', 'constitution']);
 const ALLOWED_STAT_CHANGES = new Set(['intelligence', 'agility', 'experience', 'mentality', 'constitution']);
-const ALLOWED_AI_EVENT_TYPES = new Set(['life', 'media', 'stress', 'rival', 'team']);
+const ALLOWED_AI_EVENT_TYPES = new Set(['life', 'media', 'stress', 'rival', 'team', 'tournament-context']);
+const ALLOWED_CONTEXT_PHASES = new Set(['signup', 'pre-match', 'post-match']);
 
 function isValidStatChanges(v: unknown): boolean {
   if (!isObject(v)) return false;
@@ -104,6 +105,11 @@ export function isValidAiEvent(v: unknown): v is EventDef {
 
   if (e.requireTags !== undefined && !isStringArray(e.requireTags)) return false;
   if (e.forbidTags !== undefined && !isStringArray(e.forbidTags)) return false;
+  if (e.type === 'tournament-context') {
+    if (!Array.isArray(e.contextPhase) || e.contextPhase.length === 0) return false;
+    if (!e.contextPhase.every((phase) => isString(phase) && ALLOWED_CONTEXT_PHASES.has(phase))) return false;
+    if (e.triggerReason !== undefined && !isString(e.triggerReason)) return false;
+  }
 
   if (!Array.isArray(e.choices) || e.choices.length < 2 || e.choices.length > 4) return false;
   if (!e.choices.every(isValidChoice)) return false;

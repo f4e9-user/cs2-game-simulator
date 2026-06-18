@@ -1,6 +1,6 @@
-# 社交关系系统设计方案（待实现）
+# 社交关系系统设计方案（已完成）
 
-状态：待定
+状态：已完成
 
 ---
 
@@ -125,7 +125,7 @@ mediaRel   向 40 归中，每回合 ±0.3（比 sceneRep 更快衰减）
 | `chain-team-fired` | 触发条件改为：consecutiveLosses ≥ 3 **且** teamTrust ≤ 40（双条件） |
 | `chain-rival-teammate-leave` | 叙事中"离队队友"从 roster 取具名 |
 | 所有 media 类事件 | 结果影响 mediaRel |
-| `matchSimulator` | trustModifier 接入（见阵容系统文档） |
+| `matchSimulator` | 派生队伍默契修正接入（见阵容系统文档；旧 `trustModifier` 已替代） |
 | 俱乐部面试 DC | sceneRep 修正：≥60 → -2，≤20 → +3 |
 | `generateTeamOffer` 薪资范围 | team-trusted 且合同续约 → salaryRange 上限 +1 |
 
@@ -217,5 +217,5 @@ mediaRel   向 40 归中，每回合 ±0.3（比 sceneRep 更快衰减）
 | 3 个新链式事件叙事 | 中 |
 | 俱乐部面试 DC 修正 | 小 |
 | 薪资谈判修正 | 小 |
-| `matchSimulator` trustModifier 接入 | 小（与阵容系统同步实现）|
+| `matchSimulator` 派生队伍默契修正接入 | 小（与阵容系统同步实现）|
 | 前端 PlayerStats 关系进度条 | 小 |

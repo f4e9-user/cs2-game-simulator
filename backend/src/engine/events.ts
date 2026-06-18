@@ -2,7 +2,15 @@ import { PROMOTION_EVENTS, getEventById, getEventRegistry } from '../data/events
 import { getGate } from './stages.js';
 import { getTrait } from '../data/traits.js';
 import { CLUBS } from '../data/clubs.js';
-import type { EventDef, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier, LeaderboardTeam } from '../types.js';
+import { getClubProfile } from '../data/clubProfiles.js';
+import {
+  derivePlayerTeamIdentities,
+  deriveTeammateIdentities,
+} from './teamIdentity.js';
+import { calcSynergyBonus } from './synergy.js';
+import type { AiEventPickCandidate } from '../ai/eventCache.js';
+import type { EventDef, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier, LeaderboardTeam, TeamIdentity } from '../types.js';
+import { pickTournamentContextEvent } from './tournamentContext.js';
 
 export interface EventContext {
   player: Player;
@@ -10,6 +18,22 @@ export interface EventContext {
   rng: () => number;
   leaderboard?: LeaderboardTeam[];
   aiEvents?: EventDef[];
+  aiEventCandidates?: AiEventPickCandidate[];
+}
+
+function playerHasTeamIdentity(player: Player, identity: TeamIdentity): boolean {
+  if (player.visibleTeamIdentity === identity) return true;
+  if (player.visibleTeamIdentity === 'star-caller' && (identity === 'star' || identity === 'caller')) return true;
+  return derivePlayerTeamIdentities(player, player.roster ?? []).includes(identity);
+}
+
+function teammateHasTeamIdentity(player: Player, teammate: Teammate, identity: TeamIdentity): boolean {
+  if (teammate.visibleIdentity === identity) return true;
+  return deriveTeammateIdentities(teammate, player.roster ?? []).includes(identity);
+}
+
+function teammateWithIdentity(player: Player, identity: TeamIdentity): Teammate | undefined {
+  return (player.roster ?? []).find((tm) => teammateHasTeamIdentity(player, tm, identity));
 }
 
 function dynamicTags(player: Player): string[] {
@@ -59,6 +83,54 @@ function dynamicTags(player: Player): string[] {
   // ── 在队生命周期 tag ──────────────────────────────────────────────
   if (player.team) {
     out.push('has-team');
+    const playerIsCaller = playerHasTeamIdentity(player, 'caller');
+    const playerIsStar = playerHasTeamIdentity(player, 'star');
+    const starTeammate = teammateWithIdentity(player, 'star');
+    const callerTeammate = teammateWithIdentity(player, 'caller');
+    if (player.visibleTeamIdentity === 'star-caller' || (playerIsCaller && playerIsStar)) {
+      out.push('player-star-caller');
+    } else {
+      if (playerIsCaller) out.push('player-team-caller');
+      if (playerIsStar) out.push('player-team-star');
+    }
+    if (starTeammate) out.push('team-has-star-teammate');
+    if (callerTeammate) out.push('team-has-caller-teammate');
+
+    const hasConflictPressure =
+      (player.teamTrust ?? 50) < 40 ||
+      (player.consecutiveLosses ?? 0) >= 2 ||
+      player.tags.includes('locker-tension') ||
+      (starTeammate && (starTeammate.chemistry ?? 50) <= 35) ||
+      (callerTeammate && (callerTeammate.chemistry ?? 50) <= 35);
+    if (hasConflictPressure) out.push('team-influence-conflict-risk');
+
+    if (playerIsCaller && starTeammate && hasConflictPressure) {
+      out.push('team-caller-star-conflict-risk');
+    }
+    if (playerIsStar && callerTeammate && hasConflictPressure) {
+      out.push('team-star-caller-conflict-risk');
+    }
+    if (!playerIsCaller && !playerIsStar && starTeammate && callerTeammate && hasConflictPressure) {
+      out.push('team-ordinary-politics-risk');
+    }
+    if ((playerIsCaller || playerIsStar) && starTeammate && callerTeammate && (player.teamTrust ?? 50) >= 55 && !player.tags.includes('locker-tension')) {
+      out.push('team-positive-voice-risk');
+    }
+    if (playerIsStar && ((player.consecutiveLosses ?? 0) >= 1 || player.pendingMatch || (player.teamTrust ?? 50) < 45)) {
+      out.push('team-resource-tilt-risk');
+    }
+    if (
+      playerIsStar &&
+      !playerIsCaller &&
+      (
+        calcSynergyBonus(player, player.roster ?? []) <= 0 ||
+        (player.consecutiveLosses ?? 0) >= 2 ||
+        player.tags.includes('locker-tension') ||
+        Boolean(player.pendingDeparture?.revealed)
+      )
+    ) {
+      out.push('team-lineup-advice-risk');
+    }
     // 合约到期（每 48 回合）
     if ((player.round - player.team.joinedRound) > 0 &&
         (player.round - player.team.joinedRound) % 48 === 0) {
@@ -208,6 +280,20 @@ function stateWeight(e: EventDef, player: Player): number {
   if (!player.team && e.type === 'tryout') w *= 1.5;
   // 有战队时 team 类事件权重提升
   if (player.team && e.type === 'team') w *= 1.6;
+  if (player.team && e.id.startsWith('team-politics-')) {
+    const politics = getClubProfile(player.team.clubId, player.team.tier).politicsBias;
+    if (e.requireTags?.includes('team-caller-star-conflict-risk')) {
+      w *= politics.conflictRisk * politics.starWeight / Math.max(0.5, politics.coachControl);
+    } else if (e.requireTags?.includes('team-star-caller-conflict-risk')) {
+      w *= politics.conflictRisk * politics.callerWeight / Math.max(0.5, politics.coachControl);
+    } else if (e.requireTags?.includes('team-resource-tilt-risk')) {
+      w *= politics.starWeight / Math.max(0.5, politics.coachControl);
+    } else if (e.requireTags?.includes('team-positive-voice-risk')) {
+      w *= Math.max(0.5, politics.coachControl) / Math.max(0.5, politics.conflictRisk);
+    } else if (e.requireTags?.includes('team-ordinary-politics-risk')) {
+      w *= politics.conflictRisk;
+    }
+  }
   // star 性格队友 + 连败：队内冲突触发概率翻倍
   if (
     e.id === 'chain-team-conflict' &&
@@ -285,11 +371,68 @@ export function buildTournamentPrepEvent(pm: PendingMatch): EventDef {
   };
 }
 
+export function buildInjuryAwareTournamentEvent(pm: PendingMatch): EventDef {
+  return {
+    id: `tourney-injury-${pm.tournamentId}-${pm.stageIndex}`,
+    type: 'match',
+    title: `伤病未愈 — ${pm.name}`,
+    narrative: `队医建议你继续休养，但 ${pm.name} 第 ${pm.stageIndex + 1} 阶段已经排到本周。你必须决定怎么处理。`,
+    stages: ['rookie', 'youth', 'second', 'pro'],
+    difficulty: 2,
+    choices: [
+      {
+        id: 'play-injured',
+        label: '带伤上场',
+        description: '硬打比赛，但个人表现和后续恢复都会受影响。',
+        check: { primary: 'constitution', secondary: 'mentality', dc: 0 },
+        success: { narrative: '' },
+        failure: { narrative: '' },
+      },
+      {
+        id: 'reduce-role',
+        label: '降低承担',
+        description: '有战队时更合理，减少关键位责任，队伍胜率和个人数据都会下降。',
+        check: { primary: 'mentality', secondary: 'experience', dc: 0 },
+        success: { narrative: '' },
+        failure: { narrative: '' },
+      },
+      {
+        id: 'forfeit-injury',
+        label: '申请退赛',
+        description: '退出当前赛事，保住身体状态，但队伍关系和名气会受影响。',
+        check: { primary: 'mentality', dc: 0 },
+        success: { narrative: '你选择退赛，把身体恢复放在第一位。赛程不会等你，当前赛事就此结束。' },
+        failure: { narrative: '你选择退赛，把身体恢复放在第一位。赛程不会等你，当前赛事就此结束。' },
+      },
+    ],
+  };
+}
+
 export function pickEvent(ctx: EventContext): EventDef | null {
-  const { player, recentEventIds, rng, aiEvents } = ctx;
+  const { player, recentEventIds, rng, aiEvents, aiEventCandidates } = ctx;
   const realTags = new Set(player.tags);
   const synthTags = new Set([...player.tags, ...dynamicTags(player)]);
-  const pool = [...getEventRegistry().getAll(), ...(aiEvents ?? [])];
+  const weightedAiCandidates = aiEventCandidates ?? aiEvents?.map((event) => ({ event, weightMultiplier: 1 })) ?? [];
+  const candidateAiEvents = weightedAiCandidates.map((candidate) => candidate.event);
+  const aiWeightById = new Map(weightedAiCandidates.map((candidate) => [candidate.event.id, candidate.weightMultiplier]));
+  const pool = [
+    ...getEventRegistry().getAll().filter((event) => event.type !== 'tournament-context'),
+    ...candidateAiEvents,
+  ];
+
+  // 赛事隔离：阻断晋级事件和随机事件
+  if (player.pendingMatch) {
+    const isMatchWeek =
+      player.pendingMatch.resolveYear === (player.year ?? 1) &&
+      player.pendingMatch.resolveWeek === (player.week ?? 1);
+    if (isMatchWeek) {
+      if ((player.restRounds ?? 0) > 0) {
+        return buildInjuryAwareTournamentEvent(player.pendingMatch);
+      }
+      return getEventById(`tournament-${player.pendingMatch.tournamentId}--${player.pendingMatch.stageIndex}`) ?? null;
+    }
+    return pickTournamentContextEvent(player, candidateAiEvents);
+  }
 
   if (player.forceNextEvent) {
     const forcedEvent = getEventById(player.forceNextEvent);
@@ -312,15 +455,10 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     return responseEvent ?? null;
   }
 
-  // 家人危机：最高优先级注入，即使在赛事期间也必须面对
+  // 家人危机：非赛事期间最高优先级注入；赛事期间由赛事上下文结束后再处理
   if (synthTags.has('needs-family-crisis')) {
     const crisisEvent = pool.find((e) => e.id === 'family-crisis-illness');
     return crisisEvent ?? null;
-  }
-
-  // 赛事隔离：阻断晋级事件和随机事件
-  if (player.pendingMatch) {
-    return buildTournamentPrepEvent(player.pendingMatch);
   }
 
   // 破产恢复：持续破产且冷却结束时，直接注入家人/朋友救济事件
@@ -359,6 +497,26 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     return interviewEvent ?? null;
   }
 
+  if (
+    synthTags.has('team-caller-star-conflict-risk') ||
+    synthTags.has('team-star-caller-conflict-risk') ||
+    (synthTags.has('player-star-caller') && synthTags.has('team-influence-conflict-risk')) ||
+    synthTags.has('team-positive-voice-risk') ||
+    synthTags.has('team-resource-tilt-risk') ||
+    synthTags.has('team-lineup-advice-risk') ||
+    synthTags.has('team-ordinary-politics-risk')
+  ) {
+    const politicsPool = pool.filter(
+      (e) =>
+        e.id.startsWith('team-politics-') &&
+        e.stages.includes(player.stage) &&
+        !recentEventIds.includes(e.id) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
+    );
+    if (politicsPool.length > 0) return weightedPick(politicsPool, rng, (e) => stateWeight(e, player));
+  }
+
   const eligible = pool.filter((e) => {
     if (e.type === 'rest') return false;
     if (e.type === 'routine') return false; // 日常行动改为行动面板，不再随机出现
@@ -369,9 +527,9 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     return true;
   });
 
-  const aiEligible = eligible.filter((e) => e.id.startsWith('ai-'));
+  const aiEligible = eligible.filter((e) => aiWeightById.has(e.id));
   if (aiEligible.length > 0 && rng() < 0.6) {
-    return weightedPick(aiEligible, rng, (e) => stateWeight(e, player));
+    return weightedPick(aiEligible, rng, (e) => stateWeight(e, player) * (aiWeightById.get(e.id) ?? 1));
   }
 
   if (eligible.length === 0) {
@@ -382,7 +540,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     return weightedPick(fallback, rng, (e) => stateWeight(e, player));
   }
 
-  return weightedPick(eligible, rng, (e) => stateWeight(e, player));
+  return weightedPick(eligible, rng, (e) => stateWeight(e, player) * (aiWeightById.get(e.id) ?? 1));
 }
 
 function weightedPick(

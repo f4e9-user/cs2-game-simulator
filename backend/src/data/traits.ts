@@ -5,13 +5,15 @@ import type { Trait } from '../types.js';
 // Positive modifiers become the "floor" of the stat allocator;
 // negative modifiers are shown in the allocator as a visible penalty
 // that the player can compensate for with their 10-point pool.
+// Experience is career-derived; only traits that imply prior real match history
+// should grant opening experience.
 export const TRAITS: Trait[] = [
   {
     id: 'aim-god',
     name: '枪法天才',
     description:
       '第一次摸鼠标那天，队友就以为他开了挂。对枪时眼睛比手快，定位像磁铁一样精准。不是练出来的——是天生的。',
-    modifiers: { agility: 2 },
+    modifiers: { agility: 3 },
     tags: ['aimer', 'mechanical'],
   },
   {
@@ -35,7 +37,7 @@ export const TRAITS: Trait[] = [
     name: '训练狂',
     description:
       '训练服第一个在线，最后一个离线。每天 500 个 bot 击杀是底线，不是目标。别人问他秘诀，他说"再练一会儿"。身体偶尔抗议，但他从不回应。',
-    modifiers: { experience: 1, agility: 1, constitution: -1 },
+    modifiers: { agility: 1, mentality: 1, constitution: -1 },
     tags: ['grinder', 'steady'],
   },
   {
@@ -83,7 +85,7 @@ export const TRAITS: Trait[] = [
     name: '天梯之王',
     description:
       '天梯排名是他唯一的简历。一个人杀穿五个人是家常便饭，但战术配合在他眼里是"耽误我发挥"。路人局他是神，正式比赛教练需要反复提醒他"你不是一个人在打"。',
-    modifiers: { agility: 1, experience: 2, intelligence: -1 },
+    modifiers: { agility: 2, intelligence: -1 },
     tags: ['solo', 'mechanical'],
   },
   {
@@ -123,7 +125,7 @@ export const TRAITS: Trait[] = [
     name: '沉迷型',
     description:
       '一天 12 小时，一周 7 天。吃饭在电脑前，睡觉在电脑前，活着在电脑前。他的天梯排名是最好的，但他的生活——如果那还能叫生活的话——是一团废墟。他自己知道，但关不掉。',
-    modifiers: { experience: 2, mentality: -1, constitution: -1 },
+    modifiers: { agility: 1, mentality: -1, constitution: -1 },
     tags: ['grinder', 'obsessed'],
   },
   {
@@ -131,7 +133,7 @@ export const TRAITS: Trait[] = [
     name: '花架子',
     description:
       '360 度跳狙、盲狙甩枪、刀杀集锦——他的操作足够填满十个精彩镜头合集。但教练翻看他的胜率时皱起了眉头。华丽和有用是两回事，而他还没搞明白这个区别。',
-    modifiers: { agility: 1, experience: -1 },
+    modifiers: { agility: 1, mentality: -1 },
     tags: ['media', 'flashy', 'inconsistent'],
   },
   {
@@ -147,7 +149,7 @@ export const TRAITS: Trait[] = [
     name: '拖延症',
     description:
       '"明天一定复盘。"——这是他对自己说的第 17 遍。训练计划写得很完美，执行记录一片空白。但奇怪的是，截止日期的前一晚他总能奇迹般地完成一切。不是最好的方式，但暂时还没出大事。',
-    modifiers: { intelligence: 1, experience: -2 },
+    modifiers: { intelligence: 1, mentality: -1 },
     tags: ['lazy'],
   },
   {
@@ -179,7 +181,7 @@ export const TRAITS: Trait[] = [
     name: '夜猫体质',
     description:
       '下午三点的训练赛他困得像梦游。但一到凌晨，他的瞳孔开始发光。深夜服务器上只剩下他一个人，准星却比白天任何时候都稳。他知道这不健康，但凌晨三点是他的时区。',
-    modifiers: { experience: 1, constitution: -2, mentality: 1 },
+    modifiers: { agility: 1, constitution: -2, mentality: 1 },
     tags: ['grinder', 'obsessed'],
   },
 ];

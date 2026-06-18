@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildYearTournaments } from '../../data/tournaments.js';
 import { buildCareerGoal } from '../careerGoal.js';
 import type { Player } from '../../types.js';
 
@@ -53,6 +54,7 @@ function player(overrides: Partial<Player>): Player {
     actionPoints: 100,
     shopCooldowns: {},
     weeklyShopPurchases: {},
+    weeklyTeamActions: {},
     team: null,
     pendingApplication: null,
     qualificationSlots: {},
@@ -127,5 +129,142 @@ describe('buildCareerGoal', () => {
       expect.objectContaining({ id: 's-championships', current: 1, target: 1, completed: true }),
       expect.objectContaining({ id: 'fame', current: 42, target: 60 }),
     ]));
+  });
+
+  it('marks gated A-tier opportunities unavailable without the required ticket', () => {
+    const blockedGoal = buildCareerGoal(player({
+      stage: 'second',
+      week: 22,
+      fame: 20,
+      team: {
+        clubId: 'semi-pro-test',
+        name: '二线测试队',
+        tag: 'SPT',
+        region: 'CN',
+        tier: 'semi-pro',
+        monthlySalary: 20,
+        joinedRound: 1,
+        teamStatus: 'starter',
+      },
+    }), 20);
+
+    expect(blockedGoal.opportunities).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        week: 22,
+        tier: 'A 级赛事',
+        available: false,
+        status: '缺A级公开预选门票',
+      }),
+    ]));
+  });
+
+  it('shows A-tier opportunities for a second-tier team with the required ticket', () => {
+    const ticketGoal = buildCareerGoal(player({
+      stage: 'second',
+      week: 22,
+      fame: 20,
+      team: {
+        clubId: 'semi-pro-test',
+        name: '二线测试队',
+        tag: 'SPT',
+        region: 'CN',
+        tier: 'semi-pro',
+        monthlySalary: 20,
+        joinedRound: 1,
+        teamStatus: 'starter',
+      },
+      qualificationSlots: { 'a-open': 1 },
+    }), 20);
+
+    expect(ticketGoal.opportunities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ week: 22, tier: 'A 级赛事', available: true, status: '可报名' }),
+    ]));
+  });
+
+  it('shows all target opportunities in the next twelve weeks', () => {
+    const goal = buildCareerGoal(player({
+      stage: 'second',
+      week: 21,
+      fame: 30,
+      team: {
+        clubId: 'semi-pro-test',
+        name: '二线测试队',
+        tag: 'SPT',
+        region: 'CN',
+        tier: 'semi-pro',
+        monthlySalary: 20,
+        joinedRound: 1,
+        teamStatus: 'starter',
+      },
+      qualificationSlots: { 'a-open': 1, 'a-main': 1 },
+    }), 30);
+
+    expect(goal.opportunities.map((opportunity) => opportunity.week)).toEqual([22, 25, 27, 29, 30, 33]);
+  });
+
+  it('includes additional A-tier open qualifiers in early second-stage planning', () => {
+    const goal = buildCareerGoal(player({
+      stage: 'second',
+      week: 6,
+      fame: 20,
+      team: {
+        clubId: 'semi-pro-test',
+        name: '二线测试队',
+        tag: 'SPT',
+        region: 'CN',
+        tier: 'semi-pro',
+        monthlySalary: 20,
+        joinedRound: 1,
+        teamStatus: 'starter',
+      },
+      qualificationSlots: { 'a-open': 1 },
+    }), 20);
+
+    expect(goal.opportunities.map((opportunity) => opportunity.week)).toEqual([8, 11, 13, 15, 16]);
+    expect(goal.opportunities.filter((opportunity) => opportunity.name.includes('Open Qualifier')).length)
+      .toBeGreaterThanOrEqual(2);
+  });
+
+  it('does not lock youth and second B-tier A-open tickets behind championships only', () => {
+    const bMainEvents = buildYearTournaments(1).filter((tournament) => (
+      tournament.tier === 'b'
+      && tournament.stages.includes('youth')
+      && tournament.stages.includes('second')
+      && tournament.teamRequirement === 'youth'
+      && tournament.qualificationMilestones?.some((milestone) => (
+        milestone.rewards.some((reward) => reward.slot === 'a-open')
+      ))
+    ));
+
+    expect(bMainEvents.length).toBeGreaterThanOrEqual(8);
+    for (const tournament of bMainEvents) {
+      expect(tournament.qualificationMilestones).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          stageIndex: 0,
+          label: '晋级决赛',
+          rewards: expect.arrayContaining([expect.objectContaining({ slot: 'a-open' })]),
+        }),
+      ]));
+    }
+  });
+
+  it('adds a direction hint from the current club profile', () => {
+    const goal = buildCareerGoal(player({
+      stage: 'youth',
+      team: {
+        clubId: 'club-cyber-academy',
+        name: '赛博学院',
+        tag: 'CYA',
+        region: '亚太',
+        tier: 'youth',
+        monthlySalary: 10,
+        joinedRound: 1,
+        teamStatus: 'trial',
+        teamStatusUntilRound: 9,
+      },
+    }));
+
+    expect(goal.teamHint).toContain('战术体系晋级');
+    expect(goal.teamHint).toContain('试训期');
   });
 });

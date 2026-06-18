@@ -188,6 +188,8 @@ function shouldConsumeBuff(
       return fatigueMatches;
     case 'stress':
       return stressMatches;
+    case 'match':
+      return false;
     case 'any':
       return growthMatches || fatigueMatches || stressMatches;
   }

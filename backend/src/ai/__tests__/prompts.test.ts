@@ -56,6 +56,7 @@ function mockPlayer(overrides?: Partial<Player>): Player {
     actionPoints: 3,
     shopCooldowns: {},
     weeklyShopPurchases: {},
+    weeklyTeamActions: {},
     team: null,
     pendingApplication: null,
     qualificationSlots: {},
@@ -246,5 +247,69 @@ describe('buildSocialFeedPrompt', () => {
       [] as LeaderboardTeam[],
     );
     expect(prompt).toContain('社交媒体模拟引擎');
+  });
+
+  it('uses the historical team snapshot for recent tournament reports', () => {
+    const prompt = buildSocialFeedPrompt(
+      mockPlayer({
+        team: {
+          clubId: 'iron-wolves',
+          name: '铁狼',
+          tag: 'IW',
+          region: 'CN',
+          tier: 'semi-pro',
+          monthlySalary: 20,
+          joinedRound: 2,
+        },
+      }),
+      [{
+        round: 1,
+        eventId: 'tournament-academy-league-s4--2',
+        eventType: 'match',
+        eventTitle: 'Academy League Season 4 决赛',
+        teamSnapshot: {
+          clubId: 'cyber-academy',
+          name: '赛博学院',
+          tag: 'CYA',
+          region: 'CN',
+          tier: 'youth',
+        },
+        choiceId: 'play',
+        choiceLabel: '参赛',
+        success: true,
+        roll: 15,
+        dc: 12,
+        narrative: '决赛打满三图，队伍执行更稳。',
+        statChanges: {},
+        newStats: mockPlayer().stats,
+        stageBefore: 'rookie',
+        stageAfter: 'youth',
+        tagsAdded: [],
+        tagsRemoved: [],
+        passiveEffects: [],
+        qualificationChanges: [],
+        stressChange: 0,
+        fameChange: 4,
+        feelChange: 0,
+        tiltChange: 0,
+        fatigueChange: 0,
+        buffsAdded: [],
+        matchStats: {
+          kills: 18,
+          deaths: 9,
+          assists: 4,
+          headshotRate: 0.42,
+          rating: 1.21,
+          teamScore: 16,
+          enemyScore: 12,
+        },
+        createdAt: '2026-06-09T00:00:00.000Z',
+      } as RoundResult],
+      [] as LeaderboardTeam[],
+    );
+
+    expect(prompt).toContain('赛博学院 在「Academy League Season 4 决赛」夺冠/晋级');
+    expect(prompt).toContain('禁止用当前战队改写旧赛事');
+    expect(prompt).not.toContain('铁狼 在「Academy League Season 4 决赛」');
   });
 });
