@@ -38,10 +38,11 @@ import {
   findTeamCaller,
   findTeamStar,
 } from '../engine/teamIdentity.js';
+import { canCrystallizeRole, deriveRolePressure, normalizeRoleTransition } from '../engine/roleTransition.js';
 import { CLUBS, clubsForStage, getClub } from '../data/clubs.js';
 import { buildLeaderboard } from '../data/leaderboard.js';
 import { getClubProfile } from '../data/clubProfiles.js';
-import { ROLE_PROFILES } from '../data/roleProfiles.js';
+import { ROLE_PROFILES, roleFitScore } from '../data/roleProfiles.js';
 import { getEventById } from '../data/events/index.js';
 import {
   buildYearTournaments,
@@ -75,6 +76,7 @@ import {
   type AiEventCacheEnvelope,
 } from '../ai/eventCache.js';
 import type { ClubApplicationSummary, ClubRuntimeState, ClubStoryline, ClubTier, Env, EventDef, GameSession, MatchStats, Player, PlayerTeam, Stats, TeamIdentityDebug } from '../types.js';
+import type { RoleDebug } from '../types.js';
 
 const AI_EVENT_CACHE_TTL_SECONDS = 43200;
 const TEAM_ONBOARDING_EVENTS = {
@@ -231,6 +233,29 @@ function buildTeamIdentityDebug(player: Player): TeamIdentityDebug {
     })),
     caller: findTeamCaller(player, roster),
     star: findTeamStar(player, roster),
+  };
+}
+
+function buildRoleDebug(player: Player, history: GameSession['history']): RoleDebug {
+  const fitScores = {
+    IGL: roleFitScore(player, 'IGL'),
+    AWPer: roleFitScore(player, 'AWPer'),
+    Entry: roleFitScore(player, 'Entry'),
+    Support: roleFitScore(player, 'Support'),
+    Lurker: roleFitScore(player, 'Lurker'),
+  };
+  const pressure = deriveRolePressure(player, history);
+  const crystallizeThreshold = 70;
+  const crystallizeReady = canCrystallizeRole(player, history);
+  return {
+    fitScores,
+    pressure: Math.max(0, Math.min(100, pressure)),
+    crystallizeReady,
+    crystallizeThreshold,
+    activeRole: player.activeRole,
+    preferredRole: player.preferredRole,
+    roleTransition: normalizeRoleTransition(player.roleTransition),
+    activeRoleRounds: player.activeRoleRounds,
   };
 }
 
@@ -397,6 +422,7 @@ app.get('/game/:sessionId', async (c) => {
       session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0,
     ),
     debugTeamIdentity: buildTeamIdentityDebug(session.player),
+    debugRole: buildRoleDebug(session.player, session.history),
   });
 });
 

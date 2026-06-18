@@ -748,22 +748,24 @@ describe('team management actions', () => {
   it('resets crystallization when activeRole changes away from preferredRole', () => {
     const base = {
       ...player(),
-      preferredRole: 'IGL' as const,
+      preferredRole: 'Lurker' as const,
+      activeRole: 'IGL' as const,
       activeRoleRounds: 12,
       roleCrystallized: true,
       roster: [
+        teammate('caller-slot', 'IGL'),
         teammate('awp-slot', 'AWPer'),
         teammate('support-slot', 'Support'),
         teammate('lurker-slot', 'Lurker'),
       ],
     };
     const session = createSession(base, 1);
-    session.currentEvent = toPublicEvent(getEventById('chain-team-joined')!);
+    session.currentEvent = toPublicEvent(getEventById('routine-standard')!);
 
-    const resolved = applyChoice(session, 'accept-role', 20);
+    const resolved = applyChoice(session, 'structured-training', 20);
 
-    expect(resolved.session.player.activeRole).not.toBe('IGL');
-    expect(resolved.session.player.preferredRole).toBe('IGL');
+    expect(resolved.session.player.preferredRole).toBe('Lurker');
+    expect(resolved.session.player.activeRole).toBe('IGL');
     expect(resolved.session.player.activeRoleRounds).toBeGreaterThanOrEqual(0);
     expect(resolved.session.player.roleCrystallized).toBe(false);
   });

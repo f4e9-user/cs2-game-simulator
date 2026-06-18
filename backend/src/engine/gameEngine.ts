@@ -10,6 +10,7 @@ import { generateRoster, generateSingleTeammate } from '../data/roster.js';
 import { addPlayerPoints, buildLeaderboard } from '../data/leaderboard.js';
 import { getEventById } from '../data/events/index.js';
 import { roleFitScore } from '../data/roleProfiles.js';
+import { canCrystallizeRole, deriveRolePressure } from './roleTransition.js';
 import { TRAITS, getTrait } from '../data/traits.js';
 import { ACTIONS, getAction, type ActionDef, type ComboConsume } from '../data/actions.js';
 import { getShopItem, SHOP_ITEMS, type ShopCategory } from '../data/shop.js';
@@ -2625,6 +2626,7 @@ export function applyChoice(
         const target = eligible[Math.floor(rng() * eligible.length)]!;
         const resolveRound = nextPlayer.round + 3 + Math.floor(rng() * 3);
         nextPlayer.roleTransition = { targetRole: target, startedRound: nextPlayer.round, resolveRound };
+        nextPlayer.roleCrystallized = false;
       }
     } else {
       nextPlayer.roleTransition = null;
@@ -4537,32 +4539,6 @@ function applyAutomaticTagCleanup(
   const tagExpiry = { ...(player.tagExpiry ?? {}) };
   for (const tag of remove) delete tagExpiry[tag];
   return { ...player, tags, tagExpiry };
-}
-
-function deriveRolePressure(player: Player, history: RoundResult[]): number {
-  let pressure = 0;
-  if (player.preferredRole && player.activeRole && player.preferredRole !== player.activeRole) {
-    pressure += 20;
-  }
-  if (player.team && (player.teamTrust ?? 50) < 40) {
-    pressure += Math.min(20, 40 - (player.teamTrust ?? 50));
-  }
-  if (player.activeRole && player.roster?.some((tm) => tm.role === player.activeRole)) {
-    pressure += 25;
-  }
-  if (hasPoorRecentMatch(history)) {
-    pressure += 15;
-  }
-  if (player.roleTransition) {
-    pressure += 10;
-  }
-  return Math.max(0, Math.min(100, pressure));
-}
-
-function hasPoorRecentMatch(history: RoundResult[]): boolean {
-  const recent = [...history].reverse().slice(0, 5);
-  const match = recent.find((entry) => entry.matchStats);
-  return (match?.matchStats?.rating ?? 1) < 0.95;
 }
 
 function hashString(s: string): number {

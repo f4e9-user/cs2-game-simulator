@@ -446,6 +446,17 @@ export interface ClubApplicationSummary extends Club {
   };
 }
 
+export interface RoleDebug {
+  fitScores: Record<TeammateRole, number>;
+  pressure: number;
+  crystallizeReady: boolean;
+  crystallizeThreshold: number;
+  activeRole: TeammateRole | null;
+  preferredRole: TeammateRole | null;
+  roleTransition: RoleTransition | null;
+  activeRoleRounds: number;
+}
+
 export interface PlayerTeam {
   clubId: string;
   name: string;
@@ -837,6 +848,7 @@ export interface GameSession {
   worldClubs?: WorldClubPool;
   worldClubsVersion?: number;
   debugTeamIdentity?: TeamIdentityDebug;
+  debugRole?: RoleDebug;
 }
 
 export interface SessionSummary {

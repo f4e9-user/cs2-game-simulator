@@ -94,6 +94,41 @@ describe('game routes', () => {
     ])).not.toContain('money');
   });
 
+  it('normalizes legacy role transition fields in session debug payload', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Role Debugger',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+
+    await app.request(`https://localhost/api/debug/${started.sessionId}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+      body: JSON.stringify({
+        roleTransition: {
+          targetRole: 'IGL',
+          startedRound: 7,
+          resolveRound: 10,
+        },
+      }),
+    }, env);
+
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const body = await sessionRes.json() as { debugRole?: { roleTransition?: { stage?: string; source?: string } } };
+
+    expect(sessionRes.status).toBe(200);
+    expect(body.debugRole?.roleTransition?.stage).toBe('trial');
+    expect(body.debugRole?.roleTransition?.source).toBe('team-need');
+  });
+
   it('allows trait rolling before a session exists', async () => {
     const res = await app.request('https://localhost/api/game/roll-traits', { method: 'POST' });
     const body = await res.json() as { traits?: unknown[]; error?: string };

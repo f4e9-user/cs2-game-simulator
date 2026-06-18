@@ -8,6 +8,7 @@ import {
   deriveTeammateIdentities,
 } from './teamIdentity.js';
 import { calcSynergyBonus } from './synergy.js';
+import { deriveRolePressure } from './roleTransition.js';
 import type { AiEventPickCandidate } from '../ai/eventCache.js';
 import type { EventDef, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier, LeaderboardTeam, TeamIdentity } from '../types.js';
 import { pickTournamentContextEvent } from './tournamentContext.js';
@@ -192,7 +193,7 @@ function dynamicTags(player: Player): string[] {
   if (teamBailoutReady) out.push('needs-team-bailout');
 
   // ── 角色转型 tag ──────────────────────────────────────────────────
-  if (player.preferredRole && !player.roleTransition) {
+  if (player.preferredRole && !player.roleTransition && !player.roleCrystallized) {
     const allRoles: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
     if (allRoles.some((r) => hasRoleTransitionMainTrigger(player, r))) {
       out.push('role-transition-eligible');
@@ -200,6 +201,9 @@ function dynamicTags(player: Player): string[] {
   }
   if (player.roleTransition && player.round >= player.roleTransition.resolveRound) {
     out.push('role-transition-resolve');
+  }
+  if (player.roleTransition) {
+    out.push('role-transition-active');
   }
 
   // ── 前队友联系 tag ────────────────────────────────────────────────

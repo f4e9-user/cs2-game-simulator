@@ -11,6 +11,7 @@ import {
   parseAiEventCache,
 } from '../ai/eventCache.js';
 import { computeClubVrsScore } from '../engine/worldClubs.js';
+import { normalizeRoleTransition } from '../engine/roleTransition.js';
 import type {
   ClubTier,
   Env,
@@ -78,6 +79,7 @@ app.post('/debug/:sessionId', async (c) => {
     pendingMatch,
     forceNextEvent,
     forceMatchResult,
+    roleTransition,
     stats,
     tags,
     teamMonthlySalary,
@@ -136,6 +138,19 @@ app.post('/debug/:sessionId', async (c) => {
   if (tags !== undefined && (!Array.isArray(tags) || tags.some((tag) => typeof tag !== 'string'))) {
     return c.json({ error: 'tags 必须是字符串数组' }, 400);
   }
+  if (roleTransition !== undefined) {
+    if (
+      roleTransition !== null &&
+      (
+        !isObject(roleTransition) ||
+        typeof roleTransition.targetRole !== 'string' ||
+        !Number.isInteger(roleTransition.startedRound) ||
+        !Number.isInteger(roleTransition.resolveRound)
+      )
+    ) {
+      return c.json({ error: 'roleTransition 结构无效' }, 400);
+    }
+  }
 
   if ((teamMonthlySalary !== undefined || teamTier !== undefined || teamVrsScore !== undefined) && !session.player.team) {
     return c.json({ error: '玩家当前没有战队，不能覆盖战队合同字段' }, 400);
@@ -161,6 +176,7 @@ app.post('/debug/:sessionId', async (c) => {
   if (pendingMatch !== undefined) session.player.pendingMatch = pendingMatch;
   if (forceNextEvent !== undefined) session.player.forceNextEvent = forceNextEvent === null ? null : forceNextEvent;
   if (forceMatchResult !== undefined) session.player.forceMatchResult = forceMatchResult === null ? null : forceMatchResult;
+  if (roleTransition !== undefined) session.player.roleTransition = normalizeRoleTransition(roleTransition as never);
   if (stats !== undefined && isObject(stats)) {
     for (const key of DEBUG_CORE_STATS) {
       const value = stats[key];

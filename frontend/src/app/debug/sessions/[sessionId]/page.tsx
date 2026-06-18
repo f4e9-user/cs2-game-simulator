@@ -675,6 +675,37 @@ export default function DebugSessionPage() {
           </div>
 
           <div className="panel">
+            <div className="panel-title">角色 Debug</div>
+            {session.debugRole ? (
+              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>
+                    active {session.debugRole.activeRole ?? '(none)'} · preferred {session.debugRole.preferredRole ?? '(none)'}
+                  </div>
+                  <div>
+                    rounds: {session.debugRole.activeRoleRounds} · pressure: {session.debugRole.pressure} · crystallize: {String(session.debugRole.crystallizeReady)}
+                  </div>
+                  <div>threshold: {session.debugRole.crystallizeThreshold}</div>
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {Object.entries(session.debugRole.fitScores).map(([role, score]) => (
+                    <div key={role}>{role}: {score}</div>
+                  ))}
+                </div>
+                {session.debugRole.roleTransition ? (
+                  <div>
+                    transition: {session.debugRole.roleTransition.targetRole} · stage {session.debugRole.roleTransition.stage ?? 'trial'} · source {session.debugRole.roleTransition.source ?? 'team-need'}
+                  </div>
+                ) : (
+                  <div>当前没有进行中的转型轨道。</div>
+                )}
+              </div>
+            ) : (
+              <div style={{ color: '#8b949e', fontSize: 13 }}>debugRole 未返回</div>
+            )}
+          </div>
+
+          <div className="panel">
             <div className="panel-title">AI 状态</div>
             {aiStatus ? (
               <div style={{ display: 'grid', gap: 8, fontSize: 13, color: '#8b949e' }}>
