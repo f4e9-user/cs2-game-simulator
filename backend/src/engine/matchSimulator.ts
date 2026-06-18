@@ -5,6 +5,7 @@ import type {
   TournamentTier,
 } from '../data/tournaments.js';
 import { calcSynergyBonus, calcTeamChemistryModifier, deriveTeamChemistry } from './synergy.js';
+import { roleFitScore } from '../data/roleProfiles.js';
 
 export interface MatchStats {
   kills: number;
@@ -125,6 +126,27 @@ function deriveEnemyPower(context: MatchContext): number {
   return clamp(base + powerComponent + vrsComponent + formComponent + stageComponent, 20, 90);
 }
 
+function roleMatchModifiers(player: Player): { personalPower: number; teamPower: number; rating: number; summary: string | null } {
+  if (!player.activeRole) return { personalPower: 0, teamPower: 0, rating: 0, summary: null };
+  const fit = roleFitScore(player, player.activeRole);
+  const fitDelta = clamp((fit - 60) / 20, -1, 1);
+  const crystallized = player.roleCrystallized ? 0.5 : 0;
+  const pressure = player.tags.includes('role-confusion') || player.roleTransition ? -0.5 : 0;
+  const base = clamp(fitDelta + crystallized + pressure, -1, 1);
+  switch (player.activeRole) {
+    case 'IGL':
+      return { personalPower: 0, teamPower: base * 2, rating: 0, summary: '指挥位影响队伍节奏' };
+    case 'Support':
+      return { personalPower: 0, teamPower: base * 1.5, rating: 0.01 * base, summary: '辅助位影响执行容错' };
+    case 'AWPer':
+      return { personalPower: base * 2, teamPower: 0, rating: 0.03 * base, summary: '狙击手影响火力上限' };
+    case 'Entry':
+      return { personalPower: base * 1.5, teamPower: 0, rating: 0.02 * base, summary: '突破手影响开局主动权' };
+    case 'Lurker':
+      return { personalPower: base, teamPower: base, rating: 0.015 * base, summary: '自由人影响信息差和残局' };
+  }
+}
+
 export function deriveTeamPower(player: Player, context: MatchContext): number {
   const roster = player.roster ?? [];
   if (!player.team || roster.length === 0) return pickupTeamPower(context);
@@ -155,10 +177,11 @@ export function simulateMatch(
   const feelEffect = feel * 3;
   const fatigueDebuff = Math.max(0, (fatigue - 60) * 0.2);
   const tiltDebuff = tilt * 3;
+  const roleMods = roleMatchModifiers(player);
   const personalPower = Math.max(5, Math.min(99,
     aimBase + feelEffect - fatigueDebuff - tiltDebuff,
-  ));
-  const teamPower = deriveTeamPower(player, context);
+  )) + roleMods.personalPower;
+  const teamPower = deriveTeamPower(player, context) + roleMods.teamPower;
 
   // ── 对手强度 ──────────────────────────────────────────────────
   const enemyPower = deriveEnemyPower(context);
@@ -253,7 +276,7 @@ export function simulateMatch(
     resultModifier +
     marginBonus;
   const matchRatingDelta = activeMatchBuffs.reduce((sum, buff) => sum + (buff.matchRatingDelta ?? 0), 0);
-  const rating = round2(clamp(rawRating + matchRatingDelta, 0.50, 2.50));
+  const rating = round2(clamp(rawRating + matchRatingDelta + roleMods.rating, 0.50, 2.50));
 
   // ── 状态变化 ─────────────────────────────────────────────────
   const ratingVsAvg = rating - 1.0;
@@ -277,6 +300,7 @@ export function simulateMatch(
     fatigueDelta,
     winProb,
   );
+  const roleSummary = roleMods.summary ? ` ${roleMods.summary}。` : '';
 
   return {
     won,
@@ -287,7 +311,7 @@ export function simulateMatch(
     rating,
     teamScore,
     enemyScore,
-    summary,
+    summary: summary + roleSummary,
     feelDelta,
     tiltDelta,
     fatigueDelta,

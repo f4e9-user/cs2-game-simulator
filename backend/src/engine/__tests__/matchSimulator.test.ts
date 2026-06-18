@@ -253,6 +253,52 @@ describe('simulateMatch', () => {
     expect(typeof resolved.result.passiveEffects.join(' ')).toBe('string');
   });
 
+  it('differentiates active role impact between personal firepower and team stability', () => {
+    const base = player({
+      stats: {
+        agility: 16,
+        intelligence: 16,
+        experience: 14,
+        money: 0,
+        mentality: 14,
+        constitution: 10,
+      },
+      volatile: { feel: 0, tilt: 0, fatigue: 10 },
+      stage: 'pro',
+      activeRoleRounds: 30,
+      roleCrystallized: true,
+    });
+    const context = {
+      tier: 'a' as const,
+      progressionTier: 'a' as const,
+      entryType: 'direct_signup' as const,
+      stageIndex: 1,
+      effectiveDifficulty: 5,
+    };
+    const rolls = [0.55, 0.5, 0.5, 0.5, 0.5, 0.5];
+
+    const awper = simulateMatch(
+      { ...base, activeRole: 'AWPer', preferredRole: 'AWPer' },
+      context,
+      rng(rolls),
+    );
+    const igl = simulateMatch(
+      { ...base, activeRole: 'IGL', preferredRole: 'IGL' },
+      context,
+      rng(rolls),
+    );
+    const noRole = simulateMatch(
+      { ...base, activeRole: null, preferredRole: null, roleCrystallized: false },
+      context,
+      rng(rolls),
+    );
+
+    expect(awper.summary).toContain('狙击手影响火力上限');
+    expect(igl.summary).toContain('指挥位影响队伍节奏');
+    expect(awper.rating).toBeGreaterThan(noRole.rating);
+    expect(igl.winProb).toBeGreaterThan(noRole.winProb);
+  });
+
   it('lowers win probability against a strong concrete opponent', () => {
     const p = player({
       stats: {
