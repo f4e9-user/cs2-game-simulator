@@ -671,6 +671,103 @@ describe('team management actions', () => {
     expect(resolved.session.player.tagExpiry['role-confusion']).toBeUndefined();
   });
 
+  it('crystallizes only when fit is high and pressure is low, then adds cooldown', () => {
+    const base = {
+      ...player(),
+      preferredRole: 'IGL' as const,
+      activeRole: 'IGL' as const,
+      activeRoleRounds: 23,
+      roleCrystallized: false,
+      teamTrust: 70,
+      stats: {
+        agility: 14,
+        intelligence: 18,
+        mentality: 18,
+        experience: 18,
+        constitution: 10,
+        money: 20,
+      },
+      traits: ['tactical', 'igl', 'steady', 'support'],
+      tags: ['role-confusion'],
+      tagExpiry: { 'role-confusion': 99 },
+      roster: [
+        teammate('awp-slot', 'AWPer'),
+        teammate('entry-slot', 'Entry'),
+      ],
+    };
+    const session = createSession(base, 1);
+    session.currentEvent = toPublicEvent(getEventById('routine-standard')!);
+
+    const resolved = applyChoice(session, 'structured-training', 20);
+
+    expect(resolved.session.player.activeRoleRounds).toBe(24);
+    expect(resolved.session.player.roleCrystallized).toBe(true);
+    expect(resolved.session.player.preferredRole).toBe('IGL');
+    expect(resolved.session.player.tags).not.toContain('role-confusion');
+    expect(resolved.session.player.tags).toContain('role-crystallize-cd');
+    expect(resolved.session.player.tagExpiry['role-crystallize-cd']).toBe(resolved.session.player.round + 24);
+  });
+
+  it('defers crystallization under high role pressure and adds a short cooldown', () => {
+    const base = {
+      ...player(),
+      preferredRole: 'Entry' as const,
+      activeRole: 'IGL' as const,
+      activeRoleRounds: 23,
+      roleCrystallized: false,
+      teamTrust: 20,
+      consecutiveLosses: 2,
+      stats: {
+        agility: 14,
+        intelligence: 18,
+        mentality: 18,
+        experience: 18,
+        constitution: 10,
+        money: 20,
+      },
+      traits: ['tactical', 'igl', 'steady'],
+      tags: ['locker-tension'],
+      roster: [
+        teammate('caller-slot', 'IGL'),
+        teammate('awp-slot', 'AWPer'),
+      ],
+    };
+    const session = createSession(base, 1);
+    session.currentEvent = toPublicEvent(getEventById('routine-standard')!);
+
+    const resolved = applyChoice(session, 'structured-training', 20);
+
+    expect(resolved.session.player.roleCrystallized).toBe(false);
+    expect(resolved.session.player.preferredRole).toBe('Entry');
+    expect(resolved.session.player.activeRole).toBe('IGL');
+    expect(resolved.session.player.activeRoleRounds).toBe(18);
+    expect(resolved.session.player.tags).toContain('role-crystallize-cd');
+    expect(resolved.session.player.tagExpiry['role-crystallize-cd']).toBe(resolved.session.player.round + 8);
+  });
+
+  it('resets crystallization when activeRole changes away from preferredRole', () => {
+    const base = {
+      ...player(),
+      preferredRole: 'IGL' as const,
+      activeRoleRounds: 12,
+      roleCrystallized: true,
+      roster: [
+        teammate('awp-slot', 'AWPer'),
+        teammate('support-slot', 'Support'),
+        teammate('lurker-slot', 'Lurker'),
+      ],
+    };
+    const session = createSession(base, 1);
+    session.currentEvent = toPublicEvent(getEventById('chain-team-joined')!);
+
+    const resolved = applyChoice(session, 'accept-role', 20);
+
+    expect(resolved.session.player.activeRole).not.toBe('IGL');
+    expect(resolved.session.player.preferredRole).toBe('IGL');
+    expect(resolved.session.player.activeRoleRounds).toBeGreaterThanOrEqual(0);
+    expect(resolved.session.player.roleCrystallized).toBe(false);
+  });
+
   it('applies team trust and target teammate chemistry effects from politics choices', () => {
     const star: Teammate = {
       ...teammate('star-slot', 'AWPer'),

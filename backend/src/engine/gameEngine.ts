@@ -9,6 +9,7 @@ import { generateRivals } from '../data/rivals.js';
 import { generateRoster, generateSingleTeammate } from '../data/roster.js';
 import { addPlayerPoints, buildLeaderboard } from '../data/leaderboard.js';
 import { getEventById } from '../data/events/index.js';
+import { roleFitScore } from '../data/roleProfiles.js';
 import { TRAITS, getTrait } from '../data/traits.js';
 import { ACTIONS, getAction, type ActionDef, type ComboConsume } from '../data/actions.js';
 import { getShopItem, SHOP_ITEMS, type ShopCategory } from '../data/shop.js';
@@ -2582,15 +2583,33 @@ export function applyChoice(
     }
   }
 
+  if (nextPlayer.activeRole && nextPlayer.preferredRole && nextPlayer.activeRole !== nextPlayer.preferredRole) {
+    nextPlayer.roleCrystallized = false;
+  }
+
   if (shouldAdvanceRound && nextPlayer.activeRole) {
     nextPlayer.activeRoleRounds = (nextPlayer.activeRoleRounds ?? 0) + 1;
     if (
       nextPlayer.activeRoleRounds >= 24 &&
-      !nextPlayer.roleCrystallized
+      !nextPlayer.roleCrystallized &&
+      !nextPlayer.tags.includes('role-crystallize-cd')
     ) {
-      nextPlayer.preferredRole = nextPlayer.activeRole;
-      nextPlayer.roleCrystallized = true;
-      passiveEffects.push('角色结晶：你已成为公认的 ' + nextPlayer.activeRole);
+      const fit = roleFitScore(nextPlayer, nextPlayer.activeRole);
+      const pressure = deriveRolePressure(nextPlayer, session.history);
+      if (fit >= 70 && pressure <= 30) {
+        nextPlayer.preferredRole = nextPlayer.activeRole;
+        nextPlayer.roleCrystallized = true;
+        nextPlayer.tags = nextPlayer.tags.filter((tag) => tag !== 'role-confusion');
+        delete nextPlayer.tagExpiry['role-confusion'];
+        if (!nextPlayer.tags.includes('role-crystallize-cd')) nextPlayer.tags.push('role-crystallize-cd');
+        nextPlayer.tagExpiry['role-crystallize-cd'] = nextPlayer.round + 24;
+        passiveEffects.push('角色结晶：你已成为公认的 ' + nextPlayer.activeRole);
+      } else {
+        nextPlayer.activeRoleRounds = 18;
+        if (!nextPlayer.tags.includes('role-crystallize-cd')) nextPlayer.tags.push('role-crystallize-cd');
+        nextPlayer.tagExpiry['role-crystallize-cd'] = nextPlayer.round + 8;
+        passiveEffects.push('角色结晶未完成：你还没真正站稳这个位置');
+      }
     }
   }
 
@@ -4518,6 +4537,32 @@ function applyAutomaticTagCleanup(
   const tagExpiry = { ...(player.tagExpiry ?? {}) };
   for (const tag of remove) delete tagExpiry[tag];
   return { ...player, tags, tagExpiry };
+}
+
+function deriveRolePressure(player: Player, history: RoundResult[]): number {
+  let pressure = 0;
+  if (player.preferredRole && player.activeRole && player.preferredRole !== player.activeRole) {
+    pressure += 20;
+  }
+  if (player.team && (player.teamTrust ?? 50) < 40) {
+    pressure += Math.min(20, 40 - (player.teamTrust ?? 50));
+  }
+  if (player.activeRole && player.roster?.some((tm) => tm.role === player.activeRole)) {
+    pressure += 25;
+  }
+  if (hasPoorRecentMatch(history)) {
+    pressure += 15;
+  }
+  if (player.roleTransition) {
+    pressure += 10;
+  }
+  return Math.max(0, Math.min(100, pressure));
+}
+
+function hasPoorRecentMatch(history: RoundResult[]): boolean {
+  const recent = [...history].reverse().slice(0, 5);
+  const match = recent.find((entry) => entry.matchStats);
+  return (match?.matchStats?.rating ?? 1) < 0.95;
 }
 
 function hashString(s: string): number {
