@@ -66,6 +66,34 @@ function makeEnv(): Env {
 }
 
 describe('game routes', () => {
+  it('returns backend role profile metadata without money stats', async () => {
+    const res = await app.request('https://localhost/api/game/meta/role-profiles');
+    const body = await res.json() as {
+      roleProfiles?: Array<{
+        role: string;
+        primaryStats: string[];
+        secondaryStats: string[];
+        eventThemes: string[];
+      }>;
+      error?: string;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.roleProfiles).toHaveLength(5);
+    expect(body.roleProfiles?.map((profile) => profile.role).sort()).toEqual([
+      'AWPer',
+      'Entry',
+      'IGL',
+      'Lurker',
+      'Support',
+    ]);
+    expect(body.roleProfiles?.flatMap((profile) => [
+      ...profile.primaryStats,
+      ...profile.secondaryStats,
+    ])).not.toContain('money');
+  });
+
   it('allows trait rolling before a session exists', async () => {
     const res = await app.request('https://localhost/api/game/roll-traits', { method: 'POST' });
     const body = await res.json() as { traits?: unknown[]; error?: string };

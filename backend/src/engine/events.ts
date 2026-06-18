@@ -194,7 +194,7 @@ function dynamicTags(player: Player): string[] {
   // ── 角色转型 tag ──────────────────────────────────────────────────
   if (player.preferredRole && !player.roleTransition) {
     const allRoles: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
-    if (allRoles.some((r) => canTransitionTo(player, r))) {
+    if (allRoles.some((r) => hasRoleTransitionMainTrigger(player, r))) {
       out.push('role-transition-eligible');
     }
   }
@@ -236,6 +236,15 @@ function canTransitionTo(player: Player, role: TeammateRole): boolean {
   const req = ROLE_STAT_REQUIREMENT[role];
   if (!req) return false;
   return (player.stats[req.stat] ?? 0) >= req.min;
+}
+
+function hasRoleTransitionMainTrigger(player: Player, role: TeammateRole): boolean {
+  if (!canTransitionTo(player, role)) return false;
+  if (!player.team || !player.roster) return false;
+  if (role !== 'IGL' && role !== 'AWPer') return false;
+  const filledRoles = new Set(player.roster.map((tm) => tm.role));
+  if (player.activeRole) filledRoles.add(player.activeRole);
+  return !filledRoles.has(role);
 }
 
 function stateWeight(e: EventDef, player: Player): number {
@@ -515,6 +524,18 @@ export function pickEvent(ctx: EventContext): EventDef | null {
         !e.forbidTags?.some((t) => synthTags.has(t)),
     );
     if (politicsPool.length > 0) return weightedPick(politicsPool, rng, (e) => stateWeight(e, player));
+  }
+
+  if (synthTags.has('role-transition-eligible')) {
+    const roleTransitionStart = pool.find(
+      (e) =>
+        e.id === 'chain-role-transition-start' &&
+        e.stages.includes(player.stage) &&
+        !recentEventIds.includes(e.id) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
+    );
+    if (roleTransitionStart) return roleTransitionStart;
   }
 
   const eligible = pool.filter((e) => {

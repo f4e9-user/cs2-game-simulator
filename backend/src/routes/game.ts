@@ -41,6 +41,7 @@ import {
 import { CLUBS, clubsForStage, getClub } from '../data/clubs.js';
 import { buildLeaderboard } from '../data/leaderboard.js';
 import { getClubProfile } from '../data/clubProfiles.js';
+import { ROLE_PROFILES } from '../data/roleProfiles.js';
 import { getEventById } from '../data/events/index.js';
 import {
   buildYearTournaments,
@@ -1161,6 +1162,7 @@ app.post('/game/:sessionId/friend-loan', async (c) => {
 app.get('/game/meta/actions', (c) => c.json({ actions: ACTIONS }));
 app.get('/game/meta/shop', (c) => c.json({ items: SHOP_ITEMS }));
 app.get('/game/meta/clubs', (c) => c.json({ clubs: CLUBS }));
+app.get('/game/meta/role-profiles', (c) => c.json({ roleProfiles: ROLE_PROFILES }));
 
 app.get('/game/:sessionId/clubs', async (c) => {
   const id = c.req.param('sessionId');

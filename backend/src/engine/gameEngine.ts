@@ -2614,9 +2614,12 @@ export function applyChoice(
 
   if (eventDef.id === 'chain-role-transition-resolve') {
     if (choiceDef.id === 'prove-transition' && outcome.success && nextPlayer.roleTransition) {
-      nextPlayer.preferredRole = nextPlayer.roleTransition.targetRole;
-      nextPlayer.roleCrystallized = true;
-      passiveEffects.push('角色转型成功：你已成为公认的 ' + nextPlayer.roleTransition.targetRole);
+      const targetRole = nextPlayer.roleTransition.targetRole;
+      nextPlayer.preferredRole = targetRole;
+      nextPlayer.activeRole = targetRole;
+      nextPlayer.activeRoleRounds = 0;
+      nextPlayer.roleCrystallized = false;
+      passiveEffects.push('角色转型成功：你开始正式转向 ' + targetRole);
     }
     nextPlayer.roleTransition = null;
   }
@@ -4478,6 +4481,9 @@ function applyAutomaticTagCleanup(
       'locker-tension',
       'suppressed-anger',
       'role-confusion',
+      'role-transition-active',
+      'role-transition-cd',
+      'role-crystallize-cd',
       'caller-discipline',
       'caller-star-aligned',
       'star-freedom',

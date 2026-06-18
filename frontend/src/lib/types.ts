@@ -372,6 +372,36 @@ export interface RoleTransition {
   targetRole: TeammateRole;
   startedRound: number;
   resolveRound: number;
+  stage?: 'suggested' | 'trial' | 'contested' | 'settling';
+  source?: 'coach' | 'team-need' | 'player-choice' | 'performance';
+}
+
+export type CoreStatKey = Exclude<StatKey, 'money'>;
+
+export type RoleEventTheme =
+  | 'calling'
+  | 'space-taking'
+  | 'utility'
+  | 'late-round'
+  | 'opening-duel'
+  | 'resource-conflict'
+  | 'adaptation';
+
+export interface RoleProfile {
+  role: TeammateRole;
+  label: string;
+  primaryStats: CoreStatKey[];
+  secondaryStats: CoreStatKey[];
+  preferredTraits: string[];
+  riskTraits: string[];
+  resultTags: string[];
+  eventThemes: RoleEventTheme[];
+  matchContributions: {
+    primary: string;
+    secondary: string;
+    risk: string;
+  };
+  transitionCost: 'medium' | 'medium-high' | 'high';
 }
 
 export interface Teammate {

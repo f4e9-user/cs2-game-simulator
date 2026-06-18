@@ -554,6 +554,123 @@ describe('team management actions', () => {
     expect(event?.id).toBe('team-politics-hard-choice');
   });
 
+  it('does not surface role transition thoughts from stats alone', () => {
+    const base = {
+      ...player(),
+      preferredRole: 'Entry' as const,
+      activeRole: 'Entry' as const,
+      stats: {
+        agility: 14,
+        intelligence: 14,
+        mentality: 14,
+        experience: 14,
+        constitution: 10,
+        money: 20,
+      },
+      teamTrust: 60,
+      roster: [
+        teammate('caller-slot', 'IGL'),
+        teammate('awp-slot', 'AWPer'),
+        teammate('support-slot', 'Support'),
+      ],
+    };
+
+    const event = pickEvent({
+      player: base,
+      recentEventIds: [],
+      rng: () => 0,
+    });
+
+    expect(event?.id).not.toBe('chain-role-transition-start');
+  });
+
+  it('surfaces role transition thoughts when the team lacks a caller and the player can fill it', () => {
+    const base = {
+      ...player(),
+      preferredRole: 'Entry' as const,
+      activeRole: 'Entry' as const,
+      stats: {
+        agility: 10,
+        intelligence: 14,
+        mentality: 12,
+        experience: 12,
+        constitution: 10,
+        money: 20,
+      },
+      teamTrust: 60,
+      roster: [
+        teammate('awp-slot', 'AWPer'),
+        teammate('support-slot', 'Support'),
+        teammate('lurker-slot', 'Lurker'),
+      ],
+    };
+
+    const event = pickEvent({
+      player: base,
+      recentEventIds: [],
+      rng: () => 0,
+    });
+
+    expect(event?.id).toBe('chain-role-transition-start');
+  });
+
+  it('resolving a role transition switches roles without crystallizing immediately', () => {
+    const base = {
+      ...player(),
+      preferredRole: 'Entry' as const,
+      activeRole: 'Entry' as const,
+      activeRoleRounds: 12,
+      roleCrystallized: true,
+      roleTransition: {
+        targetRole: 'IGL' as const,
+        startedRound: 10,
+        resolveRound: 10,
+      },
+      tags: ['role-transition-active'],
+    };
+    const session = createSession(base, 1);
+    const event = getEventById('chain-role-transition-resolve')!;
+    session.currentEvent = toPublicEvent(event);
+
+    const resolved = applyChoice(session, 'prove-transition', 20);
+
+    expect(resolved.session.player.preferredRole).toBe('IGL');
+    expect(resolved.session.player.activeRole).toBe('IGL');
+    expect(resolved.session.player.activeRoleRounds).toBe(0);
+    expect(resolved.session.player.roleCrystallized).toBe(false);
+    expect(resolved.session.player.roleTransition).toBeNull();
+  });
+
+  it('cleans role transition tags and cooldown expiry after leaving a team', () => {
+    const base = {
+      ...player(),
+      team: null,
+      activeRole: 'IGL' as const,
+      preferredRole: 'IGL' as const,
+      tags: ['role-transition-active', 'role-transition-cd', 'role-crystallize-cd', 'role-confusion'],
+      tagExpiry: {
+        'role-transition-active': 20,
+        'role-transition-cd': 30,
+        'role-crystallize-cd': 40,
+        'role-confusion': 50,
+      },
+      roleTransition: null,
+    };
+    const session = createSession(base, 1);
+    session.currentEvent = toPublicEvent(getEventById('team-politics-ordinary-stand')!);
+
+    const resolved = applyChoice(session, 'back-caller', 20);
+
+    expect(resolved.session.player.tags).not.toContain('role-transition-active');
+    expect(resolved.session.player.tags).not.toContain('role-transition-cd');
+    expect(resolved.session.player.tags).not.toContain('role-crystallize-cd');
+    expect(resolved.session.player.tags).not.toContain('role-confusion');
+    expect(resolved.session.player.tagExpiry['role-transition-active']).toBeUndefined();
+    expect(resolved.session.player.tagExpiry['role-transition-cd']).toBeUndefined();
+    expect(resolved.session.player.tagExpiry['role-crystallize-cd']).toBeUndefined();
+    expect(resolved.session.player.tagExpiry['role-confusion']).toBeUndefined();
+  });
+
   it('applies team trust and target teammate chemistry effects from politics choices', () => {
     const star: Teammate = {
       ...teammate('star-slot', 'AWPer'),

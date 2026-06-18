@@ -12,6 +12,7 @@ import type {
   Loan,
   MatchStats,
   Player,
+  RoleProfile,
   RoundPhase,
   SessionSummary,
   RollTraitsResponse,
@@ -179,6 +180,8 @@ export const api = {
     request<{ items: ShopItem[] }>('/api/game/meta/shop'),
   listClubs: () =>
     request<{ clubs: Club[] }>('/api/game/meta/clubs'),
+  getRoleProfiles: () =>
+    request<{ roleProfiles: RoleProfile[] }>('/api/game/meta/role-profiles'),
   listSessionClubs: (sessionId: string) =>
     request<{ clubs: ClubApplicationSummary[] }>(`/api/game/${sessionId}/clubs`),
   applyClub: (sessionId: string, clubId: string, apiToken?: string) =>
