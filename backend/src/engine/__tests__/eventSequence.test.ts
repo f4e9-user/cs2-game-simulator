@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyAction, applyChoice, createSession, initPlayer } from '../gameEngine.js';
 import { toPublicEvent } from '../events.js';
 import type { EventDef, EventSequence, Player } from '../../types.js';
+import type { InitInput } from '../gameEngine.js';
 
 function event(id: string, title: string): EventDef {
   return {
@@ -65,6 +66,22 @@ function sequence(events: EventDef[]): EventSequence {
 }
 
 describe('event sequence', () => {
+  it('uses rngSeed to create deterministic session identifiers', () => {
+    const input: InitInput = {
+      name: 'SeedTester',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    };
+    const sameA = createSession(initPlayer(input), 123);
+    const sameB = createSession(initPlayer(input), 123);
+    const different = createSession(initPlayer(input), 124);
+
+    expect(sameA.id).toBe(sameB.id);
+    expect(sameA.apiToken).toBe(sameB.apiToken);
+    expect(sameA.id).not.toBe(different.id);
+    expect(sameA.apiToken).not.toBe(different.apiToken);
+  });
+
   it('keeps non-final steps in the same round and advances only after final step', () => {
     const events = [
       event('seq-step-1', 'Step 1'),

@@ -1,7 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, applyShopPurchase, createSession, initPlayer } from '../gameEngine.js';
+import { applyAction, applyShopPurchase, createSession, initPlayer, weekToMonth } from '../gameEngine.js';
 
 describe('applyShopPurchase', () => {
+  it('keeps weekToMonth exported from the game engine facade', () => {
+    expect(weekToMonth(1)).toBe(1);
+    expect(weekToMonth(5)).toBe(2);
+    expect(weekToMonth(99)).toBe(12);
+  });
+
+  it('blocks shop purchases while an event sequence is active', () => {
+    const player = initPlayer({
+      name: 'TestPlayer',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    player.stats.money = 20;
+
+    const session = createSession(player, 1);
+    session.activeEventSequence = {
+      id: 'test-sequence',
+      type: 'club-interview',
+      currentIndex: 0,
+      startedRound: player.round,
+      mustCompleteInCurrentRound: true,
+      status: 'active',
+      context: {},
+      steps: [],
+    };
+
+    expect(() => applyShopPurchase(session, 'energy-drink'))
+      .toThrow('当前事件流程未结束，不能进行其他操作');
+  });
+
   it('limits each consumable item to two purchases per week', () => {
     const player = initPlayer({
       name: 'TestPlayer',
@@ -79,6 +109,38 @@ describe('applyShopPurchase', () => {
     };
     const second = applyShopPurchase({ ...session, player: cooledDownPlayer }, 'psych-session');
     expect(second.player.shopCooldowns['psych-session']).toBe(22);
+  });
+
+  it('uses shared tag expiry durations for shop negative event tags', () => {
+    const player = initPlayer({
+      name: 'TestPlayer',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    player.stats.money = 100;
+    player.stage = 'youth';
+    player.round = 10;
+    player.team = {
+      clubId: 'club-local-wolves',
+      name: '本地狼队',
+      tag: 'LW',
+      region: '本地',
+      tier: 'youth',
+      monthlySalary: 10,
+      joinedRound: 1,
+    };
+
+    const session = createSession(player, 1);
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+    try {
+      const result = applyShopPurchase(session, 'team-dinner');
+
+      expect(result.player.tags).toContain('locker-tension');
+      expect(result.player.tagExpiry?.['locker-tension']).toBe(18);
+    } finally {
+      Math.random = originalRandom;
+    }
   });
 
   it('makes aim coaching a buff-only baseline service', () => {
