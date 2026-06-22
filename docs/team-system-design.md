@@ -28,7 +28,7 @@ CS2 是 5 人团队游戏，但本模拟器是**单选手视角**的生涯故事
 |-------|-------|
 | 奖金 100% 自留 | 奖金按档位分成（50–85%） |
 | 赛事选择自由 | 有强制参赛义务 |
-| 无周薪收入 | 每回合稳定薪资 |
+| 无工资收入 | 按 4 周账期结算月薪 |
 | 只能打开放赛 | 可进入高级别联赛 |
 | 无团队加成 | matchSimulator teamBonus |
 
@@ -44,6 +44,37 @@ CS2 是 5 人团队游戏，但本模拟器是**单选手视角**的生涯故事
 - 俱乐部财务状况（战队破产）
 - 青训梯队升降级
 
+### 1.6 出生地区与地域偏好原则
+
+战队申请不只看 stage、fame 和 region，还可以有自己的“出生地区偏好”：
+
+- **本地/国家队倾向**：更偏好同国出生或同本地成长的选手，国际申请通过率较低。
+- **区域队倾向**：只接受同大区来源，强调地区一致性，不组国际纵队。
+- **国际开放型**：不限制出生地区，主要看实力、名气和位置适配。
+
+这个维度不替代现有门槛，而是作为软条件叠加到申请、面试、薪资谈判和入队适应度里。
+
+偏好不是硬门槛，允许破例录取。破例主要通过三类入口触发：
+
+- **实力破例**：选手当前实力已经明显高于该档常规门槛。
+- **契机破例**：出现队伍急缺人、位置真空、教练点名、星探推荐等特殊契机。
+- **事件破例**：赛事表现、试训事件、临时救火、战队危机等叙事事件直接抬高通过率。
+
+建议的破例标准：
+
+- **Youth / Semi-pro**：名气、经验、低级别赛事夺冠任一项明显高于同档平均线即可考虑破例，适合“新人天才”“本地黑马”。
+- **Pro**：要求近期有稳定的高级别赛事表现、名气显著超过门槛、或目标战队存在阵容缺口。
+- **Top**：要求顶级赛事成绩、较高名气、或明确的明星级叙事触发，普通申请很难直接破例。
+
+建议的破例事件：
+
+- 队内某位置长期空缺，需要立刻补人。
+- 教练或分析师主动点名，认为该选手适配体系。
+- 玩家在赛事中打出超预期表现，被现场/对手战队注意到。
+- 原定目标选手临时转会失败，战队改而邀请玩家试训。
+- 战队处于重建、换血、临时救火阶段，地域偏好权重下降。
+- 玩家与某个战队已有既往关系，例如试训通过、被熟人引荐、曾在同地区赛事被反复观察。
+
 ---
 
 ## 二、数据模型
@@ -52,6 +83,8 @@ CS2 是 5 人团队游戏，但本模拟器是**单选手视角**的生涯故事
 
 ```typescript
 export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
+export type ClubOriginPreference = 'local-core' | 'regional-core' | 'international-open';
+export type ClubOriginFit = 'match' | 'regional' | 'mismatch' | 'open';
 
 export interface Club {
   id: string;
@@ -63,6 +96,8 @@ export interface Club {
   requiredFame?: number;     // 报名门槛名气
   baseSalary: number;        // 合同基础周薪（money 单位，×10=K）
   salaryRange: [number, number]; // 谈判可浮动区间 [min, max]
+  originPreference?: ClubOriginPreference; // 出生地区偏好
+  preferredOriginRegions?: string[];       // 显式偏好的出生地区
   isRival?: boolean;         // 是否映射到 rivals[] 中的战队
   rivalIndex?: number;       // rivals[rivalIndex] 对应关系
 }
@@ -73,7 +108,7 @@ export interface PlayerTeam {
   tag: string;
   region: string;
   tier: ClubTier;
-  weeklySalary: number;      // 每回合实际发放薪资（谈判后确定）
+  monthlySalary: number;     // 月薪，按 salaryTracker.payCycle=4 分账期结算
   joinedRound: number;       // 加入时的 round 数
   contractEndRound?: number; // 合同到期 round（可选，未来扩展用）
 }
@@ -83,9 +118,16 @@ export interface PendingApplication {
   clubName: string;
   appliedRound: number;
   responseRound: number;     // 触发回信事件的 round
+  originRegion?: string;
+  originPreference?: ClubOriginPreference;
+  originFit?: ClubOriginFit;
+  originFitBonus?: number;
+  exceptionBonus?: number;
+  exceptionReasons?: string[];
 }
 
 // 加入 Player 接口
+// originRegion: string;
 // team: PlayerTeam | null;
 // pendingApplication: PendingApplication | null;
 ```
@@ -192,7 +234,24 @@ baseRate = 0.5
 + min(0.2, fame / 100)           // 名气加成
 + min(0.15, experience / 20)      // 经验加成
 - rivalPenalty（对手俱乐部 -0.1） // 敌对俱乐部更难进
++ originFitBonus                 // 出生地区 / 地域偏好软加成
++ exceptionBonus                 // 破例契机加成
 ```
+
+`originFitBonus` 只做软修正：
+
+- 符合本地 / 国家队倾向：小幅加成。
+- 符合区域队倾向：小幅加成。
+- 不符合偏好：小幅惩罚，但不直接禁止申请。
+- 国际开放型：不做地域惩罚。
+
+`exceptionBonus` 用于覆盖地域偏好惩罚，但不能跳过 stage / fame 等硬门槛：
+
+- 近期赛事超预期表现：提高回信和面试通过率。
+- 队伍位置空缺或阵容危机：提高回信概率。
+- 教练、星探、熟人引荐：提高面试成功率。
+- 战队重建或临时救火：降低出生地区偏好权重。
+- 玩家 fame / 经验 / 赛事成绩显著高于目标战队门槛：允许跨地区破例。
 
 ### 4.3 薪资谈判
 
@@ -202,14 +261,18 @@ baseRate = 0.5
 
 ## 五、周薪系统
 
-### 5.1 每回合发薪
+### 5.1 月薪账期
 
-在 `gameEngine.ts` 的 `advanceRound()` 内注入：
+当前代码使用 `PlayerTeam.monthlySalary` 与 `salaryTracker.payCycle = 4`：
 
 ```typescript
-if (nextPlayer.team) {
-  nextPlayer.stats.money += nextPlayer.team.weeklySalary;
-  passiveEffects.push(`周薪入账 +${nextPlayer.team.weeklySalary * 10}K`);
+if (shouldAdvanceRound && nextPlayer.team && nextPlayer.salaryTracker) {
+  const roundsSinceLastPay = nextPlayer.round - nextPlayer.salaryTracker.lastPayRound;
+  if (roundsSinceLastPay >= nextPlayer.salaryTracker.payCycle) {
+    applyMoneyTransaction(nextPlayer, nextPlayer.team.monthlySalary);
+    nextPlayer.salaryTracker.lastPayRound = nextPlayer.round;
+    passiveEffects.push(`月薪入账 +${nextPlayer.team.monthlySalary}K`);
+  }
 }
 ```
 
@@ -290,6 +353,9 @@ effectiveAim = Math.max(5, Math.min(99,
 | `chain-club-interview` | interview-pending tag | 正式面试，d20 检定，成功触发 OfferModal |
 | `chain-club-rejected` | 面试失败后 | 叙事收尾，清 tag，设冷却 |
 | `chain-team-joined` | 加入战队后第 1 回合 | 新队友见面，队内氛围事件 |
+| `chain-club-exception-scout` | 玩家不符合战队出生地区偏好 + 近期表现突出 | 星探 / 教练认为值得破例，成功后提高当前申请的回信和面试检定 |
+| `chain-club-roster-crisis` | 目标战队同位置空缺 / 阵容危机 | 战队降低地域偏好权重，成功后提高当前申请的回信和面试检定 |
+| `chain-club-local-reference` | 玩家与目标地区已有熟人 / 赛事观察记录 | 熟人引荐或地区观察报告，成功后提高当前申请的回信和面试检定 |
 
 ### 7.2 在队期间事件（新增）
 
@@ -325,7 +391,13 @@ if (player.team) {
 if (player.pendingApplication) {
   // 申请中：暂时压低不相关高权重事件
 }
+if (player.pendingApplication && !applicationResponseReady && player.tags.includes('club-exception-ready')) {
+  // 不符合出生地区偏好时，申请回信前优先注入破例类事件，而不是直接拒绝
+  return pickClubExceptionEvent();
+}
 ```
+
+破例事件成功后会写入 `club-exception-scouted`、`club-exception-roster-window` 或 `club-exception-referenced`，当前申请在回信和面试检定时获得额外软加成。申请结束后，这些临时标签会随 `pendingApplication` 清理。
 
 ---
 
@@ -398,7 +470,7 @@ if (player.pendingApplication) {
 - 俱乐部强制参赛的 pendingMatch 标注「[俱乐部安排]」不可弃赛
 
 **ResultPanel.tsx**：
-- 显示周薪入账的 passive effect chip
+- 显示月薪入账的 passive effect chip
 
 ---
 
@@ -432,20 +504,22 @@ GET /api/game/meta/clubs
 
 ## 十一、各阶段里程碑
 
+以下里程碑为原始 Phase H 拆解记录，保留用于追溯战队系统的演进；当前落地状态以代码和本文档顶部状态为准。
+
 ### Phase H-1：核心可玩（战队基础）
 
 **目标：玩家能签约战队、领取周薪、看到战队信息。**
 
 - [ ] `backend/src/data/clubs.ts` — 16 个俱乐部定义
 - [ ] `backend/src/types.ts` — Club / PlayerTeam / PendingApplication 类型
-- [ ] `backend/src/engine/gameEngine.ts` — initPlayer 加 team/pendingApplication 字段；advanceRound 注入周薪
+- [ ] `backend/src/engine/gameEngine.ts` — initPlayer 加 team/pendingApplication 字段；周推进注入月薪账期结算
 - [ ] `backend/src/routes/game.ts` — `POST /apply-club`、`POST /team-response`、`GET /meta/clubs`
 - [ ] `backend/src/data/events/chains.ts` — chain-club-response、chain-club-interview、chain-club-rejected
 - [ ] `frontend/src/components/ClubPanel.tsx` — 基础版（列表+发简历按钮）
 - [ ] `frontend/src/components/TeamOfferModal.tsx` — 确认弹框
 - [ ] `frontend/src/store/gameStore.ts` — pendingOffer 状态、applyClub/respondOffer action
 - [ ] `frontend/src/lib/types.ts` — 前端类型同步
-- [ ] `frontend/src/components/HudTopBar.tsx` — 战队 tag + 周薪显示
+- [ ] `frontend/src/components/HudTopBar.tsx` — 战队 tag + 月薪显示
 
 **验收标准：**
 1. 路人阶段 ClubPanel 不显示或提示「进入青训后解锁」
@@ -513,7 +587,7 @@ GET /api/game/meta/clubs
 - [ ] `free-agent-legend` 结局判定（全程自由人 + 条件）
 - [ ] `loyal-veteran` 结局判定（同队 200 回合 + 续约 ≥ 3）
 - [ ] EndingPanel 新增战队历史展示（曾效力 / 当前 / 离队原因）
-- [ ] 数值平衡：teamBonus / 周薪 / 奖金分成比率基于游戏测试调整
+- [ ] 数值平衡：teamBonus / 月薪 / 奖金分成比率基于游戏测试调整
 
 ---
 

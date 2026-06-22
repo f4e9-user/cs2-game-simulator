@@ -261,6 +261,7 @@ interface Props {
 
 export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
   const apiToken = useGameStore((s) => s.apiToken);
+  const leaderboard = useGameStore((s) => s.leaderboard);
   const [open, setOpen] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -364,6 +365,7 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
             key={t.id}
             t={t}
             team={player.team}
+            playerPoints={leaderboard.find((row) => row.isPlayer)?.points ?? 0}
             qualificationSlots={player.qualificationSlots ?? {}}
             teamQualificationSlots={player.teamQualificationSlots ?? {}}
             onSignup={() => signup(t.id)}
@@ -476,9 +478,30 @@ function hasQualTicket(
   });
 }
 
+function hasRankBypass(team: Player['team'], tournament: Tournament): boolean {
+  if (!team || !tournament.directEntryBypass) return false;
+  const tierOrder: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+  if (
+    tournament.directEntryBypass.minTeamTier &&
+    tierOrder.indexOf(team.tier) < tierOrder.indexOf(tournament.directEntryBypass.minTeamTier)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function hasRankBypassVrs(team: Player['team'], tournament: Tournament, playerPoints: number): boolean {
+  if (!hasRankBypass(team, tournament)) return false;
+  if (tournament.directEntryBypass?.minVrsScore !== undefined && playerPoints < tournament.directEntryBypass.minVrsScore) {
+    return false;
+  }
+  return true;
+}
+
 function TournamentCard({
   t,
   team,
+  playerPoints,
   qualificationSlots,
   teamQualificationSlots,
   onSignup,
@@ -486,6 +509,7 @@ function TournamentCard({
 }: {
   t: Tournament;
   team: Player['team'];
+  playerPoints: number;
   qualificationSlots: Record<string, number>;
   teamQualificationSlots: Record<string, number>;
   onSignup: () => void;
@@ -495,9 +519,9 @@ function TournamentCard({
   const teamReq = t.teamRequirement ?? null;
   const needsTicket = !!t.qualificationTargets?.length;
   const hasTicket = hasQualTicket(t.qualificationTargets, qualificationSlots, teamQualificationSlots);
-  const ticketBypass = !!team && hasTicket;
-  const teamOk = teamReqMet(team, teamReq) || (teamReq !== null && ticketBypass);
-  const canEnter = (!needsTicket || hasTicket) && teamOk;
+  const rankBypass = hasRankBypassVrs(team, t, playerPoints);
+  const teamOk = teamReqMet(team, teamReq) || (teamReq !== null && rankBypass);
+  const canEnter = teamOk && (!needsTicket || hasTicket || rankBypass);
   const entryLabel = t.entryType === 'direct_signup' && teamReq
     ? '战队报名'
     : ENTRY_LABELS[t.entryType] ?? t.entryType;
@@ -525,8 +549,10 @@ function TournamentCard({
       {teamReq && (
         <div style={{ fontSize: 10, color: canEnter ? 'var(--up)' : 'var(--danger)', marginBottom: 4 }}>
           {canEnter
-            ? ticketBypass
-              ? `持票破格（当前${TIER_LABELS[team!.tier]}）`
+            ? rankBypass
+              ? `排名直通（当前${TIER_LABELS[team!.tier]}）`
+              : hasTicket
+                ? `持票参赛（当前${TIER_LABELS[team!.tier]}）`
               : '可参加'
             : !team
               ? '无战队'
@@ -537,6 +563,7 @@ function TournamentCard({
       {t.qualificationTargets && t.qualificationTargets.length > 0 && (
         <div style={{ fontSize: 10, color: hasTicket ? 'var(--fg-2)' : 'var(--danger)', marginBottom: 4 }}>
           资格要求 · {t.qualificationTargets.map((slot) => slotLabel(slot)).join(' / ')}
+          {rankBypass ? ' · 可排名直通' : ''}
         </div>
       )}
       {t.qualificationMilestones && t.qualificationMilestones.length > 0 && (

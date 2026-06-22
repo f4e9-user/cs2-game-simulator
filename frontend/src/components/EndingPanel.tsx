@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Player, Trait } from '@/lib/types';
 import { ENDING_LABELS, STAGE_LABELS, STAT_LABELS, formatTag } from '@/lib/format';
+import { buildCareerReview } from '@/lib/careerReview';
 
 const TIER_LABELS: Record<string, string> = {
   c: 'C 级赛事',
@@ -55,6 +56,7 @@ export function EndingPanel({ player, traits, ending }: Props) {
 
   const isLegend = ending === 'legend';
   const isChampion = ending === 'champion' || ending === 'retired_on_top';
+  const careerReview = buildCareerReview(player, ending);
 
   return (
     <div className="ending-panel-rich">
@@ -63,6 +65,23 @@ export function EndingPanel({ player, traits, ending }: Props) {
         <div className="ending-rich-label">生涯结束</div>
         <div className={`ending-rich-result${isLegend ? ' legend' : isChampion ? ' champion' : ''}`}>
           {ending ? (ENDING_LABELS[ending] ?? ending) : '未知结局'}
+        </div>
+      </div>
+
+      <div className="ending-section">
+        <div className="ending-section-title">职业履历评价</div>
+        <div className="ending-rich-result" style={{ fontSize: 16, marginTop: 8 }}>
+          {careerReview.title}
+        </div>
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+          {careerReview.summary}
+        </div>
+        <div className="ending-tags-list" style={{ marginTop: 10 }}>
+          {careerReview.chips.map((chip) => (
+            <span key={chip.label} className={`ending-tag-chip ${chip.tone}`}>
+              {chip.label}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -81,8 +100,8 @@ export function EndingPanel({ player, traits, ending }: Props) {
           </div>
           <div className="ending-timeline-sep" />
           <div className="ending-timeline-cell">
-            <div className="ending-tl-val">{STAGE_LABELS[player.stage]}</div>
-            <div className="ending-tl-label">最终阶段</div>
+            <div className="ending-tl-val">{STAGE_LABELS[player.careerPeaks?.highestStage ?? player.stage]}</div>
+            <div className="ending-tl-label">最高阶段</div>
           </div>
         </div>
       </div>
@@ -155,6 +174,11 @@ export function EndingPanel({ player, traits, ending }: Props) {
                 <span>加入于第 {player.team.joinedRound} 回合</span>
                 <span>效力 {player.round - player.team.joinedRound} 回合</span>
               </div>
+              {player.teamCareer && (
+                <div style={{ fontSize: 11, color: 'var(--fg-2)' }}>
+                  最长效力 {player.teamCareer.longestTeamRounds} 回合
+                </div>
+              )}
               {(player.contractRenewals ?? 0) > 0 && (
                 <div style={{ fontSize: 11, color: 'var(--fg-2)', marginTop: 2 }}>
                   续约 {player.contractRenewals} 次

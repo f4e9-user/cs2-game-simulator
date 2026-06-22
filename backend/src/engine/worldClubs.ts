@@ -522,7 +522,7 @@ function applyWorldTournamentTick(session: GameSession, tickRound: number, tickT
   let nextSession = session;
   let runtimeByClubId = { ...pool.runtimeByClubId };
   let processedTickKeysByClubId = { ...pool.processedTickKeysByClubId };
-  const candidateIds = unique([...pool.activeClubIds, ...pool.relevantClubIds, ...pool.staticClubIds]).slice(0, 32);
+  const candidateIds = unique([...pool.activeClubIds, ...pool.relevantClubIds, ...pool.staticClubIds]).slice(0, 48);
   const playerClubId = session.player.team?.clubId;
 
   for (const tournament of tournaments) {
@@ -819,7 +819,7 @@ export function tickWorldClubRuntimes(
     return applyWorldTournamentTick(nextSession, tickRound, tickType);
   }
   const pool = nextSession.worldClubs!;
-  const tickIds = unique([...pool.activeClubIds, ...pool.relevantClubIds]).slice(0, 24);
+  const tickIds = unique([...pool.activeClubIds, ...pool.relevantClubIds]).slice(0, 32);
   let runtimeByClubId = { ...pool.runtimeByClubId };
   let processedTickKeysByClubId = { ...pool.processedTickKeysByClubId };
 

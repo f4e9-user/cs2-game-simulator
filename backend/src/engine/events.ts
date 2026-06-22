@@ -468,6 +468,20 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     return responseEvent ?? null;
   }
 
+  if (player.pendingApplication && synthTags.has('club-exception-ready')) {
+    const exceptionPool = pool.filter(
+      (e) =>
+        e.id.startsWith('chain-club-exception-') || e.id === 'chain-club-roster-crisis' || e.id === 'chain-club-local-reference',
+    ).filter(
+      (e) =>
+        e.stages.includes(player.stage) &&
+        !recentEventIds.includes(e.id) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
+    );
+    if (exceptionPool.length > 0) return weightedPick(exceptionPool, rng, (e) => e.weight ?? 1);
+  }
+
   // 家人危机：非赛事期间最高优先级注入；赛事期间由赛事上下文结束后再处理
   if (synthTags.has('needs-family-crisis')) {
     const crisisEvent = pool.find((e) => e.id === 'family-crisis-illness');

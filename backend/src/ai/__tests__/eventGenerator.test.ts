@@ -15,6 +15,7 @@ function mockPlayer(): Player {
     growthSpent: 0,
     traits: [],
     backgroundId: 'test-bg',
+    originRegion: '本地',
     round: 1,
     tags: [],
     tagExpiry: {},

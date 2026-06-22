@@ -1,6 +1,22 @@
 # 结局后职业履历评价设计
 
 落地日期：2026-06-17
+状态：已完成。
+
+## 现状说明
+
+当前代码库已经有结局面板、赛事履历和战队历史等基础展示，但还没有独立的“职业履历评价”模块，也没有 `careerPeaks` / `teamCareer` 这类专门快照字段。本文档分两层描述：
+
+- 现有能力：当前已经存在、可以直接复用的数据和界面。
+- 目标方案：后续需要新增的数据结构、维护 helper、前端评价模型和面板改造。
+
+### 当前实现快照
+
+- 结局页已经渲染在 `frontend/src/components/EndingPanel.tsx`，内容包含结局标题、生涯轨迹、关键数值、隐藏五维、战队历史、赛事生涯、开局特质和生涯标签。
+- 结局页当前显示的是原始 `player.stage`、`player.fame`、`player.stress`、`player.stats`、`player.team`、`player.tournamentParticipations`、`player.tournamentChampionships`、`player.tierChampionships`、`player.championshipSeries`。
+- 后端 `Player` 结构里已有 `team`、`everHadTeam`、`contractRenewals`、`tournamentParticipations`、`tierChampionships`、`championshipSeries` 等字段，但还没有 `careerPeaks` / `teamCareer`。
+- 后端目前存在多个直接 `storage.sessions.save(session)` 的保存入口，职业履历快照还没有统一收口。
+- 目前没有 `buildCareerReview`，也没有把职业履历评价接入结局页。
 
 ## 背景
 
@@ -13,6 +29,7 @@
 ## 设计目标
 
 - 保留现有结局 ID 和结局文案，避免破坏当前结局判定。
+- 保留现有结局页基础结构，新增职业履历评价时不打乱现有生涯轨迹 / 战队历史 / 赛事生涯的展示顺序。
 - 在结局面板新增职业履历评价模块，提供主称号、短评和关键履历标签。
 - 让失败结局、普通退役结局也具备辨识度。
 - 基于稳定规则生成评价，第一版不依赖 AI 文案。
@@ -27,7 +44,7 @@
 
 ## 现有可复用数据
 
-当前 `Player` 已经具备以下可用于职业履历评价的数据：
+当前 `Player` 已具备以下可用于职业履历评价的基础数据，可作为第一版输入：
 
 - `stage`：最终阶段。
 - `fame`：最终名气。
@@ -46,11 +63,11 @@
 - `creditScore`：信用分。
 - `consecutiveBrokeRounds`：连续破产回合数。
 
-这些数据足以生成第一版评价，但仍缺少历史峰值类信息。
+这些数据足以支撑第一版评价逻辑，但仍缺少历史峰值类信息，因此需要新增快照字段来补足。
 
 ## 新增数据字段
 
-建议在 `Player` 上新增两个结构化字段。
+第一版建议在 `Player` 上新增两个结构化字段。
 
 ```ts
 export interface CareerPeaks {
@@ -88,7 +105,7 @@ teamCareer?: TeamCareer;
 
 ## 数据维护规则
 
-每次玩家状态变化并准备持久化 session 前，都必须维护职业峰值。实现上建议新增统一收口 helper，例如：
+目标实现中，每次玩家状态变化并准备持久化 session 前，都应维护职业峰值。实现上建议新增统一收口 helper，例如：
 
 ```ts
 finalizePlayerCareerSnapshot(player): Player
@@ -105,7 +122,7 @@ helper 内部负责：
 
 不能只在 `applyAction` / `settleEvent` 调用，因为当前游戏还有贷款、商店、接受 offer、离队、debug 更新等独立状态变更入口。实现时应优先让这些入口在返回 session 前统一调用 `finalizeGameSessionCareerSnapshot`，避免职业履历快照漏刷。
 
-禁止 route 直接调用 `storage.sessions.save(session)` 保存未 finalize 的 session；保存前必须保证 session 已经过 `finalizeGameSessionCareerSnapshot`。
+目标实现中，route 不应直接保存未 finalize 的 session；保存前必须保证 session 已经过 `finalizeGameSessionCareerSnapshot`。
 
 为降低漏改风险，后端实现时建议新增局部保存 helper，例如：
 
@@ -125,12 +142,12 @@ saveFinalizedSession(storage, session): Promise<void>
 - 第一版的 `teamCareer` 记录“最长连续效力战队”，不是完整队史。
 - 玩家有战队时，根据 `player.round - player.team.joinedRound` 计算当前连续效力回合；如果超过 `teamCareer.longestTeamRounds`，刷新最长效力战队摘要。
 - 玩家离队后，`teamCareer` 不清空。离队、换队、接受新 offer 等会清空或替换旧 `player.team` 的流程，必须在清空旧战队前先调用一次 `finalizePlayerCareerSnapshot` 或专门的 `finalizeCurrentTeamCareer`，记录旧队最后一段连续效力；随后再执行统一的 `finalizeGameSessionCareerSnapshot`。
-- 旧存档没有该字段时，读取时用当前状态懒初始化。
+- 旧存档没有该字段时，读路径需要做兜底初始化。
 - 类型层面字段保留 optional 是为了兼容旧存档；运行时应通过 normalizer 或 helper 给 UI 提供完整默认值，组件不直接假设字段必定存在。
 
 ## 前端评价模型
 
-前端新增纯函数：
+目标实现中，前端新增纯函数：
 
 ```ts
 buildCareerReview(player: Player, ending?: string): CareerReview
@@ -286,13 +303,12 @@ championship: c < b < a < s < major
 
 ## 兼容性
 
-- 旧存档没有 `careerPeaks` 和 `teamCareer` 时，前端使用当前 `player.fame`、`player.stress`、`player.stats.constitution`、`player.team` 兜底。
-- 旧存档若 `player.stage !== 'retired'`，可以用当前 `player.stage` 作为临时 `highestStage`。
-- 旧存档若 `player.stage === 'retired'` 且没有 `careerPeaks`，前端显示“最高阶段未知”，不能把 `retired` 当作最高竞技阶段。
-- 如果旧存档缺少 `teamCareer` 且当前仍有 `team`，可以用当前战队和 `player.round - player.team.joinedRound` 作为临时最长效力战队。
+- 当前结局页直接读取 `player.fame`、`player.stress`、`player.stats.constitution`、`player.team`、`player.tournamentParticipations`、`player.tierChampionships`、`player.championshipSeries`，因此旧存档不会额外崩溃。
+- 后续引入 `careerPeaks` / `teamCareer` 后，读路径仍要兼容旧档缺失字段；没有 `careerPeaks` 时，前端可以临时使用当前值兜底。
+- 旧存档若 `player.stage === 'retired'` 且没有 `careerPeaks`，不能把 `retired` 当作最高竞技阶段。
+- 如果旧存档缺少 `teamCareer` 且当前仍有 `team`，可以先用当前战队和 `player.round - player.team.joinedRound` 作为临时值。
 - 如果旧存档缺少 `teamCareer` 且当前无战队，只能显示“暂无最长效力记录”或“曾签约战队”，不能推断具体最长战队。
-- 后端新建角色时初始化新字段。
-- 后端每次持久化 session 前通过 `finalizeGameSessionCareerSnapshot` 刷新新字段，内部调用 `finalizePlayerCareerSnapshot`，逐步让旧存档自然补齐。
+- 新字段最终应由后端统一补齐，但这不是当前代码已具备的能力，后续实现阶段再接入 `finalizeGameSessionCareerSnapshot`。
 - 结局判定仍使用现有字段，不依赖职业履历评价结果。
 
 ## 测试计划

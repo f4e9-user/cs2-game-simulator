@@ -1,5 +1,6 @@
 # Rival Club Materialization Design
-
+状态：已完成。
+落地日期：2026-06-17
 ## Background
 
 The current world-club simulation keeps rival-mapped clubs in `CLUBS` as static placeholders:

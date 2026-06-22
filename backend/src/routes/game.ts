@@ -29,8 +29,8 @@ import {
 import { checkTournamentPromotion } from '../engine/stages.js';
 import { buildCareerGoal } from '../engine/careerGoal.js';
 import { applyMoneyTransaction } from '../engine/money.js';
-import { canSignUpForTournament, playerTeamMeetsRequirement } from '../engine/tournamentEligibility.js';
-import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime } from '../engine/worldClubs.js';
+import { canSignUpForTournament, playerTeamMeetsRequirement, tournamentDirectEntryBypassApplies } from '../engine/tournamentEligibility.js';
+import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime, resolveClubDisplayInfo } from '../engine/worldClubs.js';
 import { createTournamentContext } from '../engine/tournamentContext.js';
 import {
   derivePlayerIdentityScores,
@@ -39,6 +39,7 @@ import {
   findTeamStar,
 } from '../engine/teamIdentity.js';
 import { canCrystallizeRole, deriveRolePressure, normalizeRoleTransition } from '../engine/roleTransition.js';
+import { finalizeGameSessionCareerSnapshot } from '../engine/careerSnapshot.js';
 import { CLUBS, clubsForStage, getClub } from '../data/clubs.js';
 import { buildLeaderboard } from '../data/leaderboard.js';
 import { getClubProfile } from '../data/clubProfiles.js';
@@ -47,6 +48,7 @@ import { getEventById } from '../data/events/index.js';
 import {
   buildYearTournaments,
   getTournament,
+  tournamentInitialStageIndex,
 } from '../data/tournaments.js';
 import {
   clearTeamQualifications,
@@ -114,6 +116,10 @@ const TEAM_LIFECYCLE_TAGS = [
   'team-tactical-ready',
   'team-meeting-ready',
 ] as const;
+
+async function saveFinalizedSession(storage: ReturnType<typeof makeStorage>, session: GameSession): Promise<void> {
+  await storage.sessions.save(finalizeGameSessionCareerSnapshot(session));
+}
 
 function deriveTeamOnboardingKind(previousPlayer: Player, nextPlayer: Player): TeamOnboardingKind {
   if (!previousPlayer.everHadTeam && !previousPlayer.team) return 'first';
@@ -357,7 +363,7 @@ app.post('/game/roll-traits', (c) => {
 
 app.post('/game/start', async (c) => {
   const body = await c.req.json().catch(() => ({}));
-  const { name, traitIds, backgroundId, stats } = body ?? {};
+  const { name, traitIds, backgroundId, originRegion, stats } = body ?? {};
 
   if (!Array.isArray(traitIds) || traitIds.length !== 3) {
     return c.json({ error: '必须选择 3 个特质' }, 400);
@@ -383,13 +389,14 @@ app.post('/game/start', async (c) => {
       name: typeof name === 'string' ? name : '',
       traitIds,
       backgroundId,
+      originRegion: typeof originRegion === 'string' ? originRegion : undefined,
       stats: stats as Stats | undefined,
     });
     const seed = Math.floor(Math.random() * 0x7fffffff);
     const session = createSession(player, seed);
 
     const storage = makeStorage(c.env);
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
 
     return c.json({
       sessionId: session.id,
@@ -595,7 +602,7 @@ app.post('/game/:sessionId/choice', async (c) => {
       result.createdAt,
     );
 
-    await storage.sessions.save(updated);
+    await saveFinalizedSession(storage, updated);
 
     let nextAiEventCache: AiEventCacheEnvelope | undefined;
     if (aiEventCache) {
@@ -746,20 +753,21 @@ app.post('/game/:sessionId/signup', async (c) => {
   // 战队门槛校验：持有该赛事所需资格门票时可破格参加（只要有战队即可）
   const teamReq = t.teamRequirement ?? null;
   if (teamReq !== null && !playerTeamMeetsRequirement(player.team, teamReq)) {
-    const hasQualTicket = !!t.qualificationTargets?.length &&
-      t.qualificationTargets
-        .flatMap((slot) => qualificationFallbackSlots(slot))
-        .some((slot) => {
-          const owner = qualificationSlotOwner(slot);
-          const pool = owner === 'team'
-            ? (player.teamQualificationSlots ?? {})
-            : (player.qualificationSlots ?? {});
-          return (pool[slot] ?? 0) > 0;
-        });
     if (!player.team) {
       return c.json({ error: `该赛事需要签约战队才能参加` }, 400);
     }
-    if (!hasQualTicket) {
+    if (!tournamentDirectEntryBypassApplies(player.team, t, playerPoints)) {
+      const hasQualTicket = !!t.qualificationTargets?.length &&
+        t.qualificationTargets
+          .flatMap((slot) => qualificationFallbackSlots(slot))
+          .some((slot) => {
+            const owner = qualificationSlotOwner(slot);
+            const pool = owner === 'team'
+              ? (player.teamQualificationSlots ?? {})
+              : (player.qualificationSlots ?? {});
+            return (pool[slot] ?? 0) > 0;
+          });
+      if (!hasQualTicket) {
       const tierLabels: Record<ClubTier, string> = {
         youth: '青训',
         'semi-pro': '二线队',
@@ -770,6 +778,7 @@ app.post('/game/:sessionId/signup', async (c) => {
         { error: `该赛事需要 ${tierLabels[teamReq]} 及以上战队（当前 ${tierLabels[player.team.tier]}），或持有资格门票破格参加` },
         400,
       );
+      }
     }
   }
   const week = player.week ?? 1;
@@ -785,50 +794,52 @@ app.post('/game/:sessionId/signup', async (c) => {
   let usedQualificationSlotOwner: 'player' | 'team' | undefined;
   let usedQualificationSlotExpiresAt: { year: number; week: number } | undefined;
   if (t.qualificationTargets?.length) {
-    const hasBlockedTeamTicket = t.qualificationTargets
-      .flatMap((slot) => qualificationFallbackSlots(slot))
-      .some((slot) => {
-        if (qualificationSlotOwner(slot) !== 'team') return false;
-        return ((player.teamQualificationSlots ?? {})[slot] ?? 0) > 0;
-      }) && player.team?.teamStatus !== 'starter';
-    if (hasBlockedTeamTicket) {
-      return c.json({ error: '当前队内定位不是首发，不能使用战队资格门票报名' }, 400);
-    }
-    const usedSlot = t.qualificationTargets
-      .flatMap((slot) => qualificationFallbackSlots(slot))
-      .find((slot) => {
-        const owner = qualificationSlotOwner(slot);
-        const pool = owner === 'team'
-          ? (player.teamQualificationSlots ?? {})
-          : (player.qualificationSlots ?? {});
-        return (pool[slot] ?? 0) > 0;
-      });
-    if (!usedSlot) {
-      return c.json({ error: '缺少对应资格门票' }, 400);
-    }
-    usedQualificationSlot = usedSlot;
-    usedQualificationSlotOwner = qualificationSlotOwner(usedSlot);
-    const fallbackExpiry = defaultQualificationExpiry(session.player.year ?? 1, session.player.week ?? 1);
-    if (usedQualificationSlotOwner === 'team') {
-      const consumed = consumeQualificationSlot(
-        session.player.teamQualificationSlots ?? {},
-        session.player.teamQualificationSlotBatches,
-        usedSlot,
-        fallbackExpiry,
-      );
-      session.player.teamQualificationSlots = consumed.slots;
-      session.player.teamQualificationSlotBatches = consumed.batches;
-      usedQualificationSlotExpiresAt = consumed.consumedExpiry;
-    } else {
-      const consumed = consumeQualificationSlot(
-        session.player.qualificationSlots ?? {},
-        session.player.qualificationSlotBatches,
-        usedSlot,
-        fallbackExpiry,
-      );
-      session.player.qualificationSlots = consumed.slots;
-      session.player.qualificationSlotBatches = consumed.batches;
-      usedQualificationSlotExpiresAt = consumed.consumedExpiry;
+    if (!tournamentDirectEntryBypassApplies(player.team, t, playerPoints)) {
+      const hasBlockedTeamTicket = t.qualificationTargets
+        .flatMap((slot) => qualificationFallbackSlots(slot))
+        .some((slot) => {
+          if (qualificationSlotOwner(slot) !== 'team') return false;
+          return ((player.teamQualificationSlots ?? {})[slot] ?? 0) > 0;
+        }) && player.team?.teamStatus !== 'starter';
+      if (hasBlockedTeamTicket) {
+        return c.json({ error: '当前队内定位不是首发，不能使用战队资格门票报名' }, 400);
+      }
+      const usedSlot = t.qualificationTargets
+        .flatMap((slot) => qualificationFallbackSlots(slot))
+        .find((slot) => {
+          const owner = qualificationSlotOwner(slot);
+          const pool = owner === 'team'
+            ? (player.teamQualificationSlots ?? {})
+            : (player.qualificationSlots ?? {});
+          return (pool[slot] ?? 0) > 0;
+        });
+      if (!usedSlot) {
+        return c.json({ error: '缺少对应资格门票' }, 400);
+      }
+      usedQualificationSlot = usedSlot;
+      usedQualificationSlotOwner = qualificationSlotOwner(usedSlot);
+      const fallbackExpiry = defaultQualificationExpiry(session.player.year ?? 1, session.player.week ?? 1);
+      if (usedQualificationSlotOwner === 'team') {
+        const consumed = consumeQualificationSlot(
+          session.player.teamQualificationSlots ?? {},
+          session.player.teamQualificationSlotBatches,
+          usedSlot,
+          fallbackExpiry,
+        );
+        session.player.teamQualificationSlots = consumed.slots;
+        session.player.teamQualificationSlotBatches = consumed.batches;
+        usedQualificationSlotExpiresAt = consumed.consumedExpiry;
+      } else {
+        const consumed = consumeQualificationSlot(
+          session.player.qualificationSlots ?? {},
+          session.player.qualificationSlotBatches,
+          usedSlot,
+          fallbackExpiry,
+        );
+        session.player.qualificationSlots = consumed.slots;
+        session.player.qualificationSlotBatches = consumed.batches;
+        usedQualificationSlotExpiresAt = consumed.consumedExpiry;
+      }
     }
   }
 
@@ -842,6 +853,7 @@ app.post('/game/:sessionId/signup', async (c) => {
       ? { year: adv1.year + 1, week: 1 }
       : { year: adv1.year, week: adv1.week + 1 };
 
+  const initialStageIndex = tournamentInitialStageIndex(t, session.player.team?.tier ?? null);
   const pendingMatch = {
     tournamentId: t.id,
     tier: t.tier,
@@ -854,14 +866,15 @@ app.post('/game/:sessionId/signup', async (c) => {
     qualificationSlotExpiresAt: usedQualificationSlotExpiresAt,
     resolveYear: next.year,
     resolveWeek: next.week,
-    stageIndex: 0,
+    stageIndex: initialStageIndex,
+    stageLosses: 0,
   };
   const opponentAssigned = assignPendingMatchOpponent(session, pendingMatch);
   session = opponentAssigned.session;
   session.player.pendingMatch = opponentAssigned.pendingMatch;
   session.player.tournamentContext = createTournamentContext(session.player, session.player.pendingMatch, t);
   session.updatedAt = new Date().toISOString();
-  await storage.sessions.save(session);
+  await saveFinalizedSession(storage, session);
 
   return c.json({
     pendingMatch: session.player.pendingMatch,
@@ -942,7 +955,7 @@ app.post('/game/:sessionId/withdraw', async (c) => {
   session.player.pendingMatch = null;
   session.player.tournamentContext = undefined;
   session.updatedAt = new Date().toISOString();
-  await storage.sessions.save(session);
+  await saveFinalizedSession(storage, session);
   return c.json({ player: session.player, penalties });
 });
 
@@ -979,7 +992,7 @@ app.post('/game/:sessionId/action', async (c) => {
     session.phase = 'action';
     session.currentEvent = null;
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
 
     if (aiEventCache) {
       try {
@@ -1025,7 +1038,7 @@ app.post('/game/:sessionId/end-action-phase', async (c) => {
     session.currentEvent = updated.currentEvent;
     session.activeEventSequence = updated.activeEventSequence;
     session.updatedAt = updated.updatedAt;
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
 
     if (aiEventCache) {
       try {
@@ -1076,7 +1089,7 @@ app.post('/game/:sessionId/shop', async (c) => {
     } = applyShopPurchase(session, itemId);
     session.player = player;
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({
       player,
       itemName,
@@ -1116,7 +1129,7 @@ app.post('/game/:sessionId/pawn', async (c) => {
     }
     session.player = result.player;
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({ player: session.player, pawnValue: result.pawnValue });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1146,7 +1159,7 @@ app.post('/game/:sessionId/loan', async (c) => {
       return c.json({ error: result.message ?? '贷款申请失败' }, 400);
     }
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({ player: session.player, loan: result.loan });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1176,7 +1189,7 @@ app.post('/game/:sessionId/friend-loan', async (c) => {
       return c.json({ error: result.message ?? '朋友借款申请失败' }, 400);
     }
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({ player: session.player, loan: result.loan });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1219,7 +1232,7 @@ app.post('/game/:sessionId/apply-club', async (c) => {
     session.player = player;
     session = activateClubRuntime(session, clubId, 'club-application');
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({ player: session.player });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1263,7 +1276,7 @@ app.post('/game/:sessionId/team-response', async (c) => {
     }
     session.leaderboard = buildLeaderboard(session);
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({
       ...session,
       phase: getSessionPhase(session),
@@ -1299,7 +1312,7 @@ app.post('/game/:sessionId/team-practice', async (c) => {
     const { player, result } = applyTeamPractice(session, teammateId);
     session.player = player;
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({ player, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1320,7 +1333,7 @@ app.post('/game/:sessionId/team-meeting', async (c) => {
     const { player, result } = applyTeamMeeting(session);
     session.player = player;
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({ player, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1341,7 +1354,7 @@ app.post('/game/:sessionId/locker-room-talk', async (c) => {
     const { player, result } = applyLockerRoomTalk(session);
     session.player = player;
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({ player, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1362,7 +1375,7 @@ app.post('/game/:sessionId/retain-core-teammate', async (c) => {
     const { player, result } = applyRetainCoreTeammate(session);
     session.player = player;
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({ player, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1388,7 +1401,7 @@ app.post('/game/:sessionId/team-training-focus', async (c) => {
     const { player, result } = applyTeamTrainingFocus(session, focus);
     session.player = player;
     session.updatedAt = new Date().toISOString();
-    await storage.sessions.save(session);
+    await saveFinalizedSession(storage, session);
     return c.json({ player, result });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1423,7 +1436,7 @@ app.post('/game/:sessionId/leave-team', async (c) => {
     delete session.player.tagExpiry[tag];
   }
   session.updatedAt = new Date().toISOString();
-  await storage.sessions.save(session);
+  await saveFinalizedSession(storage, session);
   return c.json({ player: session.player });
 });
 
@@ -1482,11 +1495,11 @@ function formLabel(form: number): string {
 }
 
 function displayClubName(session: GameSession, clubId: string): string {
-  const club = getClub(clubId);
-  if (club?.isRival && typeof club.rivalIndex === 'number') {
-    return session.player.rivals[club.rivalIndex]?.name ?? club.name;
-  }
-  return club?.name ?? clubId;
+  return resolveClubDisplayInfo(session, clubId)?.name ?? clubId;
+}
+
+function displayClubTag(session: GameSession, clubId: string): string {
+  return resolveClubDisplayInfo(session, clubId)?.tag ?? clubId;
 }
 
 function buildWorldClubSocialPosts(session: GameSession): SocialFeedPost[] {
@@ -1526,12 +1539,13 @@ function buildWorldClubSocialPosts(session: GameSession): SocialFeedPost[] {
     const club = getClub(runtime.clubId);
     if (!club) continue;
     const clubName = displayClubName(session, runtime.clubId);
+    const clubTag = displayClubTag(session, runtime.clubId);
     const storyline = runtime.activeStorylines[0];
     if (storyline) {
       posts.push({
-        author: `${club.tag} Watch`,
+        author: `${clubTag} Watch`,
         authorType: 'media',
-        handle: `@${club.tag.toLowerCase()}_watch`,
+        handle: `@${clubTag.toLowerCase()}_watch`,
         content: `${clubName} ${STORYLINE_SOCIAL_COPY[storyline]}，最近整体${formLabel(runtime.currentForm)}。`,
       });
     } else if (runtime.recentResults[0]) {
@@ -1546,7 +1560,7 @@ function buildWorldClubSocialPosts(session: GameSession): SocialFeedPost[] {
       posts.push({
         author: clubName,
         authorType: 'club',
-        handle: `@${club.tag.toLowerCase()}_gg`,
+        handle: `@${clubTag.toLowerCase()}_gg`,
         content: `${clubName} 最近在 ${result.tier.toUpperCase()} 级赛事${resultText}，训练室今晚继续复盘。`,
       });
     }

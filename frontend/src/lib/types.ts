@@ -50,6 +50,8 @@ export type Stage =
   | 'pro'
   | 'retired';
 
+export type CareerCompetitiveStage = Exclude<Stage, 'retired'>;
+
 export type EventType =
   | 'training'
   | 'ranked'
@@ -86,6 +88,7 @@ export interface Background {
   description: string;
   startStage: Stage;
   statBias: Partial<Stats>;
+  originRegion?: string;
   tags: string[];
 }
 
@@ -102,6 +105,7 @@ export interface PendingMatch {
   resolveYear: number;
   resolveWeek: number;
   stageIndex: number;
+  stageLosses?: number;
   opponent?: PendingMatchOpponent;
 }
 
@@ -215,6 +219,8 @@ export interface LeaderboardTeam {
 }
 
 export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
+export type ClubOriginPreference = 'local-core' | 'regional-core' | 'international-open';
+export type ClubOriginFit = 'match' | 'regional' | 'mismatch' | 'open';
 export type TournamentTier = 'c' | 'b' | 'a' | 's-open' | 's-closed' | 's-class' | 'major';
 
 export type RosterStyle =
@@ -429,6 +435,8 @@ export interface Club {
   requiredFame?: number;
   baseSalary: number;
   salaryRange: [number, number];
+  originPreference?: ClubOriginPreference;
+  preferredOriginRegions?: string[];
   isRival?: boolean;
   rivalIndex?: number;
 }
@@ -489,6 +497,12 @@ export interface PendingApplication {
   clubName: string;
   appliedRound: number;
   responseRound: number;
+  originRegion?: string;
+  originPreference?: ClubOriginPreference;
+  originFit?: ClubOriginFit;
+  originFitBonus?: number;
+  exceptionBonus?: number;
+  exceptionReasons?: string[];
 }
 
 export interface TeamOffer {
@@ -544,6 +558,20 @@ export interface SalaryTracker {
   salaryRestoreRound?: number;
 }
 
+export interface CareerPeaks {
+  highestStage: CareerCompetitiveStage;
+  peakFame: number;
+  peakStress: number;
+  lowestConstitution: number;
+}
+
+export interface TeamCareer {
+  longestTeamName?: string;
+  longestTeamTag?: string;
+  longestTeamTier?: ClubTier;
+  longestTeamRounds: number;
+}
+
 export interface DynamicState {
   stress: number;
   fame: number;
@@ -575,6 +603,8 @@ export interface DynamicState {
   familyBailoutCount: number;
   pendingFamilyCrisis?: PendingFamilyCrisis;
   roundCombos: RoundCombo[];
+  careerPeaks?: CareerPeaks;
+  teamCareer?: TeamCareer;
 }
 
 export interface ActionResult {
@@ -655,6 +685,7 @@ export interface Player extends DynamicState {
   growthSpent: number;
   traits: string[];
   backgroundId: string;
+  originRegion: string;
   stage: Stage;
   round: number;
   tags: string[];
@@ -892,6 +923,11 @@ export interface Tournament {
   city?: string;
   region?: string;
   teamRequirement?: ClubTier | null;
+  directEntryBypass?: {
+    minTeamTier?: ClubTier;
+    minVrsScore?: number;
+    reason: 'world-ranking' | 'partner-invite' | 'major-standing';
+  };
   qualificationTargets?: string[];
   qualificationRewards?: QualificationReward[];
   qualificationMilestones?: QualificationMilestone[];

@@ -101,6 +101,24 @@ describe('injury rest integration', () => {
     expect(resolved.session.player.tags).toContain('forced-rest');
   });
 
+  it('does not report pressure collapse removal when the tag was not active', () => {
+    const session = createSession(player({
+      pendingMatch: null,
+      restRounds: 2,
+      stress: 40,
+      stressMaxRounds: 0,
+      tags: ['injured', 'forced-rest'],
+      actionPoints: 100,
+    }), 1);
+    session.phase = 'event';
+    session.currentEvent = toPublicEvent(getEventById('rest-physio-rookie')!);
+
+    const resolved = applyChoice(session, 'full-rest');
+
+    expect(resolved.result.tagsRemoved).not.toContain('breaking-down');
+    expect(resolved.session.player.tags).not.toContain('breaking-down');
+  });
+
   it('blocks action, shop, and team management during rest', () => {
     const session = createSession(player({
       pendingMatch: null,

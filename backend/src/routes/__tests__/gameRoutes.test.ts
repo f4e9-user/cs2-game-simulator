@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import app from '../../index.js';
+import { activateClubRuntime } from '../../engine/worldClubs.js';
 import type { Env, GameSession } from '../../types.js';
 
 class MemoryStatement {
@@ -63,6 +64,13 @@ function makeEnv(): Env {
     } as unknown as KVNamespace,
     AI_PROVIDER: 'none',
   } as Env;
+}
+
+function makeExecutionContext(): ExecutionContext {
+  return {
+    waitUntil: () => undefined,
+    passThroughOnException: () => undefined,
+  } as unknown as ExecutionContext;
 }
 
 describe('game routes', () => {
@@ -136,6 +144,57 @@ describe('game routes', () => {
     expect(res.status).toBe(200);
     expect(body.error).toBeUndefined();
     expect(body.traits).toHaveLength(3);
+  });
+
+  it('uses materialized rival display identity in world club social posts', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Social Rival',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+
+    const initialRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const initial = await initialRes.json() as GameSession;
+    const withRivalRuntime = activateClubRuntime(initial, 'club-rival-semi', 'test');
+    const rival = withRivalRuntime.player.rivals[0]!;
+    const runtime = withRivalRuntime.worldClubs!.runtimeByClubId['club-rival-semi']!;
+    const seeded: GameSession = {
+      ...withRivalRuntime,
+      worldClubs: {
+        ...withRivalRuntime.worldClubs!,
+        runtimeByClubId: {
+          ...withRivalRuntime.worldClubs!.runtimeByClubId,
+          'club-rival-semi': {
+            ...runtime,
+            activeStorylines: ['dark-horse-run'],
+            updatedRound: withRivalRuntime.player.round,
+          },
+        },
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const feedRes = await app.request(`https://localhost/api/game/${started.sessionId}/social-feed`, {
+      headers: { authorization: `Bearer ${started.apiToken}` },
+    }, env, makeExecutionContext());
+    const body = await feedRes.json() as { posts?: Array<{ author: string; handle: string; content: string }> };
+    const rivalPost = body.posts?.find((post) => post.content.includes(rival.name));
+
+    expect(feedRes.status).toBe(200);
+    expect(rivalPost).toBeDefined();
+    expect(rivalPost?.author).toBe(`${rival.tag} Watch`);
+    expect(rivalPost?.handle).toBe(`@${rival.tag.toLowerCase()}_watch`);
+    expect(rivalPost?.author).not.toContain('???');
+    expect(rivalPost?.handle).not.toContain('???');
   });
 
   it('updates core stats through the local debug endpoint', async () => {

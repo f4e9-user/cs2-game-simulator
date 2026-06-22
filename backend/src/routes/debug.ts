@@ -12,6 +12,7 @@ import {
 } from '../ai/eventCache.js';
 import { computeClubVrsScore } from '../engine/worldClubs.js';
 import { normalizeRoleTransition } from '../engine/roleTransition.js';
+import { finalizeGameSessionCareerSnapshot } from '../engine/careerSnapshot.js';
 import type {
   ClubTier,
   Env,
@@ -218,7 +219,7 @@ app.post('/debug/:sessionId', async (c) => {
   }
 
   session.updatedAt = new Date().toISOString();
-  await storage.sessions.save(session);
+  await storage.sessions.save(finalizeGameSessionCareerSnapshot(session));
 
   return c.json({ player: session.player, leaderboard: session.leaderboard });
 });

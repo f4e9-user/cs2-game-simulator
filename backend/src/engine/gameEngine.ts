@@ -4,6 +4,7 @@ import {
   getTournament,
   stageRewardDelta,
   synthesizeMatchEvent,
+  tournamentStageEliminationLosses,
 } from '../data/tournaments.js';
 import { generateRivals } from '../data/rivals.js';
 import { generateRoster, generateSingleTeammate } from '../data/roster.js';
@@ -16,11 +17,14 @@ import { ACTIONS, getAction, type ActionDef, type ComboConsume } from '../data/a
 import { getShopItem, SHOP_ITEMS, type ShopCategory } from '../data/shop.js';
 import { CLUBS, getClub, clubsForStage, PRIZE_SPLIT } from '../data/clubs.js';
 import { getClubProfile } from '../data/clubProfiles.js';
+import { finalizePlayerCareerSnapshot } from './careerSnapshot.js';
 import type {
   ActionResult,
   Buff,
   ChoiceDef,
   Club,
+  ClubOriginFit,
+  ClubOriginPreference,
   ClubPlayer,
   ClubTier,
   EventDef,
@@ -355,6 +359,7 @@ export interface InitInput {
   name: string;
   traitIds: string[];
   backgroundId: string;
+  originRegion?: string;
   stats?: Stats;
 }
 
@@ -847,6 +852,7 @@ export function initPlayer(input: InitInput): Player {
     growthSpent: 0,
     traits: traits.map((t) => t.id),
     backgroundId: bg.id,
+    originRegion: input.originRegion?.trim() || bg.originRegion || '本地',
     stage: bg.startStage,
     round: 0,
     tags: [...bg.tags],
@@ -898,6 +904,15 @@ export function initPlayer(input: InitInput): Player {
     promotionPending: null,
     promotionCooldown: 0,
     roundCombos: [],
+    careerPeaks: {
+      highestStage: bg.startStage === 'retired' ? 'rookie' : bg.startStage,
+      peakFame: 0,
+      peakStress: 0,
+      lowestConstitution: clampStats(finalStats).constitution,
+    },
+    teamCareer: {
+      longestTeamRounds: 0,
+    },
   };
 
   return applyOpeningOverflowPenalties(
@@ -1971,10 +1986,15 @@ export function applyChoice(
   const traits = session.player.traits
     .map(getTrait)
     .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  const effectiveRollBonus = rollBonus + clubApplicationRollBonus(session.player, eventDef.id);
 
-  const rng = makeRng(
-    hashString(session.id) ^ ((session.player.round + 1) * 2654435761),
-  );
+  const rng = makeRng(hashString([
+    session.id,
+    session.player.round,
+    eventDef.id,
+    choiceDef.id,
+    activeSequenceStep?.id ?? 'single',
+  ].join(':')));
 
   // ── 比赛模拟拦截（tournament-* 事件走数值模拟而非 d20）──
   let pendingMatchSim: MatchSimResult | undefined;
@@ -2081,13 +2101,13 @@ export function applyChoice(
       }
     }
     return resolveChoice({
-      player: session.player,
-      event: eventDef,
-      choice: choiceDef,
-      traits,
-      rng,
-      rollBonus,
-    });
+        player: session.player,
+        event: eventDef,
+        choice: choiceDef,
+        traits,
+        rng,
+        rollBonus: effectiveRollBonus,
+      });
   })();
 
   const chosenStateDelta = outcomeStateDelta(outcome.chosenOutcome);
@@ -2267,8 +2287,10 @@ export function applyChoice(
     if (!tagsAdded.includes('breaking-down')) tagsAdded.push('breaking-down');
   } else {
     if (stressMaxRounds > 0) passiveEffects.push('stress-eased');
+    if (stressMaxRounds > 0 || session.player.tags.includes('breaking-down')) {
+      tagsRemoved.push('breaking-down');
+    }
     stressMaxRounds = 0;
-    tagsRemoved.push('breaking-down');
   }
 
   const nextRound = session.player.round + (shouldAdvanceRound ? 1 : 0);
@@ -2908,7 +2930,12 @@ export function applyChoice(
       }
     }
 
-    if (!t || !outcome.success || isFinal) {
+    const stageLossesBefore = nextPlayer.pendingMatch.stageLosses ?? 0;
+    const stageLossesAfter = outcome.success ? 0 : stageLossesBefore + 1;
+    const eliminationLosses = t ? tournamentStageEliminationLosses(t, idx) : 1;
+    const eliminated = !outcome.success && stageLossesAfter >= eliminationLosses;
+
+    if (!t || eliminated || isFinal) {
       if (t) {
         nextPlayer = recordTournamentContextMatchResult(
           nextPlayer,
@@ -2923,7 +2950,8 @@ export function applyChoice(
       const adv = advanceWeek(nextYear, nextWeek);
       const nextPendingMatch = {
         ...nextPlayer.pendingMatch,
-        stageIndex: idx + 1,
+        stageIndex: outcome.success ? idx + 1 : idx,
+        stageLosses: outcome.success ? 0 : stageLossesAfter,
         resolveYear: adv.year,
         resolveWeek: adv.week,
         opponent: undefined,
@@ -3827,6 +3855,132 @@ export function pawnItem(
 
 // ── 战队申请 ──────────────────────────────────────────────────
 
+function resolveClubOriginPreference(club: Club): ClubOriginPreference {
+  if (club.originPreference) return club.originPreference;
+  if (club.region === '本地') return 'local-core';
+  if (club.tier === 'top') return 'international-open';
+  return 'regional-core';
+}
+
+function resolvePreferredOriginRegions(club: Club, preference: ClubOriginPreference): string[] {
+  if (club.preferredOriginRegions && club.preferredOriginRegions.length > 0) {
+    return [...club.preferredOriginRegions];
+  }
+  if (preference === 'international-open') return [];
+  return club.region === '???' ? ['本地'] : [club.region];
+}
+
+function sameMacroRegion(origin: string, clubRegion: string): boolean {
+  if (origin === clubRegion) return true;
+  const groups: string[][] = [
+    ['亚太', '中国', '东南亚', '蒙古', '大洋洲'],
+    ['欧洲', 'CIS / 东欧'],
+    ['北美'],
+    ['南美'],
+    ['中东'],
+    ['本地'],
+  ];
+  return groups.some((group) => group.includes(origin) && group.includes(clubRegion));
+}
+
+function resolveClubOriginFit(originRegion: string, club: Club): {
+  preference: ClubOriginPreference;
+  fit: ClubOriginFit;
+  bonus: number;
+  preferredRegions: string[];
+} {
+  const preference = resolveClubOriginPreference(club);
+  const preferredRegions = resolvePreferredOriginRegions(club, preference);
+  if (preference === 'international-open') {
+    return { preference, fit: 'open', bonus: 0, preferredRegions };
+  }
+
+  if (preferredRegions.includes(originRegion)) {
+    return {
+      preference,
+      fit: originRegion === club.region ? 'match' : 'regional',
+      bonus: preference === 'local-core' ? 2 : 1,
+      preferredRegions,
+    };
+  }
+
+  if (preference === 'regional-core' && sameMacroRegion(originRegion, club.region)) {
+    return { preference, fit: 'regional', bonus: 0, preferredRegions };
+  }
+
+  return {
+    preference,
+    fit: 'mismatch',
+    bonus: preference === 'local-core' ? -2 : -1,
+    preferredRegions,
+  };
+}
+
+function clubExceptionContext(player: Player, club: Club, runtime: ReturnType<typeof previewClubRuntime> | null): {
+  bonus: number;
+  reasons: string[];
+} {
+  const reasons: string[] = [];
+  let bonus = 0;
+
+  const currentFame = player.fame ?? 0;
+  const currentExperience = player.stats.experience ?? 0;
+  const fameThreshold = club.requiredFame ?? 0;
+
+  if (currentFame >= fameThreshold + 20) {
+    bonus += 2;
+    reasons.push('名气远高于门槛');
+  } else if (currentFame >= fameThreshold + 10) {
+    bonus += 1;
+    reasons.push('名气高于常规线');
+  }
+
+  if (currentExperience >= 12) {
+    bonus += 1;
+    reasons.push('比赛经验充足');
+  }
+
+  const championshipCount = (player.tournamentChampionships ?? 0)
+    + Object.values(player.tierChampionships ?? {}).reduce((sum, value) => sum + value, 0);
+  if (championshipCount >= 1) {
+    bonus += 1;
+    reasons.push('近期有冠军表现');
+  }
+
+  if (runtime) {
+    const need = deriveRosterNeed(runtime);
+    const needCount = need.neededRoles.length + need.neededIdentities.length;
+    if (runtime.rosterStability <= 45 || runtime.currentForm <= -15 || needCount >= 2) {
+      bonus += 1;
+      reasons.push('阵容或状态存在缺口');
+    }
+  }
+
+  if (club.tier === 'top' && currentFame >= 35) {
+    bonus += 1;
+    reasons.push('高段位破格尝试');
+  }
+
+  return { bonus, reasons };
+}
+
+function clubApplicationRollBonus(player: Player, eventId: string): number {
+  const isApplicationEvent = eventId === 'chain-club-response' ||
+    eventId === 'chain-club-interview' ||
+    eventId === 'chain-club-interview-open-match' ||
+    eventId === 'chain-club-interview-talent';
+  if (!isApplicationEvent || !player.pendingApplication) return 0;
+
+  const originBonus = player.pendingApplication.originFitBonus ?? 0;
+  const exceptionBonus = player.pendingApplication.exceptionBonus ?? 0;
+  const eventBonus = [
+    'club-exception-scouted',
+    'club-exception-roster-window',
+    'club-exception-referenced',
+  ].some((tag) => player.tags.includes(tag)) ? 1 : 0;
+  return Math.max(-2, Math.min(4, originBonus + exceptionBonus + eventBonus));
+}
+
 export function applyClubRequest(
   session: GameSession,
   clubId: string,
@@ -3881,15 +4035,33 @@ export function applyClubRequest(
     pathTag = hasOpenMatchPath ? 'application-path-open-match' : 'application-path-talent';
   }
 
+  const runtime = previewClubRuntime(session, club.id);
+  const originRegion = player.originRegion || '本地';
+  const originFit = resolveClubOriginFit(originRegion, club);
+  const exception = clubExceptionContext(player, club, runtime);
+
   const responseDelay = 2 + Math.floor(Math.random() * 3); // 2-4 回合
   const pending: PendingApplication = {
     clubId,
     clubName: club.name,
     appliedRound: player.round,
     responseRound: player.round + responseDelay,
+    originRegion,
+    originPreference: originFit.preference,
+    originFit: originFit.fit,
+    originFitBonus: originFit.bonus,
+    exceptionBonus: exception.bonus,
+    exceptionReasons: exception.reasons,
   };
 
-  const nextTags = dedupe([...player.tags, 'applying']);
+  const nextTags = dedupe([
+    ...player.tags,
+    'applying',
+    `club-origin-${originFit.fit}`,
+    ...(exception.bonus > 0 ? ['club-exception-ready'] : []),
+    ...(exception.reasons.includes('名气远高于门槛') ? ['club-exception-strength'] : []),
+    ...(exception.reasons.includes('阵容或状态存在缺口') ? ['club-exception-roster'] : []),
+  ]);
   if (pathTag && !nextTags.includes(pathTag)) nextTags.push(pathTag);
 
   return {
@@ -4379,6 +4551,7 @@ function joinTeamFromOffer(
   const hadTeam = player.team !== null;
 
   if (hadTeam) {
+    player = finalizePlayerCareerSnapshot(player);
     player = clearTeamQualifications(player);
     if (options.contractDispute) {
       player.fame = Math.max(0, (player.fame ?? 0) - 15);
@@ -4552,6 +4725,16 @@ function applyAutomaticTagCleanup(
     addRemove('application-response-ready');
     addRemove('application-path-open-match');
     addRemove('application-path-talent');
+    addRemove('club-origin-match');
+    addRemove('club-origin-regional');
+    addRemove('club-origin-mismatch');
+    addRemove('club-origin-open');
+    addRemove('club-exception-ready');
+    addRemove('club-exception-strength');
+    addRemove('club-exception-roster');
+    addRemove('club-exception-scouted');
+    addRemove('club-exception-roster-window');
+    addRemove('club-exception-referenced');
   }
   if (!player.roleTransition) addRemove('role-transition-active');
 

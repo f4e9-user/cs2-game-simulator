@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pickEvent } from '../events.js';
 import type { Player } from '../../types.js';
+import { applyClubRequest, createSession, initPlayer } from '../gameEngine.js';
 
 function player(overrides: Partial<Player>): Player {
   return {
@@ -100,5 +101,55 @@ describe('club application events', () => {
     });
 
     expect(event?.id).toBe('chain-club-interview-open-match');
+  });
+
+  it('keeps origin preference as a soft condition with exception context', () => {
+    const p = initPlayer({
+      name: 'OriginTester',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    const session = createSession({
+      ...p,
+      originRegion: '北美',
+      stage: 'pro',
+      fame: 40,
+      round: 20,
+      actionPoints: 100,
+    } as Player, 1);
+
+    const applied = applyClubRequest(session, 'club-dragon-corp');
+
+    expect(applied.pendingApplication?.clubId).toBe('club-dragon-corp');
+    expect(applied.pendingApplication?.originFit).toBe('mismatch');
+    expect(applied.pendingApplication?.exceptionBonus).toBeGreaterThan(0);
+    expect(applied.tags).toContain('club-origin-mismatch');
+    expect(applied.tags).toContain('club-exception-strength');
+  });
+
+  it('surfaces exception events before the application response is due', () => {
+    const event = pickEvent({
+      player: player({
+        stage: 'pro',
+        round: 20,
+        pendingApplication: {
+          clubId: 'club-dragon-corp',
+          clubName: '龙腾电竞',
+          appliedRound: 20,
+          responseRound: 24,
+          originRegion: '北美',
+          originPreference: 'regional-core',
+          originFit: 'mismatch',
+          originFitBonus: -1,
+          exceptionBonus: 2,
+          exceptionReasons: ['名气远高于门槛'],
+        },
+        tags: ['applying', 'club-origin-mismatch', 'club-exception-ready', 'club-exception-strength'],
+      }),
+      recentEventIds: [],
+      rng: () => 0,
+    });
+
+    expect(event?.id).toBe('chain-club-exception-scout');
   });
 });

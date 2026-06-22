@@ -1475,6 +1475,133 @@ export const CHAIN_EVENTS: EventDef[] = [
     ],
   },
 
+  // ── 出生地区偏好破例事件 ───────────────────────────────────────
+  {
+    id: 'chain-club-exception-scout',
+    type: 'tryout',
+    title: '星探改看了你的比赛录像',
+    narrative:
+      '你投递的队伍原本更偏向本地区选手，但有星探把你的比赛录像重新剪了一遍，发给了教练组。',
+    stages: ['rookie', 'youth', 'second', 'pro'],
+    difficulty: 2,
+    weight: 8,
+    requireTags: ['club-origin-mismatch', 'club-exception-strength'],
+    forbidTags: ['club-exception-event-cd'],
+    choices: [
+      {
+        id: 'send-highlight-package',
+        label: '补交关键回合剪辑',
+        description: '用表现解释为什么他们值得破例。',
+        check: {
+          primary: 'agility',
+          secondary: 'experience',
+          dc: 9,
+          traitBonuses: { mechanical: 2, clutch: 2, media: 1 },
+          traitPenalties: { shy: 1 },
+        },
+        success: {
+          narrative: '剪辑发过去后，对方回了一个简短的确认："我们会认真看。"地域偏好没有消失，但你让他们开始动摇。',
+          resourceDelta: { fame: 1 },
+          tags: {
+            add: ['club-exception-scouted'],
+            cooldowns: { 'club-exception-event-cd': 8 },
+          },
+        },
+        failure: {
+          narrative: '你发出去的材料没有打中重点。对方礼貌回复，但语气里还是那套标准流程。',
+          stateDelta: { stress: 5 },
+          tags: {
+            cooldowns: { 'club-exception-event-cd': 6 },
+          },
+        },
+      },
+    ],
+  },
+
+  {
+    id: 'chain-club-roster-crisis',
+    type: 'tryout',
+    title: '目标战队临时缺人',
+    narrative:
+      '圈内传来消息：你申请的那支队伍同位置有人出了状况，教练组正在临时扩大候选名单。',
+    stages: ['rookie', 'youth', 'second', 'pro'],
+    difficulty: 2,
+    weight: 8,
+    requireTags: ['club-origin-mismatch', 'club-exception-roster'],
+    forbidTags: ['club-exception-event-cd'],
+    choices: [
+      {
+        id: 'offer-emergency-trial',
+        label: '主动提出临时试训',
+        description: '队伍需要救火，你愿意直接上压力。',
+        check: {
+          primary: 'mentality',
+          secondary: 'experience',
+          dc: 8,
+          traitBonuses: { steady: 2, support: 1, clutch: 1 },
+          traitPenalties: { ego: 1 },
+        },
+        success: {
+          narrative: '你没有谈条件，只强调自己能马上适应。对方经理明显记下了这一点。',
+          stateDelta: { stress: -3 },
+          tags: {
+            add: ['club-exception-roster-window'],
+            cooldowns: { 'club-exception-event-cd': 8 },
+          },
+        },
+        failure: {
+          narrative: '你想抓住机会，但表达得有点急。对方没有拒绝，只是说会继续评估。',
+          stateDelta: { stress: 6 },
+          tags: {
+            cooldowns: { 'club-exception-event-cd': 6 },
+          },
+        },
+      },
+    ],
+  },
+
+  {
+    id: 'chain-club-local-reference',
+    type: 'tryout',
+    title: '熟人递了一句话',
+    narrative:
+      '你以前在地区赛事里认识的人听说你投了简历，问你要不要把你的名字递给那边的分析师。',
+    stages: ['rookie', 'youth', 'second', 'pro'],
+    difficulty: 1,
+    weight: 6,
+    requireTags: ['club-origin-regional'],
+    forbidTags: ['club-exception-event-cd'],
+    choices: [
+      {
+        id: 'accept-reference',
+        label: '接受引荐',
+        description: '让熟人帮你补一层信任背书。',
+        check: {
+          primary: 'mentality',
+          secondary: 'intelligence',
+          dc: 7,
+          traitBonuses: { steady: 2, support: 1, media: 1 },
+          traitPenalties: { ego: 1, shy: 1 },
+        },
+        success: {
+          narrative: '这句引荐没有直接改变结果，但至少让你的名字不再只是冷冰冰的一封邮件。',
+          resourceDelta: { fame: 1 },
+          tags: {
+            add: ['club-exception-referenced'],
+            cooldowns: { 'club-exception-event-cd': 8 },
+          },
+        },
+        failure: {
+          narrative: '你犹豫太久，机会窗口过去了。熟人也只能说下次再帮你留意。',
+          stateDelta: { stress: 4 },
+          tags: {
+            cooldowns: { 'club-exception-event-cd': 6 },
+          },
+        },
+      },
+    ],
+  },
+
   // ── 战队申请响应 ──────────────────────────────────────────────
   {
     id: 'chain-club-response',

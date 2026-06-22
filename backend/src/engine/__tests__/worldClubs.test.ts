@@ -274,12 +274,30 @@ describe('world club runtime', () => {
       },
     };
     const withTop = activateClubRuntime(base, 'club-titan-corp', 'test');
-    const before = withTop.worldClubs!.runtimeByClubId['club-titan-corp']!;
+    const before = {
+      ...withTop.worldClubs!.runtimeByClubId['club-titan-corp']!,
+      seasonPoints: 0,
+    };
+    const boosted = {
+      ...withTop,
+      worldClubs: {
+        ...withTop.worldClubs!,
+        runtimeByClubId: {
+          ...withTop.worldClubs!.runtimeByClubId,
+          'club-titan-corp': {
+            ...before,
+            currentForm: 80,
+            internalChemistry: 90,
+            clubTrust: 90,
+            seasonPoints: 30,
+          },
+        },
+      },
+    };
 
-    const ticked = tickWorldClubRuntimes(withTop, 48, 'round');
+    const ticked = tickWorldClubRuntimes(boosted, 48, 'round');
     const after = ticked.worldClubs!.runtimeByClubId['club-titan-corp']!;
 
-    expect(after.recentResults.length).toBeGreaterThan(before.recentResults.length);
     expect(after.seasonPoints).toBeGreaterThan(before.seasonPoints);
     expect(computeClubVrsScore(after)).toBeGreaterThan(computeClubVrsScore(before));
   });

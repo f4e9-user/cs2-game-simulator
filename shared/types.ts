@@ -15,6 +15,8 @@ export type Stage =
   | 'pro'
   | 'retired';
 
+export type CareerCompetitiveStage = Exclude<Stage, 'retired'>;
+
 export type EventType =
   | 'training'
   | 'ranked'
@@ -57,11 +59,14 @@ export interface Background {
   description: string;
   startStage: Stage;
   statBias: Partial<Stats>;
+  originRegion?: string;
   tags: string[];
 }
 
 // ── 战队/经济相关类型 ──────────────────────────────────────────
 export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
+export type ClubOriginPreference = 'local-core' | 'regional-core' | 'international-open';
+export type ClubOriginFit = 'match' | 'regional' | 'mismatch' | 'open';
 
 export interface PlayerTeam {
   clubId: string;
@@ -95,6 +100,12 @@ export interface PendingApplication {
   clubName: string;
   appliedRound: number;
   responseRound: number;
+  originRegion?: string;
+  originPreference?: ClubOriginPreference;
+  originFit?: ClubOriginFit;
+  originFitBonus?: number;
+  exceptionBonus?: number;
+  exceptionReasons?: string[];
 }
 
 export interface TeamOffer {
@@ -133,6 +144,20 @@ export interface SalaryTracker {
   salaryRestoreRound?: number;
 }
 
+export interface CareerPeaks {
+  highestStage: CareerCompetitiveStage;
+  peakFame: number;
+  peakStress: number;
+  lowestConstitution: number;
+}
+
+export interface TeamCareer {
+  longestTeamName?: string;
+  longestTeamTag?: string;
+  longestTeamTier?: ClubTier;
+  longestTeamRounds: number;
+}
+
 // Dynamic state that is NOT part of the 6-stat allocation.
 // Derived display values live on the frontend (psychological = mentality*2 etc).
 export interface DynamicState {
@@ -161,6 +186,8 @@ export interface DynamicState {
   familyBailoutCount: number;
   pendingFamilyCrisis?: PendingFamilyCrisis;
   roundCombos: RoundCombo[];
+  careerPeaks?: CareerPeaks;
+  teamCareer?: TeamCareer;
 }
 
 // A tournament the player has signed up for. Resolves when (year, month) match.
@@ -177,6 +204,7 @@ export interface PendingMatch {
   resolveWeek: number;
   // For multi-stage tournaments: the current stage index within Tournament.stages.
   stageIndex: number;
+  stageLosses?: number;
   opponent?: PendingMatchOpponent;
 }
 
@@ -293,6 +321,7 @@ export interface Player extends DynamicState {
   stats: Stats;
   traits: string[];
   backgroundId: string;
+  originRegion: string;
   stage: Stage;
   round: number;
   tags: string[];

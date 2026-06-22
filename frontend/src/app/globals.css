@@ -2253,6 +2253,36 @@ input[type='text']:focus {
   color: var(--fg-2);
 }
 
+.ending-tag-chip.gold {
+  background: rgba(240, 192, 64, 0.1);
+  border-color: rgba(240, 192, 64, 0.35);
+  color: #f0c040;
+}
+
+.ending-tag-chip.good {
+  background: rgba(56, 193, 114, 0.1);
+  border-color: rgba(56, 193, 114, 0.35);
+  color: var(--success);
+}
+
+.ending-tag-chip.warn {
+  background: rgba(255, 189, 46, 0.1);
+  border-color: rgba(255, 189, 46, 0.35);
+  color: var(--warn);
+}
+
+.ending-tag-chip.danger {
+  background: rgba(255, 91, 91, 0.1);
+  border-color: rgba(255, 91, 91, 0.35);
+  color: var(--danger);
+}
+
+.ending-tag-chip.neutral {
+  background: var(--bg-2);
+  border-color: var(--border-strong);
+  color: var(--fg-2);
+}
+
 /* Footer */
 .ending-footer {
   padding: 14px 16px;

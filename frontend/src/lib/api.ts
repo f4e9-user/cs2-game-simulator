@@ -101,6 +101,7 @@ export const api = {
     name: string;
     traitIds: string[];
     backgroundId: string;
+    originRegion?: string;
     stats?: Stats;
   }) =>
     request<StartGameResponse>('/api/game/start', {

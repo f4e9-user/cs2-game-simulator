@@ -28,6 +28,13 @@ function player(): Player {
   };
 }
 
+function unforcedPlayer(): Player {
+  return {
+    ...player(),
+    forceMatchResult: null,
+  };
+}
+
 function pendingFinal(): PendingMatch {
   return {
     tournamentId: 'y1-b-01',
@@ -54,6 +61,40 @@ function pendingPglMajorFinal(): PendingMatch {
     resolveWeek: 20,
     stageIndex: 5,
   };
+}
+
+function pendingSClassGroup(): PendingMatch {
+  return {
+    tournamentId: 'y1-s-main-01',
+    tier: 's-class',
+    name: 'IEM',
+    displayName: 'IEM Test',
+    progressionTier: 's-main',
+    entryType: 'invite',
+    resolveYear: 1,
+    resolveWeek: 20,
+    stageIndex: 1,
+  };
+}
+
+function resolveForcedGroupLoss(stageLosses = 0) {
+  const p = {
+    ...player(),
+    forceMatchResult: 'loss' as const,
+    pendingMatch: {
+      ...pendingSClassGroup(),
+      stageLosses,
+    },
+  };
+  const session = {
+    ...createSession(p, 1),
+    phase: 'action' as const,
+  };
+
+  const eventPhase = endActionPhase(session).session;
+  const map1 = applyChoice(eventPhase, 'match-play');
+  const map2 = applyChoice(map1.session, 'match-play');
+  return applyChoice(map2.session, 'series-confirm');
 }
 
 describe('tournament series', () => {
@@ -92,6 +133,48 @@ describe('tournament series', () => {
     expect(final.result.matchStats?.kills).toBeGreaterThan(0);
   });
 
+  it('uses a different simulation stream for each map in the same bo3 round', () => {
+    const p = {
+      ...unforcedPlayer(),
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    const map2 = applyChoice(map1.session, 'match-play');
+
+    expect(map1.session.player.round).toBe(map2.session.player.round);
+    expect(map1.result.matchStats).toBeDefined();
+    expect(map2.result.matchStats).toBeDefined();
+    expect(map2.result.matchStats).not.toEqual(map1.result.matchStats);
+  });
+
+  it('does not repeat map simulation when a bo3 step is restored in the same round', () => {
+    const p = {
+      ...unforcedPlayer(),
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    const restoredMap2Session = {
+      ...map1.session,
+      activeEventSequence: undefined,
+    };
+    const map2 = applyChoice(restoredMap2Session, 'match-play');
+
+    expect(map2.result.eventId).toContain('map-2');
+    expect(map2.result.matchStats).not.toEqual(map1.result.matchStats);
+  });
+
   it('records championship counts by tier and S-tier series', () => {
     const p = {
       ...player(),
@@ -113,6 +196,19 @@ describe('tournament series', () => {
     expect(final.session.player.tierChampionships.s).toBe(1);
     expect(final.session.player.championshipSeries?.pgl).toBe(1);
     expect(final.session.player.championshipSeries?.major).toBe(1);
+  });
+
+  it('keeps a player alive after one group-stage loss and eliminates on the second', () => {
+    const firstLoss = resolveForcedGroupLoss(0);
+
+    expect(firstLoss.result.success).toBe(false);
+    expect(firstLoss.session.player.pendingMatch?.stageIndex).toBe(1);
+    expect(firstLoss.session.player.pendingMatch?.stageLosses).toBe(1);
+
+    const secondLoss = resolveForcedGroupLoss(1);
+
+    expect(secondLoss.result.success).toBe(false);
+    expect(secondLoss.session.player.pendingMatch).toBeNull();
   });
 
   it('requires PGL, BLAST, and Major championships for the legend ending', () => {
