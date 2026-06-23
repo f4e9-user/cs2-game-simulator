@@ -9,9 +9,9 @@ export const AI_EVENT_TTL_ROUNDS = 24;
 export const AI_EVENT_PICK_COOLDOWN = 8;
 export const AI_EVENT_MAX_USES = 2;
 
-const AI_EVENT_CATEGORIES = new Set(['stress', 'team', 'media', 'rival', 'life']);
+const AI_EVENT_CATEGORIES = new Set(['stress', 'team', 'media', 'rival', 'life', 'tournament-context']);
 
-export type AiEventCategory = 'stress' | 'team' | 'media' | 'rival' | 'life';
+export type AiEventCategory = 'stress' | 'team' | 'media' | 'rival' | 'life' | 'tournament-context';
 
 export interface AiEventTriggerSnapshot {
   stress: number;
@@ -397,5 +397,9 @@ function relevanceScore(meta: AiEventMeta, player: Player, history: RoundResult[
       if ((player.rivals ?? []).length === 0) return 0;
       if (recentMatch || recentLoss || (player.consecutiveLosses ?? 0) >= 2) return 1.2;
       return 0.8;
+    case 'tournament-context':
+      if (player.pendingMatch) return 1.5;
+      if (recentMatch || recentLoss) return 1.0;
+      return 0.5;
   }
 }

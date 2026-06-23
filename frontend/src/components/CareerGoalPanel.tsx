@@ -24,7 +24,7 @@ export function CareerGoalPanel({ goal }: Props) {
       <div className="career-goal-summary">{goal.summary}</div>
       {goal.teamHint && <div className="career-goal-summary">{goal.teamHint}</div>}
 
-      {goal.goals.length > 0 && (
+      {goal.goals?.length > 0 && (
         <div className="career-goal-block">
           <div className="career-goal-block-title">晋级目标</div>
           <div className="career-goal-list">
@@ -42,7 +42,7 @@ export function CareerGoalPanel({ goal }: Props) {
 
       <div className="career-goal-block">
         <div className="career-goal-block-title">未来 12 周晋级赛程</div>
-        {goal.opportunities.length > 0 ? (
+        {goal.opportunities?.length > 0 ? (
           <div className="career-opportunity-list">
             {goal.opportunities.map((opportunity) => (
               <div key={`${opportunity.week}-${opportunity.name}`} className="career-opportunity-row">

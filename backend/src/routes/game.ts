@@ -69,6 +69,7 @@ import type { SocialFeedPost } from '../ai/prompts.js';
 import {
   aiEventCacheKey,
   aiEventsFromCache,
+  emptyAiEventCache,
   legacyAiEventCacheKey,
   markAiEventActive,
   mergeGeneratedAiEvents,
@@ -508,7 +509,9 @@ app.post('/game/:sessionId/choice', async (c) => {
       }
       aiEventCache = releaseActiveAiEvent(aiEventCache, session.player);
       aiEvents = aiEventsFromCache(aiEventCache);
-    } catch {}
+    } catch (err) {
+      console.warn('[AI events] cache load failed in /choice:', err);
+    }
 
     // 面试 post-handler 需要 clubId，但 applyChoice 内部会清空 pendingApplication
     // 提前保存，供下方生成入队邀请时使用
@@ -616,13 +619,21 @@ app.post('/game/:sessionId/choice', async (c) => {
 
     if (ai.active && updated.status === 'active') {
       const refreshAiEvents = async () => {
-        const baseCache = nextAiEventCache ?? aiEventCache ?? await loadAiEventCache(c.env.KV, id, updated);
+        // Re-read the latest cache from KV instead of using the stale closure value.
+        // This prevents the background refresh from overwriting concurrent writes
+        // made by other requests (e.g. /action, /end-action-phase, or a second /choice).
+        const baseCache: AiEventCacheEnvelope = await loadAiEventCache(c.env.KV, id, updated).catch((err) => {
+          console.warn('[AI events] background reload failed, falling back to closure cache:', err);
+          return nextAiEventCache ?? aiEventCache ?? emptyAiEventCache();
+        });
         const preservePendingAiEvent = async () => saveAiEventCache(c.env.KV, id, baseCache);
         const writeMergedAiEvents = async (generated: EventDef[]) => {
+          // Re-read again right before writing to minimize the race window.
+          const freshCache = await loadAiEventCache(c.env.KV, id, updated).catch(() => baseCache);
           await saveAiEventCache(
             c.env.KV,
             id,
-            mergeGeneratedAiEvents(baseCache, generated, updated.player, updated.history),
+            mergeGeneratedAiEvents(freshCache, generated, updated.player, updated.history),
           );
         };
 
@@ -985,7 +996,9 @@ app.post('/game/:sessionId/action', async (c) => {
     try {
       aiEventCache = await loadAiEventCache(c.env.KV, id, session);
       aiEventCache = releaseActiveAiEvent(aiEventCache, session.player);
-    } catch {}
+    } catch (err) {
+      console.warn('[AI events] cache load failed in /action:', err);
+    }
 
     const { actionResult, player } = applyAction(session, actionId, undefined, aiEventCache);
     session.player = player;
@@ -1030,7 +1043,9 @@ app.post('/game/:sessionId/end-action-phase', async (c) => {
       aiEventCache = await loadAiEventCache(c.env.KV, id, session);
       aiEventCache = releaseActiveAiEvent(aiEventCache, session.player);
       aiEvents = aiEventsFromCache(aiEventCache);
-    } catch {}
+    } catch (err) {
+      console.warn('[AI events] cache load failed in /end-action-phase:', err);
+    }
 
     const { session: updated, pickedEvent } = endActionPhase(session, aiEvents, aiEventCache);
     session.player = updated.player;
@@ -1142,8 +1157,8 @@ app.post('/game/:sessionId/loan', async (c) => {
   const id = c.req.param('sessionId');
   const body = await c.req.json().catch(() => ({}));
   const { amount } = body ?? {};
-  if (!Number.isInteger(amount)) {
-    return c.json({ error: 'amount 必须是整数' }, 400);
+  if (!Number.isInteger(amount) || amount < 20 || amount > 100) {
+    return c.json({ error: 'amount 必须是 20-100 之间的整数' }, 400);
   }
 
   const storage = makeStorage(c.env);
