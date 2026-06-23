@@ -1537,13 +1537,13 @@ input[type='text']:focus {
 
 /* ── Compact player info (right panel top) ───────────────────── */
 
-.career-goal-panel {
+.career-insight-panel {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-1);
 }
 
-.career-goal-header {
+.career-insight-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1551,8 +1551,8 @@ input[type='text']:focus {
   margin-bottom: 6px;
 }
 
-.career-goal-kicker,
-.career-goal-block-title {
+.career-insight-kicker,
+.career-insight-block-title {
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
@@ -1560,14 +1560,14 @@ input[type='text']:focus {
   color: var(--fg-3);
 }
 
-.career-goal-title {
+.career-insight-title {
   margin-top: 2px;
   font-size: 15px;
   font-weight: 700;
   color: var(--fg);
 }
 
-.career-goal-next {
+.career-insight-next {
   flex-shrink: 0;
   padding: 2px 6px;
   border: 1px solid rgba(255, 91, 31, 0.3);
@@ -1578,14 +1578,14 @@ input[type='text']:focus {
   font-weight: 700;
 }
 
-.career-goal-summary {
+.career-insight-summary {
   margin-bottom: 8px;
   color: var(--fg-2);
   font-size: 12px;
   line-height: 1.45;
 }
 
-.career-goal-summary.strong {
+.career-insight-summary.strong {
   color: var(--fg);
   font-weight: 600;
 }
@@ -1681,11 +1681,11 @@ input[type='text']:focus {
   background: var(--accent-glow);
 }
 
-.career-goal-block {
+.career-insight-block {
   margin-top: 8px;
 }
 
-.career-goal-list,
+.career-insight-list,
 .career-opportunity-list {
   margin-top: 5px;
   display: flex;
@@ -1693,7 +1693,7 @@ input[type='text']:focus {
   gap: 4px;
 }
 
-.career-goal-row,
+.career-insight-row,
 .career-opportunity-row {
   display: flex;
   align-items: center;
@@ -1706,12 +1706,12 @@ input[type='text']:focus {
   background: var(--bg-2);
 }
 
-.career-goal-row.completed {
+.career-insight-row.completed {
   border-color: rgba(63, 185, 80, 0.3);
   background: rgba(63, 185, 80, 0.08);
 }
 
-.career-goal-label,
+.career-insight-label,
 .career-opportunity-name {
   min-width: 0;
   color: var(--fg-2);
@@ -1740,7 +1740,7 @@ input[type='text']:focus {
   white-space: nowrap;
 }
 
-.career-goal-count,
+.career-insight-count,
 .career-opportunity-week {
   flex-shrink: 0;
   color: var(--fg);
@@ -1749,11 +1749,11 @@ input[type='text']:focus {
   font-variant-numeric: tabular-nums;
 }
 
-.career-goal-row.completed .career-goal-count {
+.career-insight-row.completed .career-insight-count {
   color: var(--success);
 }
 
-.career-goal-empty {
+.career-insight-empty {
   margin-top: 5px;
   color: var(--fg-3);
   font-size: 11px;
@@ -2983,24 +2983,24 @@ input[type='text']:focus {
     font-size: 14px;
   }
 
-  .career-goal-panel,
+  .career-insight-panel,
   .player-card,
   .feed-item {
     padding-inline: 14px;
   }
 
-  .career-goal-title {
+  .career-insight-title {
     font-size: 16px;
   }
 
-  .career-goal-summary,
+  .career-insight-summary,
   .feed-narrative,
   .feed-choice {
     font-size: 13px;
   }
 
-  .career-goal-label,
-  .career-goal-count,
+  .career-insight-label,
+  .career-insight-count,
   .career-opportunity-name,
   .career-opportunity-week,
   .roster-row,

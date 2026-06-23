@@ -8,7 +8,7 @@ import { WelcomeCard } from '@/components/WelcomeCard';
 import { EventCard } from '@/components/EventCard';
 import { ChoiceList } from '@/components/ChoiceList';
 import { PlayerStats } from '@/components/PlayerStats';
-import { CareerGoalPanel } from '@/components/CareerGoalPanel';
+import { CareerInsightPanel } from '@/components/CareerInsightPanel';
 import { ResultPanel } from '@/components/ResultPanel';
 import { EndingPanel } from '@/components/EndingPanel';
 import { MatchPanel } from '@/components/MatchPanel';
@@ -530,7 +530,7 @@ export default function GamePage() {
 
         {/* Right: player info + feed */}
         <aside className="hud-right">
-          <CareerGoalPanel insight={careerInsight} />
+          <CareerInsightPanel insight={careerInsight} />
           <PlayerStats player={player} traits={traits} />
           <FeedPanel history={history} socialPosts={socialPosts} socialLoading={socialLoading} />
         </aside>

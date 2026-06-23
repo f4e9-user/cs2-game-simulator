@@ -19,7 +19,7 @@ function priorityLabel(priority: CareerInsight['recommendations'][number]['prior
   return '低';
 }
 
-export function CareerGoalPanel({ insight }: Props) {
+export function CareerInsightPanel({ insight }: Props) {
   const [onboardingHidden, setOnboardingHidden] = useState(false);
   if (!insight) return null;
 
@@ -31,19 +31,19 @@ export function CareerGoalPanel({ insight }: Props) {
   const showOnboarding = insight?.onboarding && !onboardingHidden && insight.onboarding.mode !== 'hidden';
 
   return (
-    <section className="career-goal-panel">
-      <div className="career-goal-header">
+    <section className="career-insight-panel">
+      <div className="career-insight-header">
         <div>
-          <div className="career-goal-kicker">职业助手</div>
-          <div className="career-goal-title">{insight.stage.label}</div>
+          <div className="career-insight-kicker">职业助手</div>
+          <div className="career-insight-title">{insight.stage.label}</div>
         </div>
         {insight.stage.nextStage && (
-          <span className="career-goal-next">→ {insight.stage.nextStage}</span>
+          <span className="career-insight-next">→ {insight.stage.nextStage}</span>
         )}
       </div>
 
-      <div className="career-goal-summary">{insight.stage.summary}</div>
-      <div className="career-goal-summary strong">{insight.stage.mainObjective}</div>
+      <div className="career-insight-summary">{insight.stage.summary}</div>
+      <div className="career-insight-summary strong">{insight.stage.mainObjective}</div>
 
       {showOnboarding && insight?.onboarding && (
         <div className="career-insight-onboarding">
@@ -61,8 +61,8 @@ export function CareerGoalPanel({ insight }: Props) {
       )}
 
       {mainMilestone && (
-        <div className="career-goal-block">
-          <div className="career-goal-block-title">下一目标</div>
+        <div className="career-insight-block">
+          <div className="career-insight-block-title">下一目标</div>
           <div className={`career-insight-card ${mainMilestone.status}`}>
             <div className="career-insight-row-title">
               <span>{mainMilestone.title}</span>
@@ -81,8 +81,8 @@ export function CareerGoalPanel({ insight }: Props) {
 
 
       {visibleRisks.length > 0 && (
-        <div className="career-goal-block">
-          <div className="career-goal-block-title">当前风险</div>
+        <div className="career-insight-block">
+          <div className="career-insight-block-title">当前风险</div>
           <div className="career-insight-list">
             {visibleRisks.map((risk) => (
               <div key={risk.id} className={`career-insight-card risk-${risk.severity}`}>
@@ -99,8 +99,8 @@ export function CareerGoalPanel({ insight }: Props) {
       )}
 
       {visibleRecommendations.length > 0 && (
-        <div className="career-goal-block">
-          <div className="career-goal-block-title">本周建议</div>
+        <div className="career-insight-block">
+          <div className="career-insight-block-title">本周建议</div>
           <div className="career-insight-list">
             {visibleRecommendations.map((item) => (
               <div key={`${item.title}-${item.actionId ?? 'text'}`} className="career-insight-card recommendation">
@@ -118,8 +118,8 @@ export function CareerGoalPanel({ insight }: Props) {
       )}
 
       {playerExplanations.length > 0 && (
-        <div className="career-goal-block">
-          <div className="career-goal-block-title">状态解释</div>
+        <div className="career-insight-block">
+          <div className="career-insight-block-title">状态解释</div>
           <div className="career-insight-list">
             {playerExplanations.map((item) => (
               <div key={item.id} className="career-insight-card explanation">
@@ -131,8 +131,8 @@ export function CareerGoalPanel({ insight }: Props) {
         </div>
       )}
 
-      <div className="career-goal-block">
-        <div className="career-goal-block-title">未来 12 周晋级赛程</div>
+      <div className="career-insight-block">
+        <div className="career-insight-block-title">未来 12 周晋级赛程</div>
         {visibleOpportunities.length > 0 ? (
           <div className="career-opportunity-list">
             {visibleOpportunities.map((opportunity) => (
@@ -150,7 +150,7 @@ export function CareerGoalPanel({ insight }: Props) {
             ))}
           </div>
         ) : (
-          <div className="career-goal-empty">未来暂无符合当前晋级目标的赛事</div>
+          <div className="career-insight-empty">未来暂无符合当前晋级目标的赛事</div>
         )}
       </div>
     </section>
