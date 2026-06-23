@@ -103,6 +103,7 @@ describe('buildCareerInsight', () => {
       expect.stringContaining('冠军'),
     ]));
     expect(insight.onboarding?.mode).toBe('first_round');
+    expect(insight.opportunities[0]?.week).toBeGreaterThanOrEqual(1);
   });
 
   it('marks promotion milestone ready when requirements are met', () => {

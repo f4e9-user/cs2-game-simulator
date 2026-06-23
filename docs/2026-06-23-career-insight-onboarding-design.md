@@ -644,11 +644,27 @@ npm --prefix frontend run build
 - `git diff --check`：通过。
 - `npm --prefix backend run test`：当前环境启动 Vitest 即 `Bus error`，退出码 135；该问题在实现前基线也可复现。已新增 `backend/src/engine/__tests__/careerInsight.test.ts`，但当前环境无法执行 Vitest 验证。
 
+### 2026-06-23 v1.1 二期收束
+
+已完成：
+
+1. 前端右侧职业助手改为只消费 `careerInsight`，不再依赖 `careerGoal`。
+2. `CareerInsight` 新增 `opportunities`，承载未来 12 周晋级赛事窗口。
+3. `CareerGoalPanel` 去除 `CareerGoal` fallback 和旧目标列表分支，显示链路统一为 insight。
+4. 前端 store 去除 `careerGoal` 状态，避免 UI 层双轨维护。
+5. 后端 game 路由停止返回 `careerGoal` 派生字段，只返回 `careerInsight`。
+6. 前端 API/类型定义移除 `CareerGoal` response 字段和旧 `CareerGoal*` 类型。
+
+验证记录：
+
+- `npm --prefix backend run typecheck`：通过。
+- `npm --prefix frontend run typecheck`：通过。
+
 后续建议：
 
 1. 单独排查 Vitest / Node 22.22.3 / WSL 当前环境的 `Bus error`。
 2. 在测试可运行后执行 `careerInsight.test.ts` 并补充更细的路由响应测试。
-3. 继续收束 `careerGoal` 与 `CareerInsight` 的重复展示逻辑，避免长期双轨维护。
+3. 后端内部仍可继续把 `careerGoal` 作为规则适配层使用；若后续要完全删除，可先把赛事窗口和 gate 规则抽成共享 helper，再删除旧 `careerGoal.ts`。
 
 ---
 

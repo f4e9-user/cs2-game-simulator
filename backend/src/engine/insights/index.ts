@@ -2,7 +2,7 @@ import type { GameSession } from '../../types.js';
 import { buildActionRecommendations } from './actionRecommendation.js';
 import { buildBlockerInsights, buildEventExplanations } from './eventReason.js';
 import { buildOnboardingInsight } from './onboardingInsight.js';
-import { buildProgressionMilestones, buildStageInsight } from './progressionInsight.js';
+import { buildProgressionMilestones, buildProgressionOpportunities, buildStageInsight } from './progressionInsight.js';
 import { buildRiskInsights } from './riskInsight.js';
 import type { CareerInsight, PriorityInsight } from './types.js';
 
@@ -34,6 +34,7 @@ function buildPriorities(insight: Pick<CareerInsight, 'milestones' | 'risks'>): 
 export function buildCareerInsight(session: GameSession, playerPoints = 0): CareerInsight {
   const stage = buildStageInsight(session.player);
   const milestones = buildProgressionMilestones(session.player, playerPoints);
+  const opportunities = buildProgressionOpportunities(session.player, playerPoints);
   const risks = buildRiskInsights(session.player);
   const recommendations = buildActionRecommendations(session, milestones, risks);
   const blockers = buildBlockerInsights(session);
@@ -49,6 +50,7 @@ export function buildCareerInsight(session: GameSession, playerPoints = 0): Care
     risks,
     recommendations,
     milestones,
+    opportunities,
     blockers,
     explanations,
   };

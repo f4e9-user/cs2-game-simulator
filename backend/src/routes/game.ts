@@ -27,7 +27,6 @@ import {
   validateAllocation,
 } from '../engine/gameEngine.js';
 import { checkTournamentPromotion } from '../engine/stages.js';
-import { buildCareerGoal } from '../engine/careerGoal.js';
 import { buildCareerInsight } from '../engine/insights/index.js';
 import { applyMoneyTransaction } from '../engine/money.js';
 import { canSignUpForTournament, playerTeamMeetsRequirement, tournamentDirectEntryBypassApplies } from '../engine/tournamentEligibility.js';
@@ -406,7 +405,6 @@ app.post('/game/start', async (c) => {
       player: session.player,
       phase: session.phase,
       currentEvent: session.currentEvent,
-      careerGoal: buildCareerGoal(session.player, 0),
       careerInsight: buildCareerInsight(session, 0),
       leaderboard: session.leaderboard,
     });
@@ -427,10 +425,6 @@ app.get('/game/:sessionId', async (c) => {
     ...session,
     phase: getSessionPhase(session),
     promotion,
-    careerGoal: buildCareerGoal(
-      session.player,
-      session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0,
-    ),
     careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
     debugTeamIdentity: buildTeamIdentityDebug(session.player),
     debugRole: buildRoleDebug(session.player, session.history),
@@ -677,10 +671,6 @@ app.post('/game/:sessionId/choice', async (c) => {
       status: updated.status,
       ending: updated.ending,
       promotion: checkTournamentPromotion(updated.player),
-      careerGoal: buildCareerGoal(
-        updated.player,
-        updated.leaderboard?.find((t) => t.isPlayer)?.points ?? 0,
-      ),
       careerInsight: buildCareerInsight(updated, updated.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
       leaderboard: updated.leaderboard,
     });
@@ -1308,10 +1298,6 @@ app.post('/game/:sessionId/team-response', async (c) => {
       phase: getSessionPhase(session),
       player,
       leaderboard: session.leaderboard,
-      careerGoal: buildCareerGoal(
-        player,
-        session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0,
-      ),
       careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
     });
   } catch (err) {

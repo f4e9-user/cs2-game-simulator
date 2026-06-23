@@ -9,6 +9,7 @@ export interface CareerInsight {
   risks: RiskInsight[];
   recommendations: ActionRecommendation[];
   milestones: MilestoneInsight[];
+  opportunities: OpportunityInsight[];
   blockers: BlockerInsight[];
   explanations: ExplanationInsight[];
 }
@@ -36,6 +37,15 @@ export interface MilestoneInsight {
   progressText: string;
   missing: string[];
   nextStep?: string;
+}
+
+export interface OpportunityInsight {
+  id: string;
+  week: number;
+  name: string;
+  tier: string;
+  available: boolean;
+  status: string;
 }
 
 export interface RiskInsight {

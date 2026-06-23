@@ -39,7 +39,6 @@ export default function GamePage() {
     ending,
     lastResult,
     promotion,
-    careerGoal,
     careerInsight,
     leaderboard,
     pendingOffer,
@@ -531,7 +530,7 @@ export default function GamePage() {
 
         {/* Right: player info + feed */}
         <aside className="hud-right">
-          <CareerGoalPanel goal={careerGoal} insight={careerInsight} />
+          <CareerGoalPanel insight={careerInsight} />
           <PlayerStats player={player} traits={traits} />
           <FeedPanel history={history} socialPosts={socialPosts} socialLoading={socialLoading} />
         </aside>
@@ -578,7 +577,6 @@ export default function GamePage() {
               const res = await api.respondOffer(sessionId, true, apiToken ?? undefined);
               setPlayerState({
                 player: res.player,
-                careerGoal: res.careerGoal,
                 careerInsight: res.careerInsight,
                 leaderboard: res.leaderboard,
               });
@@ -598,7 +596,6 @@ export default function GamePage() {
               const res = await api.respondOffer(sessionId, false, apiToken ?? undefined);
               setPlayerState({
                 player: res.player,
-                careerGoal: res.careerGoal,
                 careerInsight: res.careerInsight,
               });
               setCurrentEvent(res.currentEvent ?? null);

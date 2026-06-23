@@ -835,32 +835,6 @@ export interface PromotionCheck {
   reasons: string[];
 }
 
-export interface CareerGoalProgress {
-  id: string;
-  label: string;
-  current: number;
-  target: number;
-  completed: boolean;
-}
-
-export interface CareerGoalOpportunity {
-  week: number;
-  name: string;
-  tier: string;
-  available?: boolean;
-  status?: string;
-}
-
-export interface CareerGoal {
-  stage: Stage;
-  stageLabel: string;
-  summary: string;
-  teamHint?: string;
-  nextStageLabel?: string;
-  goals: CareerGoalProgress[];
-  opportunities: CareerGoalOpportunity[];
-}
-
 export interface CareerInsight {
   generatedAtRound: number;
   stage: {
@@ -909,6 +883,14 @@ export interface CareerInsight {
     missing: string[];
     nextStep?: string;
   }>;
+  opportunities: Array<{
+    id: string;
+    week: number;
+    name: string;
+    tier: string;
+    available: boolean;
+    status: string;
+  }>;
   blockers: Array<{
     id: string;
     title: string;
@@ -936,7 +918,6 @@ export interface GameSession {
   createdAt: string;
   updatedAt: string;
   promotion?: PromotionCheck;
-  careerGoal?: CareerGoal;
   careerInsight?: CareerInsight;
   leaderboard: LeaderboardTeam[];
   worldClubs?: WorldClubPool;
@@ -962,7 +943,6 @@ export interface StartGameResponse {
   player: Player;
   phase: RoundPhase;
   currentEvent: GameEvent | null;
-  careerGoal?: CareerGoal;
   careerInsight?: CareerInsight;
   leaderboard: LeaderboardTeam[];
 }
@@ -1015,7 +995,6 @@ export interface ChoiceResponse {
   status: SessionStatus;
   ending?: string;
   promotion?: PromotionCheck;
-  careerGoal?: CareerGoal;
   careerInsight?: CareerInsight;
   leaderboard?: LeaderboardTeam[];
 }

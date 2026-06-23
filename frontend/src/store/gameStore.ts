@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type {
-  CareerGoal,
   CareerInsight,
   GameEvent,
   GameSession,
@@ -24,7 +23,6 @@ interface GameState {
   ending: string | null;
   lastResult: RoundResult | null;
   promotion: PromotionCheck | null;
-  careerGoal: CareerGoal | null;
   careerInsight: CareerInsight | null;
   leaderboard: LeaderboardTeam[];
 
@@ -42,7 +40,6 @@ interface GameState {
     sessionId: string;
     player: Player;
     currentEvent: GameEvent | null;
-    careerGoal?: CareerGoal;
     careerInsight?: CareerInsight;
   }) => void;
   applyChoiceResponse: (args: {
@@ -53,7 +50,6 @@ interface GameState {
     status: SessionStatus;
     ending?: string;
     promotion?: PromotionCheck;
-    careerGoal?: CareerGoal;
     careerInsight?: CareerInsight;
     leaderboard?: LeaderboardTeam[];
   }) => void;
@@ -63,7 +59,6 @@ interface GameState {
   setActiveEventSequence: (activeEventSequence: EventSequence | null) => void;
   setPlayerState: (args: {
     player: Player;
-    careerGoal?: CareerGoal;
     careerInsight?: CareerInsight;
     leaderboard?: LeaderboardTeam[];
   }) => void;
@@ -88,7 +83,6 @@ export const useGameStore = create<GameState>((set) => ({
   ending: null,
   lastResult: null,
   promotion: null,
-  careerGoal: null,
   careerInsight: null,
   leaderboard: [],
   actionsPhase: false,
@@ -110,7 +104,6 @@ export const useGameStore = create<GameState>((set) => ({
       ending: session.ending ?? null,
       lastResult: session.history[session.history.length - 1] ?? null,
       promotion: session.promotion ?? null,
-      careerGoal: session.careerGoal ?? null,
       careerInsight: session.careerInsight ?? null,
       leaderboard: session.leaderboard ?? [],
       pendingOffer: session.player.pendingOffer ?? null,
@@ -118,7 +111,7 @@ export const useGameStore = create<GameState>((set) => ({
       error: null,
     }),
 
-  hydrateFromStart: ({ sessionId, player, currentEvent, careerGoal, careerInsight }) =>
+  hydrateFromStart: ({ sessionId, player, currentEvent, careerInsight }) =>
     set({
       sessionId,
       player,
@@ -129,7 +122,6 @@ export const useGameStore = create<GameState>((set) => ({
       ending: null,
       lastResult: null,
       promotion: null,
-      careerGoal: careerGoal ?? null,
       careerInsight: careerInsight ?? null,
       error: null,
     }),
@@ -142,7 +134,6 @@ export const useGameStore = create<GameState>((set) => ({
     status,
     ending,
     promotion,
-    careerGoal,
     careerInsight,
     leaderboard,
   }) =>
@@ -155,7 +146,6 @@ export const useGameStore = create<GameState>((set) => ({
       history: [...state.history, result],
       lastResult: result,
       promotion: promotion ?? state.promotion,
-      careerGoal: careerGoal ?? state.careerGoal,
       careerInsight: careerInsight ?? state.careerInsight,
       leaderboard: leaderboard ?? state.leaderboard,
       actionsPhase: false,
@@ -168,10 +158,9 @@ export const useGameStore = create<GameState>((set) => ({
   setCareerInsight: (careerInsight) => set({ careerInsight }),
   setCurrentEvent: (currentEvent) => set({ currentEvent }),
   setActiveEventSequence: (activeEventSequence) => set({ activeEventSequence }),
-  setPlayerState: ({ player, careerGoal, careerInsight, leaderboard }) =>
+  setPlayerState: ({ player, careerInsight, leaderboard }) =>
     set((state) => ({
       player,
-      careerGoal: careerGoal ?? state.careerGoal,
       careerInsight: careerInsight ?? state.careerInsight,
       leaderboard: leaderboard ?? state.leaderboard,
       pendingOffer: player.pendingOffer ?? null,
@@ -194,7 +183,6 @@ export const useGameStore = create<GameState>((set) => ({
       ending: null,
       lastResult: null,
       promotion: null,
-      careerGoal: null,
       careerInsight: null,
       actionsPhase: false,
       loading: false,

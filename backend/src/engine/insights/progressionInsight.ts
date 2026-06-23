@@ -1,6 +1,6 @@
 import type { Player, Stage } from '../../types.js';
 import { buildCareerGoal, type CareerGoal } from '../careerGoal.js';
-import type { MilestoneInsight, StageInsight } from './types.js';
+import type { MilestoneInsight, OpportunityInsight, StageInsight } from './types.js';
 
 const STAGE_LABELS: Record<Stage, string> = {
   rookie: '路人新人',
@@ -61,6 +61,18 @@ function milestoneTitle(goal: CareerGoal): string {
     case 'pro': return '冲击顶级荣誉';
     case 'retired': return '生涯已收束';
   }
+}
+
+export function buildProgressionOpportunities(player: Player, playerPoints = 0): OpportunityInsight[] {
+  const goal = buildCareerGoal(player, playerPoints);
+  return goal.opportunities.map((opportunity) => ({
+    id: `${opportunity.week}:${opportunity.name}`,
+    week: opportunity.week,
+    name: opportunity.name,
+    tier: opportunity.tier,
+    available: opportunity.available,
+    status: opportunity.status,
+  }));
 }
 
 export function buildProgressionMilestones(player: Player, playerPoints = 0): MilestoneInsight[] {

@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import type { CareerGoal, CareerInsight } from '@/lib/types';
+import type { CareerInsight } from '@/lib/types';
 
 interface Props {
-  goal: CareerGoal | null;
   insight?: CareerInsight | null;
 }
 
@@ -20,12 +19,13 @@ function priorityLabel(priority: CareerInsight['recommendations'][number]['prior
   return '低';
 }
 
-export function CareerGoalPanel({ goal, insight }: Props) {
+export function CareerGoalPanel({ insight }: Props) {
   const [onboardingHidden, setOnboardingHidden] = useState(false);
-  if (!goal && !insight) return null;
+  if (!insight) return null;
 
   const visibleRisks = insight?.risks?.slice(0, 3) ?? [];
   const visibleRecommendations = insight?.recommendations?.slice(0, 3) ?? [];
+  const visibleOpportunities = insight?.opportunities?.slice(0, 12) ?? [];
   const mainMilestone = insight?.milestones?.[0];
   const playerExplanations = insight?.explanations?.filter((item) => item.visibility === 'player').slice(0, 2) ?? [];
   const showOnboarding = insight?.onboarding && !onboardingHidden && insight.onboarding.mode !== 'hidden';
@@ -35,16 +35,15 @@ export function CareerGoalPanel({ goal, insight }: Props) {
       <div className="career-goal-header">
         <div>
           <div className="career-goal-kicker">职业助手</div>
-          <div className="career-goal-title">{insight?.stage.label ?? goal?.stageLabel}</div>
+          <div className="career-goal-title">{insight.stage.label}</div>
         </div>
-        {(insight?.stage.nextStage ?? goal?.nextStageLabel) && (
-          <span className="career-goal-next">→ {insight?.stage.nextStage ?? goal?.nextStageLabel}</span>
+        {insight.stage.nextStage && (
+          <span className="career-goal-next">→ {insight.stage.nextStage}</span>
         )}
       </div>
 
-      <div className="career-goal-summary">{insight?.stage.summary ?? goal?.summary}</div>
-      <div className="career-goal-summary strong">{insight?.stage.mainObjective ?? goal?.summary}</div>
-      {goal?.teamHint && <div className="career-goal-summary">{goal.teamHint}</div>}
+      <div className="career-goal-summary">{insight.stage.summary}</div>
+      <div className="career-goal-summary strong">{insight.stage.mainObjective}</div>
 
       {showOnboarding && insight?.onboarding && (
         <div className="career-insight-onboarding">
@@ -80,21 +79,6 @@ export function CareerGoalPanel({ goal, insight }: Props) {
         </div>
       )}
 
-      {!mainMilestone && goal?.goals && goal.goals.length > 0 && (
-        <div className="career-goal-block">
-          <div className="career-goal-block-title">晋级目标</div>
-          <div className="career-goal-list">
-            {goal.goals.map((item) => (
-              <div key={item.id} className={`career-goal-row${item.completed ? ' completed' : ''}`}>
-                <span className="career-goal-label">{item.label}</span>
-                <span className="career-goal-count">
-                  {Math.min(item.current, item.target)} / {item.target}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {visibleRisks.length > 0 && (
         <div className="career-goal-block">
@@ -149,10 +133,10 @@ export function CareerGoalPanel({ goal, insight }: Props) {
 
       <div className="career-goal-block">
         <div className="career-goal-block-title">未来 12 周晋级赛程</div>
-        {goal?.opportunities && goal.opportunities.length > 0 ? (
+        {visibleOpportunities.length > 0 ? (
           <div className="career-opportunity-list">
-            {goal.opportunities.map((opportunity) => (
-              <div key={`${opportunity.week}-${opportunity.name}`} className="career-opportunity-row">
+            {visibleOpportunities.map((opportunity) => (
+              <div key={opportunity.id} className="career-opportunity-row">
                 <span className="career-opportunity-week">第 {opportunity.week} 周</span>
                 <span className="career-opportunity-tier">{opportunity.tier}</span>
                 <span className="career-opportunity-name">{opportunity.name}</span>

@@ -1,7 +1,6 @@
 import type {
   ActionResult,
   Background,
-  CareerGoal,
   CareerInsight,
   ChoiceResponse,
   Club,
@@ -199,7 +198,6 @@ export const api = {
       currentEvent?: GameEvent | null;
       activeEventSequence?: EventSequence | null;
       leaderboard?: LeaderboardTeam[];
-      careerGoal?: CareerGoal;
       careerInsight?: CareerInsight;
     }>(
       `/api/game/${sessionId}/team-response`,
