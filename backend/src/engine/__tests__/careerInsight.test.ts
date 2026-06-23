@@ -155,6 +155,24 @@ describe('buildCareerInsight', () => {
     expect(savedSession).not.toHaveProperty('careerInsight');
   });
 
+  it('prevents debug-only fields from being reintroduced through response overrides', () => {
+    const savedSession = {
+      ...session(),
+      debugTeamIdentity: { player: { scores: [] }, teammates: [], caller: null, star: null },
+      debugRole: {} as GameSession['debugRole'],
+    } as GameSession;
+
+    const payload = buildSessionPayload(savedSession, {
+      phase: 'event' as const,
+      debugTeamIdentity: { player: { scores: [{ identity: 'caller', score: 99, reasons: [] }] }, teammates: [], caller: null, star: null },
+      debugRole: {} as GameSession['debugRole'],
+    } as Partial<GameSession>);
+
+    expect(payload.phase).toBe('event');
+    expect(payload).not.toHaveProperty('debugTeamIdentity');
+    expect(payload).not.toHaveProperty('debugRole');
+  });
+
   it('sorts high stress and high fatigue risks before softer warnings', () => {
     const insight = buildCareerInsight(session({
       stress: 91,
