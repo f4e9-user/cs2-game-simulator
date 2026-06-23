@@ -2,6 +2,7 @@ import type {
   ActionResult,
   Background,
   CareerGoal,
+  CareerInsight,
   ChoiceResponse,
   Club,
   ClubApplicationSummary,
@@ -141,13 +142,13 @@ export const api = {
       method: 'POST',
     }, apiToken),
   submitAction: (sessionId: string, actionId: string, apiToken?: string) =>
-    request<{ actionResult: ActionResult; player: Player; phase: 'action' | 'event'; currentEvent: GameEvent | null }>(
+    request<{ actionResult: ActionResult; player: Player; phase: 'action' | 'event'; currentEvent: GameEvent | null; careerInsight?: CareerInsight }>(
       `/api/game/${sessionId}/action`,
       { method: 'POST', body: JSON.stringify({ actionId }) },
       apiToken,
     ),
   endActionPhase: (sessionId: string, apiToken?: string) =>
-    request<{ player: Player; phase: 'event'; currentEvent: GameEvent | null; activeEventSequence?: EventSequence | null }>(
+    request<{ player: Player; phase: 'event'; currentEvent: GameEvent | null; activeEventSequence?: EventSequence | null; careerInsight?: CareerInsight }>(
       `/api/game/${sessionId}/end-action-phase`,
       { method: 'POST' },
       apiToken,
@@ -199,6 +200,7 @@ export const api = {
       activeEventSequence?: EventSequence | null;
       leaderboard?: LeaderboardTeam[];
       careerGoal?: CareerGoal;
+      careerInsight?: CareerInsight;
     }>(
       `/api/game/${sessionId}/team-response`,
       { method: 'POST', body: JSON.stringify({ accept }) },

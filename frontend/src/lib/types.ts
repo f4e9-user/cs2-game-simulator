@@ -861,6 +861,68 @@ export interface CareerGoal {
   opportunities: CareerGoalOpportunity[];
 }
 
+export interface CareerInsight {
+  generatedAtRound: number;
+  stage: {
+    stage: Stage;
+    label: string;
+    summary: string;
+    mainObjective: string;
+    nextStage?: string;
+  };
+  headline: string;
+  onboarding?: {
+    mode: 'first_round' | 'early_game' | 'stage_intro' | 'hidden';
+    title: string;
+    message: string;
+    checklist: string[];
+    dismissible: boolean;
+  };
+  priorities: Array<{
+    id: string;
+    title: string;
+    detail: string;
+    priority: 'high' | 'medium' | 'low';
+  }>;
+  risks: Array<{
+    id: string;
+    severity: 'info' | 'warning' | 'danger';
+    title: string;
+    reason: string;
+    suggestedMitigation?: string;
+    relatedStats: string[];
+  }>;
+  recommendations: Array<{
+    actionId?: string;
+    title: string;
+    priority: 'high' | 'medium' | 'low';
+    reason: string;
+    expectedBenefit: string;
+    tradeoff?: string;
+  }>;
+  milestones: Array<{
+    id: string;
+    title: string;
+    category: 'promotion' | 'team' | 'tournament' | 'economy' | 'fame' | 'ending';
+    status: 'locked' | 'in_progress' | 'ready' | 'completed';
+    progressText: string;
+    missing: string[];
+    nextStep?: string;
+  }>;
+  blockers: Array<{
+    id: string;
+    title: string;
+    detail: string;
+    severity: 'info' | 'warning' | 'danger';
+  }>;
+  explanations: Array<{
+    id: string;
+    title: string;
+    detail: string;
+    visibility: 'player' | 'debug';
+  }>;
+}
+
 export interface GameSession {
   id: string;
   apiToken: string;
@@ -875,6 +937,7 @@ export interface GameSession {
   updatedAt: string;
   promotion?: PromotionCheck;
   careerGoal?: CareerGoal;
+  careerInsight?: CareerInsight;
   leaderboard: LeaderboardTeam[];
   worldClubs?: WorldClubPool;
   worldClubsVersion?: number;
@@ -900,6 +963,7 @@ export interface StartGameResponse {
   phase: RoundPhase;
   currentEvent: GameEvent | null;
   careerGoal?: CareerGoal;
+  careerInsight?: CareerInsight;
   leaderboard: LeaderboardTeam[];
 }
 
@@ -952,6 +1016,7 @@ export interface ChoiceResponse {
   ending?: string;
   promotion?: PromotionCheck;
   careerGoal?: CareerGoal;
+  careerInsight?: CareerInsight;
   leaderboard?: LeaderboardTeam[];
 }
 

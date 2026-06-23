@@ -40,6 +40,7 @@ export default function GamePage() {
     lastResult,
     promotion,
     careerGoal,
+    careerInsight,
     leaderboard,
     pendingOffer,
     aiActive,
@@ -51,6 +52,7 @@ export default function GamePage() {
     setCurrentEvent,
     setActiveEventSequence,
     setPlayer,
+    setCareerInsight,
     setPlayerState,
     setAiActive,
     setTransitioning,
@@ -177,6 +179,7 @@ export default function GamePage() {
     try {
       const res = await api.endActionPhase(sessionId, apiToken ?? undefined);
       setPlayer(res.player);
+      setCareerInsight(res.careerInsight ?? null);
       setCurrentEvent(res.currentEvent);
       setActiveEventSequence(res.activeEventSequence ?? null);
       setPhase(res.phase);
@@ -528,7 +531,7 @@ export default function GamePage() {
 
         {/* Right: player info + feed */}
         <aside className="hud-right">
-          <CareerGoalPanel goal={careerGoal} />
+          <CareerGoalPanel goal={careerGoal} insight={careerInsight} />
           <PlayerStats player={player} traits={traits} />
           <FeedPanel history={history} socialPosts={socialPosts} socialLoading={socialLoading} />
         </aside>
@@ -576,6 +579,7 @@ export default function GamePage() {
               setPlayerState({
                 player: res.player,
                 careerGoal: res.careerGoal,
+                careerInsight: res.careerInsight,
                 leaderboard: res.leaderboard,
               });
               setCurrentEvent(res.currentEvent ?? null);
@@ -595,6 +599,7 @@ export default function GamePage() {
               setPlayerState({
                 player: res.player,
                 careerGoal: res.careerGoal,
+                careerInsight: res.careerInsight,
               });
               setCurrentEvent(res.currentEvent ?? null);
               setActiveEventSequence(res.activeEventSequence ?? null);

@@ -1,30 +1,86 @@
 'use client';
 
-import type { CareerGoal } from '@/lib/types';
+import { useState } from 'react';
+import type { CareerGoal, CareerInsight } from '@/lib/types';
 
 interface Props {
   goal: CareerGoal | null;
+  insight?: CareerInsight | null;
 }
 
-export function CareerGoalPanel({ goal }: Props) {
-  if (!goal) return null;
+function severityLabel(severity: CareerInsight['risks'][number]['severity']): string {
+  if (severity === 'danger') return '危险';
+  if (severity === 'warning') return '警告';
+  return '提示';
+}
+
+function priorityLabel(priority: CareerInsight['recommendations'][number]['priority']): string {
+  if (priority === 'high') return '高';
+  if (priority === 'medium') return '中';
+  return '低';
+}
+
+export function CareerGoalPanel({ goal, insight }: Props) {
+  const [onboardingHidden, setOnboardingHidden] = useState(false);
+  if (!goal && !insight) return null;
+
+  const visibleRisks = insight?.risks?.slice(0, 3) ?? [];
+  const visibleRecommendations = insight?.recommendations?.slice(0, 3) ?? [];
+  const mainMilestone = insight?.milestones?.[0];
+  const playerExplanations = insight?.explanations?.filter((item) => item.visibility === 'player').slice(0, 2) ?? [];
+  const showOnboarding = insight?.onboarding && !onboardingHidden && insight.onboarding.mode !== 'hidden';
 
   return (
     <section className="career-goal-panel">
       <div className="career-goal-header">
         <div>
-          <div className="career-goal-kicker">职业目标</div>
-          <div className="career-goal-title">{goal.stageLabel}</div>
+          <div className="career-goal-kicker">职业助手</div>
+          <div className="career-goal-title">{insight?.stage.label ?? goal?.stageLabel}</div>
         </div>
-        {goal.nextStageLabel && (
-          <span className="career-goal-next">→ {goal.nextStageLabel}</span>
+        {(insight?.stage.nextStage ?? goal?.nextStageLabel) && (
+          <span className="career-goal-next">→ {insight?.stage.nextStage ?? goal?.nextStageLabel}</span>
         )}
       </div>
 
-      <div className="career-goal-summary">{goal.summary}</div>
-      {goal.teamHint && <div className="career-goal-summary">{goal.teamHint}</div>}
+      <div className="career-goal-summary">{insight?.stage.summary ?? goal?.summary}</div>
+      <div className="career-goal-summary strong">{insight?.stage.mainObjective ?? goal?.summary}</div>
+      {goal?.teamHint && <div className="career-goal-summary">{goal.teamHint}</div>}
 
-      {goal.goals?.length > 0 && (
+      {showOnboarding && insight?.onboarding && (
+        <div className="career-insight-onboarding">
+          <div className="career-insight-row-title">
+            <span>{insight.onboarding.title}</span>
+            {insight.onboarding.dismissible && (
+              <button type="button" onClick={() => setOnboardingHidden(true)}>收起</button>
+            )}
+          </div>
+          <div className="career-insight-text">{insight.onboarding.message}</div>
+          <ul>
+            {insight.onboarding.checklist.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {mainMilestone && (
+        <div className="career-goal-block">
+          <div className="career-goal-block-title">下一目标</div>
+          <div className={`career-insight-card ${mainMilestone.status}`}>
+            <div className="career-insight-row-title">
+              <span>{mainMilestone.title}</span>
+              <span>{mainMilestone.status === 'ready' ? '已满足' : '推进中'}</span>
+            </div>
+            <div className="career-insight-text">{mainMilestone.progressText}</div>
+            {mainMilestone.missing.length > 0 && (
+              <ul>
+                {mainMilestone.missing.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            )}
+            {mainMilestone.nextStep && <div className="career-insight-hint">{mainMilestone.nextStep}</div>}
+          </div>
+        </div>
+      )}
+
+      {!mainMilestone && goal?.goals && goal.goals.length > 0 && (
         <div className="career-goal-block">
           <div className="career-goal-block-title">晋级目标</div>
           <div className="career-goal-list">
@@ -40,9 +96,60 @@ export function CareerGoalPanel({ goal }: Props) {
         </div>
       )}
 
+      {visibleRisks.length > 0 && (
+        <div className="career-goal-block">
+          <div className="career-goal-block-title">当前风险</div>
+          <div className="career-insight-list">
+            {visibleRisks.map((risk) => (
+              <div key={risk.id} className={`career-insight-card risk-${risk.severity}`}>
+                <div className="career-insight-row-title">
+                  <span>{risk.title}</span>
+                  <span>{severityLabel(risk.severity)}</span>
+                </div>
+                <div className="career-insight-text">{risk.reason}</div>
+                {risk.suggestedMitigation && <div className="career-insight-hint">{risk.suggestedMitigation}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {visibleRecommendations.length > 0 && (
+        <div className="career-goal-block">
+          <div className="career-goal-block-title">本周建议</div>
+          <div className="career-insight-list">
+            {visibleRecommendations.map((item) => (
+              <div key={`${item.title}-${item.actionId ?? 'text'}`} className="career-insight-card recommendation">
+                <div className="career-insight-row-title">
+                  <span>{item.title}</span>
+                  <span>{priorityLabel(item.priority)}</span>
+                </div>
+                <div className="career-insight-text">{item.reason}</div>
+                <div className="career-insight-hint">{item.expectedBenefit}</div>
+                {item.tradeoff && <div className="career-insight-tradeoff">代价：{item.tradeoff}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {playerExplanations.length > 0 && (
+        <div className="career-goal-block">
+          <div className="career-goal-block-title">状态解释</div>
+          <div className="career-insight-list">
+            {playerExplanations.map((item) => (
+              <div key={item.id} className="career-insight-card explanation">
+                <div className="career-insight-row-title"><span>{item.title}</span></div>
+                <div className="career-insight-text">{item.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="career-goal-block">
         <div className="career-goal-block-title">未来 12 周晋级赛程</div>
-        {goal.opportunities?.length > 0 ? (
+        {goal?.opportunities && goal.opportunities.length > 0 ? (
           <div className="career-opportunity-list">
             {goal.opportunities.map((opportunity) => (
               <div key={`${opportunity.week}-${opportunity.name}`} className="career-opportunity-row">

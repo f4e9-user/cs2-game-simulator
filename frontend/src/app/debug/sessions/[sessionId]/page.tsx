@@ -481,6 +481,50 @@ export default function DebugSessionPage() {
           </div>
 
           <div className="panel">
+            <div className="panel-title">CareerInsight Debug</div>
+            {session.careerInsight ? (
+              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                <div>
+                  <span style={{ color: '#e6edf3', fontWeight: 600 }}>{session.careerInsight.stage.label}</span>
+                  {' '}· round {session.careerInsight.generatedAtRound}
+                </div>
+                <div>{session.careerInsight.headline}</div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>milestones</div>
+                  {session.careerInsight.milestones.map((item) => (
+                    <div key={item.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
+                      <div style={{ color: '#e6edf3' }}>{item.title} · {item.status}</div>
+                      <div>{item.progressText}</div>
+                      {item.missing.length > 0 && <div>missing: {item.missing.join(' / ')}</div>}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>risks</div>
+                  {session.careerInsight.risks.length > 0 ? session.careerInsight.risks.map((item) => (
+                    <div key={item.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
+                      <div style={{ color: '#e6edf3' }}>{item.title} · {item.severity}</div>
+                      <div>{item.reason}</div>
+                    </div>
+                  )) : <div>无风险项</div>}
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>recommendations</div>
+                  {session.careerInsight.recommendations.map((item) => (
+                    <div key={`${item.title}-${item.actionId ?? 'text'}`} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
+                      <div style={{ color: '#e6edf3' }}>{item.title} · {item.priority}</div>
+                      <div>{item.reason}</div>
+                    </div>
+                  ))}
+                </div>
+                <pre style={preStyle}>{pretty(session.careerInsight)}</pre>
+              </div>
+            ) : (
+              <div style={{ color: '#8b949e', fontSize: 13 }}>当前 session 未返回 careerInsight。</div>
+            )}
+          </div>
+
+          <div className="panel">
             <div className="panel-title">事件流程 Debug</div>
             {session.activeEventSequence ? (
               <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>

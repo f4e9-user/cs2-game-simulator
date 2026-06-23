@@ -2,7 +2,7 @@
 
 > 文档版本：v0.1  
 > 日期：2026-06-23 08:44 +08:00  
-> 当前实现状态：设计阶段，尚未实现  
+> 当前实现状态：已实现 v1（状态解释层、首局引导、职业助手 UI、debug 展示已接入；Vitest 在当前环境启动即 Bus error，测试文件已补但无法执行）  
 > 目标实现状态：分阶段完整落地“方案 2：状态解释层 + 首局引导”  
 > 关联方向：B 体验优化 + C 工程重构重组合
 
@@ -612,7 +612,47 @@ npm --prefix frontend run build
 
 ---
 
-## 10. 推荐实施顺序
+## 10. 实现记录
+
+### 2026-06-23 v1 实现状态
+
+已完成：
+
+1. 阶段 0：后端 `backend/src/engine/insights/` 类型和生成入口已建立。
+2. 阶段 1：职业阶段和晋级解释已接入，复用 `buildCareerGoal` 的阶段目标和赛事窗口结果。
+3. 阶段 2：风险解释层已实现，覆盖高压力、高疲劳、低资金、队伍信任、连败、低 AP。
+4. 阶段 3：行动建议层已实现，按阶段、风险、事件阶段限制输出最多 3 条建议。
+5. 阶段 4：首局第 1-5 回合引导已实现。
+6. 阶段 5：前端职业助手面板已接入，展示阶段、目标、风险、建议、首局引导、玩家可见解释。
+7. 阶段 6：事件阶段、赛事上下文、pending match 的基础解释和 blocker 已实现。
+8. 阶段 7：debug session 页已展示完整 `CareerInsight` 摘要和 JSON。
+
+已接入 API：
+
+- `POST /game/start`
+- `GET /game/:sessionId`
+- `POST /game/:sessionId/choice`
+- `POST /game/:sessionId/action`
+- `POST /game/:sessionId/end-action-phase`
+- `POST /game/:sessionId/team-response`
+
+验证记录：
+
+- `npm --prefix backend run typecheck`：通过。
+- `npm --prefix frontend run typecheck`：通过。
+- `npm --prefix frontend run build`：通过。
+- `git diff --check`：通过。
+- `npm --prefix backend run test`：当前环境启动 Vitest 即 `Bus error`，退出码 135；该问题在实现前基线也可复现。已新增 `backend/src/engine/__tests__/careerInsight.test.ts`，但当前环境无法执行 Vitest 验证。
+
+后续建议：
+
+1. 单独排查 Vitest / Node 22.22.3 / WSL 当前环境的 `Bus error`。
+2. 在测试可运行后执行 `careerInsight.test.ts` 并补充更细的路由响应测试。
+3. 继续收束 `careerGoal` 与 `CareerInsight` 的重复展示逻辑，避免长期双轨维护。
+
+---
+
+## 11. 推荐实施顺序
 
 建议按以下 PR / 分支节奏推进：
 

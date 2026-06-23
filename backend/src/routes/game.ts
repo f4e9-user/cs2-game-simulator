@@ -28,6 +28,7 @@ import {
 } from '../engine/gameEngine.js';
 import { checkTournamentPromotion } from '../engine/stages.js';
 import { buildCareerGoal } from '../engine/careerGoal.js';
+import { buildCareerInsight } from '../engine/insights/index.js';
 import { applyMoneyTransaction } from '../engine/money.js';
 import { canSignUpForTournament, playerTeamMeetsRequirement, tournamentDirectEntryBypassApplies } from '../engine/tournamentEligibility.js';
 import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime, resolveClubDisplayInfo } from '../engine/worldClubs.js';
@@ -406,6 +407,7 @@ app.post('/game/start', async (c) => {
       phase: session.phase,
       currentEvent: session.currentEvent,
       careerGoal: buildCareerGoal(session.player, 0),
+      careerInsight: buildCareerInsight(session, 0),
       leaderboard: session.leaderboard,
     });
   } catch (err) {
@@ -429,6 +431,7 @@ app.get('/game/:sessionId', async (c) => {
       session.player,
       session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0,
     ),
+    careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
     debugTeamIdentity: buildTeamIdentityDebug(session.player),
     debugRole: buildRoleDebug(session.player, session.history),
   });
@@ -678,6 +681,7 @@ app.post('/game/:sessionId/choice', async (c) => {
         updated.player,
         updated.leaderboard?.find((t) => t.isPlayer)?.points ?? 0,
       ),
+      careerInsight: buildCareerInsight(updated, updated.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
       leaderboard: updated.leaderboard,
     });
   } catch (err) {
@@ -1015,7 +1019,13 @@ app.post('/game/:sessionId/action', async (c) => {
       }
     }
 
-    return c.json({ actionResult, player, phase: session.phase, currentEvent: null });
+    return c.json({
+      actionResult,
+      player,
+      phase: session.phase,
+      currentEvent: null,
+      careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
@@ -1068,6 +1078,7 @@ app.post('/game/:sessionId/end-action-phase', async (c) => {
       phase: session.phase,
       currentEvent: session.currentEvent,
       activeEventSequence: session.activeEventSequence ?? null,
+      careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1301,6 +1312,7 @@ app.post('/game/:sessionId/team-response', async (c) => {
         player,
         session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0,
       ),
+      careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

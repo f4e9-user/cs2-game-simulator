@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type {
   CareerGoal,
+  CareerInsight,
   GameEvent,
   GameSession,
   EventSequence,
@@ -24,6 +25,7 @@ interface GameState {
   lastResult: RoundResult | null;
   promotion: PromotionCheck | null;
   careerGoal: CareerGoal | null;
+  careerInsight: CareerInsight | null;
   leaderboard: LeaderboardTeam[];
 
   actionsPhase: boolean;
@@ -41,6 +43,7 @@ interface GameState {
     player: Player;
     currentEvent: GameEvent | null;
     careerGoal?: CareerGoal;
+    careerInsight?: CareerInsight;
   }) => void;
   applyChoiceResponse: (args: {
     result: RoundResult;
@@ -51,14 +54,17 @@ interface GameState {
     ending?: string;
     promotion?: PromotionCheck;
     careerGoal?: CareerGoal;
+    careerInsight?: CareerInsight;
     leaderboard?: LeaderboardTeam[];
   }) => void;
   setPlayer: (player: Player) => void;
+  setCareerInsight: (careerInsight: CareerInsight | null) => void;
   setCurrentEvent: (currentEvent: GameEvent | null) => void;
   setActiveEventSequence: (activeEventSequence: EventSequence | null) => void;
   setPlayerState: (args: {
     player: Player;
     careerGoal?: CareerGoal;
+    careerInsight?: CareerInsight;
     leaderboard?: LeaderboardTeam[];
   }) => void;
   setLeaderboard: (leaderboard: LeaderboardTeam[]) => void;
@@ -83,6 +89,7 @@ export const useGameStore = create<GameState>((set) => ({
   lastResult: null,
   promotion: null,
   careerGoal: null,
+  careerInsight: null,
   leaderboard: [],
   actionsPhase: false,
   pendingOffer: null,
@@ -104,13 +111,14 @@ export const useGameStore = create<GameState>((set) => ({
       lastResult: session.history[session.history.length - 1] ?? null,
       promotion: session.promotion ?? null,
       careerGoal: session.careerGoal ?? null,
+      careerInsight: session.careerInsight ?? null,
       leaderboard: session.leaderboard ?? [],
       pendingOffer: session.player.pendingOffer ?? null,
       actionsPhase: session.phase === 'action',
       error: null,
     }),
 
-  hydrateFromStart: ({ sessionId, player, currentEvent, careerGoal }) =>
+  hydrateFromStart: ({ sessionId, player, currentEvent, careerGoal, careerInsight }) =>
     set({
       sessionId,
       player,
@@ -122,6 +130,7 @@ export const useGameStore = create<GameState>((set) => ({
       lastResult: null,
       promotion: null,
       careerGoal: careerGoal ?? null,
+      careerInsight: careerInsight ?? null,
       error: null,
     }),
 
@@ -134,6 +143,7 @@ export const useGameStore = create<GameState>((set) => ({
     ending,
     promotion,
     careerGoal,
+    careerInsight,
     leaderboard,
   }) =>
     set((state) => ({
@@ -146,6 +156,7 @@ export const useGameStore = create<GameState>((set) => ({
       lastResult: result,
       promotion: promotion ?? state.promotion,
       careerGoal: careerGoal ?? state.careerGoal,
+      careerInsight: careerInsight ?? state.careerInsight,
       leaderboard: leaderboard ?? state.leaderboard,
       actionsPhase: false,
       pendingOffer: player.pendingOffer ?? null,
@@ -154,12 +165,14 @@ export const useGameStore = create<GameState>((set) => ({
 
   setAiActive: (v) => set({ aiActive: v }),
   setPlayer: (player) => set({ player, pendingOffer: player.pendingOffer ?? null }),
+  setCareerInsight: (careerInsight) => set({ careerInsight }),
   setCurrentEvent: (currentEvent) => set({ currentEvent }),
   setActiveEventSequence: (activeEventSequence) => set({ activeEventSequence }),
-  setPlayerState: ({ player, careerGoal, leaderboard }) =>
+  setPlayerState: ({ player, careerGoal, careerInsight, leaderboard }) =>
     set((state) => ({
       player,
       careerGoal: careerGoal ?? state.careerGoal,
+      careerInsight: careerInsight ?? state.careerInsight,
       leaderboard: leaderboard ?? state.leaderboard,
       pendingOffer: player.pendingOffer ?? null,
     })),
@@ -182,6 +195,7 @@ export const useGameStore = create<GameState>((set) => ({
       lastResult: null,
       promotion: null,
       careerGoal: null,
+      careerInsight: null,
       actionsPhase: false,
       loading: false,
       error: null,
