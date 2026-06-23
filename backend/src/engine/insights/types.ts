@@ -3,6 +3,7 @@ import type { Stage } from '../../types.js';
 export interface CareerInsight {
   generatedAtRound: number;
   stage: StageInsight;
+  promotion: PromotionInsight;
   headline: string;
   onboarding?: OnboardingInsight;
   priorities: PriorityInsight[];
@@ -12,6 +13,7 @@ export interface CareerInsight {
   opportunities: OpportunityInsight[];
   blockers: BlockerInsight[];
   explanations: ExplanationInsight[];
+  compatibility: CareerInsightCompatibility;
 }
 
 export interface StageInsight {
@@ -20,6 +22,27 @@ export interface StageInsight {
   summary: string;
   mainObjective: string;
   nextStage?: string;
+}
+
+export interface PromotionInsight {
+  ready: boolean;
+  currentStage: Stage;
+  nextStage?: Stage;
+  nextStageLabel?: string;
+  milestoneId?: string;
+  progressText: string;
+  missing: string[];
+  nextStep?: string;
+}
+
+export interface CareerInsightCompatibility {
+  /**
+   * API responses should expose CareerInsight as the single display contract.
+   * The legacy CareerGoal shape remains an internal helper only.
+   */
+  legacyCareerGoalExposed: false;
+  /** CareerInsight is generated per response and is not part of persisted GameSession. */
+  persistenceSafe: true;
 }
 
 export interface PriorityInsight {

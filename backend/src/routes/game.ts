@@ -27,7 +27,7 @@ import {
   validateAllocation,
 } from '../engine/gameEngine.js';
 import { checkTournamentPromotion } from '../engine/stages.js';
-import { buildCareerInsight } from '../engine/insights/index.js';
+import { buildSessionPayload } from '../engine/insights/index.js';
 import { applyMoneyTransaction } from '../engine/money.js';
 import { canSignUpForTournament, playerTeamMeetsRequirement, tournamentDirectEntryBypassApplies } from '../engine/tournamentEligibility.js';
 import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime, resolveClubDisplayInfo } from '../engine/worldClubs.js';
@@ -399,15 +399,9 @@ app.post('/game/start', async (c) => {
     const storage = makeStorage(c.env);
     await saveFinalizedSession(storage, session);
 
-    return c.json({
+    return c.json(buildSessionPayload(session, {
       sessionId: session.id,
-      apiToken: session.apiToken,
-      player: session.player,
-      phase: session.phase,
-      currentEvent: session.currentEvent,
-      careerInsight: buildCareerInsight(session, 0),
-      leaderboard: session.leaderboard,
-    });
+    }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
@@ -419,16 +413,11 @@ app.get('/game/:sessionId', async (c) => {
   const storage = makeStorage(c.env);
   let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
-  // Annotate with current promotion check so the UI can show next-stage hints.
-  const promotion = checkTournamentPromotion(session.player);
-  return c.json({
-    ...session,
+  return c.json(buildSessionPayload(session, {
     phase: getSessionPhase(session),
-    promotion,
-    careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
     debugTeamIdentity: buildTeamIdentityDebug(session.player),
     debugRole: buildRoleDebug(session.player, session.history),
-  });
+  }));
 });
 
 const CUSTOM_QUALITY_BONUS: Record<string, number> = {
@@ -662,18 +651,12 @@ app.post('/game/:sessionId/choice', async (c) => {
       }
     }
 
-    return c.json({
+    return c.json(buildSessionPayload(updated, {
       result,
-      player: updated.player,
       phase: updated.phase,
-      currentEvent: updated.currentEvent,
       activeEventSequence: updated.activeEventSequence,
-      status: updated.status,
-      ending: updated.ending,
       promotion: checkTournamentPromotion(updated.player),
-      careerInsight: buildCareerInsight(updated, updated.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
-      leaderboard: updated.leaderboard,
-    });
+    }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
@@ -1009,13 +992,12 @@ app.post('/game/:sessionId/action', async (c) => {
       }
     }
 
-    return c.json({
+    return c.json(buildSessionPayload(session, {
       actionResult,
       player,
       phase: session.phase,
       currentEvent: null,
-      careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
-    });
+    }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
@@ -1063,13 +1045,10 @@ app.post('/game/:sessionId/end-action-phase', async (c) => {
       }
     }
 
-    return c.json({
-      player: session.player,
+    return c.json(buildSessionPayload(session, {
       phase: session.phase,
-      currentEvent: session.currentEvent,
       activeEventSequence: session.activeEventSequence ?? null,
-      careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
-    });
+    }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);
@@ -1293,13 +1272,10 @@ app.post('/game/:sessionId/team-response', async (c) => {
     session.leaderboard = buildLeaderboard(session);
     session.updatedAt = new Date().toISOString();
     await saveFinalizedSession(storage, session);
-    return c.json({
-      ...session,
+    return c.json(buildSessionPayload(session, {
       phase: getSessionPhase(session),
       player,
-      leaderboard: session.leaderboard,
-      careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
-    });
+    }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, 400);

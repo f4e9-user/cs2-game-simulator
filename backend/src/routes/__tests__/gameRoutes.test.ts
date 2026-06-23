@@ -102,7 +102,7 @@ describe('game routes', () => {
     ])).not.toContain('money');
   });
 
-  it('normalizes legacy role transition fields in session debug payload', async () => {
+  it('keeps normal session responses free of debug-only payload fields', async () => {
     const env = makeEnv();
     const startRes = await app.request('https://localhost/api/game/start', {
       method: 'POST',
@@ -130,11 +130,12 @@ describe('game routes', () => {
     }, env);
 
     const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
-    const body = await sessionRes.json() as { debugRole?: { roleTransition?: { stage?: string; source?: string } } };
+    const body = await sessionRes.json() as Record<string, unknown>;
 
     expect(sessionRes.status).toBe(200);
-    expect(body.debugRole?.roleTransition?.stage).toBe('trial');
-    expect(body.debugRole?.roleTransition?.source).toBe('team-need');
+    expect(body).toHaveProperty('careerInsight');
+    expect(body).not.toHaveProperty('debugTeamIdentity');
+    expect(body).not.toHaveProperty('debugRole');
   });
 
   it('allows trait rolling before a session exists', async () => {
