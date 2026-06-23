@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCareerInsight } from '../insights/index.js';
+import { buildCareerInsight, buildSessionPayload } from '../insights/index.js';
 import type { GameSession, Player } from '../../types.js';
 
 function player(overrides: Partial<Player> = {}): Player {
@@ -115,6 +115,44 @@ describe('buildCareerInsight', () => {
     expect(insight.milestones).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'rookie-to-youth', status: 'ready', missing: [] }),
     ]));
+  });
+
+  it('exposes promotion compatibility without a legacy careerGoal payload', () => {
+    const insight = buildCareerInsight(session({
+      tierParticipations: { c: 2, b: 1 },
+      tierChampionships: { b: 1 },
+    }));
+
+    expect(insight.promotion).toMatchObject({
+      ready: true,
+      currentStage: 'rookie',
+      nextStage: 'youth',
+      nextStageLabel: '青训',
+    });
+    expect(insight.compatibility).toMatchObject({
+      legacyCareerGoalExposed: false,
+      persistenceSafe: true,
+    });
+    expect(insight).not.toHaveProperty('careerGoal');
+  });
+
+  it('builds a response-only session payload without persisting insight or debug fields', () => {
+    const savedSession = {
+      ...session({
+        tierParticipations: { c: 2, b: 1 },
+        tierChampionships: { b: 1 },
+      }),
+      debugTeamIdentity: { player: { scores: [] }, teammates: [], caller: null, star: null },
+      debugRole: {} as GameSession['debugRole'],
+    } as GameSession;
+
+    const payload = buildSessionPayload(savedSession, { phase: 'action' as const });
+
+    expect(payload.careerInsight.promotion.ready).toBe(true);
+    expect(payload).not.toHaveProperty('careerGoal');
+    expect(payload).not.toHaveProperty('debugTeamIdentity');
+    expect(payload).not.toHaveProperty('debugRole');
+    expect(savedSession).not.toHaveProperty('careerInsight');
   });
 
   it('sorts high stress and high fatigue risks before softer warnings', () => {

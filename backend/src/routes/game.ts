@@ -27,7 +27,7 @@ import {
   validateAllocation,
 } from '../engine/gameEngine.js';
 import { checkTournamentPromotion } from '../engine/stages.js';
-import { buildCareerInsight } from '../engine/insights/index.js';
+import { buildCareerInsight, buildSessionPayload } from '../engine/insights/index.js';
 import { applyMoneyTransaction } from '../engine/money.js';
 import { canSignUpForTournament, playerTeamMeetsRequirement, tournamentDirectEntryBypassApplies } from '../engine/tournamentEligibility.js';
 import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime, resolveClubDisplayInfo } from '../engine/worldClubs.js';
@@ -419,16 +419,11 @@ app.get('/game/:sessionId', async (c) => {
   const storage = makeStorage(c.env);
   let session = await storage.sessions.load(id);
   if (!session) return c.json({ error: 'session not found' }, 404);
-  // Annotate with current promotion check so the UI can show next-stage hints.
-  const promotion = checkTournamentPromotion(session.player);
-  return c.json({
-    ...session,
+  return c.json(buildSessionPayload(session, {
     phase: getSessionPhase(session),
-    promotion,
-    careerInsight: buildCareerInsight(session, session.leaderboard?.find((t) => t.isPlayer)?.points ?? 0),
     debugTeamIdentity: buildTeamIdentityDebug(session.player),
     debugRole: buildRoleDebug(session.player, session.history),
-  });
+  }));
 });
 
 const CUSTOM_QUALITY_BONUS: Record<string, number> = {

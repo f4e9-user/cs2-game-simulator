@@ -1,6 +1,6 @@
 import type { Player, Stage } from '../../types.js';
 import { buildCareerGoal, type CareerGoal } from '../careerGoal.js';
-import type { MilestoneInsight, OpportunityInsight, StageInsight } from './types.js';
+import type { MilestoneInsight, OpportunityInsight, PromotionInsight, StageInsight } from './types.js';
 
 const STAGE_LABELS: Record<Stage, string> = {
   rookie: '路人新人',
@@ -109,4 +109,19 @@ export function buildProgressionMilestones(player: Player, playerPoints = 0): Mi
         ? '优先查看未来 12 周的相关赛事窗口。'
         : '先通过训练、天梯或战队行动补足当前短板。',
   }];
+}
+
+export function buildPromotionInsight(player: Player, milestones: MilestoneInsight[], playerPoints = 0): PromotionInsight {
+  const goal = buildCareerGoal(player, playerPoints);
+  const milestone = milestones[0];
+  return {
+    ready: milestone?.status === 'ready',
+    currentStage: goal.stage,
+    nextStage: goal.nextStageLabel ? NEXT_STAGE[goal.stage] : undefined,
+    nextStageLabel: goal.nextStageLabel,
+    milestoneId: milestone?.id,
+    progressText: milestone?.progressText ?? goal.summary,
+    missing: milestone?.missing ?? [],
+    nextStep: milestone?.nextStep,
+  };
 }
