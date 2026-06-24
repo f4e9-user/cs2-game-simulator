@@ -1,4 +1,5 @@
 import type { Player } from '../../types.js';
+import { INSIGHT_RISK_THRESHOLDS } from '../constants.js';
 import type { RiskInsight } from './types.js';
 
 const SEVERITY_ORDER: Record<RiskInsight['severity'], number> = {
@@ -12,7 +13,7 @@ export function buildRiskInsights(player: Player): RiskInsight[] {
   const fatigue = player.volatile?.fatigue ?? 0;
   const money = player.stats.money ?? 0;
 
-  if ((player.stress ?? 0) >= 85) {
+  if ((player.stress ?? 0) >= INSIGHT_RISK_THRESHOLDS.highStress) {
     risks.push({
       id: 'high-stress',
       severity: 'danger',
@@ -21,7 +22,7 @@ export function buildRiskInsights(player: Player): RiskInsight[] {
       suggestedMitigation: '优先选择休息、冥想或低风险行动，避免继续堆叠压力。',
       relatedStats: ['stress', 'mentality'],
     });
-  } else if ((player.stress ?? 0) >= 65) {
+  } else if ((player.stress ?? 0) >= INSIGHT_RISK_THRESHOLDS.mediumStress) {
     risks.push({
       id: 'medium-stress',
       severity: 'warning',
@@ -32,10 +33,10 @@ export function buildRiskInsights(player: Player): RiskInsight[] {
     });
   }
 
-  if (fatigue >= 70) {
+  if (fatigue >= INSIGHT_RISK_THRESHOLDS.fatigueWarning) {
     risks.push({
       id: 'high-fatigue',
-      severity: fatigue >= 90 ? 'danger' : 'warning',
+      severity: fatigue >= INSIGHT_RISK_THRESHOLDS.fatigueDanger ? 'danger' : 'warning',
       title: '疲劳过高',
       reason: `当前疲劳 ${Math.round(fatigue)}，会放大压力收益并提高伤病/失误风险。`,
       suggestedMitigation: '安排休息、度假或冥想，必要时放弃低价值行动。',
@@ -43,7 +44,7 @@ export function buildRiskInsights(player: Player): RiskInsight[] {
     });
   }
 
-  if (money <= 5) {
+  if (money <= INSIGHT_RISK_THRESHOLDS.lowMoney) {
     risks.push({
       id: 'low-money',
       severity: money <= 0 ? 'danger' : 'warning',
@@ -54,7 +55,7 @@ export function buildRiskInsights(player: Player): RiskInsight[] {
     });
   }
 
-  if ((player.teamTrust ?? 50) <= 25 && player.team) {
+  if ((player.teamTrust ?? 50) <= INSIGHT_RISK_THRESHOLDS.lowTeamTrust && player.team) {
     risks.push({
       id: 'low-team-trust',
       severity: 'warning',
@@ -65,7 +66,7 @@ export function buildRiskInsights(player: Player): RiskInsight[] {
     });
   }
 
-  if ((player.consecutiveLosses ?? 0) >= 2) {
+  if ((player.consecutiveLosses ?? 0) >= INSIGHT_RISK_THRESHOLDS.lossStreak) {
     risks.push({
       id: 'loss-streak',
       severity: 'warning',
@@ -76,7 +77,7 @@ export function buildRiskInsights(player: Player): RiskInsight[] {
     });
   }
 
-  if ((player.actionPoints ?? 0) < 30) {
+  if ((player.actionPoints ?? 0) < INSIGHT_RISK_THRESHOLDS.lowActionPoints) {
     risks.push({
       id: 'low-ap',
       severity: 'info',

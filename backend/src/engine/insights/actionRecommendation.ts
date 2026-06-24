@@ -1,4 +1,5 @@
 import type { GameSession } from '../../types.js';
+import { INSIGHT_RISK_THRESHOLDS } from '../constants.js';
 import type { ActionRecommendation, MilestoneInsight, RiskInsight } from './types.js';
 
 function hasRisk(risks: RiskInsight[], id: string): boolean {
@@ -24,8 +25,8 @@ export function buildActionRecommendations(
 
   if (hasRisk(risks, 'high-stress') || hasRisk(risks, 'high-fatigue')) {
     recommendations.push({
-      actionId: (player.stress ?? 0) >= 85 ? 'action-meditation' : 'action-rest-day',
-      title: (player.stress ?? 0) >= 85 ? '先降压' : '先恢复疲劳',
+      actionId: (player.stress ?? 0) >= INSIGHT_RISK_THRESHOLDS.highStress ? 'action-meditation' : 'action-rest-day',
+      title: (player.stress ?? 0) >= INSIGHT_RISK_THRESHOLDS.highStress ? '先降压' : '先恢复疲劳',
       priority: 'high',
       reason: '当前风险已经高于成长收益，继续训练或比赛可能把状态推向崩盘。',
       expectedBenefit: '降低压力/疲劳，给后续赛事和训练留出安全空间。',

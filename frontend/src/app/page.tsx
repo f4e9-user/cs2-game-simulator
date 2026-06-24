@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import type { Stats, Trait } from '@/lib/types';
+import type { RulesMeta, Stats, Trait } from '@/lib/types';
 import { TraitRoll } from '@/components/TraitRoll';
 import { StatAllocatorModal } from '@/components/StatAllocatorModal';
-import { POINT_POOL, formatMoney } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
 
 const MAX_REROLLS = 1;
 const DEFAULT_OPENING_MONEY = 20;
@@ -23,12 +23,23 @@ export default function NewGamePage() {
   const [rolledTraits, setRolledTraits] = useState<Trait[] | null>(null);
   const [rerollsLeft, setRerollsLeft] = useState(MAX_REROLLS);
   const [rolling, setRolling] = useState(false);
+  const [rulesMeta, setRulesMeta] = useState<RulesMeta | null>(null);
 
   const [allocOpen, setAllocOpen] = useState(false);
   const [chosenStats, setChosenStats] = useState<Stats | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getRulesMeta()
+      .then((rules) => {
+        if (!cancelled) setRulesMeta(rules);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const doRoll = async (isReroll: boolean) => {
     setRolling(true);
@@ -114,7 +125,7 @@ export default function NewGamePage() {
 
       <div className="panel">
         <div className="panel-title">
-          属性分配（底线之上再分 {POINT_POOL} 点）
+          属性分配（底线之上再分 {rulesMeta?.pointPool ?? '...'} 点）
         </div>
         {!rolledTraits ? (
           <div className="stat-desc">请先抽取特质。</div>
@@ -147,6 +158,7 @@ export default function NewGamePage() {
             type="button"
             className="primary-button"
             onClick={() => setAllocOpen(true)}
+            disabled={!rulesMeta}
           >
             打开分配面板
           </button>
@@ -165,15 +177,18 @@ export default function NewGamePage() {
         </button>
       </div>
 
-      <StatAllocatorModal
-        open={allocOpen}
-        traits={rolledTraits ?? []}
-        onCancel={() => setAllocOpen(false)}
-        onConfirm={(s) => {
-          setChosenStats(s);
-          setAllocOpen(false);
-        }}
-      />
+      {rulesMeta && (
+        <StatAllocatorModal
+          open={allocOpen}
+          traits={rolledTraits ?? []}
+          rules={rulesMeta}
+          onCancel={() => setAllocOpen(false)}
+          onConfirm={(s) => {
+            setChosenStats(s);
+            setAllocOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -23,7 +23,7 @@ import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { LoanModal } from '@/components/LoanModal';
 import { InjuryAlertModal, buildInjuryAlertFromEffects, type InjuryAlert } from '@/components/InjuryAlertModal';
 import { useGameStore } from '@/store/gameStore';
-import type { ActionResult, Player, SocialPost, Trait } from '@/lib/types';
+import type { ActionResult, Player, RulesMeta, SocialPost, Trait } from '@/lib/types';
 import type { SettlementActionResult, SettlementShopResult } from '@/components/ResultPanel';
 
 export default function GamePage() {
@@ -64,6 +64,7 @@ export default function GamePage() {
   } = useGameStore();
 
   const [traits, setTraits] = useState<Trait[]>([]);
+  const [rulesMeta, setRulesMeta] = useState<RulesMeta | null>(null);
   const [shaking, setShaking] = useState(false);
   const [showNewGameModal, setShowNewGameModal] = useState(false);
   const [mobileTab, setMobileTab] = useState<'left' | 'center' | 'right'>('center');
@@ -125,12 +126,13 @@ export default function GamePage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    // 先并行取 session / traits / health，session 返回后才有真实的 apiToken
-    Promise.all([api.getSession(sessionId), api.listTraits(), api.getHealth().catch(() => null)])
-      .then(([session, t, health]) => {
+    // 先并行取 session / traits / rules / health，session 返回后才有真实的 apiToken
+    Promise.all([api.getSession(sessionId), api.listTraits(), api.getRulesMeta(), api.getHealth().catch(() => null)])
+      .then(([session, t, rules, health]) => {
         if (cancelled) return;
         hydrateFromSession(session);
         setTraits(t.traits);
+        setRulesMeta(rules);
         if (health) setAiActive(health.ai.active);
         setPhase(session.phase ?? 'action');
         setActionResults([]);
@@ -346,7 +348,7 @@ export default function GamePage() {
     }
   };
 
-  if (!player && loading) {
+  if ((!player || !rulesMeta) && loading) {
     return (
       <div
         style={{
@@ -365,7 +367,7 @@ export default function GamePage() {
     );
   }
 
-  if (!player) {
+  if (!player || !rulesMeta) {
     return (
       <div
         style={{
@@ -379,7 +381,7 @@ export default function GamePage() {
       >
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 13, color: 'var(--fg-2)', marginBottom: 12 }}>
-            找不到这个会话
+            {!player ? '找不到这个会话' : '规则配置未加载'}
           </div>
           <Link href="/" className="ghost-button">
             回到首页
@@ -429,6 +431,8 @@ export default function GamePage() {
                 sessionId={sessionId}
                 player={player}
                 enabled={isActionPhase && !loading && !settlementLoading && !isResting}
+                actionPointMax={rulesMeta.actionPointMax}
+                injuryRisk={rulesMeta.injuryRisk}
                 onPlayerUpdate={handlePlayerUpdate}
                 onActionResult={handleActionResult}
                 disabledReason={actionLockedReason}

@@ -59,6 +59,7 @@ export const PER_STAT_MAX = 12;
 export const STAT_MIN = 0;
 export const STAT_MAX = 20;
 export const MONEY_MAX = 999;
+export const ACTION_POINT_MAX = 100;
 
 // ── 成长系统 ──────────────────────────────────────────────────
 // 生涯总成长上限（money 和 experience 不计入）
@@ -68,6 +69,50 @@ export const CAREER_TIME_EXPERIENCE_RAW = 0.08;
 
 // 队友成长上限（低于玩家的 30，队友成长空间略小）
 export const TEAMMATE_GROWTH_CAP = 20;
+
+export const INSIGHT_RISK_THRESHOLDS = {
+  highStress: 85,
+  mediumStress: 65,
+  fatigueWarning: 70,
+  fatigueDanger: 90,
+  lowMoney: 5,
+  lowTeamTrust: 25,
+  lossStreak: 2,
+  lowActionPoints: 30,
+} as const;
+
+export const INJURY_RISK_THRESHOLDS = {
+  clearFatigue: 45,
+  fatigueWarning: 70,
+  fatigueHigh: 82,
+  constitutionLow: 4,
+  constitutionWarning: 6,
+  matchLoadBonus: 10,
+  mediumStrain: 84,
+  highStrain: 96,
+  constitutionBias: [
+    { max: 2, bias: 20 },
+    { max: 4, bias: 15 },
+    { max: 6, bias: 10 },
+    { max: 8, bias: 5 },
+  ],
+} as const;
+
+export const RULES_META = {
+  pointPool: POINT_POOL,
+  openingStatInvestMax: OPENING_STAT_INVEST_MAX,
+  perStatMax: PER_STAT_MAX,
+  statMax: STAT_MAX,
+  actionPointMax: ACTION_POINT_MAX,
+  growthCap: GROWTH_CAP,
+  teammateGrowthCap: TEAMMATE_GROWTH_CAP,
+  coreGrowthStats: CORE_STAT_KEYS,
+  insightRisk: INSIGHT_RISK_THRESHOLDS,
+  injuryRisk: {
+    forcedRestFatigueThreshold: INJURY_RISK_THRESHOLDS.fatigueHigh,
+    lowConstitutionThreshold: INJURY_RISK_THRESHOLDS.constitutionLow,
+  },
+} as const;
 
 // 成长曲线：属性越高，成长越慢
 export function growthFactor(level: number): number {

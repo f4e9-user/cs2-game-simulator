@@ -16,6 +16,7 @@ import {
   FEEL_CAP_DEFAULT,
   GROWTH_CAP,
   IMPLICIT_FAILURE_STRESS,
+  INJURY_RISK_THRESHOLDS,
   INJURY_REST_ROUNDS,
   STAGE_ORDER,
   STRESS_GRACE_ROUNDS,
@@ -125,17 +126,17 @@ function describeInjuryCause(player: Player, context: 'routine' | 'match'): stri
   const constitution = player.stats.constitution ?? 0;
   const reasons: string[] = [];
 
-  if (context === 'match' && fatigue >= 70) {
+  if (context === 'match' && fatigue >= INJURY_RISK_THRESHOLDS.fatigueWarning) {
     reasons.push('比赛强度过高');
-  } else if (fatigue >= 82) {
+  } else if (fatigue >= INJURY_RISK_THRESHOLDS.fatigueHigh) {
     reasons.push('疲劳过高');
-  } else if (fatigue >= 70) {
+  } else if (fatigue >= INJURY_RISK_THRESHOLDS.fatigueWarning) {
     reasons.push('疲劳偏高');
   }
 
-  if (constitution <= 4) {
+  if (constitution <= INJURY_RISK_THRESHOLDS.constitutionLow) {
     reasons.push('体质过低');
-  } else if (constitution <= 6) {
+  } else if (constitution <= INJURY_RISK_THRESHOLDS.constitutionWarning) {
     reasons.push('体质偏低');
   }
 
@@ -159,7 +160,7 @@ export function applyInjuryRiskTick(
   const current = highestInjuryState(next);
 
   if (context === 'rest' || context === 'shop') {
-    if (fatigue <= 45) {
+    if (fatigue <= INJURY_RISK_THRESHOLDS.clearFatigue) {
       if (current) effects.push('伤病风险解除');
       setInjuryState(next, null);
     } else if (current === 'injury-limited') {
@@ -173,14 +174,10 @@ export function applyInjuryRiskTick(
   }
 
   const constitutionRiskBias =
-    constitution <= 2 ? 20 :
-    constitution <= 4 ? 15 :
-    constitution <= 6 ? 10 :
-    constitution <= 8 ? 5 :
-    0;
-  const strainLoad = fatigue + constitutionRiskBias + (context === 'match' ? 10 : 0);
-  const highStrain = strainLoad >= 96;
-  const mediumStrain = strainLoad >= 84;
+    INJURY_RISK_THRESHOLDS.constitutionBias.find(({ max }) => constitution <= max)?.bias ?? 0;
+  const strainLoad = fatigue + constitutionRiskBias + (context === 'match' ? INJURY_RISK_THRESHOLDS.matchLoadBonus : 0);
+  const highStrain = strainLoad >= INJURY_RISK_THRESHOLDS.highStrain;
+  const mediumStrain = strainLoad >= INJURY_RISK_THRESHOLDS.mediumStrain;
 
   if (!mediumStrain) return next;
   const warningLabel = player.team ? '队医警告' : '伤病警告';

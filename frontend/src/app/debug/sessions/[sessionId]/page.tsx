@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatTag } from '@/lib/format';
-import type { GameSession, SessionSummary, StatKey } from '@/lib/types';
+import type { GameSession, RulesMeta, SessionSummary, StatKey } from '@/lib/types';
 
 type DebugAiStatus = {
   provider: string;
@@ -43,8 +43,6 @@ const CORE_STAT_FIELDS: Array<{ key: Exclude<StatKey, 'money'>; label: string; h
   { key: 'mentality', label: '心态', hint: '抗压、稳定性' },
   { key: 'constitution', label: '体能', hint: '疲劳、伤病、连续作战' },
 ];
-
-const GROWTH_CAP = 30;
 
 const RESOURCE_FIELDS: Array<{ key: keyof Pick<FormState, 'money' | 'fame' | 'stress' | 'round' | 'consecutiveLosses'>; label: string; hint: string }> = [
   { key: 'money', label: '资金', hint: '1 点约等于 1K' },
@@ -93,6 +91,7 @@ export default function DebugSessionPage() {
   const [aiEventsMessage, setAiEventsMessage] = useState<string | null>(null);
   const [aiEventsValidCount, setAiEventsValidCount] = useState<number | null>(null);
   const [aiEventsInvalidCount, setAiEventsInvalidCount] = useState<number | null>(null);
+  const [rulesMeta, setRulesMeta] = useState<RulesMeta | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,13 +107,15 @@ export default function DebugSessionPage() {
     setLoading(true);
     setError(null);
     try {
-      const [sessionRes, statusRes, eventsRes] = await Promise.all([
+      const [sessionRes, rulesRes, statusRes, eventsRes] = await Promise.all([
         api.getDebugSession(sessionId),
+        api.getRulesMeta(),
         api.getDebugAiStatus().catch(() => null),
         api.getDebugAiEvents(sessionId).catch(() => null),
       ]);
       setSession(sessionRes);
       setForm(initForm(sessionRes));
+      setRulesMeta(rulesRes);
       if (statusRes) setAiStatus(statusRes);
       if (eventsRes) {
         setAiEvents(eventsRes.events ?? []);
@@ -148,9 +149,9 @@ export default function DebugSessionPage() {
   }, [session]);
 
   const growthRemaining = useMemo(() => {
-    if (!session) return 0;
-    return Math.max(0, GROWTH_CAP - (session.player.growthSpent ?? 0));
-  }, [session]);
+    if (!session || !rulesMeta) return 0;
+    return Math.max(0, rulesMeta.growthCap - (session.player.growthSpent ?? 0));
+  }, [session, rulesMeta]);
 
   const worldClubRows = useMemo(() => {
     if (!session?.worldClubs) return [];
@@ -298,7 +299,7 @@ export default function DebugSessionPage() {
           </div>
           <div className="panel" style={{ marginBottom: 0 }}>
             <div className="panel-title">成长上限</div>
-            <div className="stat-label">{session.player.growthSpent ?? 0} / {GROWTH_CAP}</div>
+            <div className="stat-label">{session.player.growthSpent ?? 0} / {rulesMeta?.growthCap ?? 0}</div>
             <div className="stat-desc">剩余 {growthRemaining} 点，只计算智力、敏捷、心态、体能；经验不占用成长上限。</div>
           </div>
         </div>
@@ -470,7 +471,7 @@ export default function DebugSessionPage() {
               <div>sessionId: <span style={{ color: '#e6edf3' }}>{session.id}</span></div>
               <div>apiToken: <span style={{ color: '#e6edf3', fontFamily: 'monospace' }}>{session.apiToken}</span></div>
               <div>growthSpent: <span style={{ color: '#e6edf3' }}>{session.player.growthSpent ?? 0}</span></div>
-              <div>growthCap: <span style={{ color: '#e6edf3' }}>{GROWTH_CAP}</span></div>
+              <div>growthCap: <span style={{ color: '#e6edf3' }}>{rulesMeta?.growthCap ?? 0}</span></div>
               <div>growthRemaining: <span style={{ color: '#e6edf3' }}>{growthRemaining}</span></div>
               <div>currentEvent: <span style={{ color: '#e6edf3' }}>{session.currentEvent ? session.currentEvent.id : '(none)'}</span></div>
               <div>forceNextEvent: <span style={{ color: '#e6edf3' }}>{session.player.forceNextEvent ?? '(none)'}</span></div>

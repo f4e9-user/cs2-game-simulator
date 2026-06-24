@@ -62,7 +62,7 @@ import {
   refundQualificationSlot,
   normalizeQualificationBatches,
 } from '../engine/qualification.js';
-import { POINT_POOL } from '../engine/constants.js';
+import { RULES_META } from '../engine/constants.js';
 import { makeStorage } from '../storage/index.js';
 import { toPublicEvent } from '../engine/events.js';
 import { makeAiService } from '../ai/service.js';
@@ -620,11 +620,7 @@ app.post('/game/:sessionId/choice', async (c) => {
   }
 });
 
-app.get('/game/meta/rules', (c) =>
-  c.json({
-    pointPool: POINT_POOL,
-  }),
-);
+app.get('/game/meta/rules', (c) => c.json(RULES_META));
 
 // Tournaments whose signup window is open this week for the player's stage.
 app.get('/game/:sessionId/tournaments', async (c) => {

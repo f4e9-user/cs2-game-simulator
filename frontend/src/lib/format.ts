@@ -463,10 +463,6 @@ export function formatDelta(value: number): string {
   return '0';
 }
 
-export const POINT_POOL = 10;
-export const OPENING_STAT_INVEST_MAX = 8;
-export const PER_STAT_MAX = 12;
-
 // 旧版辅助（保留兼容性）
 export function psychologicalState(mentality: number): number {
   return Math.round((mentality / 20) * 100);

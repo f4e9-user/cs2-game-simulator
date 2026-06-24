@@ -10,6 +10,31 @@ export type StatKey =
 
 export type Stats = Record<StatKey, number>;
 
+export interface RulesMeta {
+  pointPool: number;
+  openingStatInvestMax: number;
+  perStatMax: number;
+  statMax: number;
+  actionPointMax: number;
+  growthCap: number;
+  teammateGrowthCap: number;
+  coreGrowthStats: Array<Exclude<StatKey, 'experience' | 'money'>>;
+  insightRisk: {
+    highStress: number;
+    mediumStress: number;
+    fatigueWarning: number;
+    fatigueDanger: number;
+    lowMoney: number;
+    lowTeamTrust: number;
+    lossStreak: number;
+    lowActionPoints: number;
+  };
+  injuryRisk: {
+    forcedRestFatigueThreshold: number;
+    lowConstitutionThreshold: number;
+  };
+}
+
 export interface VolatileState {
   feel: number;    // -3 ~ +3
   tilt: number;    // 0 ~ 3

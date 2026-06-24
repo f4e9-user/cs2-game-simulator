@@ -20,6 +20,7 @@ import type {
   Player,
   RoleProfile,
   RoundPhase,
+  RulesMeta,
   SessionSummary,
   RollTraitsResponse,
   ShopItem,
@@ -118,6 +119,8 @@ export const api = {
     request<GameSession>(`/api/game/${sessionId}`),
   getDebugSession: (sessionId: string) =>
     request<GameSession>(`/api/debug/sessions/${sessionId}`),
+  getRulesMeta: () =>
+    request<RulesMeta>('/api/game/meta/rules'),
   listDebugSessions: (limit = 200) =>
     request<{ sessions: SessionSummary[]; total: number }>(`/api/debug/sessions?limit=${limit}`),
   getDebugAiStatus: () =>

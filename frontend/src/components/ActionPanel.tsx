@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { useGameStore } from '@/store/gameStore';
-import type { ActionResult, Player, Stage } from '@/lib/types';
+import type { ActionResult, Player, RulesMeta, Stage } from '@/lib/types';
 
 interface ActionMeta {
   id: string;
@@ -120,20 +120,21 @@ function stageIndex(stage: Stage): number {
   return STAGE_ORDER.indexOf(stage);
 }
 
-const AP_MAX = 100;
 const RECOVERY_ACTION_IDS = new Set(['action-rest-day', 'action-meditation', 'action-vacation']);
 
 interface Props {
   sessionId: string;
   player: Player;
   enabled: boolean; // false = 事件决策前，不可用
+  actionPointMax: number;
+  injuryRisk: RulesMeta['injuryRisk'];
   onPlayerUpdate: (p: Player) => void;
   onActionResult?: (result: ActionResult, moneyChange: number) => void;
   disabledReason?: string;
 }
 
-function ApBar({ ap }: { ap: number }) {
-  const pct = Math.max(0, Math.min(100, (ap / AP_MAX) * 100));
+function ApBar({ ap, max }: { ap: number; max: number }) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (ap / max) * 100)) : 0;
   return (
     <div className="ap-bar">
       <div className="ap-track" aria-hidden="true">
@@ -144,15 +145,15 @@ function ApBar({ ap }: { ap: number }) {
   );
 }
 
-function forcedRestRiskReason(player: Player, actionId: string): string | null {
+function forcedRestRiskReason(player: Player, actionId: string, injuryRisk: RulesMeta['injuryRisk']): string | null {
   if (RECOVERY_ACTION_IDS.has(actionId)) return null;
   if (!player.tags.includes('injury-limited')) return null;
 
   const fatigue = player.volatile?.fatigue ?? 0;
   const constitution = player.stats.constitution ?? 0;
   const reasons: string[] = [];
-  if (fatigue >= 82) reasons.push('疲劳过高');
-  if (constitution <= 4) reasons.push('体质过低');
+  if (fatigue >= injuryRisk.forcedRestFatigueThreshold) reasons.push('疲劳过高');
+  if (constitution <= injuryRisk.lowConstitutionThreshold) reasons.push('体质过低');
   if (reasons.length === 0) return null;
   return reasons.join('；');
 }
@@ -271,7 +272,7 @@ export function ActionResultCard({ result, moneyChange }: { result: ActionResult
 }
 
 
-export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActionResult, disabledReason }: Props) {
+export function ActionPanel({ sessionId, player, enabled, actionPointMax, injuryRisk, onPlayerUpdate, onActionResult, disabledReason }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forcedRestConfirm, setForcedRestConfirm] = useState<{ action: ActionMeta; reason: string } | null>(null);
@@ -304,7 +305,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
   };
 
   const requestAction = (action: ActionMeta) => {
-    const riskReason = forcedRestRiskReason(player, action.id);
+    const riskReason = forcedRestRiskReason(player, action.id, injuryRisk);
     if (riskReason) {
       setForcedRestConfirm({ action, reason: riskReason });
       return;
@@ -324,7 +325,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
     <div className="action-panel">
       <div className="action-panel-header">
         <span>日常行动</span>
-        <ApBar ap={isTournamentWeek ? 0 : ap} />
+        <ApBar ap={isTournamentWeek ? 0 : ap} max={actionPointMax} />
       </div>
 
       {panelDisabledReason ? (

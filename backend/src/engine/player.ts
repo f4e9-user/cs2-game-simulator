@@ -3,6 +3,7 @@ import { TRAITS, getTrait } from '../data/traits.js';
 import type { Player, StatDelta, StatKey, Stats, TeammateRole, Trait } from '../types.js';
 import {
   ALLOCATABLE_STAT_KEYS,
+  ACTION_POINT_MAX,
   BASE_STATS,
   CORE_STAT_KEYS,
   FEEL_CAP_DEFAULT,
@@ -232,7 +233,7 @@ export function initPlayer(input: InitInput): Player {
       tier: 'shared-housing',
       movedAtRound: 0,
     },
-    actionPoints: 100,
+    actionPoints: ACTION_POINT_MAX,
     shopCooldowns: {},
     weeklyShopPurchases: {},
     weeklyTeamActions: {},

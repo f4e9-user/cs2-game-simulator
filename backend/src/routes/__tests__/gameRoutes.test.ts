@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import app from '../../index.js';
+import { RULES_META } from '../../engine/constants.js';
 import { activateClubRuntime } from '../../engine/worldClubs.js';
 import type { Env, GameSession } from '../../types.js';
 
@@ -100,6 +101,14 @@ describe('game routes', () => {
       ...profile.primaryStats,
       ...profile.secondaryStats,
     ])).not.toContain('money');
+  });
+
+  it('returns centralized game rules metadata', async () => {
+    const res = await app.request('https://localhost/api/game/meta/rules');
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toEqual(RULES_META);
   });
 
   it('returns housing metadata and lets action-phase players switch housing', async () => {

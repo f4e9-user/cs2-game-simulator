@@ -1,22 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { Stats, StatKey, Trait } from '@/lib/types';
+import type { RulesMeta, Stats, StatKey, Trait } from '@/lib/types';
 import {
-  OPENING_STAT_INVEST_MAX,
-  PER_STAT_MAX,
-  POINT_POOL,
   STAT_DESCRIPTION,
   STAT_LABELS,
 } from '@/lib/format';
-
-const ALLOCATABLE_STAT_ORDER: StatKey[] = [
-  'intelligence',
-  'agility',
-  'mentality',
-  'constitution',
-];
-const TRAIT_STAT_ORDER: StatKey[] = [...ALLOCATABLE_STAT_ORDER, 'experience'];
 
 function zeroStats(): Stats {
   return {
@@ -29,14 +18,14 @@ function zeroStats(): Stats {
   };
 }
 
-function computeFloorAndNegative(traits: Trait[]): {
+function computeFloorAndNegative(traits: Trait[], traitStatOrder: StatKey[]): {
   floor: Stats;
   negative: Stats;
 } {
   const floor = zeroStats();
   const negative = zeroStats();
   for (const t of traits) {
-    for (const k of TRAIT_STAT_ORDER) {
+    for (const k of traitStatOrder) {
       const v = t.modifiers[k];
       if (typeof v !== 'number') continue;
       if (v > 0) floor[k] += v;
@@ -46,11 +35,15 @@ function computeFloorAndNegative(traits: Trait[]): {
   return { floor, negative };
 }
 
-function randomAbove(floor: Stats, pool = POINT_POOL): Stats {
+function randomAbove(
+  floor: Stats,
+  rules: RulesMeta,
+  allocatableStatOrder: RulesMeta['coreGrowthStats'],
+): Stats {
   const s = { ...floor };
-  let remaining = pool;
+  let remaining = rules.pointPool;
   while (remaining > 0) {
-    const avail = ALLOCATABLE_STAT_ORDER.filter((k) => s[k] < floor[k] + OPENING_STAT_INVEST_MAX);
+    const avail = allocatableStatOrder.filter((k) => s[k] < floor[k] + rules.openingStatInvestMax);
     if (avail.length === 0) break;
     const pick = avail[Math.floor(Math.random() * avail.length)]!;
     s[pick] += 1;
@@ -59,8 +52,8 @@ function randomAbove(floor: Stats, pool = POINT_POOL): Stats {
   return s;
 }
 
-function negativeOverflowLabels(stats: Stats, negative: Stats): string[] {
-  return TRAIT_STAT_ORDER
+function negativeOverflowLabels(stats: Stats, negative: Stats, traitStatOrder: StatKey[]): string[] {
+  return traitStatOrder
     .filter((k) => stats[k] + negative[k] < 0)
     .map((k) => STAT_LABELS[k]);
 }
@@ -68,6 +61,7 @@ function negativeOverflowLabels(stats: Stats, negative: Stats): string[] {
 interface Props {
   open: boolean;
   traits: Trait[];
+  rules: RulesMeta;
   onCancel: () => void;
   onConfirm: (stats: Stats) => void;
 }
@@ -75,12 +69,18 @@ interface Props {
 export function StatAllocatorModal({
   open,
   traits,
+  rules,
   onCancel,
   onConfirm,
 }: Props) {
+  const allocatableStatOrder = rules.coreGrowthStats;
+  const traitStatOrder = useMemo<StatKey[]>(
+    () => [...rules.coreGrowthStats, 'experience'],
+    [rules.coreGrowthStats],
+  );
   const { floor, negative } = useMemo(
-    () => computeFloorAndNegative(traits),
-    [traits],
+    () => computeFloorAndNegative(traits, traitStatOrder),
+    [traits, traitStatOrder],
   );
 
   const [stats, setStats] = useState<Stats>(() => ({ ...floor }));
@@ -94,14 +94,14 @@ export function StatAllocatorModal({
   }, [open, floor]);
 
   const used = useMemo(
-    () => ALLOCATABLE_STAT_ORDER.reduce((a, k) => a + (stats[k] - floor[k]), 0),
-    [stats, floor],
+    () => allocatableStatOrder.reduce((a, k) => a + (stats[k] - floor[k]), 0),
+    [stats, floor, allocatableStatOrder],
   );
-  const remaining = POINT_POOL - used;
+  const remaining = rules.pointPool - used;
   const canConfirm = remaining === 0;
   const overflowLabels = useMemo(
-    () => negativeOverflowLabels(stats, negative),
-    [stats, negative],
+    () => negativeOverflowLabels(stats, negative, traitStatOrder),
+    [stats, negative, traitStatOrder],
   );
 
   if (!open) return null;
@@ -110,7 +110,7 @@ export function StatAllocatorModal({
     setStats((cur) => {
       const next = cur[k] + delta;
       if (next < floor[k]) return cur;
-      if (next > floor[k] + OPENING_STAT_INVEST_MAX) return cur;
+      if (next > floor[k] + rules.openingStatInvestMax) return cur;
       if (delta > 0 && remaining <= 0) return cur;
       return { ...cur, [k]: next };
     });
@@ -149,7 +149,7 @@ export function StatAllocatorModal({
         >
           <div style={{ fontWeight: 700, fontSize: 18 }}>分配属性点</div>
           <span className={`badge ${canConfirm ? 'success' : 'accent'}`}>
-            剩余 {remaining} / {POINT_POOL}
+            剩余 {remaining} / {rules.pointPool}
           </span>
         </div>
 
@@ -159,13 +159,13 @@ export function StatAllocatorModal({
           ）在确认后应用，可用点数抵消。
         </div>
 
-        {ALLOCATABLE_STAT_ORDER.map((k) => {
+        {allocatableStatOrder.map((k) => {
           const v = stats[k];
           const floorV = floor[k];
           const negV = negative[k];
-          const canInc = remaining > 0 && v < floorV + OPENING_STAT_INVEST_MAX;
+          const canInc = remaining > 0 && v < floorV + rules.openingStatInvestMax;
           const canDec = v > floorV;
-          const final = Math.max(0, Math.min(PER_STAT_MAX * 2, v + negV));
+          const final = Math.max(0, Math.min(rules.perStatMax * 2, v + negV));
           return (
             <div className="stepper" key={k}>
               <div style={{ minWidth: 0, flex: 1 }}>
@@ -235,7 +235,7 @@ export function StatAllocatorModal({
                   <span className="delta-chip down">特质 {negative.experience}</span>
                 )}
                 <span className="delta-chip">
-                  初始 = {Math.max(0, Math.min(PER_STAT_MAX * 2, floor.experience + negative.experience))}
+                  初始 = {Math.max(0, Math.min(rules.perStatMax * 2, floor.experience + negative.experience))}
                 </span>
               </div>
             </div>
@@ -264,7 +264,7 @@ export function StatAllocatorModal({
           <button
             type="button"
             className="ghost-button"
-            onClick={() => setStats(randomAbove(floor))}
+            onClick={() => setStats(randomAbove(floor, rules, allocatableStatOrder))}
           >
             随机分配
           </button>
