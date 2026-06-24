@@ -4,9 +4,9 @@ import type { TeamOffer } from '@/lib/types';
 
 const TIER_LABELS: Record<string, string> = {
   youth: '青训',
-  'semi-pro': '二线队',
+  'semi-pro': '二线',
   pro: '职业',
-  top: '职业队',
+  top: '豪门',
 };
 
 const PRIZE_SPLIT: Record<string, number> = {

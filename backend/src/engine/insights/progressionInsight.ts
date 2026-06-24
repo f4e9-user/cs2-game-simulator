@@ -5,23 +5,23 @@ import type { MilestoneInsight, OpportunityInsight, PromotionInsight, StageInsig
 const STAGE_LABELS: Record<Stage, string> = {
   rookie: '路人新人',
   youth: '青训',
-  second: '二线队',
-  pro: '职业队',
+  second: '二线',
+  pro: '职业',
   retired: '退役',
 };
 
 const STAGE_SUMMARIES: Record<Stage, string> = {
   rookie: '你还没有进入俱乐部体系，当前重点是通过 C/B 级赛事证明自己。',
-  youth: '你已经进入青训体系，当前重点是用 B 级赛事表现争取二线队机会。',
-  second: '你已经进入二线队，当前重点是通过 A 级赛事证明职业队价值。',
+  youth: '你已经进入青训体系，当前重点是用 B 级赛事表现争取二线机会。',
+  second: '你已经进入二线阶段，当前重点是通过 A 级赛事证明职业价值。',
   pro: '你已经进入职业阶段，当前重点是冲击 S 级赛事、Major 和传奇评价。',
   retired: '职业生涯已经结束，当前重点是复盘最终成就和结局原因。',
 };
 
 const STAGE_OBJECTIVES: Record<Stage, string> = {
   rookie: '积累 C/B 级赛事经历并争取冠军，为申请青训战队做准备。',
-  youth: '积累 B 级赛事参赛和冠军记录，推动晋级二线队。',
-  second: '积累 A 级赛事参赛和冠军记录，推动晋级职业队。',
+  youth: '积累 B 级赛事参赛和冠军记录，推动晋级二线。',
+  second: '积累 A 级赛事参赛和冠军记录，推动晋级职业。',
   pro: '冲击 S 级赛事、Major、名气和高评价结局。',
   retired: '查看生涯总结，理解这段职业道路的最终评价。',
 };
@@ -56,8 +56,8 @@ function milestoneId(goal: CareerGoal): string {
 function milestoneTitle(goal: CareerGoal): string {
   switch (goal.stage) {
     case 'rookie': return '申请青训战队';
-    case 'youth': return '晋级二线队';
-    case 'second': return '晋级职业队';
+    case 'youth': return '晋级二线';
+    case 'second': return '晋级职业';
     case 'pro': return '冲击顶级荣誉';
     case 'retired': return '生涯已收束';
   }
@@ -66,7 +66,8 @@ function milestoneTitle(goal: CareerGoal): string {
 export function buildProgressionOpportunities(player: Player, playerPoints = 0): OpportunityInsight[] {
   const goal = buildCareerGoal(player, playerPoints);
   return goal.opportunities.map((opportunity) => ({
-    id: `${opportunity.week}:${opportunity.name}`,
+    id: `${opportunity.tournamentId}:${opportunity.week}`,
+    tournamentId: opportunity.tournamentId,
     week: opportunity.week,
     name: opportunity.name,
     tier: opportunity.tier,

@@ -339,6 +339,10 @@ export function applyAction(
     growthSpent,
     stress,
     actionPoints: ap - actionDef.apCost,
+    currentWeekRoutineActions: [
+      ...(session.player.currentWeekRoutineActions ?? []),
+      actionId,
+    ],
     roundCombos,
   };
   const injuryEffects: string[] = [];

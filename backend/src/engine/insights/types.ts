@@ -11,6 +11,7 @@ export interface CareerInsight {
   recommendations: ActionRecommendation[];
   milestones: MilestoneInsight[];
   opportunities: OpportunityInsight[];
+  calendarBlocks: CalendarBlockInsight[];
   blockers: BlockerInsight[];
   explanations: ExplanationInsight[];
   compatibility: CareerInsightCompatibility;
@@ -64,11 +65,30 @@ export interface MilestoneInsight {
 
 export interface OpportunityInsight {
   id: string;
+  tournamentId: string;
   week: number;
   name: string;
   tier: string;
   available: boolean;
   status: string;
+}
+
+export interface CalendarBlockInsight {
+  id: string;
+  year: number;
+  week: number;
+  endYear?: number;
+  endWeek?: number;
+  kind: 'opportunity' | 'commitment' | 'travel' | 'prep' | 'match' | 'recovery' | 'empty';
+  title: string;
+  shortTitle: string;
+  tier?: string;
+  status: string;
+  tone: 'neutral' | 'available' | 'locked' | 'active' | 'major' | 'warning';
+  source: 'career-goal' | 'tournament-calendar' | 'pending-match' | 'tournament-context' | 'system';
+  tournamentId?: string;
+  action?: 'signup' | 'withdraw' | 'none';
+  detail?: string;
 }
 
 export interface RiskInsight {

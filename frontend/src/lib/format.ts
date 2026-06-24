@@ -87,8 +87,8 @@ export function scoreBar(score: number, bars = 10): string {
 export const STAGE_LABELS: Record<Stage, string> = {
   rookie: '路人新人',
   youth: '青训',
-  second: '二线队',
-  pro: '职业队',
+  second: '二线',
+  pro: '职业',
   retired: '退役',
 };
 

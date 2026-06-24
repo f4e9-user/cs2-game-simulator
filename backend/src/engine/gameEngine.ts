@@ -39,6 +39,12 @@ export {
   type ApplyActionResult,
 } from './action.js';
 export {
+  recordRoutineAction,
+  replayLastWeekRoutineActions,
+  rolloverRoutineActions,
+  type ReplayRoutineActionsResult,
+} from './routineActions.js';
+export {
   applyShopPurchase,
   pawnItem,
   type ApplyShopResult,

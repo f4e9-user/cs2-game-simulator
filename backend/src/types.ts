@@ -322,6 +322,15 @@ export interface ClubRecentResult {
   note: string;
 }
 
+export interface ClubTierChange {
+  season: number;
+  round: number;
+  fromTier: ClubTier;
+  toTier: ClubTier;
+  direction: 'promotion' | 'relegation';
+  summary: string;
+}
+
 export interface ClubRuntimeState {
   clubId: string;
   tier: ClubTier;
@@ -340,6 +349,7 @@ export interface ClubRuntimeState {
   activeStorylines: ClubStoryline[];
   recentResults: ClubRecentResult[];
   pendingStoryFlags: string[];
+  lastTierChange?: ClubTierChange;
   updatedRound: number;
 }
 
@@ -486,6 +496,7 @@ export interface PlayerTeam {
   tier: ClubTier;
   monthlySalary: number;
   joinedRound: number;
+  lastTierChange?: ClubTierChange;
   teamStatus?: 'starter' | 'trial' | 'rotation';
   teamStatusUntilRound?: number;
   joinMode?: PlayerJoinMode;
@@ -557,6 +568,7 @@ export interface Loan {
   source?: 'bank' | 'friend';
   principal: number;
   interestRate: number;
+  durationRounds?: number;
   remainingPrincipal: number;
   issuedRound: number;
   dueRound: number;
@@ -632,6 +644,8 @@ export interface DynamicState {
   pendingMatch: PendingMatch | null;
   tournamentContext?: TournamentContext;
   actionPoints: number;
+  currentWeekRoutineActions?: string[];
+  lastWeekRoutineActions?: string[];
   shopCooldowns: Record<string, number>;
   weeklyShopPurchases: Record<string, { year: number; week: number; count: number }>;
   weeklyTeamActions: Record<string, { year: number; week: number; count: number }>;

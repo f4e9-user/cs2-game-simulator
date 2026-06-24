@@ -40,6 +40,7 @@ import {
   pickPromotionClub,
 } from './club.js';
 import { advanceWeek } from './calendar.js';
+import { rolloverRoutineActions } from './routineActions.js';
 import {
   applyAutomaticTagCleanup,
   refreshTagExpiry,
@@ -159,6 +160,59 @@ import {
 } from './worldClubs.js';
 
 const PROMOTION_DECLINE_COOLDOWN_ROUNDS = 4;
+const CLUB_INTERVIEW_IDS = new Set([
+  'chain-club-interview',
+  'chain-club-interview-open-match',
+  'chain-club-interview-talent',
+]);
+
+function pickClubInterviewEvent(player: Player): EventDef | null {
+  const preferredIds = [
+    player.tags.includes('application-path-open-match') ? 'chain-club-interview-open-match' : null,
+    player.tags.includes('application-path-talent') ? 'chain-club-interview-talent' : null,
+    'chain-club-interview',
+  ].filter((id): id is string => Boolean(id));
+
+  for (const eventId of preferredIds) {
+    const event = getEventById(eventId);
+    if (event && event.stages.includes(player.stage)) return event;
+  }
+  return null;
+}
+
+function createClubInterviewSequence(player: Player, finalInterviewEvent: EventDef, includeInvitePrompt = false): NonNullable<GameSession['activeEventSequence']> {
+  const round = player.round ?? 0;
+  return createNarrativeSequence(
+    `club-interview-${round}`,
+    'club-interview',
+    round,
+    [
+      ...(includeInvitePrompt
+        ? [
+            buildSequencePromptEvent(
+              `club-interview-${round}-invite`,
+              'tryout',
+              '线下面试邀请',
+              '回信里写得很明确：他们想约你线下聊一次。你确认时间地点，准备进入正式面试。',
+            ),
+          ]
+        : []),
+      buildSequencePromptEvent(
+        `club-interview-${round}-question-1`,
+        'tryout',
+        '面试问题：你的定位',
+        '战队没有马上进入合同细节，而是先问你怎么看自己的队内定位。',
+      ),
+      buildSequencePromptEvent(
+        `club-interview-${round}-question-2`,
+        'tryout',
+        '面试问题：压力和目标',
+        '第二个问题更直接：如果成绩不顺，你准备怎么证明自己值得这个名额。',
+      ),
+      finalInterviewEvent,
+    ],
+  );
+}
 
 export interface ApplyChoiceResult {
   session: GameSession;
@@ -664,6 +718,9 @@ export function applyChoice(
     consecutiveLosses,
     consecutiveBrokeRounds,
   };
+  if (shouldAdvanceRound) {
+    nextPlayer = rolloverRoutineActions(nextPlayer);
+  }
 
   if (nextPlayer.team) {
     if (typeof chosenEffects.teamTrustDelta === 'number' && chosenEffects.teamTrustDelta !== 0) {
@@ -741,12 +798,6 @@ export function applyChoice(
     nextPlayer.forceMatchResult = null;
   }
 
-  // 面试事件完成后清空 pendingApplication（response 阶段保留，供面试 post-handler 读取 clubId）
-  const CLUB_INTERVIEW_IDS = new Set([
-    'chain-club-interview',
-    'chain-club-interview-open-match',
-    'chain-club-interview-talent',
-  ]);
   if (CLUB_INTERVIEW_IDS.has(eventDef.id)) {
     nextPlayer.pendingApplication = null;
   }
@@ -1372,6 +1423,26 @@ export function applyChoice(
     }
   }
 
+  if (eventDef.id === 'chain-club-response' && result.success) {
+    const interviewEvent = pickClubInterviewEvent(nextPlayer);
+    if (interviewEvent) {
+      const interviewSequence = createClubInterviewSequence(nextPlayer, interviewEvent, true);
+      const firstInterviewStep = interviewSequence.steps[0]?.generatedEvent ?? interviewEvent;
+      const updated: GameSession = {
+        ...session,
+        player: nextPlayer,
+        phase: 'event',
+        currentEvent: toPublicEvent(firstInterviewStep, nextPlayer.rivals, nextPlayer.roster ?? []),
+        activeEventSequence: interviewSequence,
+        history: [...session.history, result],
+        status: ending ? 'ended' : 'active',
+        ending: ending ?? session.ending,
+        updatedAt: nowIso(),
+      };
+      return { session: updated, result };
+    }
+  }
+
   let worldSession = { ...worldStateSession, player: nextPlayer };
   if (nextPlayer.team) {
     worldSession = activateClubRuntime(worldSession, nextPlayer.team.clubId, 'player-team-active');
@@ -1451,32 +1522,8 @@ export function endActionPhase(
       pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
     }
   }
-  const interviewIds = new Set([
-    'chain-club-interview',
-    'chain-club-interview-open-match',
-    'chain-club-interview-talent',
-  ]);
-  if (!activeEventSequence && pickedEvent && interviewIds.has(pickedEvent.id)) {
-    activeEventSequence = createNarrativeSequence(
-      `club-interview-${nextPlayer.round}`,
-      'club-interview',
-      nextPlayer.round,
-      [
-        buildSequencePromptEvent(
-          `club-interview-${nextPlayer.round}-question-1`,
-          'tryout',
-          '面试问题：你的定位',
-          '战队没有马上进入合同细节，而是先问你怎么看自己的队内定位。',
-        ),
-        buildSequencePromptEvent(
-          `club-interview-${nextPlayer.round}-question-2`,
-          'tryout',
-          '面试问题：压力和目标',
-          '第二个问题更直接：如果成绩不顺，你准备怎么证明自己值得这个名额。',
-        ),
-        pickedEvent,
-      ],
-    );
+  if (!activeEventSequence && pickedEvent && CLUB_INTERVIEW_IDS.has(pickedEvent.id)) {
+    activeEventSequence = createClubInterviewSequence(nextPlayer, pickedEvent);
     pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
   }
   if (!activeEventSequence && pickedEvent?.id === 'family-crisis-illness') {

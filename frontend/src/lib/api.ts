@@ -157,6 +157,20 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ actionId }) },
       apiToken,
     ),
+  replayLastWeekActions: (sessionId: string, apiToken?: string) =>
+    request<{
+      replayResults: ActionResult[];
+      replayTeamResults?: TeamActionResult[];
+      replayStopped?: { index: number; actionId: string; reason: string } | null;
+      player: Player;
+      phase: 'action' | 'event';
+      currentEvent: GameEvent | null;
+      careerInsight?: CareerInsight;
+    }>(
+      `/api/game/${sessionId}/replay-last-week-actions`,
+      { method: 'POST' },
+      apiToken,
+    ),
   endActionPhase: (sessionId: string, apiToken?: string) =>
     request<{ player: Player; phase: 'event'; currentEvent: GameEvent | null; activeEventSequence?: EventSequence | null; careerInsight?: CareerInsight }>(
       `/api/game/${sessionId}/end-action-phase`,
@@ -273,10 +287,10 @@ export const api = {
     request<{ summary: string; ending?: string }>(`/api/game/${sessionId}/summary`, {}, apiToken),
   getSocialFeed: (sessionId: string, apiToken?: string) =>
     request<{ posts: SocialPost[] }>(`/api/game/${sessionId}/social-feed`, {}, apiToken),
-  takeLoan: (sessionId: string, amount: number, apiToken?: string) =>
+  takeLoan: (sessionId: string, amount: number, durationRounds?: number, apiToken?: string) =>
     request<{ player: Player; loan: Loan }>(
       `/api/game/${sessionId}/loan`,
-      { method: 'POST', body: JSON.stringify({ amount }) },
+      { method: 'POST', body: JSON.stringify({ amount, durationRounds }) },
       apiToken,
     ),
   takeFriendLoan: (sessionId: string, amount: number, apiToken?: string) =>

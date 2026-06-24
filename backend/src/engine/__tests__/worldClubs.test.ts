@@ -190,6 +190,132 @@ describe('world club runtime', () => {
     expect(rolledRuntime?.seasonPoints).toBe(0);
   });
 
+  it('syncs player team tier and stage when their club is promoted at season rollover', () => {
+    const baseSession = session();
+    const activated = activateClubRuntime({
+      ...baseSession,
+      player: {
+        ...baseSession.player,
+        team: {
+          clubId: 'club-cyber-academy',
+          name: '赛博学院',
+          tag: 'CYA',
+          region: '亚太',
+          tier: 'youth' as const,
+          monthlySalary: 10,
+          joinedRound: 1,
+        },
+        teamQualificationSlots: { 'a-main': 1 },
+        teamQualificationSlotBatches: [{ slot: 'a-main', count: 1, expiresAt: { year: 2, week: 12 } }],
+        pendingMatch: {
+          tournamentId: 'y1-a-01',
+          tier: 'a',
+          name: 'A Main',
+          displayName: 'A Main',
+          resolveYear: 1,
+          resolveWeek: 6,
+          stageIndex: 0,
+          qualificationSlotUsed: 'a-main',
+          qualificationSlotOwner: 'team',
+        },
+      },
+    }, 'club-cyber-academy', 'test');
+    const runtime = activated.worldClubs!.runtimeByClubId['club-cyber-academy']!;
+    const rosterBefore = runtime.fullRoster.map((tm) => ({ id: tm.id, name: tm.name, agility: tm.stats.agility }));
+    const previousSeason = activated.worldClubs!.season;
+
+    const nextSeason = tickWorldClubRuntimes({
+      ...activated,
+      player: {
+        ...activated.player,
+        year: previousSeason + 1,
+        round: 49,
+      },
+      worldClubs: {
+        ...activated.worldClubs!,
+        runtimeByClubId: {
+          ...activated.worldClubs!.runtimeByClubId,
+          'club-cyber-academy': {
+            ...runtime,
+            seasonPoints: 40,
+            currentForm: 35,
+          },
+        },
+      },
+    }, 49, 'round');
+
+    expect(nextSeason.worldClubs?.runtimeByClubId['club-cyber-academy']?.tier).toBe('semi-pro');
+    expect(nextSeason.player.team?.tier).toBe('semi-pro');
+    expect(nextSeason.player.stage).toBe('second');
+    expect(nextSeason.player.team?.monthlySalary).toBe(20);
+    expect(nextSeason.player.team?.lastTierChange).toMatchObject({
+      season: previousSeason,
+      fromTier: 'youth',
+      toTier: 'semi-pro',
+      direction: 'promotion',
+    });
+    expect(nextSeason.player.teamQualificationSlots).toEqual({});
+    expect(nextSeason.player.teamQualificationSlotBatches).toEqual([]);
+    expect(nextSeason.player.pendingMatch).toBeNull();
+    const rosterAfter = nextSeason.worldClubs?.runtimeByClubId['club-cyber-academy']?.fullRoster ?? [];
+    expect(rosterAfter.map((tm) => tm.id)).toEqual(rosterBefore.map((tm) => tm.id));
+    expect(rosterAfter[0]?.name).toBe(rosterBefore[0]?.name);
+    expect(rosterAfter[0]?.stats.agility).toBeGreaterThanOrEqual(rosterBefore[0]!.agility);
+  });
+
+  it('syncs player team tier without downgrading player stage when their club is relegated', () => {
+    const baseSession = session();
+    const activated = activateClubRuntime({
+      ...baseSession,
+      player: {
+        ...baseSession.player,
+        stage: 'pro',
+        team: {
+          clubId: 'club-dragon-corp',
+          name: 'Dragon Corp',
+          tag: 'DRG',
+          region: '中国',
+          tier: 'pro' as const,
+          monthlySalary: 65,
+          joinedRound: 1,
+        },
+      },
+    }, 'club-dragon-corp', 'test');
+    const runtime = activated.worldClubs!.runtimeByClubId['club-dragon-corp']!;
+    const previousSeason = activated.worldClubs!.season;
+
+    const nextSeason = tickWorldClubRuntimes({
+      ...activated,
+      player: {
+        ...activated.player,
+        year: previousSeason + 1,
+        round: 49,
+      },
+      worldClubs: {
+        ...activated.worldClubs!,
+        runtimeByClubId: {
+          ...activated.worldClubs!.runtimeByClubId,
+          'club-dragon-corp': {
+            ...runtime,
+            seasonPoints: 0,
+            currentForm: -45,
+          },
+        },
+      },
+    }, 49, 'round');
+
+    expect(nextSeason.worldClubs?.runtimeByClubId['club-dragon-corp']?.tier).toBe('semi-pro');
+    expect(nextSeason.player.team?.tier).toBe('semi-pro');
+    expect(nextSeason.player.stage).toBe('pro');
+    expect(nextSeason.player.team?.monthlySalary).toBe(50);
+    expect(nextSeason.player.team?.lastTierChange).toMatchObject({
+      season: previousSeason,
+      fromTier: 'pro',
+      toTier: 'semi-pro',
+      direction: 'relegation',
+    });
+  });
+
   it('ticks rival mapped clubs as active world clubs', () => {
     const base = ensureWorldClubPool(session());
     const ticked = tickWorldClubRuntimes(base, 12, 'round');

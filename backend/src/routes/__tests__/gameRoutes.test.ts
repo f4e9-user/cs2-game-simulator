@@ -111,6 +111,227 @@ describe('game routes', () => {
     expect(body).toEqual(RULES_META);
   });
 
+  it('replays last-week routine actions through the game route and persists partial success', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Routine Route Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        actionPoints: 40,
+        lastWeekRoutineActions: ['action-meditation', 'action-fitness'],
+        currentWeekRoutineActions: [],
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/replay-last-week-actions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${session.apiToken}`,
+      },
+    }, env);
+    const body = await res.json() as {
+      player?: GameSession['player'];
+      replayResults?: Array<{ actionId: string }>;
+      replayStopped?: { index: number; actionId: string; reason: string } | null;
+      error?: string;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.replayResults?.map((result) => result.actionId)).toEqual(['action-meditation']);
+    expect(body.replayStopped).toEqual({
+      index: 1,
+      actionId: 'action-fitness',
+      reason: '行动力不足',
+    });
+    expect(body.player?.currentWeekRoutineActions).toEqual(['action-meditation']);
+
+    const saved = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const savedBody = await saved.json() as GameSession;
+    expect(savedBody.player.currentWeekRoutineActions).toEqual(['action-meditation']);
+  });
+
+  it('creates bank loans with the requested repayment duration', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Loan Route Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        stage: 'youth',
+        round: 10,
+        creditScore: 80,
+        loans: [],
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/loan`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+      body: JSON.stringify({ amount: 40, durationRounds: 8 }),
+    }, env);
+    const body = await res.json() as { loan?: GameSession['player']['loans'][number]; error?: string };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.loan).toMatchObject({
+      principal: 40,
+      durationRounds: 8,
+      interestRate: 0.18,
+      issuedRound: 10,
+      dueRound: 18,
+    });
+  });
+
+  it('lets qualified pro teams sign up for A-tier tournaments without qualification tickets', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'A Tier Signup Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        stage: 'pro',
+        year: 1,
+        week: 11,
+        fame: 40,
+        team: {
+          clubId: 'dragon-raiders',
+          name: '龙腾电竞',
+          tag: 'DRG',
+          region: 'CN',
+          tier: 'pro',
+          monthlySalary: 65,
+          joinedRound: session.player.round,
+        },
+        qualificationSlots: {},
+        teamQualificationSlots: {},
+      },
+      leaderboard: [{ name: '龙腾电竞', tag: 'DRG', region: 'CN', points: 20, isPlayer: true }],
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/signup`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+      body: JSON.stringify({ tournamentId: 'y1-a-01' }),
+    }, env);
+    const body = await res.json() as { player?: GameSession['player']; error?: string };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.player?.pendingMatch?.tournamentId).toBe('y1-a-01');
+    expect(body.player?.pendingMatch?.qualificationSlotUsed).toBeUndefined();
+  });
+
+  it('lets higher-tier teams sign up for B-tier tournaments without qualification tickets', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'B Tier Signup Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        stage: 'second',
+        year: 1,
+        week: 12,
+        fame: 12,
+        team: {
+          clubId: 'dragon-raiders',
+          name: '龙腾电竞',
+          tag: 'DRG',
+          region: 'CN',
+          tier: 'semi-pro',
+          monthlySalary: 28,
+          joinedRound: session.player.round,
+        },
+        qualificationSlots: {},
+        teamQualificationSlots: {},
+      },
+      leaderboard: [{ name: '龙腾电竞', tag: 'DRG', region: 'CN', points: 8, isPlayer: true }],
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/signup`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+      body: JSON.stringify({ tournamentId: 'y1-b-main-01' }),
+    }, env);
+    const body = await res.json() as { player?: GameSession['player']; error?: string };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.player?.pendingMatch?.tournamentId).toBe('y1-b-main-01');
+    expect(body.player?.pendingMatch?.qualificationSlotUsed).toBeUndefined();
+  });
+
   it('returns housing metadata and lets action-phase players switch housing', async () => {
     const env = makeEnv();
     const metaRes = await app.request('https://localhost/api/game/meta/housing');

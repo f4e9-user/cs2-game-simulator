@@ -88,6 +88,26 @@ describe('career experience progression', () => {
     ]));
   });
 
+  it('blocks foundation rehab unless the player has opening overflow recovery tags', () => {
+    const player = initPlayer({
+      name: 'HealthyTester',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+      stats: {
+        agility: 4,
+        intelligence: 4,
+        mentality: 4,
+        constitution: 5,
+        experience: 0,
+        money: 0,
+      },
+    });
+    player.stats.money = 50;
+
+    expect(() => applyShopPurchase(createSession(player, 1), 'foundation-rehab'))
+      .toThrow('仅限存在开局负面溢出恢复标签时购买');
+  });
+
   it('grows experience from career sources with slower high-end gains', () => {
     const low = applyCareerExperienceGrowth(
       { ...BASE_STATS, experience: 4 },

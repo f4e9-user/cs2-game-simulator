@@ -44,6 +44,32 @@ function hasUsableQualificationSlot(player: Player, tournament: Tournament): boo
     });
 }
 
+function tournamentQualificationTierWaiverApplies(
+  player: Player,
+  tournament: Tournament,
+): boolean {
+  const teamTier = player.team?.tier;
+  if (!teamTier) return false;
+  if (tournament.progressionTier === 'b') {
+    return teamTier === 'semi-pro' || teamTier === 'pro' || teamTier === 'top';
+  }
+  if (tournament.progressionTier === 'a') {
+    return teamTier === 'pro' || teamTier === 'top';
+  }
+  return false;
+}
+
+export function tournamentRequiresQualificationSlot(
+  player: Player,
+  tournament: Tournament,
+  playerPoints: number,
+): boolean {
+  if (!tournament.qualificationTargets?.length) return false;
+  if (tournamentDirectEntryBypassApplies(player.team, tournament, playerPoints)) return false;
+  if (tournamentQualificationTierWaiverApplies(player, tournament)) return false;
+  return true;
+}
+
 export function canSignUpForTournament(
   player: Player,
   tournament: Tournament,
@@ -55,6 +81,7 @@ export function canSignUpForTournament(
   if (tournament.pointsRequired !== undefined && playerPoints < tournament.pointsRequired) return false;
   if (tournament.signupWeeks !== 'always' && !tournament.signupWeeks.includes(week)) return false;
   const teamReq = tournament.teamRequirement ?? null;
+  const requiresQualificationSlot = tournamentRequiresQualificationSlot(player, tournament, playerPoints);
   if (!playerTeamMeetsRequirement(player.team, teamReq)) {
     if (!player.team) return false;
     if (tournamentDirectEntryBypassApplies(player.team, tournament, playerPoints)) {
@@ -66,7 +93,7 @@ export function canSignUpForTournament(
   if (tournamentDirectEntryBypassApplies(player.team, tournament, playerPoints)) {
     return true;
   }
-  if (!hasUsableQualificationSlot(player, tournament)) return false;
+  if (requiresQualificationSlot && !hasUsableQualificationSlot(player, tournament)) return false;
   return true;
 }
 
@@ -102,21 +129,18 @@ export function tournamentOpportunityStatus(
   }
   const teamReq = tournament.teamRequirement ?? null;
   const teamOk = playerTeamMeetsRequirement(player.team, teamReq);
+  const requiresQualificationSlot = tournamentRequiresQualificationSlot(player, tournament, playerPoints);
   if (!teamOk && !player.team) return '需要战队';
   if (!teamOk && !tournament.qualificationTargets?.length) return '战队不足';
   if (!teamOk && tournamentDirectEntryBypassApplies(player.team, tournament, playerPoints)) {
     return '排名直通';
   }
-  if (!teamOk && !hasUsableQualificationSlot(player, tournament)) {
+  if (requiresQualificationSlot && !hasUsableQualificationSlot(player, tournament)) {
     const missing = tournament.qualificationTargets?.[0];
     if (!missing) return '缺资格';
     const owner = qualificationSlotOwner(missing);
     if (owner === 'team' && player.team?.teamStatus !== 'starter') return '需首发资格';
     return `缺${qualificationSlotLabel(missing)}`;
-  }
-  if (teamOk && !hasUsableQualificationSlot(player, tournament)) {
-    const missing = tournament.qualificationTargets?.[0];
-    return missing ? `缺${qualificationSlotLabel(missing)}` : '缺资格';
   }
   return '可报名';
 }

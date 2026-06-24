@@ -133,6 +133,24 @@ describe('tournament series', () => {
     expect(final.result.matchStats?.kills).toBeGreaterThan(0);
   });
 
+  it('does not add extra fatigue on series confirmation after completed maps', () => {
+    const p = {
+      ...player(),
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    const map2 = applyChoice(map1.session, 'match-play');
+    const final = applyChoice(map2.session, 'series-confirm');
+
+    expect(final.result.fatigueChange).toBe(0);
+  });
+
   it('uses a different simulation stream for each map in the same bo3 round', () => {
     const p = {
       ...unforcedPlayer(),

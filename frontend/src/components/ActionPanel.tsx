@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { useGameStore } from '@/store/gameStore';
-import type { ActionResult, Player, RulesMeta, Stage } from '@/lib/types';
+import type { ActionResult, Player, RulesMeta, Stage, TeamActionResult } from '@/lib/types';
 
 interface ActionMeta {
   id: string;
@@ -11,6 +11,7 @@ interface ActionMeta {
   description: string;
   icon: string;
   apCost: number;
+  category: 'growth' | 'recovery' | 'income';
   comboConsumes?: Array<{
     id: string;
     label: string;
@@ -25,6 +26,7 @@ const ACTIONS = [
     description: '实战磨练枪法，敏捷成长',
     icon: '🎯',
     apCost: 30,
+    category: 'growth',
     comboConsumes: [
       { id: 'structured-mind', label: '结构化思路', summary: '敏捷成长提高，tilt 风险降低' },
       { id: 'flow-ready', label: '心流准备', summary: '压力和 tilt 风险降低' },
@@ -38,6 +40,7 @@ const ACTIONS = [
     description: '战术训练，智力成长',
     icon: '📋',
     apCost: 30,
+    category: 'growth',
     comboConsumes: [
       { id: 'practical-problems', label: '实战问题', summary: '智力成长提高，压力增长降低' },
       { id: 'body-activated', label: '身体激活', summary: '疲劳增长降低' },
@@ -49,6 +52,7 @@ const ACTIONS = [
     description: '恢复疲劳，手感微降',
     icon: '💤',
     apCost: 30,
+    category: 'recovery',
     comboConsumes: [
       { id: 'overdrawn', label: '透支感', summary: '额外恢复疲劳和压力' },
     ],
@@ -59,6 +63,7 @@ const ACTIONS = [
     description: '增强体能，增加疲劳',
     icon: '🏋️',
     apCost: 30,
+    category: 'growth',
   },
   {
     id: 'action-meditation',
@@ -66,6 +71,7 @@ const ACTIONS = [
     description: '快速缓解疲劳与压力，不消耗成长预算',
     icon: '🧘',
     apCost: 15,
+    category: 'recovery',
     comboConsumes: [
       { id: 'overdrawn', label: '透支感', summary: '额外恢复疲劳和压力' },
     ],
@@ -76,6 +82,7 @@ const ACTIONS = [
     description: '专项心理强化，心态成长，但会积累压力',
     icon: '🧠',
     apCost: 30,
+    category: 'growth',
     comboConsumes: [
       { id: 'flow-ready', label: '心流准备', summary: '压力和 tilt 风险降低' },
     ],
@@ -86,6 +93,7 @@ const ACTIONS = [
     description: '大幅恢复，手感生疏',
     icon: '🏖',
     apCost: 50,
+    category: 'recovery',
   },
   {
     id: 'action-boosting',
@@ -93,6 +101,7 @@ const ACTIONS = [
     description: '高强度代练，用枪法换现金',
     icon: '💰',
     apCost: 35,
+    category: 'income',
   },
   {
     id: 'action-coaching',
@@ -100,6 +109,7 @@ const ACTIONS = [
     description: '指导新人，稳定收入',
     icon: '🎓',
     apCost: 30,
+    category: 'income',
   },
   {
     id: 'action-net-cafe',
@@ -107,6 +117,7 @@ const ACTIONS = [
     description: '网吧值班，体力换钱',
     icon: '🖥️',
     apCost: 35,
+    category: 'income',
   },
 ] satisfies ActionMeta[];
 
@@ -121,6 +132,19 @@ function stageIndex(stage: Stage): number {
 }
 
 const RECOVERY_ACTION_IDS = new Set(['action-rest-day', 'action-meditation', 'action-vacation']);
+
+const CATEGORY_LABELS: Record<ActionMeta['category'], string> = {
+  growth: '训练成长',
+  recovery: '恢复调整',
+  income: '赚钱',
+};
+
+const TEAM_TRAINING_FOCUS_OPTIONS = [
+  { id: 'firepower', label: '枪法压迫' },
+  { id: 'tactics', label: '战术执行' },
+  { id: 'defense', label: '防守纪律' },
+  { id: 'mental', label: '心态稳定' },
+] as const;
 
 interface Props {
   sessionId: string;
@@ -276,6 +300,8 @@ export function ActionPanel({ sessionId, player, enabled, actionPointMax, injury
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forcedRestConfirm, setForcedRestConfirm] = useState<{ action: ActionMeta; reason: string } | null>(null);
+  const [mode, setMode] = useState<'daily' | 'team'>('daily');
+  const [teamActionResult, setTeamActionResult] = useState<TeamActionResult | null>(null);
   const apiToken = useGameStore((s) => s.apiToken);
 
   const ap = player.actionPoints ?? 0;
@@ -304,6 +330,32 @@ export function ActionPanel({ sessionId, player, enabled, actionPointMax, injury
     }
   };
 
+  const replayLastWeekActions = async () => {
+    setForcedRestConfirm(null);
+    setBusyId('replay-last-week');
+    setError(null);
+    let previousMoney = player.stats.money;
+    try {
+      const res = await api.replayLastWeekActions(sessionId, apiToken ?? undefined);
+      for (const actionResult of res.replayResults) {
+        const moneyChange = actionResult.newStats.money - previousMoney;
+        previousMoney = actionResult.newStats.money;
+        onActionResult?.(actionResult, moneyChange);
+      }
+      if (res.replayTeamResults?.length) {
+        setTeamActionResult(res.replayTeamResults[res.replayTeamResults.length - 1]!);
+      }
+      onPlayerUpdate(res.player);
+      if (res.replayStopped) {
+        setError(`重复上周行动已停止：第 ${res.replayStopped.index + 1} 个行动失败（${res.replayStopped.reason}）`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const requestAction = (action: ActionMeta) => {
     const riskReason = forcedRestRiskReason(player, action.id, injuryRisk);
     if (riskReason) {
@@ -320,26 +372,98 @@ export function ActionPanel({ sessionId, player, enabled, actionPointMax, injury
     : isResting
     ? '休养期间不能进行日常行动'
     : null;
+  const lastWeekActionCount = player.lastWeekRoutineActions?.length ?? 0;
+  const replayDisabledReason = panelDisabledReason
+    ?? (lastWeekActionCount === 0 ? '上周没有可重复的行动' : null);
+  const canReplay = replayDisabledReason === null && busyId === null;
+  const hasTeam = Boolean(player.team);
+  const weeklyTeamActions = player.weeklyTeamActions ?? {};
+  const currentYear = player.year ?? 1;
+  const currentWeek = player.week ?? 1;
+  const teamActionCount = (actionId: string) => {
+    const record = weeklyTeamActions[actionId];
+    return record && record.year === currentYear && record.week === currentWeek ? record.count : 0;
+  };
+  const canShowRetain = Boolean(
+    player.pendingDeparture?.revealed &&
+    player.team &&
+    player.roster?.some((tm) => tm.id === player.pendingDeparture?.slotId),
+  );
+  const canRetain = Boolean(
+    enabled &&
+    !panelDisabledReason &&
+    !busyId &&
+    player.pendingDeparture?.revealed &&
+    player.round < player.pendingDeparture.departureRound &&
+    !player.pendingDeparture.retentionAttempted &&
+    ap >= 35,
+  );
+  const canInfluenceStrategy =
+    player.visibleTeamIdentity === 'caller' ||
+    player.visibleTeamIdentity === 'star' ||
+    player.visibleTeamIdentity === 'star-caller';
+
+  const runTeamAction = async (
+    actionId: string,
+    fn: () => Promise<{ player: Player; result: TeamActionResult }>,
+  ) => {
+    setBusyId(actionId);
+    setError(null);
+    try {
+      const res = await fn();
+      setTeamActionResult(res.result);
+      onPlayerUpdate(res.player);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div className="action-panel">
       <div className="action-panel-header">
-        <span>日常行动</span>
-        <ApBar ap={isTournamentWeek ? 0 : ap} max={actionPointMax} />
+        <button
+          type="button"
+          className="action-panel-title-toggle"
+          onClick={() => hasTeam && setMode((value) => (value === 'daily' ? 'team' : 'daily'))}
+          disabled={!hasTeam}
+          title={hasTeam ? '点击切换日常行动/团队管理' : undefined}
+        >
+          {mode === 'team' ? '团队管理' : '日常行动'}
+        </button>
+        <div className="action-panel-header-tools">
+          <button
+            type="button"
+            className="ghost-button repeat-actions-button"
+            disabled={!canReplay || busyId === 'replay-last-week'}
+            onClick={() => void replayLastWeekActions()}
+            title={replayDisabledReason ?? `按顺序重复上周 ${lastWeekActionCount} 个行动`}
+          >
+            ↻ 重复上周
+          </button>
+          <ApBar ap={isTournamentWeek ? 0 : ap} max={actionPointMax} />
+        </div>
       </div>
 
       {panelDisabledReason ? (
         <div className="action-panel-hint">{panelDisabledReason}</div>
       ) : null}
 
-      {(player.roundCombos?.length ?? 0) > 0 && !panelDisabledReason ? (
+      {mode === 'daily' && (player.roundCombos?.length ?? 0) > 0 && !panelDisabledReason ? (
         <div className="action-panel-hint">
           本回合连锁：{player.roundCombos.map((combo) => combo.label).join(' / ')}
         </div>
       ) : null}
 
+      {mode === 'daily' ? (
       <div className={`action-list ${panelDisabledReason ? 'panel-disabled' : ''}`}>
-        {ACTIONS.map((a) => {
+        {(['growth', 'recovery', 'income'] as const).map((category) => {
+          const group = ACTIONS.filter((a) => a.category === category);
+          return (
+            <div key={category} className="action-group">
+              <div className="action-group-title">{CATEGORY_LABELS[category]}</div>
+              {group.map((a) => {
           const requiredStage = ACTION_STAGE_REQUIREMENTS[a.id];
           const isStageLocked = !!requiredStage && stageIndex(player.stage) < stageIndex(requiredStage);
           let actionDisabledReason: string | null = null;
@@ -352,30 +476,121 @@ export function ActionPanel({ sessionId, player, enabled, actionPointMax, injury
           }
           const canDo = actionDisabledReason === null && busyId === null;
           const availableCombos = (a.comboConsumes ?? []).filter((combo) => activeComboIds.has(combo.id));
-          return (
-            <div key={a.id} className="action-item">
-              <button
-                type="button"
-                className="action-btn"
-                disabled={!canDo || busyId === a.id}
-                onClick={() => requestAction(a)}
-                title={actionDisabledReason || undefined}
-              >
-                <div className="action-btn-body">
-                  <div className="action-btn-label">{a.label}</div>
-                  <div className="action-btn-desc">{a.description}</div>
-                  {availableCombos.length > 0 && (
-                    <div className="action-btn-desc">
-                      可触发：{availableCombos.map((combo) => `${combo.label}（${combo.summary}）`).join(' / ')}
-                    </div>
-                  )}
-                </div>
-                <span className="ap-cost-badge">-{a.apCost} AP</span>
-              </button>
+          const comboTitle = availableCombos.length > 0
+            ? availableCombos.map((combo) => `${combo.label}：${combo.summary}`).join('\n')
+            : undefined;
+                return (
+                  <div key={a.id} className="action-item">
+                    <button
+                      type="button"
+                      className="action-btn"
+                      disabled={!canDo || busyId === a.id}
+                      onClick={() => requestAction(a)}
+                      title={actionDisabledReason || undefined}
+                    >
+                      <div className="action-btn-body">
+                        <div className="action-btn-label">{a.label}</div>
+                        <div className="action-btn-desc">{a.description}</div>
+                      </div>
+                      <div className="action-btn-side">
+                        {availableCombos.length > 0 && (
+                          <span className="combo-count-badge" title={comboTitle}>连锁 ×{availableCombos.length}</span>
+                        )}
+                        <span className="ap-cost-badge">-{a.apCost} AP</span>
+                      </div>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
       </div>
+      ) : (
+        <div className={`action-list ${panelDisabledReason ? 'panel-disabled' : ''}`}>
+          <div className="action-group">
+            <div className="action-group-title">团队管理</div>
+            {[
+              {
+                id: 'team-meeting',
+                label: teamActionCount('team-meeting') >= 1 ? '会议已开' : '战术会议',
+                description: '统一战术语言，提升队内执行。',
+                apCost: 30,
+                disabledReason: teamActionCount('team-meeting') >= 1 ? '本周会议已开' : null,
+                run: () => api.teamMeeting(sessionId, apiToken ?? undefined),
+              },
+              {
+                id: 'locker-room-talk',
+                label: teamActionCount('locker-room-talk') >= 1 ? '已安抚' : '安抚更衣室',
+                description: '缓和队内紧张，压低冲突风险。',
+                apCost: 25,
+                disabledReason: teamActionCount('locker-room-talk') >= 1
+                  ? '本周已安抚'
+                  : (!player.tags.includes('locker-tension') && (player.teamTrust ?? 50) >= 30)
+                    ? '当前更衣室不需要额外安抚'
+                    : null,
+                run: () => api.lockerRoomTalk(sessionId, apiToken ?? undefined),
+              },
+              ...(canShowRetain ? [{
+                id: 'retain-core-teammate',
+                label: `挽留 ${player.roster?.find((tm) => tm.id === player.pendingDeparture?.slotId)?.name ?? '核心队友'}`,
+                description: '处理离队风险，争取保住关键队友。',
+                apCost: 35,
+                disabledReason: canRetain ? null : '当前不能挽留',
+                run: () => api.retainCoreTeammate(sessionId, apiToken ?? undefined),
+              }] : []),
+              ...TEAM_TRAINING_FOCUS_OPTIONS.map((option) => ({
+                id: `team-training-focus:${option.id}`,
+                label: option.label,
+                description: '调整本周团队训练重点。',
+                apCost: 20,
+                disabledReason: canInfluenceStrategy ? null : '需要队内话语权',
+                run: () => api.teamTrainingFocus(sessionId, option.id, apiToken ?? undefined),
+              })),
+            ].map((a) => {
+              const lockedReason = panelDisabledReason
+                ?? (ap < a.apCost ? 'AP 不足' : a.disabledReason);
+              const canDo = lockedReason === null && busyId === null;
+              return (
+                <div key={a.id} className="action-item">
+                  <button
+                    type="button"
+                    className="action-btn"
+                    disabled={!canDo || busyId === a.id}
+                    onClick={() => void runTeamAction(a.id, a.run)}
+                    title={lockedReason ?? undefined}
+                  >
+                    <div className="action-btn-body">
+                      <div className="action-btn-label">{a.label}</div>
+                      <div className="action-btn-desc">{a.description}</div>
+                    </div>
+                    <span className="ap-cost-badge">-{a.apCost} AP</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {teamActionResult && (
+            <div className="action-result-box">
+              <div className={teamActionResult.success ? 'positive' : 'negative'}>
+                {teamActionResult.label} · {teamActionResult.success ? '成功' : '失败'} ({teamActionResult.roll}/{teamActionResult.dc})
+              </div>
+              <div className="muted-text">{teamActionResult.narrative}</div>
+              <div className="chip-row">
+                {teamActionResult.comboTriggeredLabels?.map((label) => (
+                  <span key={`triggered-${label}`} className="chip chip-pos">触发连锁：{label}</span>
+                ))}
+                {teamActionResult.comboAddedLabels?.map((label) => (
+                  <span key={`added-${label}`} className="chip chip-neu">形成连锁：{label}</span>
+                ))}
+                {teamActionResult.effects.map((effect) => (
+                  <span key={effect} className="chip chip-neu">{effect}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>

@@ -76,7 +76,7 @@ function buildSummary(player: Player, title: string): string {
   if (title === '透支型选手') return '你在高压下持续燃烧，代价是很高的职业透支。';
   if (title === '高光很多但冠军太少') return '你有足够多的闪光时刻，但关键奖杯始终差一口气。';
 
-  const stageText = stage === 'pro' ? '职业队' : stage === 'second' ? '二线队' : stage === 'youth' ? '青训' : '路人局';
+  const stageText = stage === 'pro' ? '职业' : stage === 'second' ? '二线' : stage === 'youth' ? '青训' : '路人局';
   const roundsText = rounds != null ? `最长效力 ${rounds} 回合` : '没有稳定战队记录';
   const tierText = tier === 'major' ? 'Major' : tier === 's' ? 'S 级' : tier === 'a' ? 'A 级' : tier === 'b' ? 'B 级' : 'C 级';
 

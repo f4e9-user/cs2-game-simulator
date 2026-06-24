@@ -28,6 +28,18 @@ export interface ApplyShopResult {
   shopTagsRemoved?: string[];
 }
 
+const OPENING_OVERFLOW_RECOVERY_TAGS = [
+  'opening-mental-scar',
+  'opening-physical-debt',
+  'opening-tactical-gap',
+  'opening-mechanical-gap',
+];
+
+function hasOpeningOverflowRecoveryTag(player: Player): boolean {
+  const tags = new Set(player.tags ?? []);
+  return OPENING_OVERFLOW_RECOVERY_TAGS.some((tag) => tags.has(tag));
+}
+
 export function applyShopPurchase(session: GameSession, itemId: string): ApplyShopResult {
   if (session.status !== 'active') throw new Error('session is not active');
   assertNoActiveEventSequence(session);
@@ -53,6 +65,9 @@ export function applyShopPurchase(session: GameSession, itemId: string): ApplySh
   const cooldownUntil = (player.shopCooldowns ?? {})[itemId] ?? 0;
   if (cooldownUntil > round) throw new Error(`商品冷却中，还需 ${cooldownUntil - round} 回合`);
   if (weeklyLimit !== undefined && purchaseCount >= weeklyLimit) throw new Error(`本周购买次数已达上限（${purchaseCount}/${weeklyLimit}）`);
+  if (itemId === 'foundation-rehab' && !hasOpeningOverflowRecoveryTag(player)) {
+    throw new Error('仅限存在开局负面溢出恢复标签时购买');
+  }
   if (player.stats.money < item.priceMoney) throw new Error(`资金不足，需要 ${item.priceMoney}K`);
   if (itemId === 'hire-agent' && player.tags.includes('has-agent')) throw new Error('已经签约经纪人，无需重复购买');
   if (itemId === 'fire-agent' && !player.tags.includes('has-agent')) throw new Error('当前没有经纪人可解约');

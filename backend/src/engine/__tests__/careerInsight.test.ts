@@ -204,4 +204,126 @@ describe('buildCareerInsight', () => {
       }
     }
   });
+
+  it('exposes calendar blocks for visible tournament opportunities', () => {
+    const base = session({
+      stage: 'pro',
+      year: 5,
+      week: 6,
+      team: {
+        clubId: 'dragon-raiders',
+        name: '龙腾电竞',
+        tag: 'DRG',
+        region: 'CN',
+        tier: 'pro',
+        monthlySalary: 65,
+        joinedRound: 166,
+      },
+      qualificationSlots: { 'blast-closed': 2 },
+      fame: 87,
+    });
+    base.leaderboard = [{ name: '龙腾电竞', tag: 'DRG', region: 'CN', points: 20, isPlayer: true }];
+    const insight = buildCareerInsight(base, 20);
+
+    expect(insight.calendarBlocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'opportunity',
+        week: 6,
+        title: expect.stringContaining('IEM London'),
+        status: expect.stringContaining('缺'),
+      }),
+      expect.objectContaining({
+        kind: 'opportunity',
+        week: 7,
+        status: '阶段不符',
+      }),
+      expect.objectContaining({
+        kind: 'opportunity',
+        week: 12,
+        title: expect.stringContaining('BLAST Bounty'),
+        status: '可报名窗口',
+        action: 'none',
+      }),
+    ]));
+  });
+
+  it('exposes all upcoming tournament blocks, not only current-stage progression goals', () => {
+    const base = session({
+      stage: 'pro',
+      year: 5,
+      week: 6,
+      team: {
+        clubId: 'dragon-raiders',
+        name: '龙腾电竞',
+        tag: 'DRG',
+        region: 'CN',
+        tier: 'pro',
+        monthlySalary: 65,
+        joinedRound: 166,
+      },
+      fame: 87,
+    });
+    base.leaderboard = [{ name: '龙腾电竞', tag: 'DRG', region: 'CN', points: 20, isPlayer: true }];
+
+    const insight = buildCareerInsight(base, 20);
+
+    expect(insight.opportunities.every((opportunity) => (
+      ['S 级预选', 'S 级正赛', 'Major'].includes(opportunity.tier)
+    ))).toBe(true);
+    expect(insight.calendarBlocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'opportunity',
+        week: 8,
+        title: expect.stringContaining('Platform Ladder Cup'),
+        status: '阶段不符',
+      }),
+      expect.objectContaining({
+        kind: 'opportunity',
+        week: 13,
+        title: expect.stringContaining('ESL Challenger League'),
+      }),
+    ]));
+  });
+
+  it('expands a pending match into prep and match calendar blocks', () => {
+    const insight = buildCareerInsight(session({
+      stage: 'pro',
+      year: 5,
+      week: 6,
+      pendingMatch: {
+        tournamentId: 'iem-london-2030-open-qualifier',
+        tier: 's-class',
+        name: 'iem-london-2030-open-qualifier',
+        displayName: 'IEM London 2030 Open Qualifier',
+        progressionTier: 's-qualifier',
+        entryType: 'open_qualifier',
+        resolveYear: 5,
+        resolveWeek: 10,
+        stageIndex: 0,
+        stageLosses: 0,
+      },
+      tournamentContext: {
+        tournamentId: 'iem-london-2030-open-qualifier',
+        stageIndex: 0,
+        signedUpAtRound: 196,
+        signedUpAtYear: 5,
+        signedUpAtWeek: 6,
+        resolveYear: 5,
+        resolveWeek: 10,
+        phase: 'pre-match',
+        contextEventQueue: [],
+        consumedContextEventIds: [],
+        pressureLevel: 2,
+        stakesLevel: 3,
+      },
+    }));
+
+    expect(insight.calendarBlocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'commitment', week: 6, status: '已报名' }),
+      expect.objectContaining({ kind: 'commitment', week: 7, status: '备赛周' }),
+      expect.objectContaining({ kind: 'commitment', week: 8, status: '备赛周' }),
+      expect.objectContaining({ kind: 'commitment', week: 9, status: '备赛周' }),
+      expect.objectContaining({ kind: 'match', week: 10, status: '比赛周' }),
+    ]));
+  });
 });

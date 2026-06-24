@@ -250,7 +250,7 @@ export function aggregateSeriesMatchResult(
     rating: Math.round(((totals.rating / count) + seriesWinBonus + sweepBonus) * 100) / 100,
     feelDelta: won ? 1 : -1,
     tiltDelta: won ? 0 : 1,
-    fatigueDelta: Math.min(35, 8 * count),
+    fatigueDelta: 0,
     winProb: won ? 1 : 0,
     summary: `系列赛${won ? '获胜' : '失利'}，总比分 ${context.playerMapWins}-${context.opponentMapWins}。` +
       maps.map((map, index) => ` Map${index + 1} ${map.mapName} ${map.teamScore}:${map.enemyScore}`).join('；'),

@@ -316,7 +316,7 @@ export function buildYearTournaments(year: number): Tournament[] {
     {
       id: `y${year}-b-main-03`, tier: 'b', progressionTier: 'b', entryType: 'direct_signup', brand: 'Rising Stars Finals', subtype: 'rising_stars_finals',
       displayName: `Rising Stars Finals ${pickFrom(REGIONS, year + 5)} ${yyyy}`,
-      description: '赛季后半段的 B 级正赛，给二线队补 A 级公开预选门票的稳定机会。',
+      description: '赛季后半段的 B 级正赛，给二线战队补 A 级公开预选门票的稳定机会。',
       stages: ['youth', 'second'], teamRequirement: 'youth', fameRequired: 6, signupWeeks: [34], reward: { money: 24, experience: 3, fame: 3, points: 3 }, baseDifficulty: 3, bracket: TWO_STAGE, region: pickFrom(REGIONS, year + 5), qualificationTargets: ['b-seed'], qualificationMilestones: B_MAIN_A_OPEN_MILESTONES,
     },
     {
@@ -334,7 +334,7 @@ export function buildYearTournaments(year: number): Tournament[] {
     {
       id: `y${year}-b-main-04`, tier: 'b', progressionTier: 'b', entryType: 'direct_signup', brand: 'Academy Last Chance', subtype: 'academy_last_chance',
       displayName: `Academy Last Chance ${pickFrom(REGIONS, year + 6)} ${yyyy}`,
-      description: '赛季末 B 级正赛，给还缺 A 级公开预选门票的二线队最后一轮补票窗口。',
+      description: '赛季末 B 级正赛，给还缺 A 级公开预选门票的二线战队最后一轮补票窗口。',
       stages: ['youth', 'second'], teamRequirement: 'youth', fameRequired: 6, signupWeeks: [43], reward: { money: 22, experience: 3, fame: 3, points: 2 }, baseDifficulty: 3, bracket: TWO_STAGE, region: pickFrom(REGIONS, year + 6), qualificationTargets: ['b-seed'], qualificationMilestones: B_MAIN_A_OPEN_MILESTONES,
     },
     {
@@ -370,7 +370,7 @@ export function buildYearTournaments(year: number): Tournament[] {
     {
       id: `y${year}-a-open-04`, tier: 'a', progressionTier: 'a', entryType: 'open_qualifier', brand: 'CCT', subtype: 'open_qualifier',
       displayName: `CCT ${pickFrom(REGIONS, year + 1)} Open Qualifier`,
-      description: '上半赛季补充的 A 级公开预选，让二线队不用等太久就能再次冲正赛资格。',
+      description: '上半赛季补充的 A 级公开预选，让二线战队不用等太久就能再次冲正赛资格。',
       stages: ['second', 'pro'], teamRequirement: 'semi-pro', fameRequired: 7, pointsRequired: 3, signupWeeks: [8], reward: { money: 24, experience: 3, fame: 3, points: 3 }, baseDifficulty: 3, bracket: FOUR_STAGE, region: pickFrom(REGIONS, year + 1), qualificationTargets: ['a-open'], qualificationMilestones: [milestone(2, '晋级决赛', reward('a-main'))],
     },
     {
@@ -406,13 +406,13 @@ export function buildYearTournaments(year: number): Tournament[] {
     {
       id: `y${year}-a-03`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'CCT', subtype: 'cct',
       displayName: `CCT ${pickFrom(REGIONS, year + 3)} Series #${cctBase + 1}`,
-      description: '高强度地区系列赛，强青训和二线职业队都会来抢分。',
+      description: '高强度地区系列赛，强青训和二线职业战队都会来抢分。',
       stages: ['youth', 'second', 'pro'], teamRequirement: 'semi-pro', fameRequired: 10, pointsRequired: 5, signupWeeks: [16], reward: { money: 38, experience: 5, fame: 5, points: 6 }, baseDifficulty: 3, bracket: FOUR_STAGE, region: pickFrom(REGIONS, year + 3), qualificationTargets: ['a-main'], qualificationMilestones: [milestone(1, '晋级四强', reward('blast-closed'))],
     },
     {
       id: `y${year}-a-open-05`, tier: 'a', progressionTier: 'a', entryType: 'open_qualifier', brand: 'ESL Challenger League', subtype: 'open_qualifier',
       displayName: `ESL Challenger League Season ${challengerLeagueSeasonBase + 1} Open Qualifier`,
-      description: 'Challenger League 前的公开预选，给缺正赛资格的二线队补一条上升路径。',
+      description: 'Challenger League 前的公开预选，给缺正赛资格的二线战队补一条上升路径。',
       stages: ['second', 'pro'], teamRequirement: 'semi-pro', fameRequired: 8, pointsRequired: 4, signupWeeks: [15], reward: { money: 24, experience: 3, fame: 3, points: 3 }, baseDifficulty: 3, bracket: FOUR_STAGE, seasonIndex: challengerLeagueSeasonBase + 1, qualificationTargets: ['a-open'], qualificationMilestones: [milestone(2, '晋级决赛', reward('a-main'))],
     },
     {
@@ -424,7 +424,7 @@ export function buildYearTournaments(year: number): Tournament[] {
     {
       id: `y${year}-a-09`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'Galaxy Battle', subtype: 'galaxy_battle',
       displayName: `Galaxy Battle ${pickFrom(A_CITIES, year + 6)} ${yyyy}`,
-      description: '年中额外补充的 A 级线下赛，给二线队更稳定的比赛密度。',
+      description: '年中额外补充的 A 级线下赛，给二线战队更稳定的比赛密度。',
       stages: ['second', 'pro'], teamRequirement: 'semi-pro', fameRequired: 12, pointsRequired: 6, signupWeeks: [29], reward: { money: 42, experience: 5, fame: 6, points: 6 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(A_CITIES, year + 6), qualificationTargets: ['a-main'], qualificationMilestones: [milestone(1, '晋级四强', reward('pgl-open'))],
     },
     {
@@ -460,7 +460,7 @@ export function buildYearTournaments(year: number): Tournament[] {
     {
       id: `y${year}-a-04`, tier: 'a', progressionTier: 'a', entryType: 'direct_signup', brand: 'YaLLa Compass', subtype: 'yalla_compass',
       displayName: `YaLLa Compass ${pickFrom(A_CITIES, year + 1)} ${yyyy}`,
-      description: '中东风格的高奖金挑战赛，二线队很爱来抢曝光。',
+      description: '中东风格的高奖金挑战赛，二线战队很爱来抢曝光。',
       stages: ['youth', 'second', 'pro'], teamRequirement: 'semi-pro', fameRequired: 12, pointsRequired: 6, signupWeeks: [25], reward: { money: 42, experience: 5, fame: 6, points: 6 }, baseDifficulty: 3, bracket: FOUR_STAGE, city: pickFrom(A_CITIES, year + 1), qualificationTargets: ['a-main'], qualificationMilestones: [milestone(1, '晋级四强', reward('blast-closed'))],
     },
     {
@@ -490,7 +490,7 @@ export function buildYearTournaments(year: number): Tournament[] {
     {
       id: `y${year}-s-open-02`, tier: 's-open', progressionTier: 's-qualifier', entryType: 'open_qualifier', brand: 'PGL', subtype: 'open_qualifier',
       displayName: `PGL ${pickFrom(S_CITIES, year + 5)} ${yyyy} Open Qualifier`,
-      description: '下半年公开预选，野心足的二线队都会来赌一次。',
+      description: '下半年公开预选，野心足的二线战队都会来赌一次。',
       stages: ['second', 'pro'], teamRequirement: 'semi-pro', fameRequired: 14, pointsRequired: 9, signupWeeks: [32], reward: { money: 30, experience: 4, fame: 5, points: 6, stressDelta: 1 }, baseDifficulty: 4, bracket: FOUR_STAGE, city: pickFrom(S_CITIES, year + 5), qualificationTargets: ['pgl-open'], qualificationMilestones: [milestone(2, '晋级决赛', reward('pgl-closed'))],
     },
     {

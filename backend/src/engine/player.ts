@@ -234,6 +234,8 @@ export function initPlayer(input: InitInput): Player {
       movedAtRound: 0,
     },
     actionPoints: ACTION_POINT_MAX,
+    currentWeekRoutineActions: [],
+    lastWeekRoutineActions: [],
     shopCooldowns: {},
     weeklyShopPurchases: {},
     weeklyTeamActions: {},

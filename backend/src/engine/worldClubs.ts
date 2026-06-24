@@ -8,18 +8,21 @@ import type {
   ClubRuntimeState,
   ClubSeasonSummary,
   ClubTier,
+  ClubTierChange,
   GameSession,
   PendingMatch,
+  Player,
   PersonalityTag,
   RosterNeed,
   RosterStyle,
+  Stage,
   TeamIdentity,
   TeammateRole,
   TeammateStats,
   TournamentTier,
   WorldClubPool,
 } from '../types.js';
-import { makeRng } from './resolver.js';
+import { makeRng, stageIndex } from './resolver.js';
 
 const WORLD_CLUBS_VERSION = 1;
 const ROLES: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
@@ -203,10 +206,124 @@ function eligibleTiersForClub(tier: ClubTier): TournamentTier[] {
 }
 
 const CLUB_TIER_ORDER: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+const TIER_MIN_STAGE: Record<ClubTier, Stage> = {
+  youth: 'youth',
+  'semi-pro': 'second',
+  pro: 'pro',
+  top: 'pro',
+};
+const TIER_SALARY_RANGE: Record<ClubTier, [number, number]> = {
+  youth: [10, 20],
+  'semi-pro': [20, 50],
+  pro: [50, 90],
+  top: [90, 150],
+};
+const TIER_LABELS: Record<ClubTier, string> = {
+  youth: '青训',
+  'semi-pro': '二线',
+  pro: '职业',
+  top: '豪门',
+};
 
 function adjacentTier(tier: ClubTier, delta: 1 | -1): ClubTier {
   const idx = CLUB_TIER_ORDER.indexOf(tier);
   return CLUB_TIER_ORDER[Math.max(0, Math.min(CLUB_TIER_ORDER.length - 1, idx + delta))]!;
+}
+
+function tierDirection(fromTier: ClubTier, toTier: ClubTier): ClubTierChange['direction'] {
+  return CLUB_TIER_ORDER.indexOf(toTier) > CLUB_TIER_ORDER.indexOf(fromTier) ? 'promotion' : 'relegation';
+}
+
+function tierChangeSummary(fromTier: ClubTier, toTier: ClubTier): string {
+  const direction = tierDirection(fromTier, toTier);
+  if (direction === 'promotion') {
+    if (toTier === 'top') return '战队升入豪门行列';
+    return `战队升入${TIER_LABELS[toTier]}层级`;
+  }
+  if (fromTier === 'top') return '战队跌出豪门行列';
+  if (fromTier === 'pro') return '战队跌出职业层级';
+  return `战队降至${TIER_LABELS[toTier]}层级`;
+}
+
+function createTierChange(fromTier: ClubTier, toTier: ClubTier, season: number, round: number): ClubTierChange {
+  return {
+    season,
+    round,
+    fromTier,
+    toTier,
+    direction: tierDirection(fromTier, toTier),
+    summary: tierChangeSummary(fromTier, toTier),
+  };
+}
+
+function salaryForTierChange(currentSalary: number, toTier: ClubTier, direction: ClubTierChange['direction']): number {
+  const [min, max] = TIER_SALARY_RANGE[toTier];
+  const scaled = direction === 'promotion'
+    ? Math.round(currentSalary * 1.25)
+    : Math.round(currentSalary * 0.8);
+  return clamp(scaled, min, max);
+}
+
+function adjustStatsForTierChange(stats: TeammateStats, direction: ClubTierChange['direction']): TeammateStats {
+  const delta = direction === 'promotion' ? 1 : -1;
+  return {
+    agility: clamp(stats.agility + delta, 0, 20),
+    intelligence: clamp(stats.intelligence + delta, 0, 20),
+    mentality: clamp(stats.mentality + delta, 0, 20),
+    experience: clamp(stats.experience + delta, 0, 20),
+  };
+}
+
+function adjustClubRosterForTierChange(runtime: ClubRuntimeState, direction: ClubTierChange['direction']): ClubRuntimeState {
+  return {
+    ...runtime,
+    fullRoster: runtime.fullRoster.map((player) => ({
+      ...player,
+      stats: adjustStatsForTierChange(player.stats, direction),
+      internalChemistry: player.internalChemistry === undefined
+        ? player.internalChemistry
+        : clamp(player.internalChemistry + (direction === 'promotion' ? 2 : -2), 0, 100),
+    })),
+  };
+}
+
+function adjustPlayerRosterForTierChange(player: Player, direction: ClubTierChange['direction']): Player {
+  if (!player.roster) return player;
+  return {
+    ...player,
+    roster: player.roster.map((teammate) => ({
+      ...teammate,
+      stats: adjustStatsForTierChange(teammate.stats, direction),
+      chemistry: teammate.chemistry === undefined
+        ? teammate.chemistry
+        : clamp(teammate.chemistry + (direction === 'promotion' ? 2 : -2), 0, 100),
+    })),
+  };
+}
+
+function syncPlayerTeamTierFromRuntime(player: Player, runtimeByClubId: Record<string, ClubRuntimeState>): Player {
+  if (!player.team) return player;
+  const currentTeam = player.team;
+  const runtime = runtimeByClubId[player.team.clubId];
+  if (!runtime || runtime.tier === player.team.tier) return player;
+  const change = runtime.lastTierChange ?? createTierChange(currentTeam.tier, runtime.tier, player.year ?? 1, player.round ?? 0);
+  const direction = change.direction;
+  const minStage = TIER_MIN_STAGE[runtime.tier];
+  const nextStage = stageIndex(minStage) > stageIndex(player.stage) ? minStage : player.stage;
+  const adjustedPlayer = adjustPlayerRosterForTierChange(player, direction);
+  return {
+    ...adjustedPlayer,
+    pendingMatch: adjustedPlayer.pendingMatch?.qualificationSlotOwner === 'team' ? null : adjustedPlayer.pendingMatch,
+    teamQualificationSlots: {},
+    teamQualificationSlotBatches: [],
+    stage: nextStage,
+    team: {
+      ...currentTeam,
+      tier: runtime.tier,
+      monthlySalary: salaryForTierChange(currentTeam.monthlySalary, runtime.tier, direction),
+      lastTierChange: change,
+    },
+  };
 }
 
 function generateFullRoster(session: GameSession, club: Club): ClubPlayer[] {
@@ -746,8 +863,9 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
     }
     if (promoted) {
       const promotedTier = adjacentTier(next.tier, 1);
+      const change = createTierChange(next.tier, promotedTier, pool.season, tickRound);
       promotedClubIds.push(clubId);
-      next = {
+      next = adjustClubRosterForTierChange({
         ...next,
         tier: promotedTier,
         qualificationState: {
@@ -756,12 +874,14 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
         },
         activeStorylines: addUnique(next.activeStorylines, 'promoted-after-breakout-season'),
         pendingStoryFlags: addUnique(next.pendingStoryFlags, 'promoted-after-breakout-season'),
-      };
+        lastTierChange: change,
+      }, change.direction);
     }
     if (fallen) {
       const fallenTier = adjacentTier(next.tier, -1);
+      const change = createTierChange(next.tier, fallenTier, pool.season, tickRound);
       fallenClubIds.push(clubId);
-      next = {
+      next = adjustClubRosterForTierChange({
         ...next,
         tier: fallenTier,
         qualificationState: {
@@ -770,7 +890,8 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
         },
         activeStorylines: addUnique(next.activeStorylines, 'fallen-giant'),
         pendingStoryFlags: addUnique(next.pendingStoryFlags, 'fallen-giant'),
-      };
+        lastTierChange: change,
+      }, change.direction);
     }
     if (next.qualificationState.majorPathProgress) {
       majorNewFaceClubIds.push(clubId);
@@ -799,6 +920,7 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
 
   return {
     ...session,
+    player: syncPlayerTeamTierFromRuntime(session.player, runtimeByClubId),
     worldClubs: {
       ...pool,
       season: currentSeason,

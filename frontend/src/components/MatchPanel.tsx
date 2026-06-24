@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useGameStore } from '@/store/gameStore';
-import type { PendingMatch, Player, Tournament } from '@/lib/types';
+import type { CareerInsight, PendingMatch, Player, Tournament } from '@/lib/types';
 import type { ClubTier } from '@/lib/types';
 import {
   describeTournamentMoney,
@@ -14,9 +14,9 @@ import {
 
 const TIER_LABELS: Record<ClubTier, string> = {
   youth: '青训',
-  'semi-pro': '二线队',
+  'semi-pro': '二线',
   pro: '职业',
-  top: '职业队',
+  top: '豪门',
 };
 
 const PROGRESSION_LABELS: Record<string, string> = {
@@ -232,6 +232,31 @@ function buildMatchPreview(player: Player, pendingMatch?: PendingMatch | null): 
   return items;
 }
 
+export function PreMatchPreview({
+  player,
+  pendingMatch,
+  title = '赛前状态',
+}: {
+  player: Player;
+  pendingMatch?: PendingMatch | null;
+  title?: string;
+}) {
+  const preview = buildMatchPreview(player, pendingMatch);
+  return (
+    <div className="pre-match-preview">
+      <div className="pre-match-preview-title">{title}</div>
+      <div className="pre-match-preview-grid">
+        {preview.map((item) => (
+          <div key={item.label} className={`pre-match-preview-item ${item.tone}`}>
+            <span className="pre-match-preview-label">{item.label}</span>
+            <span className="pre-match-preview-text">{item.text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Keep in sync with qualificationRewards / qualificationMilestones in tournaments.ts
 const QUALIFICATION_OVERVIEW = [
   'C赛：新人公开生态，夺冠可拿 B级种子资格',
@@ -256,10 +281,11 @@ function teamReqMet(team: Player['team'], req: ClubTier | null): boolean {
 interface Props {
   sessionId: string;
   player: Player;
+  insight?: CareerInsight | null;
   onPlayerUpdate: (p: Player) => void;
 }
 
-export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
+export function MatchPanel({ sessionId, player, insight, onPlayerUpdate }: Props) {
   const apiToken = useGameStore((s) => s.apiToken);
   const leaderboard = useGameStore((s) => s.leaderboard);
   const [open, setOpen] = useState<Tournament[]>([]);
@@ -329,17 +355,37 @@ export function MatchPanel({ sessionId, player, onPlayerUpdate }: Props) {
             </span>
           </span>
         </span>
-        {formatSlots(player.qualificationSlots ?? {}).length > 0 && (
-          <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--fg-2)' }}>
-            个人资格：{formatSlots(player.qualificationSlots ?? {}).join(' · ')}
-          </span>
-        )}
-        {formatSlots(player.teamQualificationSlots ?? {}).length > 0 && (
-          <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--accent-dim)' }}>
-            战队资格：{formatSlots(player.teamQualificationSlots ?? {}).join(' · ')}
-          </span>
-        )}
+        <div className="tourney-section-qualifiers">
+          {formatSlots(player.qualificationSlots ?? {}).length > 0 && (
+            <span className="tourney-qualifier muted">
+              个人资格：{formatSlots(player.qualificationSlots ?? {}).join(' · ')}
+            </span>
+          )}
+          {formatSlots(player.teamQualificationSlots ?? {}).length > 0 && (
+            <span className="tourney-qualifier highlight">
+              战队资格：{formatSlots(player.teamQualificationSlots ?? {}).join(' · ')}
+            </span>
+          )}
+        </div>
       </div>
+
+      {insight?.opportunities && insight.opportunities.length > 0 && (
+        <div className="tourney-future-block">
+          <div className="tourney-future-title">未来 12 周赛程</div>
+          <div className="tourney-future-list">
+            {insight.opportunities.slice(0, 12).map((opportunity) => (
+              <div key={opportunity.id} className="tourney-future-row">
+                <span className="tourney-future-week">第 {opportunity.week} 周</span>
+                <span className="tourney-future-tier">{opportunity.tier}</span>
+                <span className="tourney-future-name">{opportunity.name}</span>
+                <span className={`tourney-future-status ${opportunity.available === false ? 'locked' : 'open'}`}>
+                  {opportunity.available === false ? opportunity.status : '可报名'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {player.pendingMatch ? (
         <PendingMatchCard
@@ -401,24 +447,13 @@ function PendingMatchCard({
   stage: string;
 }) {
   const hasContract = ['second', 'pro'].includes(stage);
-  const preview = buildMatchPreview(player, pm);
   return (
     <div className="pending-match-card">
       <div className="pending-match-name">{pm.displayName ?? pm.name}</div>
       <div className="pending-match-meta">
         Y{pm.resolveYear} W{pm.resolveWeek} · {PROGRESSION_LABELS[pm.progressionTier ?? ''] ?? pm.tier} · {ENTRY_LABELS[pm.entryType ?? ''] ?? '正赛'} · 阶段 {pm.stageIndex + 1}
       </div>
-      <div className="pre-match-preview">
-        <div className="pre-match-preview-title">赛前状态</div>
-        <div className="pre-match-preview-grid">
-          {preview.map((item) => (
-            <div key={item.label} className={`pre-match-preview-item ${item.tone}`}>
-              <span className="pre-match-preview-label">{item.label}</span>
-              <span className="pre-match-preview-text">{item.text}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <PreMatchPreview player={player} pendingMatch={pm} />
       {confirmWithdraw ? (
         <div className="withdraw-confirm">
           <div className="withdraw-warning">弃赛后果：</div>

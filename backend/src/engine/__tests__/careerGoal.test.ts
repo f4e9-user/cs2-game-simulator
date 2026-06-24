@@ -103,12 +103,12 @@ describe('buildCareerGoal', () => {
       tierChampionships: { a: 0 },
     }));
 
-    expect(youthGoal.nextStageLabel).toBe('二线队');
+    expect(youthGoal.nextStageLabel).toBe('二线');
     expect(youthGoal.goals).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'B 级赛事参赛', current: 2, target: 3 }),
       expect.objectContaining({ label: 'B 级赛事冠军', current: 1, target: 1, completed: true }),
     ]));
-    expect(secondGoal.nextStageLabel).toBe('职业队');
+    expect(secondGoal.nextStageLabel).toBe('职业');
     expect(secondGoal.goals).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'A 级赛事参赛', current: 3, target: 3, completed: true }),
       expect.objectContaining({ label: 'A 级赛事冠军', current: 0, target: 1, completed: false }),

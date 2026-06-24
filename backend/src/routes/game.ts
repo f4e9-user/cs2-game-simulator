@@ -29,6 +29,7 @@ import {
   initPlayer,
   generateTeamOffer,
   pawnItem,
+  replayLastWeekRoutineActions,
   respondTeamOffer,
   rollRandomTraits,
   validateAllocation,
@@ -36,7 +37,7 @@ import {
 import { checkTournamentPromotion } from '../engine/stages.js';
 import { buildSessionPayload } from '../engine/insights/index.js';
 import { applyMoneyTransaction } from '../engine/money.js';
-import { canSignUpForTournament, playerTeamMeetsRequirement, tournamentDirectEntryBypassApplies } from '../engine/tournamentEligibility.js';
+import { canSignUpForTournament, playerTeamMeetsRequirement, tournamentDirectEntryBypassApplies, tournamentRequiresQualificationSlot } from '../engine/tournamentEligibility.js';
 import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime, resolveClubDisplayInfo } from '../engine/worldClubs.js';
 import { createTournamentContext } from '../engine/tournamentContext.js';
 import { buildRoleDebug, buildTeamIdentityDebug } from '../engine/debugPayload.js';
@@ -230,7 +231,6 @@ function runtimeHint(runtime: ClubRuntimeState, needs: string[]): string {
   if (runtime.rosterStability <= 40) hints.push('阵容不稳');
   if (runtime.internalChemistry <= 40) hints.push('磨合吃紧');
   if (needs.length > 0) hints.push(`正在寻找${needs.slice(0, 2).join(' / ')}`);
-  if (runtime.activeStorylines.length > 0) hints.push(`故事线：${runtime.activeStorylines[0]}`);
   return hints.join(' · ') || '运行稳定';
 }
 
@@ -693,6 +693,7 @@ app.post('/game/:sessionId/signup', async (c) => {
   }
   // 战队门槛校验：持有该赛事所需资格门票时可破格参加（只要有战队即可）
   const teamReq = t.teamRequirement ?? null;
+  const requiresQualificationSlot = tournamentRequiresQualificationSlot(player, t, playerPoints);
   if (teamReq !== null && !playerTeamMeetsRequirement(player.team, teamReq)) {
     if (!player.team) {
       return c.json({ error: `该赛事需要签约战队才能参加` }, 400);
@@ -711,9 +712,9 @@ app.post('/game/:sessionId/signup', async (c) => {
       if (!hasQualTicket) {
       const tierLabels: Record<ClubTier, string> = {
         youth: '青训',
-        'semi-pro': '二线队',
+        'semi-pro': '二线',
         pro: '职业',
-        top: '职业队',
+        top: '豪门',
       };
       return c.json(
         { error: `该赛事需要 ${tierLabels[teamReq]} 及以上战队（当前 ${tierLabels[player.team.tier]}），或持有资格门票破格参加` },
@@ -734,53 +735,52 @@ app.post('/game/:sessionId/signup', async (c) => {
   let usedQualificationSlot: string | undefined;
   let usedQualificationSlotOwner: 'player' | 'team' | undefined;
   let usedQualificationSlotExpiresAt: { year: number; week: number } | undefined;
-  if (t.qualificationTargets?.length) {
-    if (!tournamentDirectEntryBypassApplies(player.team, t, playerPoints)) {
-      const hasBlockedTeamTicket = t.qualificationTargets
-        .flatMap((slot) => qualificationFallbackSlots(slot))
-        .some((slot) => {
-          if (qualificationSlotOwner(slot) !== 'team') return false;
-          return ((player.teamQualificationSlots ?? {})[slot] ?? 0) > 0;
-        }) && player.team?.teamStatus !== 'starter';
-      if (hasBlockedTeamTicket) {
-        return c.json({ error: '当前队内定位不是首发，不能使用战队资格门票报名' }, 400);
-      }
-      const usedSlot = t.qualificationTargets
-        .flatMap((slot) => qualificationFallbackSlots(slot))
-        .find((slot) => {
-          const owner = qualificationSlotOwner(slot);
-          const pool = owner === 'team'
-            ? (player.teamQualificationSlots ?? {})
-            : (player.qualificationSlots ?? {});
-          return (pool[slot] ?? 0) > 0;
-        });
-      if (!usedSlot) {
-        return c.json({ error: '缺少对应资格门票' }, 400);
-      }
-      usedQualificationSlot = usedSlot;
-      usedQualificationSlotOwner = qualificationSlotOwner(usedSlot);
-      const fallbackExpiry = defaultQualificationExpiry(session.player.year ?? 1, session.player.week ?? 1);
-      if (usedQualificationSlotOwner === 'team') {
-        const consumed = consumeQualificationSlot(
-          session.player.teamQualificationSlots ?? {},
-          session.player.teamQualificationSlotBatches,
-          usedSlot,
-          fallbackExpiry,
-        );
-        session.player.teamQualificationSlots = consumed.slots;
-        session.player.teamQualificationSlotBatches = consumed.batches;
-        usedQualificationSlotExpiresAt = consumed.consumedExpiry;
-      } else {
-        const consumed = consumeQualificationSlot(
-          session.player.qualificationSlots ?? {},
-          session.player.qualificationSlotBatches,
-          usedSlot,
-          fallbackExpiry,
-        );
-        session.player.qualificationSlots = consumed.slots;
-        session.player.qualificationSlotBatches = consumed.batches;
-        usedQualificationSlotExpiresAt = consumed.consumedExpiry;
-      }
+  const qualificationTargets = t.qualificationTargets ?? [];
+  if (requiresQualificationSlot) {
+    const hasBlockedTeamTicket = qualificationTargets
+      .flatMap((slot) => qualificationFallbackSlots(slot))
+      .some((slot) => {
+        if (qualificationSlotOwner(slot) !== 'team') return false;
+        return ((player.teamQualificationSlots ?? {})[slot] ?? 0) > 0;
+      }) && player.team?.teamStatus !== 'starter';
+    if (hasBlockedTeamTicket) {
+      return c.json({ error: '当前队内定位不是首发，不能使用战队资格门票报名' }, 400);
+    }
+    const usedSlot = qualificationTargets
+      .flatMap((slot) => qualificationFallbackSlots(slot))
+      .find((slot) => {
+        const owner = qualificationSlotOwner(slot);
+        const pool = owner === 'team'
+          ? (player.teamQualificationSlots ?? {})
+          : (player.qualificationSlots ?? {});
+        return (pool[slot] ?? 0) > 0;
+      });
+    if (!usedSlot) {
+      return c.json({ error: '缺少对应资格门票' }, 400);
+    }
+    usedQualificationSlot = usedSlot;
+    usedQualificationSlotOwner = qualificationSlotOwner(usedSlot);
+    const fallbackExpiry = defaultQualificationExpiry(session.player.year ?? 1, session.player.week ?? 1);
+    if (usedQualificationSlotOwner === 'team') {
+      const consumed = consumeQualificationSlot(
+        session.player.teamQualificationSlots ?? {},
+        session.player.teamQualificationSlotBatches,
+        usedSlot,
+        fallbackExpiry,
+      );
+      session.player.teamQualificationSlots = consumed.slots;
+      session.player.teamQualificationSlotBatches = consumed.batches;
+      usedQualificationSlotExpiresAt = consumed.consumedExpiry;
+    } else {
+      const consumed = consumeQualificationSlot(
+        session.player.qualificationSlots ?? {},
+        session.player.qualificationSlotBatches,
+        usedSlot,
+        fallbackExpiry,
+      );
+      session.player.qualificationSlots = consumed.slots;
+      session.player.qualificationSlotBatches = consumed.batches;
+      usedQualificationSlotExpiresAt = consumed.consumedExpiry;
     }
   }
 
@@ -915,7 +915,7 @@ app.post('/game/:sessionId/action', async (c) => {
   try {
     assertNoActiveEventSequence(session);
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : '当前事件流程未结束，不能离队' }, 400);
+    return c.json({ error: err instanceof Error ? err.message : '当前事件流程未结束，不能执行日常行动' }, 400);
   }
   if (getSessionPhase(session) !== 'action') {
     return c.json({ error: '当前不在行动阶段' }, 400);
@@ -950,6 +950,58 @@ app.post('/game/:sessionId/action', async (c) => {
       player,
       phase: session.phase,
       currentEvent: null,
+    }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+app.post('/game/:sessionId/replay-last-week-actions', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  try {
+    assertNoActiveEventSequence(session);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : '当前事件流程未结束，不能重复上周行动' }, 400);
+  }
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
+
+  try {
+    let aiEventCache: AiEventCacheEnvelope | undefined;
+    try {
+      aiEventCache = await loadAiEventCache(c.env.KV, id, session);
+      aiEventCache = releaseActiveAiEvent(aiEventCache, session.player);
+    } catch (err) {
+      console.warn('[AI events] cache load failed in /replay-last-week-actions:', err);
+    }
+
+    const replay = replayLastWeekRoutineActions(session, aiEventCache);
+    session.player = replay.player;
+    session.phase = 'action';
+    session.currentEvent = null;
+    session.updatedAt = new Date().toISOString();
+    await saveFinalizedSession(storage, session);
+
+    if (aiEventCache) {
+      try {
+        await saveAiEventCache(c.env.KV, id, aiEventCache);
+      } catch (err) {
+        console.warn('[AI events] replay cache update failed:', err);
+      }
+    }
+
+    return c.json(buildSessionPayload(session, {
+      player: session.player,
+      phase: session.phase,
+      currentEvent: null,
+      replayResults: replay.actionResults,
+      replayTeamResults: replay.teamActionResults,
+      replayStopped: replay.stopped ?? null,
     }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1179,7 +1231,7 @@ app.post('/game/:sessionId/home-asset', async (c) => {
 app.post('/game/:sessionId/loan', async (c) => {
   const id = c.req.param('sessionId');
   const body = await c.req.json().catch(() => ({}));
-  const { amount } = body ?? {};
+  const { amount, durationRounds } = body ?? {};
   if (!Number.isInteger(amount) || amount < 20 || amount > 100) {
     return c.json({ error: 'amount 必须是 20-100 之间的整数' }, 400);
   }
@@ -1192,7 +1244,7 @@ app.post('/game/:sessionId/loan', async (c) => {
   }
 
   try {
-    const result = applyForLoan(session.player, amount);
+    const result = applyForLoan(session.player, amount, durationRounds);
     if (!result.success || !result.loan) {
       return c.json({ error: result.message ?? '贷款申请失败' }, 400);
     }
@@ -1562,6 +1614,20 @@ function buildWorldClubSocialPosts(session: GameSession): SocialFeedPost[] {
         content: `赛季总结来了，${pieces.join('；')}。新赛季看点不少。`,
       });
     }
+  }
+  const playerTierChange = session.player.team?.lastTierChange;
+  if (
+    playerTierChange &&
+    latestSummary &&
+    playerTierChange.season === latestSummary.season &&
+    playerTierChange.round === latestSummary.round
+  ) {
+    summaryPosts.unshift({
+      author: 'Team Desk',
+      authorType: 'media',
+      handle: '@team_desk',
+      content: `${session.player.team?.tag ?? '你的战队'} 赛季结算：${playerTierChange.summary}。新赛季合同与参赛路径已同步调整。`,
+    });
   }
   const runtimes = [...pool.activeClubIds, ...pool.relevantClubIds]
     .map((clubId) => pool.runtimeByClubId[clubId])

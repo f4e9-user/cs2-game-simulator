@@ -14,6 +14,7 @@ export interface CareerGoalProgress {
 }
 
 export interface CareerGoalOpportunity {
+  tournamentId: string;
   week: number;
   name: string;
   tier: string;
@@ -34,8 +35,8 @@ export interface CareerGoal {
 const STAGE_LABELS: Record<Stage, string> = {
   rookie: '路人新人',
   youth: '青训',
-  second: '二线队',
-  pro: '职业队',
+  second: '二线',
+  pro: '职业',
   retired: '退役',
 };
 
@@ -81,6 +82,7 @@ function upcomingOpportunities(
     .filter((tournament) => isUpcomingTournament(player, tournament))
     .filter(predicate)
     .map((tournament) => ({
+      tournamentId: tournament.id,
       week: tournamentWeek(tournament, player.week),
       name: tournament.displayName,
       tier: TIER_LABELS[tournament.progressionTier] ?? TIER_LABELS[tournament.tier] ?? tournament.tier,

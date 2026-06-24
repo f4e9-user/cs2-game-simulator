@@ -334,6 +334,13 @@ function bumpWeeklyTeamAction(player: Player, key: string): Record<string, { yea
   };
 }
 
+function recordTeamManagementAction(player: Player, actionId: string): string[] {
+  return [
+    ...(player.currentWeekRoutineActions ?? []),
+    actionId,
+  ];
+}
+
 function assertTeamActionAvailable(player: Player, apCost: number): void {
   if (!player.team || !player.roster || player.roster.length === 0) {
     throw new Error('当前没有可管理的战队阵容');
@@ -631,6 +638,7 @@ export function applyTeamMeeting(
     tags: nextTags,
     actionPoints: (player.actionPoints ?? 0) - TEAM_MEETING_AP_COST,
     weeklyTeamActions: bumpWeeklyTeamAction(player, actionKey),
+    currentWeekRoutineActions: recordTeamManagementAction(player, actionKey),
     roundCombos: comboResult.roundCombos,
   };
 
@@ -711,6 +719,7 @@ export function applyLockerRoomTalk(
     tags: nextTags,
     actionPoints: (player.actionPoints ?? 0) - LOCKER_ROOM_TALK_AP_COST,
     weeklyTeamActions: bumpWeeklyTeamAction(player, actionKey),
+    currentWeekRoutineActions: recordTeamManagementAction(player, actionKey),
     roundCombos: comboResult.roundCombos,
   };
 
@@ -886,6 +895,7 @@ export function applyTeamTrainingFocus(
     teamTrust: clampTeamTrust((player.teamTrust ?? 50) + trustDelta),
     stress: clampStress((player.stress ?? 0) + stressDelta),
     actionPoints: (player.actionPoints ?? 0) - TEAM_TRAINING_FOCUS_AP_COST,
+    currentWeekRoutineActions: recordTeamManagementAction(player, `team-training-focus:${typedFocus}`),
     roundCombos: comboResult.roundCombos,
   });
 

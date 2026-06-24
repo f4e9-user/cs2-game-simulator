@@ -52,8 +52,8 @@ export const BACKGROUNDS: Background[] = [
   },
   {
     id: 'second-team-rising',
-    name: '二线队新星',
-    description: '已经在二线队打出过关键比赛，被职业队观察中。',
+    name: '二线新星',
+    description: '已经在二线战队打出过关键比赛，被职业战队观察中。',
     startStage: 'second',
     statBias: { intelligence: 1, agility: 1, experience: 2 },
     originRegion: '亚太',

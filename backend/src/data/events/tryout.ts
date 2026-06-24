@@ -111,14 +111,14 @@ export const PROMOTION_EVENTS: EventDef[] = [
     type: 'tryout',
     title: '二线合同邀约',
     narrative:
-      '联赛结束后，一支二线队的领队在更衣室外等着你。他说队里有个坑位空出来了，问你有没有兴趣签一份正式合同。',
+      '联赛结束后，一支二线战队的领队在更衣室外等着你。他说队里有个坑位空出来了，问你有没有兴趣签一份正式合同。',
     stages: ['youth'],
     difficulty: 3,
     weight: 0,
     choices: [
       {
         id: 'accept-second-offer',
-        label: '签合同，加入二线队',
+        label: '签合同，加入二线战队',
         description: '正式走上职业化道路。',
         check: {
           primary: 'experience',
@@ -127,7 +127,7 @@ export const PROMOTION_EVENTS: EventDef[] = [
           traitBonuses: { steady: 2, grinder: 2 },
         },
         success: {
-          narrative: '合同签下，你正式成为二线队的一员。新的起点，新的压力，也有新的资源。',
+          narrative: '合同签下，你正式成为二线战队的一员。新的起点，新的压力，也有新的资源。',
           stateDelta: {
             stress: 5,
           },
@@ -210,7 +210,7 @@ export const PROMOTION_EVENTS: EventDef[] = [
   {
     id: 'promotion-second-to-pro',
     type: 'tryout',
-    title: '职业队签约邀请',
+    title: '职业战队签约邀请',
     narrative:
       '赛后混采区，一个西装男把名片塞进你手里——某职业俱乐部的经理。他说今天看了你整场比赛，团队有意向把你签下来，明天约在咖啡馆细聊。',
     stages: ['second'],
@@ -313,9 +313,9 @@ export const TRYOUT_EVENTS: EventDef[] = [
   {
     id: 'tryout-invite',
     type: 'tryout',
-    title: '二线队的试训邀约',
+    title: '二线战队的试训邀约',
     narrative:
-      '一支二线队的星探私信你：在城市赛里看过你的几场比赛，想让你去参加一次试训，三天吃住自付，第四天打训练赛定去留。',
+      '一支二线战队的星探私信你：在城市赛里看过你的几场比赛，想让你去参加一次试训，三天吃住自付，第四天打训练赛定去留。',
     stages: ['youth'],
     difficulty: 3,
     requireTags: ['elite-prospect', 'has-open-match-exp'],

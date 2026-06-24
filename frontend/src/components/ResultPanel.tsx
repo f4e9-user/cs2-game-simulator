@@ -14,6 +14,53 @@ import {
   formatTag,
 } from '@/lib/format';
 
+type PassiveEffectTone = 'positive' | 'negative' | 'neutral';
+
+const NEGATIVE_PASSIVE_EFFECT_IDS = new Set([
+  'broke-mentality-drain',
+  'stress-from-anxiety',
+  'stress-from-failure',
+  'stress-from-broke',
+  'stress-pegged-1',
+  'injury-triggered',
+  'physical-collapse-rest',
+  'critical-failure-penalty',
+]);
+
+const POSITIVE_PASSIVE_EFFECT_IDS = new Set([
+  'stress-decay-mentality',
+  'fatigue-mult-reduced',
+  'stress-mult-reduced',
+  'stress-eased',
+  'career-time-experience',
+  'rest-completed',
+  'critical-success-bonus',
+]);
+
+export function passiveEffectTone(raw: string): PassiveEffectTone {
+  if (NEGATIVE_PASSIVE_EFFECT_IDS.has(raw)) return 'negative';
+  if (POSITIVE_PASSIVE_EFFECT_IDS.has(raw)) return 'positive';
+
+  const text = PASSIVE_EFFECT_LABELS[raw] ?? raw;
+  if (
+    /违约|强制休养|伤病|崩溃|见底|失败|惩罚|危机|禁赛|下调|支出|还款|维护|压力\s*(?:\+|上升)|疲劳\s*(?:\+|上升)|心态\s*-|手感\s*-|名气\s*-|信用值\s*-|-\d+K|放大了/.test(
+      text,
+    )
+  ) {
+    return 'negative';
+  }
+
+  if (
+    /入账|收入|结清|恢复|成长|经验|大成功|天选|解除|缓解|下降|降低了|手感\s*\+|压力\s*-|疲劳\s*-|信任\s*\+|默契\s*\+|信用值\s*\+|\+\d+K/.test(
+      text,
+    )
+  ) {
+    return 'positive';
+  }
+
+  return 'neutral';
+}
+
 export interface SettlementActionResult {
   result: ActionResult;
   moneyChange: number;
@@ -155,7 +202,7 @@ export function ResultPanel({
       {passives.length > 0 && (
         <div style={{ marginBottom: 6 }}>
           {passives.map((p) => (
-            <div key={p} style={{ fontSize: 11, color: 'var(--danger)' }}>
+            <div key={p} className={`passive-effect-line passive-effect-line--${passiveEffectTone(p)}`}>
               · {PASSIVE_EFFECT_LABELS[p] ?? p}
             </div>
           ))}

@@ -2567,10 +2567,10 @@ export const CHAIN_EVENTS: EventDef[] = [
       {
         id: 'contact-coach',
         label: '联系教练，提前安排替补',
-        description: '先下手为强，让管理层提前从青训／二线队物色合适人选，争取更充裕的磨合时间。',
+        description: '先下手为强，让管理层提前从青训／二线战队物色合适人选，争取更充裕的磨合时间。',
         check: { primary: 'intelligence', dc: 5, traitBonuses: { igl: 2, tactical: 1 } },
         success: {
-          narrative: '教练重视你的情报，立刻联系了二线队物色人选。新人将提前开始融入训练，届时接班会更顺畅。',
+          narrative: '教练重视你的情报，立刻联系了二线战队物色人选。新人将提前开始融入训练，届时接班会更顺畅。',
         },
         failure: {
           narrative: '教练认为流言不足为信，没有立刻行动。你的努力白费了，只能寄希望于事情不成真。',

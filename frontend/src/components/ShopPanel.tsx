@@ -233,6 +233,13 @@ export function ShopPanel({
   const isResting = (player.restRounds ?? 0) > 0;
 
   const TOURNAMENT_LOCKED_ITEMS = new Set(['team-dinner', 'fan-meetup', 'short-trip']);
+  const OPENING_OVERFLOW_RECOVERY_TAGS = new Set([
+    'opening-mental-scar',
+    'opening-physical-debt',
+    'opening-tactical-gap',
+    'opening-mechanical-gap',
+  ]);
+  const hasOpeningOverflowRecoveryTag = player.tags.some((tag) => OPENING_OVERFLOW_RECOVERY_TAGS.has(tag));
 
   const hasPawnableItems = () => {
     const pawned = new Set(player.pawnedItemIds ?? []);
@@ -277,6 +284,9 @@ export function ShopPanel({
     }
     if (item.id === 'fire-agent' && !hasAgent) {
       return { ok: false, reason: '当前没有经纪人' };
+    }
+    if (item.id === 'foundation-rehab' && !hasOpeningOverflowRecoveryTag) {
+      return { ok: false, reason: '仅限开局负面溢出可买' };
     }
     if (player.stats.money < item.priceMoney) {
       return { ok: false, reason: `资金不足（需 ${item.priceMoney}K）` };

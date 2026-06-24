@@ -338,6 +338,15 @@ export interface ClubRecentResult {
   note: string;
 }
 
+export interface ClubTierChange {
+  season: number;
+  round: number;
+  fromTier: ClubTier;
+  toTier: ClubTier;
+  direction: 'promotion' | 'relegation';
+  summary: string;
+}
+
 export interface ClubRuntimeState {
   clubId: string;
   tier: ClubTier;
@@ -356,6 +365,7 @@ export interface ClubRuntimeState {
   activeStorylines: ClubStoryline[];
   recentResults: ClubRecentResult[];
   pendingStoryFlags: string[];
+  lastTierChange?: ClubTierChange;
   updatedRound: number;
 }
 
@@ -500,6 +510,7 @@ export interface PlayerTeam {
   tier: ClubTier;
   monthlySalary: number;
   joinedRound: number;
+  lastTierChange?: ClubTierChange;
   teamStatus?: 'starter' | 'trial' | 'rotation';
   teamStatusUntilRound?: number;
   joinMode?: PlayerJoinMode;
@@ -565,6 +576,7 @@ export interface Loan {
   source?: 'bank' | 'friend';
   principal: number;
   interestRate: number;
+  durationRounds?: number;
   remainingPrincipal: number;
   issuedRound: number;
   dueRound: number;
@@ -671,6 +683,8 @@ export interface DynamicState {
   pendingMatch: PendingMatch | null;
   tournamentContext?: TournamentContext;
   actionPoints: number;
+  currentWeekRoutineActions?: string[];
+  lastWeekRoutineActions?: string[];
   shopCooldowns: Record<string, number>;
   weeklyShopPurchases: Record<string, { year: number; week: number; count: number }>;
   weeklyTeamActions: Record<string, { year: number; week: number; count: number }>;
@@ -976,11 +990,29 @@ export interface CareerInsight {
   }>;
   opportunities: Array<{
     id: string;
+    tournamentId: string;
     week: number;
     name: string;
     tier: string;
     available: boolean;
     status: string;
+  }>;
+  calendarBlocks: Array<{
+    id: string;
+    year: number;
+    week: number;
+    endYear?: number;
+    endWeek?: number;
+    kind: 'opportunity' | 'commitment' | 'travel' | 'prep' | 'match' | 'recovery' | 'empty';
+    title: string;
+    shortTitle: string;
+    tier?: string;
+    status: string;
+    tone: 'neutral' | 'available' | 'locked' | 'active' | 'major' | 'warning';
+    source: 'career-goal' | 'tournament-calendar' | 'pending-match' | 'tournament-context' | 'system';
+    tournamentId?: string;
+    action?: 'signup' | 'withdraw' | 'none';
+    detail?: string;
   }>;
   blockers: Array<{
     id: string;

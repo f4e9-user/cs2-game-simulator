@@ -7,21 +7,23 @@ import { api } from '@/lib/api';
 import { WelcomeCard } from '@/components/WelcomeCard';
 import { EventCard } from '@/components/EventCard';
 import { ChoiceList } from '@/components/ChoiceList';
-import { PlayerStats } from '@/components/PlayerStats';
-import { CareerInsightPanel } from '@/components/CareerInsightPanel';
 import { ResultPanel } from '@/components/ResultPanel';
 import { EndingPanel } from '@/components/EndingPanel';
-import { MatchPanel } from '@/components/MatchPanel';
 import { ActionPanel } from '@/components/ActionPanel';
 import { ShopPanel } from '@/components/ShopPanel';
 import { Leaderboard } from '@/components/Leaderboard';
-import { FeedPanel } from '@/components/FeedPanel';
 import { HudTopBar } from '@/components/HudTopBar';
+import { ScheduleCalendarPanel } from '@/components/ScheduleCalendarPanel';
 import TransitionOverlay from '@/components/TransitionOverlay';
 import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { LoanModal } from '@/components/LoanModal';
 import { InjuryAlertModal, buildInjuryAlertFromEffects, type InjuryAlert } from '@/components/InjuryAlertModal';
+import {
+  CareerSuggestionStrip,
+  EventActivityPanel,
+  PlayerProfilePanel,
+} from '@/components/GameLayoutPanels';
 import { useGameStore } from '@/store/gameStore';
 import type { ActionResult, Player, RulesMeta, SocialPost, Trait } from '@/lib/types';
 import type { SettlementActionResult, SettlementShopResult } from '@/components/ResultPanel';
@@ -68,7 +70,7 @@ export default function GamePage() {
   const [shaking, setShaking] = useState(false);
   const [showNewGameModal, setShowNewGameModal] = useState(false);
   const [mobileTab, setMobileTab] = useState<'left' | 'center' | 'right'>('center');
-  const [centerTab, setCenterTab] = useState<'event' | 'shop' | 'team' | 'leaderboard'>('event');
+  const [centerTab, setCenterTab] = useState<'event' | 'schedule' | 'shop' | 'team' | 'leaderboard'>('event');
   const prevStress = useRef(0);
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
   const [socialLoading, setSocialLoading] = useState(false);
@@ -80,6 +82,7 @@ export default function GamePage() {
   const [settlementLoading, setSettlementLoading] = useState(false);
   const [choiceSubmitting, setChoiceSubmitting] = useState(false);
   const [injuryAlert, setInjuryAlert] = useState<InjuryAlert | null>(null);
+  const [signupBusyId, setSignupBusyId] = useState<string | null>(null);
 
   const [streamingNarrative, setStreamingNarrative] = useState<string | null>(null);
   const [isNarrating, setIsNarrating] = useState(false);
@@ -218,6 +221,21 @@ export default function GamePage() {
     } finally {
       setTransitioning(false);
       setLoading(false);
+    }
+  };
+
+  const handleScheduleSignup = async (tournamentId: string) => {
+    if (loading || signupBusyId || !player) return;
+    setSignupBusyId(tournamentId);
+    setError(null);
+    try {
+      const res = await api.signup(sessionId, tournamentId, apiToken ?? undefined);
+      setPlayer(res.player);
+      await refreshSessionSnapshot();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSignupBusyId(null);
     }
   };
 
@@ -421,11 +439,7 @@ export default function GamePage() {
         <aside className="hud-left">
           {!ended && (
             <>
-              <MatchPanel
-                sessionId={sessionId}
-                player={player}
-                onPlayerUpdate={handlePlayerUpdate}
-              />
+              <CareerSuggestionStrip insight={careerInsight} />
               <ActionPanel
                 key={player.round}
                 sessionId={sessionId}
@@ -437,6 +451,17 @@ export default function GamePage() {
                 onActionResult={handleActionResult}
                 disabledReason={actionLockedReason}
               />
+              <div className="round-advance-sticky">
+                <button
+                  type="button"
+                  className="primary-button round-advance-button"
+                  disabled={!isActionPhase || loading || transitioning || choiceSubmitting || settlementLoading}
+                  onClick={handleEndActionPhase}
+                  title={!isActionPhase ? '等待事件结算后进入下一回合' : undefined}
+                >
+                  推进到下一回合 →
+                </button>
+              </div>
             </>
           )}
         </aside>
@@ -459,9 +484,9 @@ export default function GamePage() {
             <>
               {/* 标签栏 */}
               <div className="center-tabs">
-                {(['event', 'shop', 'team', 'leaderboard'] as const).map((tab) => {
+                {(['event', 'schedule', 'shop', 'team', 'leaderboard'] as const).map((tab) => {
                   const labels: Record<string, string> = {
-                    event: '事件', shop: '商店', team: '战队信息', leaderboard: '排行榜',
+                    event: '事件', schedule: '赛程', shop: '商店', team: '战队', leaderboard: '排行榜',
                   };
                   const hasDot = tab === 'event' && centerTab !== 'event' && (!!currentEvent || phase !== 'event');
                   return (
@@ -509,14 +534,6 @@ export default function GamePage() {
                         >
                           → 前往行动面板
                         </button>
-                        <button
-                          type="button"
-                          className="primary-button"
-                          style={{ marginTop: 12 }}
-                          onClick={handleEndActionPhase}
-                        >
-                          结束行动 →
-                        </button>
                       </div>
                     ) : phase === 'settlement' ? (
                       lastResult ? null : <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>结算中…</div>
@@ -532,6 +549,11 @@ export default function GamePage() {
                       <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>等待下一回合…</div>
                     )}
                     {error && <div className="error" style={{ marginTop: 8 }}>错误：{error}</div>}
+                    <EventActivityPanel
+                      history={history}
+                      socialPosts={socialPosts}
+                      socialLoading={socialLoading}
+                    />
                   </>
                 )}
 
@@ -544,6 +566,15 @@ export default function GamePage() {
                     onShopResult={handleShopResult}
                     enabled={isActionPhase && !loading && !settlementLoading && !isResting}
                     disabledReason={actionLockedReason}
+                  />
+                )}
+
+                {centerTab === 'schedule' && (
+                  <ScheduleCalendarPanel
+                    player={player}
+                    insight={careerInsight}
+                    busyTournamentId={signupBusyId}
+                    onSignup={handleScheduleSignup}
                   />
                 )}
 
@@ -568,9 +599,7 @@ export default function GamePage() {
 
         {/* Right: player info + feed */}
         <aside className="hud-right">
-          <CareerInsightPanel insight={careerInsight} />
-          <PlayerStats player={player} traits={traits} />
-          <FeedPanel history={history} socialPosts={socialPosts} socialLoading={socialLoading} />
+          <PlayerProfilePanel player={player} traits={traits} insight={careerInsight} />
         </aside>
       </div>
 

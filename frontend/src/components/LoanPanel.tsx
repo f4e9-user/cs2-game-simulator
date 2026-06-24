@@ -15,7 +15,11 @@ interface Props {
 const BANK_MIN = 20;
 const BANK_MAX = 100;
 const BANK_STEP = 5;
-const INTEREST_RATE = 0.10;
+const BANK_LOAN_TERMS = [
+  { rounds: 4, interestRate: 0.10 },
+  { rounds: 8, interestRate: 0.18 },
+  { rounds: 12, interestRate: 0.28 },
+] as const;
 
 const FRIEND_MIN = 10;
 const FRIEND_MAX = 30;
@@ -52,6 +56,7 @@ export function LoanPanel({ sessionId, player, onPlayerUpdate }: Props) {
   const [errorBank, setErrorBank] = useState<string | null>(null);
   const [errorFriend, setErrorFriend] = useState<string | null>(null);
   const [bankAmount, setBankAmount] = useState(BANK_MIN);
+  const [bankDuration, setBankDuration] = useState(4);
   const [friendAmount, setFriendAmount] = useState(FRIEND_MIN);
 
   const creditScore = player.creditScore ?? 100;
@@ -80,7 +85,7 @@ export function LoanPanel({ sessionId, player, onPlayerUpdate }: Props) {
     setBusyBank(true);
     setErrorBank(null);
     try {
-      const res = await api.takeLoan(sessionId, bankAmount, apiToken ?? undefined);
+      const res = await api.takeLoan(sessionId, bankAmount, bankDuration, apiToken ?? undefined);
       onPlayerUpdate(res.player);
     } catch (e) {
       setErrorBank(e instanceof Error ? e.message : String(e));
@@ -109,6 +114,7 @@ export function LoanPanel({ sessionId, player, onPlayerUpdate }: Props) {
     canBorrowBank ||
     canBorrowFriend ||
     (player.stage !== 'rookie' && creditScore < 100);
+  const selectedBankTerm = BANK_LOAN_TERMS.find((term) => term.rounds === bankDuration) ?? BANK_LOAN_TERMS[0];
 
   if (!showPanel) return null;
 
@@ -148,7 +154,7 @@ export function LoanPanel({ sessionId, player, onPlayerUpdate }: Props) {
       ) : canBorrowBank ? (
         <div className="loan-borrow">
           <div className="loan-borrow-hint">
-            {BANK_MIN}K – {BANK_MAX}K · 利率 {Math.round(INTEREST_RATE * 100)}% · 12 回合后还款
+            {BANK_MIN}K – {BANK_MAX}K · 期限越长利率越高
           </div>
           <div className="loan-slider-row">
             <input
@@ -162,8 +168,21 @@ export function LoanPanel({ sessionId, player, onPlayerUpdate }: Props) {
             />
             <span className="loan-amount-display">{formatMoney(bankAmount)}</span>
           </div>
+          <div className="loan-slider-row">
+            {BANK_LOAN_TERMS.map((term) => (
+              <button
+                key={term.rounds}
+                type="button"
+                className={bankDuration === term.rounds ? 'primary-button' : 'ghost-button'}
+                onClick={() => setBankDuration(term.rounds)}
+                style={{ flex: 1, padding: '4px 6px', fontSize: 11 }}
+              >
+                {term.rounds}回合 · {Math.round(term.interestRate * 100)}%
+              </button>
+            ))}
+          </div>
           <div className="loan-repay-preview">
-            到期需还 {formatMoney(Math.floor(bankAmount * (1 + INTEREST_RATE)))}
+            到期需还 {formatMoney(Math.floor(bankAmount * (1 + selectedBankTerm.interestRate)))}
           </div>
           <button
             type="button"
@@ -249,6 +268,12 @@ function LoanDetails({
           <div className="loan-row">
             <span className="loan-label">利息</span>
             <span className="loan-value">{Math.round(loan.interestRate * 100)}%</span>
+          </div>
+        )}
+        {loan.durationRounds && (
+          <div className="loan-row">
+            <span className="loan-label">期限</span>
+            <span className="loan-value">{loan.durationRounds} 回合</span>
           </div>
         )}
         <div className="loan-row">

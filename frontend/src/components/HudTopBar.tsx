@@ -67,6 +67,11 @@ export function HudTopBar({ player, leaderboard }: Props) {
   const sorted = [...leaderboard].sort((a, b) => b.points - a.points);
   const rank = sorted.findIndex((t) => t.isPlayer) + 1;
   const playerPts = sorted.find((t) => t.isPlayer)?.points ?? 0;
+  const salaryHint = player.salaryTracker && player.team
+    ? `战队收入：+${player.team.monthlySalary}K/月；距上次发薪 ${player.round - player.salaryTracker.lastPayRound} 回合，周期 ${player.salaryTracker.payCycle} 回合/次`
+    : player.team
+      ? `战队收入：+${player.team.monthlySalary}K/月`
+      : undefined;
 
   const derived = computeDerivedStats(player.stats);
   const vol = player.volatile ?? { feel: 0, tilt: 0, fatigue: 0 };
@@ -87,7 +92,7 @@ export function HudTopBar({ player, leaderboard }: Props) {
 
       {/* 战队信息 */}
       {player.team ? (
-        <span className="hud-stage-tag" style={{ background: 'var(--bg-3)', color: 'var(--up)' }}>
+        <span className="hud-stage-tag" style={{ background: 'var(--bg-3)', color: 'var(--up)' }} title={salaryHint}>
           [{player.team.tag}] +{player.team.monthlySalary}K/月
         </span>
       ) : (

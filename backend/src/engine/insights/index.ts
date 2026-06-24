@@ -1,5 +1,6 @@
 import type { GameSession } from '../../types.js';
 import { buildActionRecommendations } from './actionRecommendation.js';
+import { buildCalendarBlocks } from './calendarBlocks.js';
 import { buildBlockerInsights, buildEventExplanations } from './eventReason.js';
 import { buildOnboardingInsight } from './onboardingInsight.js';
 import { buildProgressionMilestones, buildProgressionOpportunities, buildPromotionInsight, buildStageInsight } from './progressionInsight.js';
@@ -53,6 +54,7 @@ export function buildCareerInsight(session: GameSession, playerPoints = 0): Care
   const milestones = buildProgressionMilestones(session.player, playerPoints);
   const promotion = buildPromotionInsight(session.player, milestones, playerPoints);
   const opportunities = buildProgressionOpportunities(session.player, playerPoints);
+  const calendarBlocks = buildCalendarBlocks(session, opportunities, playerPoints);
   const risks = buildRiskInsights(session.player);
   const recommendations = buildActionRecommendations(session, milestones, risks);
   const blockers = buildBlockerInsights(session);
@@ -70,6 +72,7 @@ export function buildCareerInsight(session: GameSession, playerPoints = 0): Care
     recommendations,
     milestones,
     opportunities,
+    calendarBlocks,
     blockers,
     explanations,
     compatibility: {

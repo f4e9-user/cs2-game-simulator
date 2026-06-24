@@ -2,9 +2,39 @@ import type { Loan, Player } from '../types.js';
 import { applyMoneyTransaction } from './money.js';
 import { uuid } from './utils.js';
 
-export function applyForLoan(player: Player, amount: number): { success: boolean; message?: string; loan?: Loan } {
+const BANK_LOAN_TERMS: Record<number, number> = {
+  4: 0.10,
+  8: 0.18,
+  12: 0.28,
+};
+
+function normalizeBankLoanTerm(durationRounds?: number): number | null {
+  if (durationRounds === undefined) return 12;
+  if (!Number.isInteger(durationRounds)) return null;
+  if (Object.prototype.hasOwnProperty.call(BANK_LOAN_TERMS, durationRounds)) return durationRounds;
+  return null;
+}
+
+function bankLoanInterestRate(durationRounds: number): number {
+  switch (durationRounds) {
+    case 4: return 0.10;
+    case 8: return 0.18;
+    case 12: return 0.28;
+    default: return 0.10;
+  }
+}
+
+export function applyForLoan(
+  player: Player,
+  amount: number,
+  durationRounds?: number,
+): { success: boolean; message?: string; loan?: Loan } {
   if (!Number.isInteger(amount) || amount < 20 || amount > 100) {
     return { success: false, message: '借款金额必须是 20K 到 100K 的整数' };
+  }
+  const normalizedTerm = normalizeBankLoanTerm(durationRounds);
+  if (normalizedTerm === null) {
+    return { success: false, message: '还款期限必须是 4、8、12 回合之一' };
   }
   if (player.stage === 'rookie') {
     return { success: false, message: '至少进入青训阶段后才能申请贷款' };
@@ -21,10 +51,11 @@ export function applyForLoan(player: Player, amount: number): { success: boolean
     id: uuid(),
     source: 'bank',
     principal: amount,
-    interestRate: 0.10,
+    interestRate: bankLoanInterestRate(normalizedTerm),
+    durationRounds: normalizedTerm,
     remainingPrincipal: amount,
     issuedRound: player.round,
-    dueRound: player.round + 12,
+    dueRound: player.round + normalizedTerm,
     paid: false,
     defaulted: false,
   };
