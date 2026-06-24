@@ -45,6 +45,20 @@ function pendingMatch(): PendingMatch {
   };
 }
 
+function awayPendingMatch(): PendingMatch {
+  return {
+    tournamentId: 'y1-c-02',
+    tier: 'c',
+    name: 'Community Open Hangzhou',
+    displayName: 'Community Open Hangzhou 2026',
+    progressionTier: 'c',
+    entryType: 'direct_signup',
+    resolveYear: 1,
+    resolveWeek: 6,
+    stageIndex: 0,
+  };
+}
+
 describe('tournament context events', () => {
   it('picks tournament context before default prep during pending match', () => {
     const t = getTournament('y1-c-01');
@@ -52,6 +66,15 @@ describe('tournament context events', () => {
     const pm = pendingMatch();
     const p = {
       ...player(),
+      team: {
+        clubId: 'club-test-na',
+        name: 'NA Test',
+        tag: 'NAT',
+        region: 'North America',
+        tier: 'youth' as const,
+        monthlySalary: 10,
+        joinedRound: 1,
+      },
       pendingMatch: pm,
     };
     p.tournamentContext = createTournamentContext(p, pm, t!);
@@ -71,6 +94,7 @@ describe('tournament context events', () => {
     const pm = pendingMatch();
     const p = {
       ...player(),
+      housing: { tier: 'shared-housing' as const, movedAtRound: 0, cityId: 'regional-hub' as const },
       pendingMatch: pm,
     };
     p.tournamentContext = {
@@ -105,6 +129,15 @@ describe('tournament context events', () => {
     const pm = pendingMatch();
     const p = {
       ...player(),
+      team: {
+        clubId: 'club-test-na',
+        name: 'NA Test',
+        tag: 'NAT',
+        region: 'North America',
+        tier: 'youth' as const,
+        monthlySalary: 10,
+        joinedRound: 1,
+      },
       pendingMatch: pm,
     };
     p.tournamentContext = {
@@ -126,6 +159,30 @@ describe('tournament context events', () => {
       'physical-prep',
       'mental-reset',
     ]);
+  });
+
+  it('injects travel recovery context events before baseline prep for cross-region tournaments', () => {
+    const t = getTournament('y1-c-02')!;
+    const pm = awayPendingMatch();
+    const p = {
+      ...player(),
+      housing: { tier: 'shared-housing' as const, movedAtRound: 0, cityId: 'local-city' as const },
+      pendingMatch: pm,
+    };
+    p.tournamentContext = {
+      ...createTournamentContext(p, pm, t),
+      phase: 'pre-match',
+      consumedContextEventIds: ['tournament-context-goal-setting'],
+    };
+
+    const event = pickEvent({
+      player: p,
+      recentEventIds: [],
+      rng: () => 0.1,
+    });
+
+    expect(event?.type).toBe('tournament-context');
+    expect(event?.id).toBe('tournament-context-travel-hotel-noise');
   });
 
   it('enqueues and consumes ai tournament-context events', () => {

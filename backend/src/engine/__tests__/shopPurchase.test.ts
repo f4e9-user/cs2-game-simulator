@@ -193,4 +193,67 @@ describe('applyShopPurchase', () => {
     const acted = applyAction({ ...session, player: purchased.player }, 'action-fitness');
     expect(acted.player.buffs.some((buff) => buff.id === 'painkiller-cover')).toBe(false);
   });
+
+  it('applies semantic side effects for consumables when their risk events trigger', () => {
+    const player = initPlayer({
+      name: 'TestPlayer',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    player.stats.money = 100;
+    player.stress = 20;
+    player.volatile.fatigue = 40;
+    player.volatile.feel = 3;
+
+    const session = createSession(player, 1);
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+    try {
+      const drink = applyShopPurchase(session, 'energy-drink');
+      const meal = applyShopPurchase({ ...session, player: drink.player }, 'meal-kit');
+      const painkiller = applyShopPurchase({ ...session, player: meal.player }, 'painkiller');
+
+      expect(drink.shopNarrativePositive).toBe(false);
+      expect(drink.shopNarrative).toBeDefined();
+      expect(meal.shopNarrativePositive).toBe(false);
+      expect(meal.shopNarrative).toBeDefined();
+      expect(painkiller.shopNarrativePositive).toBe(false);
+      expect(painkiller.shopNarrative).toBeDefined();
+      expect(drink.shopBuffLabelsAdded).toEqual(expect.arrayContaining(['体感反弹']));
+      expect(drink.player.buffs).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'caffeine-rebound', stressGainMultiplier: 1.2, remainingUses: 1 }),
+      ]));
+      expect(meal.player.stats.money).toBe(drink.player.stats.money - 5);
+      expect(painkiller.shopBuffLabelsAdded).toEqual(expect.arrayContaining(['止痛维持', '手感透支']));
+      expect(painkiller.player.buffs).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'painkiller-overdraw', growthMultiplier: 0.85, remainingUses: 1 }),
+      ]));
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
+  it('sets an expiry for consumable dependency side-effect tags', () => {
+    const player = initPlayer({
+      name: 'TestPlayer',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    player.stats.money = 100;
+    player.round = 10;
+
+    const session = createSession(player, 1);
+    const rolls = [0.3, 0];
+    const originalRandom = Math.random;
+    Math.random = () => rolls.shift() ?? 1;
+    try {
+      const result = applyShopPurchase(session, 'painkiller');
+
+      expect(result.player.tags).toContain('painkiller-dependence-risk');
+      expect(result.player.tagExpiry?.['painkiller-dependence-risk']).toBe(18);
+      expect(result.shopTagsAdded).toEqual(expect.arrayContaining(['painkiller-dependence-risk']));
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
 });

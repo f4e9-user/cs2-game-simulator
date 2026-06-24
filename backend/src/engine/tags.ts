@@ -26,6 +26,7 @@ export const DEFAULT_TAG_LIFETIME_ROUNDS: Partial<Record<string, number>> = {
   'injury-warning': 12,
   'injury-limited': 12,
   'forced-rest': 12,
+  'painkiller-dependence-risk': 8,
   'broke': 12,
   'veteran': 72,
   'star-player': 72,

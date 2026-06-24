@@ -71,6 +71,37 @@ export const TRAITS: Trait[] = [
       '网吧二楼的烟味泡面味是他最熟悉的环境。没有教练、没有战术板、没有人体工学椅——只有一台破电脑和不服输的狠劲。从局域网赛到线上天梯，他靠野路子杀出了一条路。',
     modifiers: { mentality: 2, experience: 1, constitution: 1 },
     tags: ['streetwise', 'grinder'],
+    conflictsWith: ['middle-class-family', 'upper-class-family'],
+  },
+  {
+    id: 'hardship-kid',
+    name: '寒门少年',
+    description:
+      '家里能给的支持很少，很多时候连网费和路费都要自己算着来。他比别人更早明白钱不是数字，而是下一周还能不能继续打下去。',
+    modifiers: { mentality: 2, constitution: 2 },
+    tags: ['hardship'],
+    openingMoney: 5,
+    conflictsWith: ['middle-class-family', 'upper-class-family'],
+  },
+  {
+    id: 'middle-class-family',
+    name: '中产家庭',
+    description:
+      '家里不算大富大贵，但愿意给他一台稳定的电脑和一段试错时间。追梦仍然有成本，只是第一步不用从筹网费开始。',
+    modifiers: { mentality: -1, constitution: -1 },
+    tags: ['family-backing'],
+    openingMoney: 50,
+    conflictsWith: ['hardship-kid', 'upper-class-family', 'scene-kid'],
+  },
+  {
+    id: 'upper-class-family',
+    name: '优渥家庭',
+    description:
+      '设备、训练环境和早期生活费都有人兜底。他可以更早接触好资源，但也更容易被人质疑是不是只靠家里铺路。',
+    modifiers: { mentality: -2, constitution: -2 },
+    tags: ['family-backing', 'affluent'],
+    openingMoney: 100,
+    conflictsWith: ['hardship-kid', 'middle-class-family', 'scene-kid'],
   },
   {
     id: 'fragile-star',

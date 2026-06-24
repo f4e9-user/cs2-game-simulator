@@ -3,12 +3,19 @@ import { BACKGROUNDS, getBackground } from '../data/backgrounds.js';
 import { TRAITS, getTrait } from '../data/traits.js';
 import {
   ACTIONS,
+  HOME_FACILITY_DEFINITIONS,
+  HOUSING_CITY_PROFILES,
+  HOUSING_TIERS,
   SHOP_ITEMS,
+  WEEKLY_LIVING_EXPENSE,
   applyAction,
   applyChoice,
   applyClubRequest,
   applyForLoan,
   applyFriendLoan,
+  applyHomeAssetAction,
+  applyHomeFacilityUpgrade,
+  applyHousingChange,
   applyShopPurchase,
   applyTeamMeeting,
   applyTeamPractice,
@@ -32,18 +39,12 @@ import { applyMoneyTransaction } from '../engine/money.js';
 import { canSignUpForTournament, playerTeamMeetsRequirement, tournamentDirectEntryBypassApplies } from '../engine/tournamentEligibility.js';
 import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime, resolveClubDisplayInfo } from '../engine/worldClubs.js';
 import { createTournamentContext } from '../engine/tournamentContext.js';
-import {
-  derivePlayerIdentityScores,
-  deriveTeammateIdentityScores,
-  findTeamCaller,
-  findTeamStar,
-} from '../engine/teamIdentity.js';
-import { canCrystallizeRole, deriveRolePressure, normalizeRoleTransition } from '../engine/roleTransition.js';
+import { buildRoleDebug, buildTeamIdentityDebug } from '../engine/debugPayload.js';
 import { finalizeGameSessionCareerSnapshot } from '../engine/careerSnapshot.js';
 import { CLUBS, clubsForStage, getClub } from '../data/clubs.js';
 import { buildLeaderboard } from '../data/leaderboard.js';
 import { getClubProfile } from '../data/clubProfiles.js';
-import { ROLE_PROFILES, roleFitScore } from '../data/roleProfiles.js';
+import { ROLE_PROFILES } from '../data/roleProfiles.js';
 import { getEventById } from '../data/events/index.js';
 import {
   buildYearTournaments,
@@ -78,8 +79,7 @@ import {
   releaseActiveAiEvent,
   type AiEventCacheEnvelope,
 } from '../ai/eventCache.js';
-import type { ClubApplicationSummary, ClubRuntimeState, ClubStoryline, ClubTier, Env, EventDef, GameSession, MatchStats, Player, PlayerTeam, Stats, TeamIdentityDebug } from '../types.js';
-import type { RoleDebug } from '../types.js';
+import type { ClubApplicationSummary, ClubRuntimeState, ClubStoryline, ClubTier, Env, EventDef, GameSession, HomeAssetActionId, HomeFacilityId, HousingTierId, MatchStats, Player, PlayerTeam, Stats } from '../types.js';
 
 const AI_EVENT_CACHE_TTL_SECONDS = 43200;
 const TEAM_ONBOARDING_EVENTS = {
@@ -220,49 +220,6 @@ function refreshQualificationExpiry(player: Player): Player {
     teamQualificationSlots: activeTeam.slots,
     qualificationSlotBatches: activePlayer.batches,
     teamQualificationSlotBatches: activeTeam.batches,
-  };
-}
-
-function buildTeamIdentityDebug(player: Player): TeamIdentityDebug {
-  const roster = player.roster ?? [];
-  return {
-    player: {
-      visibleIdentity: player.visibleTeamIdentity,
-      sinceRound: player.teamIdentitySinceRound,
-      scores: derivePlayerIdentityScores(player, roster),
-    },
-    teammates: roster.map((tm) => ({
-      id: tm.id,
-      name: tm.name,
-      visibleIdentity: tm.visibleIdentity,
-      sinceRound: tm.identitySinceRound,
-      scores: deriveTeammateIdentityScores(tm, roster),
-    })),
-    caller: findTeamCaller(player, roster),
-    star: findTeamStar(player, roster),
-  };
-}
-
-function buildRoleDebug(player: Player, history: GameSession['history']): RoleDebug {
-  const fitScores = {
-    IGL: roleFitScore(player, 'IGL'),
-    AWPer: roleFitScore(player, 'AWPer'),
-    Entry: roleFitScore(player, 'Entry'),
-    Support: roleFitScore(player, 'Support'),
-    Lurker: roleFitScore(player, 'Lurker'),
-  };
-  const pressure = deriveRolePressure(player, history);
-  const crystallizeThreshold = 70;
-  const crystallizeReady = canCrystallizeRole(player, history);
-  return {
-    fitScores,
-    pressure: Math.max(0, Math.min(100, pressure)),
-    crystallizeReady,
-    crystallizeThreshold,
-    activeRole: player.activeRole,
-    preferredRole: player.preferredRole,
-    roleTransition: normalizeRoleTransition(player.roleTransition),
-    activeRoleRounds: player.activeRoleRounds,
   };
 }
 
@@ -1132,6 +1089,96 @@ app.post('/game/:sessionId/pawn', async (c) => {
   }
 });
 
+app.post('/game/:sessionId/housing', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { tierId } = body ?? {};
+  if (typeof tierId !== 'string' || !tierId) {
+    return c.json({ error: 'tierId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
+
+  try {
+    const result = applyHousingChange(session.player, tierId as HousingTierId);
+    if (!result.success || !result.player) {
+      return c.json({ error: result.message }, 400);
+    }
+    session.player = result.player;
+    session.updatedAt = new Date().toISOString();
+    await saveFinalizedSession(storage, session);
+    return c.json({ player: session.player, message: result.message });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+app.post('/game/:sessionId/home-facility', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { facilityId } = body ?? {};
+  if (typeof facilityId !== 'string' || !facilityId) {
+    return c.json({ error: 'facilityId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
+
+  try {
+    const result = applyHomeFacilityUpgrade(session.player, facilityId as HomeFacilityId);
+    if (!result.success || !result.player) {
+      return c.json({ error: result.message }, 400);
+    }
+    session.player = result.player;
+    session.updatedAt = new Date().toISOString();
+    await saveFinalizedSession(storage, session);
+    return c.json({ player: session.player, message: result.message });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
+app.post('/game/:sessionId/home-asset', async (c) => {
+  const id = c.req.param('sessionId');
+  const body = await c.req.json().catch(() => ({}));
+  const { actionId } = body ?? {};
+  if (typeof actionId !== 'string' || !actionId) {
+    return c.json({ error: 'actionId 必填' }, 400);
+  }
+
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (getSessionPhase(session) !== 'action') {
+    return c.json({ error: '当前不在行动阶段' }, 400);
+  }
+
+  try {
+    const result = applyHomeAssetAction(session.player, actionId as HomeAssetActionId);
+    if (!result.success || !result.player) {
+      return c.json({ error: result.message }, 400);
+    }
+    session.player = result.player;
+    session.updatedAt = new Date().toISOString();
+    await saveFinalizedSession(storage, session);
+    return c.json({ player: session.player, message: result.message });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, 400);
+  }
+});
+
 // 贷款端点
 app.post('/game/:sessionId/loan', async (c) => {
   const id = c.req.param('sessionId');
@@ -1195,6 +1242,12 @@ app.post('/game/:sessionId/friend-loan', async (c) => {
 // 获取行动和商品列表（前端初始化用）
 app.get('/game/meta/actions', (c) => c.json({ actions: ACTIONS }));
 app.get('/game/meta/shop', (c) => c.json({ items: SHOP_ITEMS }));
+app.get('/game/meta/housing', (c) => c.json({
+  tiers: HOUSING_TIERS,
+  homeFacilities: HOME_FACILITY_DEFINITIONS,
+  cityProfiles: HOUSING_CITY_PROFILES,
+  weeklyLivingExpense: WEEKLY_LIVING_EXPENSE,
+}));
 app.get('/game/meta/clubs', (c) => c.json({ clubs: CLUBS }));
 app.get('/game/meta/role-profiles', (c) => c.json({ roleProfiles: ROLE_PROFILES }));
 

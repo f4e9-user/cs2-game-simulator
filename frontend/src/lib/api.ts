@@ -8,6 +8,12 @@ import type {
   GameEvent,
   GameSession,
   EventSequence,
+  HomeAssetActionId,
+  HomeFacilityDefinition,
+  HomeFacilityId,
+  HousingCityProfile,
+  HousingTier,
+  HousingTierId,
   LeaderboardTeam,
   Loan,
   MatchStats,
@@ -110,6 +116,8 @@ export const api = {
     }),
   getSession: (sessionId: string) =>
     request<GameSession>(`/api/game/${sessionId}`),
+  getDebugSession: (sessionId: string) =>
+    request<GameSession>(`/api/debug/sessions/${sessionId}`),
   listDebugSessions: (limit = 200) =>
     request<{ sessions: SessionSummary[]; total: number }>(`/api/debug/sessions?limit=${limit}`),
   getDebugAiStatus: () =>
@@ -179,6 +187,26 @@ export const api = {
     ),
   listShopItems: () =>
     request<{ items: ShopItem[] }>('/api/game/meta/shop'),
+  listHousingTiers: () =>
+    request<{ tiers: HousingTier[]; homeFacilities: HomeFacilityDefinition[]; cityProfiles: HousingCityProfile[]; weeklyLivingExpense: number }>('/api/game/meta/housing'),
+  changeHousing: (sessionId: string, tierId: HousingTierId, apiToken?: string) =>
+    request<{ player: Player; message: string }>(
+      `/api/game/${sessionId}/housing`,
+      { method: 'POST', body: JSON.stringify({ tierId }) },
+      apiToken,
+    ),
+  upgradeHomeFacility: (sessionId: string, facilityId: HomeFacilityId, apiToken?: string) =>
+    request<{ player: Player; message: string }>(
+      `/api/game/${sessionId}/home-facility`,
+      { method: 'POST', body: JSON.stringify({ facilityId }) },
+      apiToken,
+    ),
+  runHomeAssetAction: (sessionId: string, actionId: HomeAssetActionId, apiToken?: string) =>
+    request<{ player: Player; message: string }>(
+      `/api/game/${sessionId}/home-asset`,
+      { method: 'POST', body: JSON.stringify({ actionId }) },
+      apiToken,
+    ),
   listClubs: () =>
     request<{ clubs: Club[] }>('/api/game/meta/clubs'),
   getRoleProfiles: () =>

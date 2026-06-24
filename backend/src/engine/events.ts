@@ -12,6 +12,7 @@ import { deriveRolePressure } from './roleTransition.js';
 import type { AiEventPickCandidate } from '../ai/eventCache.js';
 import type { EventDef, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier, LeaderboardTeam, TeamIdentity } from '../types.js';
 import { pickTournamentContextEvent } from './tournamentContext.js';
+import { effectiveHousingEventWeightMultiplier, housingEventTags } from './housing.js';
 
 export interface EventContext {
   player: Player;
@@ -167,6 +168,7 @@ function dynamicTags(player: Player): string[] {
 
   // ── 信用值 tag ────────────────────────────────────────────────
   if ((player.creditScore ?? 100) < 50) out.push('low-credit');
+  out.push(...housingEventTags(player));
 
   // ── 家人危机触发 tag ──────────────────────────────────────────
   const familyCrisisCd = player.tagExpiry?.['family-crisis-cd'];
@@ -259,6 +261,7 @@ function stateWeight(e: EventDef, player: Player): number {
     if (e.type === 'cheat') w *= 1.5;
   }
   if (player.stats.constitution <= 2 && e.type === 'life') w *= 1.4;
+  if (e.type === 'life') w *= effectiveHousingEventWeightMultiplier(player);
   if (player.stress >= 60 && e.requireTags?.includes('stressed')) w *= 2;
   // Force broadcast events to dominate when in Major aftermath.
   if (e.requireTags?.includes('major-broadcast')) w *= 5;
@@ -453,7 +456,13 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   }
 
   if ((player.restRounds ?? 0) > 0) {
-    const restPool = pool.filter((e) => e.type === 'rest');
+    const restPool = pool.filter((e) =>
+      e.type === 'rest' &&
+      e.stages.includes(player.stage) &&
+      !recentEventIds.includes(e.id) &&
+      !e.requireTags?.some((t) => !synthTags.has(t)) &&
+      !e.forbidTags?.some((t) => synthTags.has(t))
+    );
     if (restPool.length > 0) return weightedPick(restPool, rng, () => 1);
   }
 

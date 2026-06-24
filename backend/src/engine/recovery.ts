@@ -1,13 +1,18 @@
 import type { ChoiceDef, Player } from '../types.js';
 import { applyMoneyTransaction } from './money.js';
 import { processLoanRepayment } from './loan.js';
+import { processLivingEconomy } from './housing.js';
 
 export function processRecoverySystems(
   player: Player,
   eventId: string,
   effects?: string[],
   choiceDef?: ChoiceDef,
+  options?: { processLivingEconomy?: boolean },
 ): void {
+  if (options?.processLivingEconomy) {
+    processLivingEconomy(player, effects);
+  }
   processLoanRepayment(player, effects);
 
   const isTeamBailout = eventId.startsWith('bailout-team-');

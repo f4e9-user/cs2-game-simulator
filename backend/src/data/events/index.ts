@@ -18,6 +18,7 @@ import { BAILOUT_EVENTS } from './bailout.js';
 import { CHAIN_EVENTS } from './chains.js';
 import { SKIN_EVENTS } from './skins.js';
 import { AGENT_EVENTS } from './agent.js';
+import { HOUSING_EVENTS } from './housing.js';
 import { TOURNAMENT_CONTEXT_EVENTS } from './tournamentContext.js';
 
 export { PROMOTION_EVENTS };
@@ -76,6 +77,7 @@ registry.register('bailout', BAILOUT_EVENTS);
 registry.register('chains', CHAIN_EVENTS);
 registry.register('skins', SKIN_EVENTS);
 registry.register('agent', AGENT_EVENTS);
+registry.register('life', HOUSING_EVENTS);
 registry.register('tournament-context', TOURNAMENT_CONTEXT_EVENTS);
 
 export const EVENT_POOL: EventDef[] = registry.getAll();

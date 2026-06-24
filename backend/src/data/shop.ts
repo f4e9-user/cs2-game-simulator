@@ -46,6 +46,36 @@ export const SHOP_ITEMS: ShopItem[] = [
     priceMoney: 3, // 3K
     cooldownRounds: 0,
     effect: { fatigueDelta: -14 },
+    negativeEvents: [
+      {
+        chance: 0.2,
+        effect: {
+          buffAdd: {
+            id: 'caffeine-rebound',
+            label: '体感反弹',
+            actionTag: 'all',
+            stressGainMultiplier: 1.2,
+            remainingUses: 1,
+            consumeOn: 'stress',
+          },
+        },
+        narrative: '咖啡因把疲劳压下去了，但身体还在兴奋边缘，下一次压力上升会更明显。',
+      },
+      {
+        chance: 0.15,
+        effect: {
+          buffAdd: {
+            id: 'sleep-disrupted',
+            label: '睡眠紊乱',
+            actionTag: 'all',
+            fatigueGainMultiplier: 1.15,
+            remainingUses: 1,
+            consumeOn: 'fatigue',
+          },
+        },
+        narrative: '这罐饮料来得太晚，短期顶住了困意，但接下来一次疲劳累积会更重。',
+      },
+    ],
   },
   {
     id: 'meal-kit',
@@ -55,6 +85,27 @@ export const SHOP_ITEMS: ShopItem[] = [
     priceMoney: 3, // 3K
     cooldownRounds: 0,
     effect: { fatigueDelta: -10, stressDelta: -4 },
+    negativeEvents: [
+      {
+        chance: 0.15,
+        effect: { moneyDelta: -2 },
+        narrative: '这一单最后又加了配送费和小食，便宜恢复变成了一笔额外开销。',
+      },
+      {
+        chance: 0.15,
+        effect: {
+          buffAdd: {
+            id: 'stomach-load',
+            label: '胃口负担',
+            actionTag: 'all',
+            fatigueGainMultiplier: 1.1,
+            remainingUses: 1,
+            consumeOn: 'fatigue',
+          },
+        },
+        narrative: '吃得有点顶，恢复是恢复了，但下一次身体负荷会更容易累上来。',
+      },
+    ],
   },
   {
     id: 'painkiller',
@@ -74,6 +125,27 @@ export const SHOP_ITEMS: ShopItem[] = [
         consumeOn: 'fatigue',
       },
     },
+    negativeEvents: [
+      {
+        chance: 0.25,
+        effect: {
+          buffAdd: {
+            id: 'painkiller-overdraw',
+            label: '手感透支',
+            actionTag: 'all',
+            growthMultiplier: 0.85,
+            remainingUses: 1,
+            consumeOn: 'growth',
+          },
+        },
+        narrative: '药效压住了不适，但你对身体反馈的判断变钝了，下一次成长收益会被透支。',
+      },
+      {
+        chance: 0.15,
+        effect: { tagAdd: 'painkiller-dependence-risk' },
+        narrative: '你开始觉得不吃药就没法安心训练，这种依赖感短期内会留在脑子里。',
+      },
+    ],
   },
 
   // ── 服务类（每周每种限购 1 次；深度恢复服务另有 4-8 回合冷却）───────

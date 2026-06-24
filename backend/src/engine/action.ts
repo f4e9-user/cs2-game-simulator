@@ -120,6 +120,28 @@ function setInjuryState(player: Player, next: InjuryStateTag | null): void {
   }
 }
 
+function describeInjuryCause(player: Player, context: 'routine' | 'match'): string {
+  const fatigue = player.volatile?.fatigue ?? 0;
+  const constitution = player.stats.constitution ?? 0;
+  const reasons: string[] = [];
+
+  if (context === 'match' && fatigue >= 70) {
+    reasons.push('比赛强度过高');
+  } else if (fatigue >= 82) {
+    reasons.push('疲劳过高');
+  } else if (fatigue >= 70) {
+    reasons.push('疲劳偏高');
+  }
+
+  if (constitution <= 4) {
+    reasons.push('体质过低');
+  } else if (constitution <= 6) {
+    reasons.push('体质偏低');
+  }
+
+  return reasons.length > 0 ? reasons.join('；') : '身体负荷累积过高';
+}
+
 export function applyInjuryRiskTick(
   player: Player,
   context: 'routine' | 'match' | 'rest' | 'shop',
@@ -150,31 +172,35 @@ export function applyInjuryRiskTick(
     return next;
   }
 
-  const highStrain =
-    fatigue >= 82 ||
-    constitution <= 4 ||
-    (context === 'match' && fatigue >= 70);
-  const mediumStrain =
-    fatigue >= 70 ||
-    constitution <= 6 ||
-    context === 'match';
+  const constitutionRiskBias =
+    constitution <= 2 ? 20 :
+    constitution <= 4 ? 15 :
+    constitution <= 6 ? 10 :
+    constitution <= 8 ? 5 :
+    0;
+  const strainLoad = fatigue + constitutionRiskBias + (context === 'match' ? 10 : 0);
+  const highStrain = strainLoad >= 96;
+  const mediumStrain = strainLoad >= 84;
 
   if (!mediumStrain) return next;
+  const warningLabel = player.team ? '队医警告' : '伤病警告';
 
   if (current === 'injury-limited' && highStrain) {
     next.restRounds = Math.max(next.restRounds ?? 0, 2);
     setInjuryState(next, 'forced-rest');
     if (!next.tags.includes('injured')) next.tags.push('injured');
-    effects.push('强制休养：伤病风险升级');
+    effects.push(`强制休养：伤病风险升级（${describeInjuryCause(next, context)}）`);
   } else if (current === 'injury-warning' && highStrain) {
     setInjuryState(next, 'injury-limited');
-    effects.push('伤病状态受限');
+    effects.push(`伤病状态受限（${describeInjuryCause(next, context)}）`);
   } else if (current === 'minor-injury-risk' && highStrain) {
     setInjuryState(next, 'injury-warning');
-    effects.push('队医警告：继续硬练可能伤停');
+    effects.push(`${warningLabel}：继续硬练可能伤停（${describeInjuryCause(next, context)}）`);
   } else if (!current && mediumStrain) {
     setInjuryState(next, highStrain ? 'injury-warning' : 'minor-injury-risk');
-    effects.push(highStrain ? '队医警告：身体风险上升' : '轻微伤病风险');
+    effects.push(highStrain
+      ? `${warningLabel}：身体风险上升（${describeInjuryCause(next, context)}）`
+      : `轻微伤病风险（${describeInjuryCause(next, context)}）`);
   }
 
   return next;
@@ -348,6 +374,7 @@ export function applyAction(
     comboAddedLabels: roundCombos
       .filter((combo) => !consumedRoundCombos.some((before) => before.id === combo.id))
       .map((combo) => combo.label),
+    statusEffects: injuryEffects.length > 0 ? injuryEffects : undefined,
   };
 
   return {

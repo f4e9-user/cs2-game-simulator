@@ -4,6 +4,8 @@ import { buildLeaderboard } from '../data/leaderboard.js';
 import { LlmLogger } from '../ai/logger.js';
 import { makeStorage } from '../storage/index.js';
 import { createClubRuntimeState } from '../engine/worldClubs.js';
+import { buildSessionPayload } from '../engine/insights/index.js';
+import { buildRoleDebug, buildTeamIdentityDebug } from '../engine/debugPayload.js';
 import {
   aiEventCacheKey,
   aiEventsFromCache,
@@ -222,6 +224,24 @@ app.post('/debug/:sessionId', async (c) => {
   await storage.sessions.save(finalizeGameSessionCareerSnapshot(session));
 
   return c.json({ player: session.player, leaderboard: session.leaderboard });
+});
+
+app.get('/debug/sessions/:sessionId', async (c) => {
+  if (!isLocalDebugRequest(c.req.url)) {
+    return c.json({ error: 'not found' }, 404);
+  }
+
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  return c.json(buildSessionPayload(session, {
+    phase: session.phase,
+    debugTeamIdentity: buildTeamIdentityDebug(session.player),
+    debugRole: buildRoleDebug(session.player, session.history),
+    includeDebugFields: true,
+  }));
 });
 
 app.get('/debug/sessions', async (c) => {

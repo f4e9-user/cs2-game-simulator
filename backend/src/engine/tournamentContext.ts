@@ -10,6 +10,7 @@ import type {
   TournamentContextMatchResult,
   TournamentContextPhase,
 } from '../types.js';
+import { pendingAwayTournamentTravelContext } from './travel.js';
 
 export function createTournamentContext(
   player: Player,
@@ -286,6 +287,12 @@ function tournamentContextEventMatches(
   if (event.minStress !== undefined && (player.stress ?? 0) < event.minStress) return false;
   if (event.minFatigue !== undefined && (player.volatile?.fatigue ?? 0) < event.minFatigue) return false;
   if (event.maxTeamTrust !== undefined && (player.teamTrust ?? 0) > event.maxTeamTrust) return false;
+  if (event.travelRequired) {
+    const travel = pendingAwayTournamentTravelContext(player);
+    if (!travel) return false;
+    if (event.travelRequired === 'city' && !travel.hasCityVenue) return false;
+    if (event.travelRequired === 'cross-region' && travel.distance !== 'cross-region') return false;
+  }
   return true;
 }
 
@@ -299,6 +306,7 @@ function priorityForEvent(
   if (phase === 'post-match') priority += 2;
   if (event.requireChampion) priority += 3;
   if (event.requireMatchResult) priority += 2;
+  if (event.travelRequired) priority += 2;
   return priority;
 }
 

@@ -121,6 +121,7 @@ function stageIndex(stage: Stage): number {
 }
 
 const AP_MAX = 100;
+const RECOVERY_ACTION_IDS = new Set(['action-rest-day', 'action-meditation', 'action-vacation']);
 
 interface Props {
   sessionId: string;
@@ -139,6 +140,78 @@ function ApBar({ ap }: { ap: number }) {
         <div className="ap-fill" style={{ width: `${pct}%` }} />
       </div>
       <span className="ap-label">{ap} AP</span>
+    </div>
+  );
+}
+
+function forcedRestRiskReason(player: Player, actionId: string): string | null {
+  if (RECOVERY_ACTION_IDS.has(actionId)) return null;
+  if (!player.tags.includes('injury-limited')) return null;
+
+  const fatigue = player.volatile?.fatigue ?? 0;
+  const constitution = player.stats.constitution ?? 0;
+  const reasons: string[] = [];
+  if (fatigue >= 82) reasons.push('疲劳过高');
+  if (constitution <= 4) reasons.push('体质过低');
+  if (reasons.length === 0) return null;
+  return reasons.join('；');
+}
+
+function ActionForcedRestConfirmModal({
+  action,
+  reason,
+  onConfirm,
+  onCancel,
+}: {
+  action: ActionMeta;
+  reason: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'var(--danger)',
+            marginBottom: 4,
+          }}
+        >
+          伤病风险
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--fg)', marginBottom: 12 }}>
+          确认执行 {action.label}
+        </div>
+
+        <div
+          style={{
+            fontSize: 13,
+            color: 'var(--danger)',
+            background: 'rgba(255, 94, 94, 0.08)',
+            padding: '8px 10px',
+            borderRadius: 6,
+            marginBottom: 14,
+            lineHeight: 1.55,
+          }}
+        >
+          当前已经是伤病受限状态。继续进行这项非恢复行动后，会立即进入强制休养。
+          <br />
+          原因：{reason}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="ghost-button" onClick={onCancel} style={{ flex: 1 }}>
+            取消
+          </button>
+          <button type="button" className="primary-button" onClick={onConfirm} style={{ flex: 1 }}>
+            仍然执行
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -201,6 +274,7 @@ export function ActionResultCard({ result, moneyChange }: { result: ActionResult
 export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActionResult, disabledReason }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [forcedRestConfirm, setForcedRestConfirm] = useState<{ action: ActionMeta; reason: string } | null>(null);
   const apiToken = useGameStore((s) => s.apiToken);
 
   const ap = player.actionPoints ?? 0;
@@ -213,6 +287,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
     player.pendingMatch.resolveWeek === player.week;
 
   const doAction = async (actionId: string) => {
+    setForcedRestConfirm(null);
     setBusyId(actionId);
     setError(null);
     const prevMoney = player.stats.money;
@@ -226,6 +301,15 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
     } finally {
       setBusyId(null);
     }
+  };
+
+  const requestAction = (action: ActionMeta) => {
+    const riskReason = forcedRestRiskReason(player, action.id);
+    if (riskReason) {
+      setForcedRestConfirm({ action, reason: riskReason });
+      return;
+    }
+    void doAction(action.id);
   };
 
   const panelDisabledReason = !enabled
@@ -273,7 +357,7 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
                 type="button"
                 className="action-btn"
                 disabled={!canDo || busyId === a.id}
-                onClick={() => doAction(a.id)}
+                onClick={() => requestAction(a)}
                 title={actionDisabledReason || undefined}
               >
                 <div className="action-btn-body">
@@ -296,6 +380,15 @@ export function ActionPanel({ sessionId, player, enabled, onPlayerUpdate, onActi
         <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>
           {error}
         </div>
+      )}
+
+      {forcedRestConfirm && (
+        <ActionForcedRestConfirmModal
+          action={forcedRestConfirm.action}
+          reason={forcedRestConfirm.reason}
+          onCancel={() => setForcedRestConfirm(null)}
+          onConfirm={() => void doAction(forcedRestConfirm.action.id)}
+        />
       )}
     </div>
   );

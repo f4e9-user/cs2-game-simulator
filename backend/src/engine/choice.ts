@@ -503,12 +503,12 @@ export function applyChoice(
   if (chosenProgression.injuryRestRounds && chosenProgression.injuryRestRounds > 0) {
     restRounds = Math.max(restRounds, chosenProgression.injuryRestRounds);
     if (!tagsAdded.includes('injured')) tagsAdded.push('injured');
-    passiveEffects.push('injury-triggered');
+    passiveEffects.push(`强制休养：本次事件造成伤病，休养 ${chosenProgression.injuryRestRounds} 回合`);
   }
   if (statsAfterGrowth.constitution <= CONSTITUTION_COLLAPSE && restRounds <= 0) {
     restRounds = INJURY_REST_ROUNDS;
     if (!tagsAdded.includes('injured')) tagsAdded.push('injured');
-    passiveEffects.push('physical-collapse-rest');
+    passiveEffects.push(`强制休养：体质 ${statsAfterGrowth.constitution} 已降至崩溃线 ${CONSTITUTION_COLLAPSE}，休养 ${INJURY_REST_ROUNDS} 回合`);
   }
   // ── 压力崩溃检查 ──
   let stressMaxRounds = session.player.stressMaxRounds ?? 0;
@@ -825,7 +825,7 @@ export function applyChoice(
 
   const recoveryEffects: string[] = [];
   if (shouldAdvanceRound || eventDef.id.startsWith('bailout-')) {
-    processRecoverySystems(nextPlayer, eventDef.id, recoveryEffects, choiceDef);
+    processRecoverySystems(nextPlayer, eventDef.id, recoveryEffects, choiceDef, { processLivingEconomy: shouldAdvanceRound });
     passiveEffects.push(...recoveryEffects);
   }
 

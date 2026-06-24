@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ACTIONS } from '../../data/actions.js';
 import { buildCareerInsight, buildSessionPayload } from '../insights/index.js';
 import type { GameSession, Player } from '../../types.js';
 
@@ -189,5 +190,18 @@ describe('buildCareerInsight', () => {
 
     expect(insight.recommendations.length).toBeLessThanOrEqual(3);
     expect(insight.recommendations[0]?.reason).toContain('事件阶段');
+  });
+
+  it('only recommends action ids that exist in the action catalog', () => {
+    const actionIds = new Set(ACTIONS.map((action) => action.id));
+    const insight = buildCareerInsight(session({
+      stats: { agility: 3, intelligence: 2, experience: 0, money: 0, mentality: 2, constitution: 2 },
+    }));
+
+    for (const recommendation of insight.recommendations) {
+      if (recommendation.actionId) {
+        expect(actionIds.has(recommendation.actionId), recommendation.actionId).toBe(true);
+      }
+    }
   });
 });

@@ -109,7 +109,7 @@ export default function DebugSessionPage() {
     setError(null);
     try {
       const [sessionRes, statusRes, eventsRes] = await Promise.all([
-        api.getSession(sessionId),
+        api.getDebugSession(sessionId),
         api.getDebugAiStatus().catch(() => null),
         api.getDebugAiEvents(sessionId).catch(() => null),
       ]);

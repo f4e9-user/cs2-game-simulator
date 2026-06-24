@@ -6,9 +6,15 @@ import { api } from '@/lib/api';
 import type { Stats, Trait } from '@/lib/types';
 import { TraitRoll } from '@/components/TraitRoll';
 import { StatAllocatorModal } from '@/components/StatAllocatorModal';
-import { POINT_POOL } from '@/lib/format';
+import { POINT_POOL, formatMoney } from '@/lib/format';
 
 const MAX_REROLLS = 1;
+const DEFAULT_OPENING_MONEY = 20;
+
+function openingMoneyForTraits(traits: Trait[] | null): number {
+  return traits?.find((trait) => typeof trait.openingMoney === 'number')?.openingMoney
+    ?? DEFAULT_OPENING_MONEY;
+}
 
 export default function NewGamePage() {
   const router = useRouter();
@@ -124,7 +130,7 @@ export default function NewGamePage() {
             <span className="delta-chip up">智力 {chosenStats.intelligence}</span>
             <span className="delta-chip up">敏捷 {chosenStats.agility}</span>
             <span className="delta-chip up">经验 {chosenStats.experience}</span>
-            <span className="delta-chip up">金钱 {chosenStats.money}</span>
+            <span className="delta-chip up">开局资金 {formatMoney(openingMoneyForTraits(rolledTraits))}</span>
             <span className="delta-chip up">心态 {chosenStats.mentality}</span>
             <span className="delta-chip up">体质 {chosenStats.constitution}</span>
             <button

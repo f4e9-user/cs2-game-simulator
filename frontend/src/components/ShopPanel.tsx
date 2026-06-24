@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useGameStore } from '@/store/gameStore';
-import type { Player, ShopItem } from '@/lib/types';
+import type { HomeAssetActionId, HomeFacilityDefinition, HousingCityProfile, HousingTier, Player, ShopItem } from '@/lib/types';
 import { formatMoney } from '@/lib/format';
 import { ShopConfirmModal } from './ShopConfirmModal';
 import { ShopResultModal } from './ShopResultModal';
@@ -20,6 +20,18 @@ const WEEKLY_SHOP_LIMITS: Partial<Record<ShopItem['category'], number>> = {
   consumable: 2,
   service: 1,
 };
+
+const HOME_ASSET_ACTIONS: Array<{
+  id: HomeAssetActionId;
+  label: string;
+  description: string;
+}> = [
+  { id: 'rent-out', label: '出租', description: '获得每周租金，但增加资产管理复杂度。' },
+  { id: 'stop-rental', label: '停租', description: '停止出租，保留房产自用属性。' },
+  { id: 'mortgage', label: '抵押', description: '一次性获得资金，后续每周偿还。' },
+  { id: 'renovate', label: '装修', description: '提升长期资产状态和房产价值。' },
+  { id: 'sell', label: '卖房', description: '出售房产并搬回普通租房。' },
+];
 
 interface Props {
   sessionId: string;
@@ -51,9 +63,14 @@ export function ShopPanel({
 }: Props) {
   const apiToken = useGameStore((s) => s.apiToken);
   const [items, setItems] = useState<ShopItem[]>([]);
+  const [housingTiers, setHousingTiers] = useState<HousingTier[]>([]);
+  const [homeFacilities, setHomeFacilities] = useState<HomeFacilityDefinition[]>([]);
+  const [cityProfiles, setCityProfiles] = useState<HousingCityProfile[]>([]);
+  const [weeklyLivingExpense, setWeeklyLivingExpense] = useState<number>(1);
   const [loadingItems, setLoadingItems] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [housingMessage, setHousingMessage] = useState<string | null>(null);
   const [showPawn, setShowPawn] = useState(false);
   const [recentBoughtId, setRecentBoughtId] = useState<string | null>(null);
   const [confirmItem, setConfirmItem] = useState<ShopItem | null>(null);
@@ -80,12 +97,33 @@ export function ShopPanel({
   }, [player.round]);
 
   useEffect(() => {
+    if (!housingMessage) return;
+    const timer = window.setTimeout(() => setHousingMessage(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [housingMessage]);
+
+  useEffect(() => {
     let cancelled = false;
     api
       .listShopItems()
       .then((res) => !cancelled && setItems(res.items))
       .catch(() => {})
       .finally(() => !cancelled && setLoadingItems(false));
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listHousingTiers()
+      .then((res) => {
+        if (cancelled) return;
+        setHousingTiers(res.tiers);
+        setHomeFacilities(res.homeFacilities);
+        setCityProfiles(res.cityProfiles);
+        setWeeklyLivingExpense(res.weeklyLivingExpense);
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
@@ -116,6 +154,54 @@ export function ShopPanel({
       setResultData(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setBusyId(null);
+    }
+  };
+
+  const handleHousingChange = async (tier: HousingTier) => {
+    if (busyId || !enabled) return;
+    setError(null);
+    setHousingMessage(null);
+    setBusyId(`housing:${tier.id}`);
+    try {
+      const res = await api.changeHousing(sessionId, tier.id, apiToken ?? undefined);
+      onPlayerUpdate(res.player);
+      setHousingMessage(res.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleFacilityUpgrade = async (facility: HomeFacilityDefinition) => {
+    if (busyId || !enabled) return;
+    setError(null);
+    setHousingMessage(null);
+    setBusyId(`home-facility:${facility.id}`);
+    try {
+      const res = await api.upgradeHomeFacility(sessionId, facility.id, apiToken ?? undefined);
+      onPlayerUpdate(res.player);
+      setHousingMessage(res.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleHomeAssetAction = async (actionId: HomeAssetActionId) => {
+    if (busyId || !enabled) return;
+    setError(null);
+    setHousingMessage(null);
+    setBusyId(`home-asset:${actionId}`);
+    try {
+      const res = await api.runHomeAssetAction(sessionId, actionId, apiToken ?? undefined);
+      onPlayerUpdate(res.player);
+      setHousingMessage(res.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
       setBusyId(null);
     }
   };
@@ -226,6 +312,15 @@ export function ShopPanel({
     if (item.id === 'fire-agent') return hasAgent;
     return true;
   });
+  const currentHousingTierId = player.housing?.tier ?? 'shared-housing';
+  const ownedHomeAssets = player.housing?.tier === 'owned-home' ? player.housing.assets : undefined;
+  const currentCity = cityProfiles.find((city) => city.id === (player.housing?.cityId ?? 'local-city'));
+  const facilityLevel = (facility: HomeFacilityDefinition): number => {
+    if (!ownedHomeAssets) return 0;
+    if (facility.id === 'training-room') return ownedHomeAssets.facilities.trainingRoom;
+    if (facility.id === 'review-room') return ownedHomeAssets.facilities.reviewRoom;
+    return ownedHomeAssets.facilities.restRoom;
+  };
 
   if (loadingItems) {
     return (
@@ -320,9 +415,164 @@ export function ShopPanel({
           );
         })}
 
+        {housingTiers.length > 0 && (
+          <div className="shop-category">
+            <div className="shop-category-label">
+              居住
+              <span> · 基础生活费 {formatMoney(weeklyLivingExpense)}/周{currentCity ? ` · ${currentCity.name}` : ''}</span>
+            </div>
+            {housingTiers.map((tier) => {
+              const active = tier.id === currentHousingTierId;
+              const affordable = player.stats.money >= tier.moveCost;
+              const disabled = active || !enabled || busyId !== null || !affordable;
+              const reason = active
+                ? '当前居住档位'
+                : !enabled
+                ? (disabledReason ?? '结算中，暂不可搬家')
+                : !affordable
+                ? `资金不足（搬家需 ${tier.moveCost}K）`
+                : undefined;
+              return (
+                <div key={tier.id} className={`shop-item ${disabled ? 'disabled' : ''}`}>
+                  <div className="shop-item-info">
+                    <div className="shop-item-name">{tier.name}</div>
+                    <div className="shop-item-desc">{tier.description}</div>
+                    <div className="shop-item-desc">
+                      周支出 {formatMoney(tier.weeklyCost)} · 疲劳 -{tier.fatigueRecovery} · 压力 -{tier.stressRecovery}
+                    </div>
+                    {reason && (
+                      <div className="shop-item-reason">{reason}</div>
+                    )}
+                  </div>
+                  <div className="shop-item-right">
+                    <div className="shop-item-price">
+                      {active ? '居住中' : `搬家 ${tier.moveCost}K`}
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      disabled={disabled}
+                      onClick={() => handleHousingChange(tier)}
+                      style={{ fontSize: 10, padding: '2px 8px' }}
+                    >
+                      {busyId === `housing:${tier.id}` ? '…' : active ? '当前' : '搬入'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {currentHousingTierId === 'owned-home' && homeFacilities.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div className="shop-category-label">
+                  房产附属功能
+                  <span> · 自有房专属</span>
+                </div>
+                {homeFacilities.map((facility) => {
+                  const level = facilityLevel(facility);
+                  const maxed = level >= facility.maxLevel;
+                  const affordable = player.stats.money >= facility.upgradeCost;
+                  const disabled = !enabled || busyId !== null || maxed || !affordable;
+                  const reason = maxed
+                    ? '已完成'
+                    : !enabled
+                    ? (disabledReason ?? '结算中，暂不可装修')
+                    : !affordable
+                    ? `资金不足（需 ${facility.upgradeCost}K）`
+                    : undefined;
+                  return (
+                    <div key={facility.id} className={`shop-item ${disabled ? 'disabled' : ''}`}>
+                      <div className="shop-item-info">
+                        <div className="shop-item-name">{facility.name}</div>
+                        <div className="shop-item-desc">{facility.description}</div>
+                        <div className="shop-item-desc">
+                          每周维护 {formatMoney(facility.weeklyUpkeep)} · 疲劳 -{facility.fatigueRecovery} · 压力 -{facility.stressRecovery}
+                        </div>
+                        {reason && (
+                          <div className="shop-item-reason">{reason}</div>
+                        )}
+                      </div>
+                      <div className="shop-item-right">
+                        <div className="shop-item-price">
+                          {maxed ? '已升级' : `装修 ${facility.upgradeCost}K`}
+                        </div>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={disabled}
+                          onClick={() => handleFacilityUpgrade(facility)}
+                          style={{ fontSize: 10, padding: '2px 8px' }}
+                        >
+                          {busyId === `home-facility:${facility.id}` ? '…' : maxed ? '完成' : '升级'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {currentHousingTierId === 'owned-home' && (
+              <div style={{ marginTop: 8 }}>
+                <div className="shop-category-label">
+                  长期资产
+                  <span>
+                    {ownedHomeAssets?.rentalActive ? ' · 出租中' : ''}
+                    {(ownedHomeAssets?.mortgagePrincipal ?? 0) > 0 ? ` · 抵押 ${ownedHomeAssets?.mortgagePrincipal}K` : ''}
+                    {ownedHomeAssets?.renovationLevel ? ` · 装修 ${ownedHomeAssets.renovationLevel}` : ''}
+                  </span>
+                </div>
+                {HOME_ASSET_ACTIONS.map((action) => {
+                  const rentalActive = ownedHomeAssets?.rentalActive ?? false;
+                  const mortgaged = (ownedHomeAssets?.mortgagePrincipal ?? 0) > 0;
+                  const unavailable =
+                    (action.id === 'rent-out' && rentalActive) ||
+                    (action.id === 'stop-rental' && !rentalActive) ||
+                    (action.id === 'mortgage' && mortgaged);
+                  const disabled = !enabled || busyId !== null || unavailable;
+                  const reason = unavailable
+                    ? action.id === 'rent-out'
+                      ? '已经出租'
+                      : action.id === 'stop-rental'
+                      ? '当前未出租'
+                      : '已经抵押'
+                    : !enabled
+                    ? (disabledReason ?? '结算中，暂不可操作')
+                    : undefined;
+                  return (
+                    <div key={action.id} className={`shop-item ${disabled ? 'disabled' : ''}`}>
+                      <div className="shop-item-info">
+                        <div className="shop-item-name">{action.label}</div>
+                        <div className="shop-item-desc">{action.description}</div>
+                        {reason && (
+                          <div className="shop-item-reason">{reason}</div>
+                        )}
+                      </div>
+                      <div className="shop-item-right">
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={disabled}
+                          onClick={() => handleHomeAssetAction(action.id)}
+                          style={{ fontSize: 10, padding: '2px 8px' }}
+                        >
+                          {busyId === `home-asset:${action.id}` ? '…' : action.label}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {error && (
           <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>
             {error}
+          </div>
+        )}
+        {housingMessage && !error && (
+          <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>
+            {housingMessage}
           </div>
         )}
       </div>

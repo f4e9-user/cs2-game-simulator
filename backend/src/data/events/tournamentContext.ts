@@ -11,6 +11,7 @@ export interface TournamentContextEventDef extends EventDef {
   minStress?: number;
   minFatigue?: number;
   maxTeamTrust?: number;
+  travelRequired?: 'away' | 'city' | 'cross-region';
 }
 
 export const TOURNAMENT_CONTEXT_EVENTS: TournamentContextEventDef[] = [
@@ -158,6 +159,197 @@ export const TOURNAMENT_CONTEXT_EVENTS: TournamentContextEventDef[] = [
         failure: {
           narrative: '越想放松越焦虑，最后也没怎么休息到。',
           stateDelta: { stress: 5 },
+        },
+      },
+    ],
+  },
+  {
+    id: 'tournament-context-travel-hotel-noise',
+    type: 'tournament-context',
+    title: '异地酒店太吵',
+    narrative:
+      '赛程把你安排进临时酒店。隔壁队伍半夜还在复盘，走廊里拖箱子的声音断断续续，睡眠质量明显不如常驻地。',
+    stages: ['rookie', 'youth', 'second', 'pro'],
+    difficulty: 1,
+    contextPhase: ['pre-match'],
+    travelRequired: 'away',
+    choices: [
+      {
+        id: 'pay-quiet-room',
+        label: '加钱换安静房间',
+        description: '花一笔小钱，尽量保证比赛恢复。',
+        check: {
+          primary: 'money',
+          dc: 5,
+        },
+        success: {
+          narrative: '你换到走廊尽头，终于把耳机摘下来也能睡一会。',
+          resourceDelta: {
+            money: -4,
+          },
+          stateDelta: {
+            fatigue: -6,
+            stress: -2,
+          },
+        },
+        failure: {
+          narrative: '预算不够，只能继续忍着。你睡得断断续续。',
+          stateDelta: {
+            fatigue: 8,
+            stress: 3,
+          },
+        },
+      },
+      {
+        id: 'endure-noise',
+        label: '戴耳塞硬睡',
+        description: '不花钱，但恢复不稳定。',
+        check: {
+          primary: 'constitution',
+          dc: 8,
+          traitBonuses: { grinder: 1, hardship: 1 },
+          traitPenalties: { fragile: 1 },
+        },
+        success: {
+          narrative: '你睡得不算好，但至少没有被彻底打乱。',
+          stateDelta: {
+            fatigue: 2,
+          },
+        },
+        failure: {
+          narrative: '早上醒来时你还记得凌晨有人在门口笑。',
+          stateDelta: {
+            fatigue: 10,
+            stress: 4,
+          },
+        },
+      },
+    ],
+  },
+  {
+    id: 'tournament-context-travel-temp-training-room',
+    type: 'tournament-context',
+    title: '临时训练室条件差',
+    narrative:
+      '赛事方给的训练室能用，但桌椅高度、网络和隔音都不顺手。你突然意识到常驻训练环境不是白来的。',
+    stages: ['rookie', 'youth', 'second', 'pro'],
+    difficulty: 1,
+    contextPhase: ['pre-match'],
+    travelRequired: 'city',
+    choices: [
+      {
+        id: 'adapt-setup',
+        label: '重新调整设置',
+        description: '花时间适应现场环境。',
+        check: {
+          primary: 'intelligence',
+          secondary: 'experience',
+          dc: 8,
+          traitBonuses: { tactical: 1, steady: 1 },
+        },
+        success: {
+          narrative: '你把椅子、鼠标线和显示器位置一点点调好，手感总算稳定下来。',
+          stateDelta: {
+            feel: 0.8,
+            fatigue: 2,
+          },
+        },
+        failure: {
+          narrative: '越调越别扭，最后连原来的肌肉记忆都被打乱。',
+          stateDelta: {
+            feel: -0.8,
+            fatigue: 6,
+          },
+        },
+      },
+      {
+        id: 'rent-better-room',
+        label: '临时租更好训练室',
+        description: '用钱换稳定训练环境。',
+        check: {
+          primary: 'money',
+          dc: 8,
+        },
+        success: {
+          narrative: '额外租的训练房安静很多，至少最后一晚没有浪费。',
+          resourceDelta: {
+            money: -6,
+          },
+          stateDelta: {
+            stress: -4,
+            fatigue: -3,
+          },
+        },
+        failure: {
+          narrative: '场地费和押金比想象中更贵，你只能回到原来的房间。',
+          stateDelta: {
+            stress: 5,
+          },
+        },
+      },
+    ],
+  },
+  {
+    id: 'tournament-context-travel-jet-lag',
+    type: 'tournament-context',
+    title: '时差没调过来',
+    narrative:
+      '跨区参赛让作息变得很怪。训练时间到了，你身体还停在另一个时区，连热身都慢半拍。',
+    stages: ['youth', 'second', 'pro'],
+    difficulty: 2,
+    contextPhase: ['pre-match'],
+    travelRequired: 'cross-region',
+    choices: [
+      {
+        id: 'sleep-schedule',
+        label: '强行调整作息',
+        description: '牺牲一点训练量，先把身体时钟拉回来。',
+        check: {
+          primary: 'constitution',
+          secondary: 'mentality',
+          dc: 10,
+          traitBonuses: { steady: 1, grinder: 1 },
+          traitPenalties: { fragile: 1 },
+        },
+        success: {
+          narrative: '你把训练压短，睡眠补回来一些，比赛日不至于彻底发懵。',
+          stateDelta: {
+            fatigue: -6,
+            stress: -2,
+          },
+        },
+        failure: {
+          narrative: '想睡睡不着，想练又没精神，状态被夹在中间。',
+          stateDelta: {
+            fatigue: 8,
+            stress: 5,
+          },
+        },
+      },
+      {
+        id: 'power-through',
+        label: '硬顶训练',
+        description: '保住训练节奏，但身体负担会更重。',
+        check: {
+          primary: 'mentality',
+          dc: 11,
+          traitBonuses: { grinder: 2, ego: 1 },
+          traitPenalties: { fragile: 1 },
+        },
+        success: {
+          narrative: '你硬是把训练打完了，手感还在，但身体明显被透支。',
+          stateDelta: {
+            feel: 0.5,
+            fatigue: 8,
+          },
+        },
+        failure: {
+          narrative: '硬顶没顶住，枪法和心态一起开始飘。',
+          stateDelta: {
+            feel: -1,
+            fatigue: 12,
+            stress: 6,
+          },
         },
       },
     ],

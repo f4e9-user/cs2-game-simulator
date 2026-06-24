@@ -14,6 +14,7 @@ export const REST_EVENTS: EventDef[] = [
     stages: ['rookie', 'youth'],
     difficulty: 1,
     weight: 1,
+    forbidTags: ['has-team'],
     narrativeMeta: {
       eventId: 'rest-physio-rookie',
       emotionTone: '被迫暂停的焦躁与无力',
@@ -118,14 +119,108 @@ export const REST_EVENTS: EventDef[] = [
 
   // ── 二线及以上：俱乐部有队医资源 ─────────────────────────────────
   {
+    id: 'rest-private-clinic',
+    type: 'rest',
+    title: '私人诊所的休养建议',
+    narrative:
+      '你自己约了运动康复诊所。医生看完检查结果，把训练计划推回给你：「这周先别碰高强度对抗，不然恢复期只会更长。」',
+    stages: ['second', 'pro'],
+    difficulty: 1,
+    weight: 1,
+    forbidTags: ['has-team'],
+    choices: [
+      {
+        id: 'full-rest',
+        label: '按医嘱完整休息',
+        description: '完全休养，恢复体质和心态。',
+        check: {
+          primary: 'mentality',
+          dc: 5,
+          traitBonuses: { steady: 2 },
+          traitPenalties: { grinder: 2, obsessed: 2 },
+        },
+        success: {
+          narrative: '你把提醒设好，真的停了一周。疼痛退下去之后，手感也没你想象中掉得那么厉害。',
+          stateDelta: {
+            feel: 1,
+            fatigue: -12,
+            stress: -15,
+          },
+        },
+        failure: {
+          narrative: '你忍不住做了几组轻练，疼痛没有恶化，但恢复也没那么彻底。',
+          stateDelta: {
+            feel: 0.5,
+            fatigue: -4,
+            stress: -5,
+          },
+        },
+      },
+      {
+        id: 'light-drill',
+        label: '只做低强度恢复训练',
+        description: '折中：稍微恢复，但保留状态。',
+        check: {
+          primary: 'intelligence',
+          dc: 8,
+          traitBonuses: { steady: 1, tactical: 1 },
+        },
+        success: {
+          narrative: '你把训练降到医生允许的强度，身体缓了过来，脑子也没完全离开比赛。',
+          stateDelta: {
+            feel: 0.6,
+            fatigue: -8,
+            stress: -5,
+          },
+        },
+        failure: {
+          narrative: '你还是多练了一点，康复效果被打了折扣。',
+          stateDelta: {
+            fatigue: -4,
+            stress: 0,
+          },
+        },
+      },
+      {
+        id: 'sneak-stream',
+        label: '偷偷开播两小时',
+        description: '赚一点钱，休养被打断。',
+        check: {
+          primary: 'money',
+          dc: 6,
+          traitBonuses: { streamer: 2 },
+          traitPenalties: { steady: 2 },
+        },
+        success: {
+          narrative: '观众不多，但礼物够你下周点几顿外卖。',
+          stateDelta: {
+            fatigue: -4,
+            stress: 5,
+          },
+          resourceDelta: {
+            money: 20,
+          },
+        },
+        failure: {
+          narrative: '你撑不住，开播一个半小时就下播。什么都没收获。',
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+        },
+      },
+    ],
+  },
+  {
     id: 'rest-physio',
     type: 'rest',
     title: '被队医按在床上',
     narrative:
       '俱乐部队医看了 MRI 单子，把键盘从你手里抽走：「你这周就躺着。」',
-    stages: ['second', 'pro'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 1,
     weight: 1,
+    requireTags: ['has-team'],
     choices: [
       {
         id: 'full-rest',

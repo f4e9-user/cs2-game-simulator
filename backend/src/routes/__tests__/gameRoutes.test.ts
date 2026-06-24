@@ -102,7 +102,161 @@ describe('game routes', () => {
     ])).not.toContain('money');
   });
 
-  it('keeps normal session responses free of debug-only payload fields', async () => {
+  it('returns housing metadata and lets action-phase players switch housing', async () => {
+    const env = makeEnv();
+    const metaRes = await app.request('https://localhost/api/game/meta/housing');
+    const meta = await metaRes.json() as {
+      tiers?: Array<{ id: string; weeklyCost: number; moveCost: number }>;
+      homeFacilities?: Array<{ id: string; upgradeCost: number }>;
+      cityProfiles?: Array<{ id: string; costMultiplier: number }>;
+      weeklyLivingExpense?: number;
+      error?: string;
+    };
+
+    expect(metaRes.status).toBe(200);
+    expect(meta.error).toBeUndefined();
+    expect(meta.weeklyLivingExpense).toBe(1);
+    expect(meta.tiers?.map((tier) => tier.id)).toEqual([
+      'shared-housing',
+      'basic-rental',
+      'standard-apartment',
+      'high-end-apartment',
+      'owned-home',
+    ]);
+    expect(meta.homeFacilities?.map((facility) => facility.id)).toEqual([
+      'training-room',
+      'review-room',
+      'rest-room',
+    ]);
+    expect(meta.cityProfiles?.map((city) => city.id)).toEqual([
+      'local-city',
+      'regional-hub',
+      'major-hub',
+      'low-cost-city',
+    ]);
+
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Housing Route Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/housing`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+      body: JSON.stringify({ tierId: 'basic-rental' }),
+    }, env);
+    const body = await res.json() as { player?: GameSession['player']; message?: string; error?: string };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.message).toContain('搬家成本 -6K');
+    expect(body.player?.housing?.tier).toBe('basic-rental');
+    expect(body.player?.stats.money).toBe(14);
+  });
+
+  it('upgrades owned-home facilities through the housing API', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Home Facility Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        stats: { ...session.player.stats, money: 50 },
+        housing: {
+          tier: 'owned-home',
+          movedAtRound: 0,
+        },
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/home-facility`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+      body: JSON.stringify({ facilityId: 'training-room' }),
+    }, env);
+    const body = await res.json() as { player?: GameSession['player']; message?: string; error?: string };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.message).toContain('训练室');
+    expect(body.player?.stats.money).toBe(38);
+    expect(body.player?.housing?.assets?.facilities.trainingRoom).toBe(1);
+  });
+
+  it('runs owned-home asset actions through the housing API', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Home Asset Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        stats: { ...session.player.stats, money: 50 },
+        housing: {
+          tier: 'owned-home',
+          movedAtRound: 0,
+          cityId: 'regional-hub',
+        },
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/home-asset`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+      body: JSON.stringify({ actionId: 'rent-out' }),
+    }, env);
+    const body = await res.json() as { player?: GameSession['player']; message?: string; error?: string };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.message).toContain('出租');
+    expect(body.player?.housing?.assets?.rentalActive).toBe(true);
+  });
+
+  it('keeps normal session responses free of debug-only payload fields while debug details include them', async () => {
     const env = makeEnv();
     const startRes = await app.request('https://localhost/api/game/start', {
       method: 'POST',
@@ -136,6 +290,14 @@ describe('game routes', () => {
     expect(body).toHaveProperty('careerInsight');
     expect(body).not.toHaveProperty('debugTeamIdentity');
     expect(body).not.toHaveProperty('debugRole');
+
+    const debugSessionRes = await app.request(`https://localhost/api/debug/sessions/${started.sessionId}`, {}, env);
+    const debugBody = await debugSessionRes.json() as Record<string, unknown>;
+
+    expect(debugSessionRes.status).toBe(200);
+    expect(debugBody).toHaveProperty('careerInsight');
+    expect(debugBody).toHaveProperty('debugTeamIdentity');
+    expect(debugBody).toHaveProperty('debugRole');
   });
 
   it('allows trait rolling before a session exists', async () => {
@@ -234,7 +396,7 @@ describe('game routes', () => {
       mentality: 14,
       constitution: 15,
     });
-    expect(body.player?.stats.money).toBe(0);
+    expect(body.player?.stats.money).toBe(20);
   });
 
   it('refreshes leaderboard VRS after debug updates the player club VRS', async () => {

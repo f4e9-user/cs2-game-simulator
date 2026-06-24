@@ -44,6 +44,17 @@ export {
   type ApplyShopResult,
 } from './shop.js';
 export {
+  HOME_FACILITY_DEFINITIONS,
+  HOUSING_CITY_PROFILES,
+  HOUSING_TIERS,
+  WEEKLY_LIVING_EXPENSE,
+  applyHomeAssetAction,
+  applyHomeFacilityUpgrade,
+  applyHousingChange,
+  processLivingEconomy,
+  type ApplyHousingChangeResult,
+} from './housing.js';
+export {
   applyClubRequest,
   generateTeamOffer,
   respondTeamOffer,

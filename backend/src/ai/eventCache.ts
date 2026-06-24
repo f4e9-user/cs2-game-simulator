@@ -215,14 +215,21 @@ export function releaseActiveAiEvent(cache: AiEventCacheEnvelope, player: Player
   }
 
   const active = cache.active;
-  const entries = active.meta.usedCount >= AI_EVENT_MAX_USES
-    ? cache.entries
-    : [active, ...cache.entries.filter((entry) => entry.event.id !== active.event.id)];
+  const entries = [
+    active,
+    ...cache.entries.filter((entry) => entry.event.id !== active.event.id),
+  ];
 
   return {
     version: AI_EVENT_CACHE_VERSION,
     active: null,
-    entries: pruneAiEventEntries(entries, player)
+    entries: [
+      active,
+      ...pruneAiEventEntries(
+        entries.filter((entry) => entry.event.id !== active.event.id),
+        player,
+      ),
+    ]
       .sort(compareCachePriority(player.round ?? 0))
       .slice(0, MAX_AI_EVENT_CACHE),
   };

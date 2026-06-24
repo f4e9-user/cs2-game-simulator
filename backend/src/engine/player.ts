@@ -27,6 +27,7 @@ const DEFAULT_OPENING_TAG_LIFETIME_ROUNDS: Partial<Record<string, number>> = {
   'opening-tactical-gap': 48,
   'opening-mechanical-gap': 48,
 };
+const DEFAULT_OPENING_MONEY = 20;
 
 export interface InitInput {
   name: string;
@@ -101,12 +102,33 @@ function applyOpeningOverflowPenalties(
 export function rollRandomTraits(count = 3): Trait[] {
   const pool = [...TRAITS];
   const out: Trait[] = [];
-  for (let i = 0; i < count && pool.length > 0; i++) {
+  while (out.length < count && pool.length > 0) {
     const idx = Math.floor(Math.random() * pool.length);
-    out.push(pool[idx]!);
+    const candidate = pool[idx]!;
     pool.splice(idx, 1);
+    if (traitSelectionConflict([...out, candidate])) continue;
+    out.push(candidate);
   }
   return out;
+}
+
+function traitSelectionConflict(traits: Trait[]): { a: Trait; b: Trait } | null {
+  for (let i = 0; i < traits.length; i++) {
+    const a = traits[i]!;
+    for (let j = i + 1; j < traits.length; j++) {
+      const b = traits[j]!;
+      if (a.conflictsWith?.includes(b.id) || b.conflictsWith?.includes(a.id)) {
+        return { a, b };
+      }
+    }
+  }
+  return null;
+}
+
+function openingMoneyForTraits(traits: Trait[], backgroundStartMoney?: number): number {
+  return traits.find((trait) => typeof trait.openingMoney === 'number')?.openingMoney
+    ?? backgroundStartMoney
+    ?? DEFAULT_OPENING_MONEY;
 }
 
 export function computeTraitMods(traits: Trait[]): {
@@ -171,6 +193,10 @@ export function initPlayer(input: InitInput): Player {
   if (new Set(traits.map((t) => t.id)).size !== 3) {
     throw new Error('traits must be distinct');
   }
+  const conflict = traitSelectionConflict(traits);
+  if (conflict) {
+    throw new Error(`特质冲突：${conflict.a.name} 与 ${conflict.b.name} 不能同时选择`);
+  }
 
   const { floor, negative } = computeTraitMods(traits);
   const allocation = input.stats ? { ...input.stats } : randomStatsWithFloor(floor);
@@ -178,6 +204,7 @@ export function initPlayer(input: InitInput): Player {
   if (err) throw new Error(err);
 
   const finalStats = applyOpeningStaticDeltas(allocation, negative, bg.statBias);
+  finalStats.money = openingMoneyForTraits(traits, bg.startMoney);
 
   const player: Player = {
     name: input.name.trim() || 'nameless',
@@ -201,6 +228,10 @@ export function initPlayer(input: InitInput): Player {
     year: 1,
     week: 1,
     pendingMatch: null,
+    housing: {
+      tier: 'shared-housing',
+      movedAtRound: 0,
+    },
     actionPoints: 100,
     shopCooldowns: {},
     weeklyShopPurchases: {},

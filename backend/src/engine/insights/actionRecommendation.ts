@@ -35,7 +35,7 @@ export function buildActionRecommendations(
 
   if (hasRisk(risks, 'low-money')) {
     recommendations.push({
-      actionId: 'action-netcafe-shift',
+      actionId: 'action-net-cafe',
       title: '补充现金流',
       priority: recommendations.length === 0 ? 'high' : 'medium',
       reason: '资金紧张会限制报名、恢复和装备选择。',

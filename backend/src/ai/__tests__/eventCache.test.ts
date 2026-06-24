@@ -111,6 +111,24 @@ describe('AI event cache', () => {
     expect(buildAiPickCandidates(released, player, [])).toHaveLength(1);
   });
 
+  it('keeps a max-use active event resolvable after release but out of candidates', () => {
+    const player = playerWithTeam('cya');
+    player.round = 10;
+    const event = aiEvent();
+    const activeCache = markAiEventActive({
+      version: 2,
+      active: null,
+      entries: [makeCachedAiEvent(event, player, [])],
+    }, event);
+    const firstUse = recordAiEventUsed(activeCache, event.id, player.round - AI_EVENT_PICK_COOLDOWN);
+    const secondUse = recordAiEventUsed(firstUse, event.id, player.round);
+
+    const released = releaseActiveAiEvent(secondUse, player);
+
+    expect(resolveAiEventById(released, event.id)).toBe(event);
+    expect(buildAiPickCandidates(released, player, [])).toHaveLength(0);
+  });
+
   it('filters cached team events after the player changes club', () => {
     const player = playerWithTeam('cya');
     const event = aiEvent();

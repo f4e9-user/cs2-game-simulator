@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -21,6 +21,7 @@ import TransitionOverlay from '@/components/TransitionOverlay';
 import { ClubPanel } from '@/components/ClubPanel';
 import { TeamOfferModal } from '@/components/TeamOfferModal';
 import { LoanModal } from '@/components/LoanModal';
+import { InjuryAlertModal, buildInjuryAlertFromEffects, type InjuryAlert } from '@/components/InjuryAlertModal';
 import { useGameStore } from '@/store/gameStore';
 import type { ActionResult, Player, SocialPost, Trait } from '@/lib/types';
 import type { SettlementActionResult, SettlementShopResult } from '@/components/ResultPanel';
@@ -77,10 +78,12 @@ export default function GamePage() {
   const [shopNarratives, setShopNarratives] = useState<Record<string, string>>({});
   const [settlementLoading, setSettlementLoading] = useState(false);
   const [choiceSubmitting, setChoiceSubmitting] = useState(false);
+  const [injuryAlert, setInjuryAlert] = useState<InjuryAlert | null>(null);
 
   const [streamingNarrative, setStreamingNarrative] = useState<string | null>(null);
   const [isNarrating, setIsNarrating] = useState(false);
   const narrateCtxRef = useRef<{ cancelled: boolean } | null>(null);
+  const sessionRefreshSeqRef = useRef(0);
 
   const storageKey = `intro-seen-${sessionId}`;
   const [welcomeDismissed, setWelcomeDismissed] = useState(() =>
@@ -93,6 +96,31 @@ export default function GamePage() {
     sessionStorage.setItem(storageKey, '1');
     setWelcomeDismissed(true);
   };
+
+  const refreshSessionSnapshot = useCallback(async () => {
+    const seq = ++sessionRefreshSeqRef.current;
+    try {
+      const session = await api.getSession(sessionId);
+      if (sessionRefreshSeqRef.current !== seq) return;
+      setPlayerState({
+        player: session.player,
+        careerInsight: session.careerInsight,
+        leaderboard: session.leaderboard,
+      });
+      setCurrentEvent(session.currentEvent);
+      setActiveEventSequence(session.activeEventSequence ?? null);
+      setPhase(session.phase ?? 'action');
+    } catch (e) {
+      if (sessionRefreshSeqRef.current === seq) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    }
+  }, [sessionId, setActiveEventSequence, setCurrentEvent, setError, setPhase, setPlayerState]);
+
+  const handlePlayerUpdate = useCallback((updatedPlayer: Player) => {
+    setPlayer(updatedPlayer);
+    void refreshSessionSnapshot();
+  }, [refreshSessionSnapshot, setPlayer]);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +140,7 @@ export default function GamePage() {
         setStreamingNarrative(null);
         setIsNarrating(false);
         setChoiceSubmitting(false);
+        setInjuryAlert(null);
         clearLastResult();
 
         // 用 session.apiToken 触发 intro（fire-and-forget，不阻塞主流程）
@@ -192,6 +221,8 @@ export default function GamePage() {
 
   const handleActionResult = (result: ActionResult, moneyChange: number) => {
     setActionResults((prev) => [...prev, { result, moneyChange }]);
+    const alert = buildInjuryAlertFromEffects(result.statusEffects);
+    if (alert) setInjuryAlert(alert);
   };
 
   const handleShopResult = (result: SettlementShopResult) => {
@@ -210,6 +241,7 @@ export default function GamePage() {
       setSettlementLoading(false);
       setIsNarrating(false);
       setChoiceSubmitting(false);
+      setInjuryAlert(null);
       clearLastResult();
     }, 400);
   };
@@ -228,6 +260,8 @@ export default function GamePage() {
     try {
       const res = await api.submitChoice(sessionId, choiceId, customAction, apiToken ?? undefined);
       applyChoiceResponse(res);
+      const injuryNotice = buildInjuryAlertFromEffects(res.result.passiveEffects);
+      if (injuryNotice) setInjuryAlert(injuryNotice);
 
       const hasNextSequenceEvent = res.phase === 'event' && !!res.currentEvent;
       setPhase(hasNextSequenceEvent ? 'event' : 'settlement');
@@ -388,14 +422,14 @@ export default function GamePage() {
               <MatchPanel
                 sessionId={sessionId}
                 player={player}
-                onPlayerUpdate={(p: Player) => setPlayer(p)}
+                onPlayerUpdate={handlePlayerUpdate}
               />
               <ActionPanel
                 key={player.round}
                 sessionId={sessionId}
                 player={player}
                 enabled={isActionPhase && !loading && !settlementLoading && !isResting}
-                onPlayerUpdate={(p: Player) => setPlayer(p)}
+                onPlayerUpdate={handlePlayerUpdate}
                 onActionResult={handleActionResult}
                 disabledReason={actionLockedReason}
               />
@@ -501,7 +535,7 @@ export default function GamePage() {
                   <ShopPanel
                     sessionId={sessionId}
                     player={player}
-                    onPlayerUpdate={(p: Player) => setPlayer(p)}
+                    onPlayerUpdate={handlePlayerUpdate}
                     onRequestLoan={() => setShowLoan(true)}
                     onShopResult={handleShopResult}
                     enabled={isActionPhase && !loading && !settlementLoading && !isResting}
@@ -511,11 +545,11 @@ export default function GamePage() {
 
                 {centerTab === 'team' && (
                   <>
-                    <ClubPanel
+                  <ClubPanel
                       sessionId={sessionId}
                       player={player}
                       enabled={isActionPhase && !loading && !settlementLoading && !isResting}
-                      onPlayerUpdate={(p: Player) => setPlayer(p)}
+                      onPlayerUpdate={handlePlayerUpdate}
                     />
                   </>
                 )}
@@ -617,7 +651,12 @@ export default function GamePage() {
         onClose={() => setShowLoan(false)}
         sessionId={sessionId}
         player={player}
-        onPlayerUpdate={(p: Player) => setPlayer(p)}
+        onPlayerUpdate={handlePlayerUpdate}
+      />
+
+      <InjuryAlertModal
+        alert={injuryAlert}
+        onClose={() => setInjuryAlert(null)}
       />
 
       {/* New-game confirm modal */}

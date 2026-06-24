@@ -12,6 +12,10 @@ export type SessionInsightPayload<T extends Record<string, unknown> = Record<str
   careerInsight: CareerInsight;
 };
 
+type SessionPayloadOverrides<T extends Record<string, unknown>> = T & {
+  includeDebugFields?: boolean;
+};
+
 function buildPriorities(insight: Pick<CareerInsight, 'milestones' | 'risks'>): PriorityInsight[] {
   const priorities: PriorityInsight[] = [];
   const topRisk = insight.risks[0];
@@ -70,18 +74,21 @@ export function buildCareerInsight(session: GameSession, playerPoints = 0): Care
 
 export function buildSessionPayload<T extends Record<string, unknown> = Record<string, never>>(
   session: GameSession,
-  overrides?: T,
+  overrides?: SessionPayloadOverrides<T>,
 ): SessionInsightPayload<T> {
   const { debugTeamIdentity: _debugTeamIdentity, debugRole: _debugRole, ...persistedSession } = session;
-  const safeOverrides = { ...(overrides ?? {} as T) };
-  delete (safeOverrides as Partial<Record<DebugOnlyResponseFields, unknown>>).debugTeamIdentity;
-  delete (safeOverrides as Partial<Record<DebugOnlyResponseFields, unknown>>).debugRole;
+  const { includeDebugFields, ...overrideFields } = (overrides ?? {}) as SessionPayloadOverrides<T>;
+  const safeOverrides = { ...overrideFields };
+  if (!includeDebugFields) {
+    delete (safeOverrides as Partial<Record<DebugOnlyResponseFields, unknown>>).debugTeamIdentity;
+    delete (safeOverrides as Partial<Record<DebugOnlyResponseFields, unknown>>).debugRole;
+  }
   const playerPoints = session.leaderboard?.find((team) => team.isPlayer)?.points ?? 0;
   return {
     ...persistedSession,
     ...safeOverrides,
     careerInsight: buildCareerInsight(session, playerPoints),
-  } as SessionInsightPayload<T>;
+  } as unknown as SessionInsightPayload<T>;
 }
 
 export * from './types.js';

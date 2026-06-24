@@ -1,4 +1,5 @@
 import { getShopItem } from '../data/shop.js';
+import type { ShopEffect } from '../data/shop.js';
 import type { Buff, GameSession, Player } from '../types.js';
 import {
   FEEL_CAP_DEFAULT,
@@ -145,13 +146,21 @@ export function applyShopPurchase(session: GameSession, itemId: string): ApplySh
   }
 
   let shopNarrative: string | undefined;
+  let negativeEffect: ShopEffect | undefined;
   if (item.negativeEvents) {
     for (const neg of item.negativeEvents) {
       if (Math.random() < neg.chance) {
+        negativeEffect = neg.effect;
+        if (neg.effect.moneyDelta) stats = clampStats(applyMoneyDeltaToStats(stats, neg.effect.moneyDelta));
         if (neg.effect.stressDelta) stress = clampStress(stress + neg.effect.stressDelta);
         if (neg.effect.fatigueDelta) fatigue = clampFatigue(fatigue + neg.effect.fatigueDelta);
         if (neg.effect.fameDelta) fame = clampFame(fame + neg.effect.fameDelta);
         if (neg.effect.feelReset) feel = clampFeel(0, player.feelCap ?? FEEL_CAP_DEFAULT);
+        if (neg.effect.buffRemoveId) buffs = buffs.filter((b) => b.id !== neg.effect.buffRemoveId);
+        if (neg.effect.buffAdd) {
+          buffs = buffs.filter((b) => b.id !== neg.effect.buffAdd!.id);
+          buffs.push(neg.effect.buffAdd);
+        }
         if (neg.effect.tagAdd && !tags.includes(neg.effect.tagAdd)) tags.push(neg.effect.tagAdd);
         if (neg.effect.tagRemove) tags = tags.filter((t) => t !== neg.effect.tagRemove);
         shopNarrative = neg.narrative;
@@ -164,7 +173,7 @@ export function applyShopPurchase(session: GameSession, itemId: string): ApplySh
     tags,
     player.tagExpiry ?? {},
     round,
-    [effect.tagAdd, shopNarrative ? item.negativeEvents?.find((neg) => neg.narrative === shopNarrative)?.effect.tagAdd : undefined]
+    [effect.tagAdd, negativeEffect?.tagAdd]
       .filter((tag): tag is string => Boolean(tag)),
   );
 
@@ -202,11 +211,27 @@ export function applyShopPurchase(session: GameSession, itemId: string): ApplySh
           : undefined),
     shopNarrativePositive:
       shopNarrative ? false : (itemId === 'hire-agent' || itemId === 'fire-agent' ? true : undefined),
-    shopBuffLabelsAdded: effect.buffAdd ? [effect.buffAdd.label] : undefined,
+    shopBuffLabelsAdded: [
+      ...(effect.buffAdd ? [effect.buffAdd.label] : []),
+      ...(negativeEffect?.buffAdd ? [negativeEffect.buffAdd.label] : []),
+    ].length > 0
+      ? [
+          ...(effect.buffAdd ? [effect.buffAdd.label] : []),
+          ...(negativeEffect?.buffAdd ? [negativeEffect.buffAdd.label] : []),
+        ]
+      : undefined,
     shopBuffLabelsRemoved: effect.buffRemoveId
       ? (player.buffs ?? []).filter((b) => b.id === effect.buffRemoveId).map((b) => b.label)
       : undefined,
-    shopTagsAdded: effect.tagAdd ? [effect.tagAdd] : undefined,
+    shopTagsAdded: [
+      ...(effect.tagAdd ? [effect.tagAdd] : []),
+      ...(negativeEffect?.tagAdd ? [negativeEffect.tagAdd] : []),
+    ].length > 0
+      ? [
+          ...(effect.tagAdd ? [effect.tagAdd] : []),
+          ...(negativeEffect?.tagAdd ? [negativeEffect.tagAdd] : []),
+        ]
+      : undefined,
     shopTagsRemoved: shopTagsRemoved.length > 0 ? shopTagsRemoved : undefined,
   };
 }

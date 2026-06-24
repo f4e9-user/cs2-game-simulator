@@ -80,6 +80,8 @@ export interface Trait {
   description: string;
   modifiers: Partial<Stats>;
   tags: string[];
+  openingMoney?: number;
+  conflictsWith?: string[];
 }
 
 export interface Background {
@@ -558,6 +560,68 @@ export interface SalaryTracker {
   salaryRestoreRound?: number;
 }
 
+export type HousingTierId =
+  | 'shared-housing'
+  | 'basic-rental'
+  | 'standard-apartment'
+  | 'high-end-apartment'
+  | 'owned-home';
+
+export type HomeFacilityId = 'training-room' | 'review-room' | 'rest-room';
+export type HousingCityId = 'local-city' | 'regional-hub' | 'major-hub' | 'low-cost-city';
+export type HomeAssetActionId = 'rent-out' | 'stop-rental' | 'mortgage' | 'sell' | 'renovate';
+
+export interface HomeFacilityState {
+  trainingRoom: number;
+  reviewRoom: number;
+  restRoom: number;
+}
+
+export interface HomeAssetState {
+  facilities: HomeFacilityState;
+  renovationLevel: number;
+  rentalActive?: boolean;
+  mortgagePrincipal?: number;
+}
+
+export interface PlayerHousing {
+  tier: HousingTierId;
+  movedAtRound: number;
+  cityId?: HousingCityId;
+  assets?: HomeAssetState;
+}
+
+export interface HousingTier {
+  id: HousingTierId;
+  name: string;
+  description: string;
+  weeklyCost: number;
+  fatigueRecovery: number;
+  stressRecovery: number;
+  moveCost: number;
+}
+
+export interface HomeFacilityDefinition {
+  id: HomeFacilityId;
+  name: string;
+  description: string;
+  upgradeCost: number;
+  weeklyUpkeep: number;
+  fatigueRecovery: number;
+  stressRecovery: number;
+  maxLevel: number;
+}
+
+export interface HousingCityProfile {
+  id: HousingCityId;
+  name: string;
+  description: string;
+  costMultiplier: number;
+  propertyValueMultiplier: number;
+  rentalIncome: number;
+  eventWeightMultiplier: number;
+}
+
 export interface CareerPeaks {
   highestStage: CareerCompetitiveStage;
   peakFame: number;
@@ -602,6 +666,7 @@ export interface DynamicState {
   creditScore: number;
   familyBailoutCount: number;
   pendingFamilyCrisis?: PendingFamilyCrisis;
+  housing?: PlayerHousing;
   roundCombos: RoundCombo[];
   careerPeaks?: CareerPeaks;
   teamCareer?: TeamCareer;
@@ -624,6 +689,7 @@ export interface ActionResult {
   newVolatile: { feel: number; tilt: number; fatigue: number };
   comboTriggeredLabels?: string[];
   comboAddedLabels?: string[];
+  statusEffects?: string[];
 }
 
 export interface TeamActionResult {
