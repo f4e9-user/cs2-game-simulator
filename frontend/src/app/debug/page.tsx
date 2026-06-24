@@ -259,9 +259,6 @@ export default function LlmDebugPage() {
           </p>
           <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Link href="/debug/sessions" className="primary-button" style={{ display: 'inline-flex' }}>
-              Session 调试 / 改属性
-            </Link>
-            <Link href="/debug/sessions" className="ghost-button" style={{ display: 'inline-flex' }}>
               会话列表
             </Link>
           </div>

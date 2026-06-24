@@ -299,7 +299,7 @@ export default function DebugSessionPage() {
           <div className="panel" style={{ marginBottom: 0 }}>
             <div className="panel-title">成长上限</div>
             <div className="stat-label">{session.player.growthSpent ?? 0} / {GROWTH_CAP}</div>
-            <div className="stat-desc">剩余 {growthRemaining} 点，只计算五项核心属性。</div>
+            <div className="stat-desc">剩余 {growthRemaining} 点，只计算智力、敏捷、心态、体能；经验不占用成长上限。</div>
           </div>
         </div>
       )}
