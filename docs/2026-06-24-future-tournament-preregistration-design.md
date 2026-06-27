@@ -46,7 +46,39 @@
 
 ## 4. 推荐方案
 
-第一阶段沿用现有 `player.pendingMatch`，但允许它指向未来 12 周内的赛事。
+第一阶段复用现有 `player.pendingMatch` 数据结构，但**改写赛事调度**，允许它指向未来 12 周内的赛事。
+
+### 4.0 比赛周建模决策（地基，必须先定）
+
+现状必须先讲清楚，否则后面全是错的：
+
+- `Tournament` **没有"比赛周"字段**，只有 `signupWeeks: number[] | 'always'`（报名窗口周）。
+- 比赛周在 `game.ts` 的 signup 里**写死为"当前周 + 2"**（`week+1` = 备赛周 / AP 100，`week+2` = 比赛周 / AP 0），完全不看赛事自身日程。
+- `calendarBlocks.ts` 的 `allTournamentBlocks` 是按 `signupWeeks.includes(week)` 把赛事块铺在各周，所以日历上 "W12 BLAST" 这个块的语义是 **"W12 是该赛事的报名窗口周"**，不是 "W12 开打"。
+
+**决策：采用方案 (b) —— 不新增比赛周字段，把现有 "signup 窗口周 + 2" 规则参数化。**
+
+- 比赛周 `resolveWeek = 目标 signup 窗口周 + 2`。
+- 本周报名（目标 signup 窗口周 = 当前周）→ 当前周 + 2，与现状完全一致。
+- 预报名（目标 signup 窗口周在未来）→ 该未来窗口周 + 2。
+- 这样同周报名与预报名共用同一条调度规则；承重的 `+1` 备赛周 / `+2` 比赛周 AP 逻辑保持不变；`Tournament` 数据结构不动，符合第 3 节"不重构状态机"的非目标。
+
+**关键澄清：比赛周绑定的是"赛事自己的 signup 窗口周"，不是"你点预报名的那一周"。** 预报名只提前锁席位，不会把比赛拉到点击周附近。
+
+举例（今天 W6，某赛事 `signupWeeks = [12]`）：
+
+| 项 | 取值 |
+|---|---|
+| 点预报名的周 | W6 |
+| 目标 signup 窗口周（赛事自己的） | **W12** |
+| `resolveWeek` = 目标窗口周 + 2 | **W14** |
+| ~~点击周 + 2~~（不采用） | ~~W8~~ |
+
+即比赛排在 W14，日历从 W6（已报名）连续占用到 W14（比赛周）。若改用"点击周 + 2"会得到 W8——等于"提前报名能让比赛提前开打"，既不合理也与赛事日程脱节，故不采用。同周报名是该规则的特例：当前周已在窗口内时，目标窗口周 = 当前周，`resolveWeek = 当前周 + 2`，与现状一致。
+
+> 备选方案 (a)：给 `Tournament` 增加独立的"比赛周"字段、预报名时 `resolveWeek` 取它。表达更精确，但要改数据模型并重排所有赛事的比赛周，超出第一阶段范围，留作后续。
+>
+> 目标 signup 窗口周的取法：signup 接口仍只收 `tournamentId`，目标窗口周由后端推导为 **未来 12 周窗口内、严格晚于当前周的最早一个 `signupWeeks`**（`'always'` 类赛事视目标窗口周 = 当前周 + 1）。这样不必给接口加 `week` 参数，结果也唯一确定。
 
 也就是说：
 
@@ -56,14 +88,15 @@
   -> 可预报名赛事显示“预报名”
 
 点击预报名
-  -> 后端校验赛事在未来 12 周窗口内
-  -> 后端校验资格、战队、VRS、名气等门槛
-  -> 写入 player.pendingMatch
+  -> 后端推导目标 signup 窗口周（未来 12 周内、晚于当前周的最早一个）
+  -> 后端按"目标窗口周"校验报名窗口，按"当前状态"校验资格、战队、VRS、名气
+  -> resolveWeek = 目标 signup 窗口周 + 2
+  -> 写入 player.pendingMatch（resolveYear/resolveWeek 指向未来）
   -> 消耗资格票
   -> 生成 tournamentContext
 
 报名成功后
-  -> 当前周到比赛周显示连续行程
+  -> 当前周到比赛周显示连续行程（pendingMatchBlocks 已支持，见 5.3）
   -> 不允许报名第二个赛事
   -> 允许退赛，沿用 withdraw 惩罚
 ```
@@ -76,37 +109,26 @@
 
 后端 `calendarBlocks` 应明确区分“展示状态”和“可执行动作”。
 
-```ts
-type CalendarBlockKind =
-  | 'opportunity'
-  | 'commitment'
-  | 'prep'
-  | 'match'
-  | 'empty';
-
-type CalendarBlockAction =
-  | 'signup'
-  | 'preregister'
-  | 'withdraw'
-  | 'none';
-```
-
-推荐字段：
+> 以现网 `insights/types.ts` 的 `CalendarBlockInsight` 为基线，本方案**只做一处类型扩展**：把现有可选字段 `action` 的取值并集加上 `'preregister'`。`kind` / `source` / `tone` 等枚举沿用现网定义，不要在文档里另立一份会漂移的子集类型。
 
 ```ts
+// 现网已有，本方案唯一改动：action 并集 + 'preregister'
 interface CalendarBlockInsight {
   id: string;
   year: number;
   week: number;
-  kind: CalendarBlockKind;
+  endYear?: number;
+  endWeek?: number;
+  kind: 'opportunity' | 'commitment' | 'travel' | 'prep' | 'match' | 'recovery' | 'empty';
   title: string;
   shortTitle: string;
   tier?: string;
   status: string;
   tone: 'neutral' | 'available' | 'locked' | 'active' | 'major' | 'warning';
-  source: 'career-goal' | 'pending-match' | 'tournament-context' | 'system';
+  // 注意：赛事块用的是 'tournament-calendar'，不是 'career-goal'
+  source: 'career-goal' | 'tournament-calendar' | 'pending-match' | 'tournament-context' | 'system';
   tournamentId?: string;
-  action: CalendarBlockAction;
+  action?: 'signup' | 'preregister' | 'withdraw' | 'none'; // ← 仅新增 'preregister'
   detail?: string;
 }
 ```
@@ -147,20 +169,27 @@ W10 BLAST Bounty Season 9
     比赛周
 ```
 
+> 实现提示：连续行程展示**已经实现**。`calendarBlocks.ts` 的 `pendingMatchBlocks` 已会从 `tournamentContext.signedUpAtYear/Week` 连续渲染到 `pendingMatch.resolveYear/Week`，并输出 `已报名` / `备赛周`（`contextPhase === 'pre-match'`）/ `等待比赛` / `比赛周`、`commitment` / `match` 等状态。因此本节只要 `resolveWeek` 能指向远处即自动成立，**无需新写渲染逻辑**。需要注意的是当前 `备赛周` 仅在 `phase === 'pre-match'` 时出现，多周间隔下中间周会落到 `等待比赛`——若想区分 `prep`/`travel` 等更细的行程块，属于第二阶段（见第 9 节）。
+
 ---
 
 ## 6. 后端落地方案
 
 ### 6.1 改造报名接口
 
-当前 `POST /api/game/:sessionId/signup` 只接受本周赛事。
+当前 `POST /api/game/:sessionId/signup` 只接受本周赛事，且把比赛周写死为 `当前周 + 2`（`game.ts:787-795`）。两处都要改。
 
-需要改成：
+接口仍只收 `tournamentId`，逻辑改成：
 
-1. 先查本周可报名赛事。
-2. 如果没找到，再查未来 12 周可见赛事。
-3. 如果赛事在未来 12 周内且资格满足，允许预报名。
-4. 如果已有 `player.pendingMatch`，拒绝报名第二个赛事。
+1. 取该赛事的 `signupWeeks`，推导**目标 signup 窗口周**：
+   - 若当前周在 `signupWeeks` 内（或 `'always'`）→ 目标窗口周 = 当前周，走原本周报名路径。
+   - 否则取未来 12 周窗口内、严格晚于当前周的最早一个 `signupWeeks` 作为目标窗口周（即预报名）；窗口外则拒绝。
+2. **窗口校验用目标窗口周**：`canSignUpForTournament(player, t, points, 目标窗口周)`，避免预报名被 `signupWeeks.includes(当前周)` 误拒。
+3. **门槛校验用当前状态**：资格票、VRS、名气、战队 tier 一律按当前 player 评估并立即锁定（与 6.2 一致）。
+4. 比赛周改为 `resolveWeek = 目标窗口周 + 2`（替换写死的 `当前周 + 2`）。
+5. 若已有 `player.pendingMatch`，拒绝报名第二个赛事。
+
+> 说明：第 2 步与第 3 步刻意分离——"窗口"看未来目标周，"资格"看当前。这就是"报名即锁定"的语义：用今天的资格锁一个未来席位。
 
 错误文案建议：
 
@@ -184,6 +213,8 @@ W10 BLAST Bounty Season 9
 
 第一阶段不返还，沿用现有弃赛惩罚。
 
+> 与现状一致：现网 signup 已在报名时立即消耗资格票（`game.ts:739-784`），本节规则无需改动消耗时机，只是把它沿用到预报名路径。
+
 ### 6.3 `pendingMatch` 复用
 
 预报名成功后继续写入：
@@ -192,7 +223,7 @@ W10 BLAST Bounty Season 9
 player.pendingMatch = {
   tournamentId,
   resolveYear,
-  resolveWeek,
+  resolveWeek,   // = 目标 signup 窗口周 + 2（跨年时进位，沿用现有 addWeeks 逻辑）
   stageIndex,
   qualificationSlotUsed,
   qualificationSlotOwner,
@@ -200,7 +231,7 @@ player.pendingMatch = {
 }
 ```
 
-`resolveWeek` 指向赛事实际比赛周。
+`resolveWeek` 由 `目标 signup 窗口周 + 2` 推出（见 4.0 决策），同周报名时即退化为现状的 `当前周 + 2`。AP 与备赛逻辑不变：`resolveWeek - 1` 为备赛周、`resolveWeek` 为比赛周冻结行动力；预报名拉长的中间周按正常行动周处理（AP 100），不提前冻结。
 
 ### 6.4 `tournamentContext` 生成
 
@@ -265,6 +296,8 @@ block.action
 
 如果已有 `pendingMatch`，所有其他赛事块只展示，不给报名按钮。
 
+> 与现状一致：`tournamentBlock` 的 `canSubmitSignup` 已要求 `!pendingMatch`，有 pendingMatch 时其余赛事块自动落到 `action: 'none'`。新增的 `preregister` 分支同样必须带 `!pendingMatch` 判定。
+
 ### 8.2 未来资格变化
 
 第一阶段采用报名时锁定席位，资格立刻消耗。
@@ -288,9 +321,11 @@ block.action
 建议规则：
 
 - 报名当周：可插入报名确认/媒体反应。
-- 比赛前 1 周：插入赛前准备事件。
-- 比赛周：强制赛事比赛事件。
+- 比赛前 1 周（`resolveWeek - 1`）：插入赛前准备事件。
+- 比赛周（`resolveWeek`）：强制赛事比赛事件。
 - 其他备赛周：只在日历展示，不强制事件。
+
+> 状态机风险（需在实现时验证）：现网 `+2` 调度只产生**单个**备赛周，`tournamentContext.phase` 的 `pre-match` → `match` 流转目前只在 1 周间隔下验证过。预报名会把间隔拉到数周，必须确认：(1) `phase` 不要在报名当周就切到 `pre-match`（否则中间周一直显示"备赛周"且可能误触发赛前事件），赛前事件应严格以 `当前周 === resolveWeek - 1` 为闸；(2) 中间周行动力按正常行动周（AP 100）处理，只有 `resolveWeek` 当周冻结为 0；(3) 跨年（`week > 48`）时 `resolveWeek` 进位与 `pendingMatchBlocks`/`addWeeks` 的折算一致。这三点是预报名相对同周报名唯一新增的状态机覆盖面，应配套测试。
 
 ---
 
@@ -337,10 +372,13 @@ block.action
 4. 已预报名时，其他未来赛事不显示报名按钮。
 5. 退赛后，日历恢复未来赛事窗口。
 6. 前端按钮完全由 `calendarBlocks.action` 驱动。
-7. 后端测试覆盖：
-   - 本周报名。
-   - 未来预报名。
+7. 预报名后 `resolveWeek === 目标 signup 窗口周 + 2`，且同周报名仍为 `当前周 + 2`（回归）。
+8. 预报名后的中间周行动力为 100，仅 `resolveWeek` 当周冻结为 0；赛前事件只在 `resolveWeek - 1` 触发。
+9. 后端测试覆盖：
+   - 本周报名（回归，调度不变）。
+   - 未来预报名（窗口用目标周校验、资格用当前状态、`resolveWeek` 正确）。
    - 已有 `pendingMatch` 时拒绝第二报名。
    - 资格不足时不允许预报名。
    - 预报名后 `calendarBlocks` 连续更新。
+   - 多周间隔下 `phase` 不提前切 `pre-match`、AP 与跨年进位正确。
 

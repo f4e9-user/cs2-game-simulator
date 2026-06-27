@@ -66,6 +66,12 @@
 
 因此需要新增一套轻量选手数据库，为每支队伍提供可引用的真实对象。
 
+> **收敛决策（A 案）**：`WorldPlayer` **取代**现有 `ClubRuntimeState.fullRoster: ClubPlayer[]`——`fullRoster` 改为 `WorldPlayer[]`，`ClubPlayer` 类型退役（其字段并入或迁移到 `WorldPlayer`）。`player.roster: Teammate[]` **保留不动**，作为玩家当前互动层的队友列表，通过稳定的选手 `id` 与 `WorldPlayer` 映射。这样世界侧只有一套权威选手模型（`WorldPlayer`），不再出现 `ClubPlayer` / `WorldPlayer` 两套世界阵容并存。
+>
+> **属性轴统一**：`WorldPlayer` 的能力维度统一为与玩家 `Stats` 一致的轴（`agility` / `constitution` / `intelligence` / `mentality` / `experience`，即去掉玩家专属的 `money`），不再使用另一套 `mechanics/awareness/teamplay/explosiveness`。这样 2.4 的年龄规则可对玩家和 `WorldPlayer` **直接复用同一套实现**，无需为两套 schema 各写映射。
+>
+> **生成与存储**：沿用现有 `worldClubs.ts` 的确定性派生思路（`hashString + makeRng`，见 `generateFullRoster`）：`WorldPlayer` 默认**按 clubId/赛季确定性派生**，存档只持久化"被转会等事件改写过"的增量，不全量落盘，避免上百支队伍 × 5 首发撑爆存档并保证跨读一致。
+
 第一版目标：
 
 - 每支结构化参赛队伍至少拥有 5 名首发选手。
@@ -76,13 +82,13 @@
 
 选手数据库不等于完整转会市场。第一版只需要能支撑赛事和叙事，不需要模拟所有选手合同、买断、挂牌和自由市场。
 
-映射关系：
+映射关系（A 案下）：
 
-- 玩家当前队伍的队友可以继续沿用现有 `player.roster`，第一版不强制完全替换为 `WorldPlayer`。
-- 只要是进入赛事中心、MVP、转会和战术分析视图的选手，都必须有对应的 `WorldPlayer` 记录。
-- `player.roster` 与 `WorldPlayer` 可以通过稳定的选手 id 或名称映射关联，避免一开始就重构整套玩家队友系统。
-- 如果某支队伍已经有完整 `WorldPlayer` 首发，则赛事、情报和转会都优先读 `WorldPlayer`，玩家个人页面仍可继续显示原有队友结构。
-- `player.roster` 是玩家当前互动层的队友列表，`WorldPlayer` 是世界赛事与转会系统的权威选手库；两者可映射，但不要求字段完全相同。
+- 世界侧（所有非玩家队伍阵容）统一用 `WorldPlayer`；`ClubRuntimeState.fullRoster` 的元素类型从 `ClubPlayer` 迁移为 `WorldPlayer`。
+- 进入赛事中心、MVP、转会、战术分析视图的选手，一律读 `WorldPlayer`。
+- 玩家当前队伍的队友继续用 `player.roster: Teammate[]` 承载互动层（事件、角色、默契等），但每个队友持有稳定 `id`，与世界侧对应的 `WorldPlayer` 一一映射。
+- `player.roster`（互动层）与 `WorldPlayer`（世界权威库）字段不要求完全相同，但属性轴对齐：`Teammate.stats`（`TeammateStats`）是 `WorldPlayer.stats` 的子集，映射时按同名维度对应，避免转换时语义漂移。
+- 玩家本人不进 `WorldPlayer` 库；玩家在赛事/转会视图中的身份由 `Player` 直接提供，但属性轴与 `WorldPlayer` 一致，便于同一套年龄与表现计算复用。
 
 ### 2.4 年龄系统
 
@@ -114,6 +120,12 @@
 - 如果后续需要把年龄结果写回永久属性，必须通过单独的赛季结算规则处理，不能和比赛即时修正混用。
 - 年龄修正和伤病、状态、Buff 的修正必须分层，避免同一场比赛重复叠加两次。
 - 玩家和世界选手都适用同一套年龄规则，避免不同系统各算各的。
+
+落点（实现约定）：
+
+- 年龄派生层必须注入在**比赛有效属性的单一计算入口**（`matchSimulator` 计算 effective stats 处），不要散落到各事件里。
+- 叠加顺序固定为：基础 `stats` → 年龄派生修正 → 伤病/状态/Buff 修正。年龄层在前、临时状态层在后，确保 2.4 "不双叠"成立。
+- 因为玩家与 `WorldPlayer` 属性轴已统一（见 2.3），该入口对两者复用同一函数，仅输入对象不同。
 
 ## 3. 不同俱乐部身份的机制差异
 
@@ -325,6 +337,8 @@
 
 现有赛事系统已经有 BO3 / BO5 的赛事回合设计，这部分应复用，而不是新增一套单场关键战逻辑。
 
+> 复用边界（避免误解）：可复用的是**玩家自己那一条系列赛**——现有 `tournament-series` 事件序列、`TournamentStage.seriesType: 'bo1' | 'bo3' | 'bo5'`（`tournaments.ts`）、多图推进与结算（`choiceSequences.ts`、`tournamentSeries.test.ts`）确实已存在。但现有 `bracket: TournamentStage[]` 表示的是**玩家个人的晋级路径**（`stageIndex` / `stageLosses` 在 player 上推进），并不是一个含所有参赛队对阵的完整赛程。§4.3 / §11.8 的 `TournamentInstance`（`teams[]`、各 stage 的 `matches[]`、分组、其他队抽象推进）是**新增的、较重的结构**。即"复用"仅覆盖玩家亲自打的系列赛结算，多队 bracket 的建模与抽象模拟是新工作量。
+
 第一版规则：
 
 - 如果阶段是 BO1，玩家打一场。
@@ -515,8 +529,11 @@ Major 进一步展示：
 | 赛事成绩 | `pendingMatch`、赛事结算、`recentResults` |
 | 玩家表现 | 比赛 rating、击杀、死亡、胜负 |
 | 队伍稳定 | `rosterStability` |
-| 队内关系 | `teamTrust` 或 `clubTrust` |
+| 队内关系（玩家所在队） | `player.teamTrust` |
+| 队内关系（世界队伍） | `ClubRuntimeState.clubTrust` |
 | 队伍状态 | `currentForm` |
+
+> 字段区分（全文统一）：`player.teamTrust`（`types.ts:748`）是**玩家与当前队伍**的信任；`ClubRuntimeState.clubTrust`（`types.ts:342`）是**世界俱乐部内部运行态**，两者主体不同、不可互换。凡涉及"玩家所在队"的判断一律用 `player.teamTrust`，"世界队伍"的判断用 `runtime.clubTrust`，不再写"teamTrust 或 clubTrust"。
 | 资格门票 | `qualificationSlots` 或 `teamQualificationSlots` |
 
 ### 6.2 赛季中反馈
@@ -576,7 +593,7 @@ Major 进一步展示：
 - 队伍 VRS 下滑。
 - 连续赛事失利。
 - `rosterStability` 低。
-- `clubTrust` 低。
+- 信任低（玩家所在队看 `player.teamTrust`；世界队伍看 `runtime.clubTrust`，见 6.1 字段区分）。
 - 高资本俱乐部短期目标失败。
 - 没落豪门复兴失败。
 - 玩家或队友之间出现明显核心差距。
@@ -653,7 +670,7 @@ Major 进一步展示：
 效果：
 
 - 压力上升。
-- `teamTrust` 或 `clubTrust` 下降。
+- `player.teamTrust` 下降（玩家所在队，见 6.1 字段区分）。
 - 出现管理层警告文案。
 
 #### 阶段 2：明星选手传闻
@@ -894,6 +911,7 @@ export interface PlayerTeam {
   monthlySalary: number;
   joinedRound: number;
 
+  // 仅作展示快照；权威值存 runtime（见下方持久化决策）
   seasonGoal?: ClubSeasonGoal;
   managementPatience?: number;
   rebuildPressure?: number;
@@ -901,25 +919,39 @@ export interface PlayerTeam {
 }
 ```
 
+> 持久化决策（重要）：`PlayerTeam` 是**合同快照**，换队时 `joinTeamFromOffer`（`club.ts:310`）会整体重建该对象，挂在上面的赛季级状态会随之丢失。因此 `seasonGoal` / `managementPatience` / `rebuildPressure` / `coreStatus` 的**权威存储放在玩家当前队对应的 `ClubRuntimeState`（按 `clubId` 索引）**，`PlayerTeam` 上的同名字段只作为当前合同期的展示快照（每次进入相关视图时从 runtime 派生刷新）。
+>
+> 生命周期：
+> - 换队：新队的赛季状态从其 `ClubRuntimeState` 读取/初始化（新队新目标，符合预期）；旧队状态留在旧 runtime，不随玩家迁移。
+> - 赛季 rollover：在 runtime 上演进 `rebuildPressure` / `managementPatience` / `seasonGoal`，再同步快照到 `PlayerTeam`。
+> - 这样玩家当前队与世界队伍走**同一套 runtime 字段**，避免 `PlayerTeam` 与 `ClubRuntimeState` 双写同一概念却不同步。
+
 ### 11.4 世界队伍运行态
 
-世界队伍也可以保留抽象字段，但第一版建议只完整应用于玩家当前队伍。
+`ClubRuntimeState` 已存在（`types.ts:334`），本方案在其上做两类改动：(1) `fullRoster` 的元素类型由 `ClubPlayer` 迁移为 `WorldPlayer`；(2) 新增赛季级权威字段（玩家当前队与世界队伍共用，见 11.3 持久化决策）。世界队伍第一版只需完整应用于活跃/相关/玩家当前队，远端静态队可继续按需派生。
 
 ```ts
 export interface ClubRuntimeState {
   clubId: string;
   tier: ClubTier;
+  // …现有字段（clubTrust / currentForm / rosterStability / vrsScore / recentResults 等）保持不变…
 
-  playerIds?: string[];
+  fullRoster: WorldPlayer[];        // ← 原为 ClubPlayer[]，A 案下迁移为 WorldPlayer[]
+  playerIds?: string[];             // 可选：稳定 id 索引，便于转会改写
+
+  // 赛季级权威字段（PlayerTeam 上的同名字段是其快照）
   seasonGoal?: ClubSeasonGoal;
+  managementPatience?: number;
   rebuildPressure?: number;
   rebuildCorePlayerId?: string;
 }
 ```
 
+> 迁移提示：`fullRoster` 改类型后，现有读取 `ClubPlayer` 的代码（`worldClubs.ts` 的 `generateFullRoster`、赛事/情报/申请摘要等）需同步改为 `WorldPlayer`。`ClubPlayer` 类型在迁移完成后删除。
+
 ### 11.5 选手数据库
 
-新增 `WorldPlayer`，用于承载非玩家选手和玩家队友在世界赛事中的可引用身份。
+新增 `WorldPlayer`，作为世界侧（所有非玩家队伍）的**唯一**权威选手模型，**取代** `ClubRuntimeState.fullRoster` 原来的 `ClubPlayer`（A 案，见 2.3）。`ClubPlayer` 迁移后删除。
 
 ```ts
 export type PlayerArchetype =
@@ -933,13 +965,14 @@ export type PlayerArchetype =
   | 'role-player'
   | 'volatile-talent';
 
+// 属性轴与玩家 Stats 对齐（去掉玩家专属的 money），
+// 使 2.4 的年龄规则对玩家和 WorldPlayer 复用同一套实现。
 export interface PlayerSkillProfile {
-  mechanics: number;
-  awareness: number;
-  mentality: number;
-  experience: number;
-  teamplay: number;
-  explosiveness: number;
+  agility: number;       // 敏捷
+  constitution: number;  // 体能
+  intelligence: number;  // 智力
+  mentality: number;     // 心态
+  experience: number;    // 经验
 }
 
 export interface WorldPlayer {
@@ -1163,13 +1196,14 @@ export interface TournamentPlayerAward {
 - 新增 `ClubArchetype`。
 - 扩展 `Club`。
 - 新增 `ClubSeasonGoal`。
-- 新增 `WorldPlayer`、`PlayerSkillProfile`、`TournamentPlayerPerformance`。
+- 新增 `WorldPlayer`、`PlayerSkillProfile`（属性轴与 `Stats` 对齐）、`TournamentPlayerPerformance`。
+- **迁移 `ClubRuntimeState.fullRoster` 由 `ClubPlayer[]` 改为 `WorldPlayer[]`，迁移完成后删除 `ClubPlayer`**（A 案）。
 - 新增 `TransferRumor`、`TransferRecord`、`TransferType`。
 - 给 `Player` 新增 `age`。
-- 新增年龄派生修正类型或函数，用于影响敏捷、体能、智力、心态和经验。
+- 新增年龄派生修正类型或函数，用于影响敏捷、体能、智力、心态和经验；玩家与 `WorldPlayer` 复用同一函数（属性轴已统一）。
 - 新增 `TournamentInstance`、`TournamentTeamEntry`、`TournamentInstanceStage`、`TournamentInstanceMatch`、`TournamentAwards`。
-- 扩展 `PlayerTeam`。
-- 可选扩展 `ClubRuntimeState`。
+- 扩展 `PlayerTeam`（赛季级字段仅作快照，权威值在 `ClubRuntimeState`，见 11.3）。
+- 扩展 `ClubRuntimeState`：`fullRoster: WorldPlayer[]` + `seasonGoal` / `managementPatience` / `rebuildPressure` / `rebuildCorePlayerId`。
 
 ### 12.3 选手数据库与年龄系统
 
@@ -1179,9 +1213,11 @@ export interface TournamentPlayerAward {
 
 改动：
 
-- 为每支结构化俱乐部生成或加载 5 名首发 `WorldPlayer`。
+- 把 `worldClubs.ts` 的 `generateFullRoster` 由产出 `ClubPlayer[]` 改为产出 `WorldPlayer[]`（确定性派生，沿用 `hashString + makeRng`）；下游所有读 `ClubPlayer` 的位置（赛事、情报、`ClubApplicationSummary` 摘要等）同步改读 `WorldPlayer`。
+- 为每支结构化俱乐部生成或加载 5 名首发 `WorldPlayer`，存档只持久化被转会改写过的增量，其余按需派生。
 - 将 `ClubRuntimeState.playerIds` 关联到选手数据库。
 - 赛事表现、MVP、败方 MVP、最佳新秀和战术分析读取 `WorldPlayer`。
+- 年龄派生层注入 `matchSimulator` 的有效属性计算入口，顺序为 基础 stats → 年龄 → 伤病/状态/Buff（见 2.4 落点）。
 - 玩家创建时写入 `age`。
 - 新赛季开始时玩家 `age + 1`。
 - 年龄对敏捷、体能、智力、心态、经验使用派生修正或成长倍率，不直接无预警修改永久核心属性。
@@ -1429,6 +1465,13 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 
 ## 15. 推荐实施阶段
 
+> 已细化为可实现方案的阶段：
+> - Phase 3 — [phase3-worldplayer-age-implementation.md](./phase3-worldplayer-age-implementation.md)
+> - Phase 4 — [phase4-tournament-instance-implementation.md](./phase4-tournament-instance-implementation.md)
+> - Phase 6-7 — [phase6-7-season-goal-implementation.md](./phase6-7-season-goal-implementation.md)
+>
+> 其余阶段（1/2/5/8）待细化。
+
 ### Phase 1：俱乐部身份数据
 
 目标：
@@ -1459,6 +1502,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 
 ### Phase 3：选手数据库与年龄系统
 
+> 实现细化：[phase3-worldplayer-age-implementation.md](./phase3-worldplayer-age-implementation.md)
+
 目标：
 
 - 为结构化队伍生成或加载 5 名首发选手。
@@ -1475,6 +1520,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 - 玩家年龄不会无预警永久扣除已有核心属性。
 
 ### Phase 4：赛事实例与赛事中心
+
+> 实现细化：[phase4-tournament-instance-implementation.md](./phase4-tournament-instance-implementation.md)
 
 目标：
 
@@ -1511,6 +1558,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 
 ### Phase 6：面试生成赛季目标
 
+> 实现细化：[phase6-7-season-goal-implementation.md](./phase6-7-season-goal-implementation.md)（与 Phase 7 合并）
+
 目标：
 
 - 签约时生成 `seasonGoal`。
@@ -1524,6 +1573,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 - 目标能随新赛季刷新。
 
 ### Phase 7：赛季目标评估
+
+> 实现细化：[phase6-7-season-goal-implementation.md](./phase6-7-season-goal-implementation.md)（与 Phase 6 合并）
 
 目标：
 
