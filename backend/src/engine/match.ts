@@ -2,7 +2,7 @@ import { type Tournament, stageRewardDelta } from '../data/tournaments.js';
 import { PRIZE_SPLIT } from '../data/clubs.js';
 import { getRoleProfile } from '../data/roleProfiles.js';
 import type { Outcome, Player, StatKey } from '../types.js';
-import { CAREER_TIME_EXPERIENCE_RAW } from './constants.js';
+import { CAREER_TIME_EXPERIENCE_RAW, SERIES_MAP_FATIGUE_SCALE } from './constants.js';
 import { applyCareerExperienceGrowth, clampStats, resolveChoice } from './resolver.js';
 import { applyMoneyDeltaToStats } from './money.js';
 import { type MatchSimResult } from './matchSimulator.js';
@@ -133,12 +133,15 @@ export function buildTournamentMapResolveResult(
   player: Player,
   sim: MatchSimResult,
 ): ReturnType<typeof resolveChoice> {
+  // 单图疲劳打折：系列赛一张图只是整场比赛的一段，配合中场休息回血，
+  // 避免 Bo3/Bo5 逐图叠加把疲劳直接焊死在 100。
+  const mapFatigueDelta = Math.round(sim.fatigueDelta * SERIES_MAP_FATIGUE_SCALE);
   const chosenOutcome: Outcome = {
     narrative: sim.summary,
     stateDelta: {
       feel: sim.feelDelta,
       tilt: sim.tiltDelta,
-      fatigue: sim.fatigueDelta,
+      fatigue: mapFatigueDelta,
       stress: sim.won ? 0 : 5,
     },
   };
@@ -158,7 +161,7 @@ export function buildTournamentMapResolveResult(
     endReason: undefined,
     feelDelta: sim.feelDelta,
     tiltDelta: sim.tiltDelta,
-    fatigueDelta: sim.fatigueDelta,
+    fatigueDelta: mapFatigueDelta,
     moneyDelta: 0,
     growthApplied: 0,
     growthKey: undefined,

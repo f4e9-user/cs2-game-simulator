@@ -901,6 +901,7 @@ export type EventSequenceType =
 
 export type EventSequenceDynamicKind =
   | 'tournament-map'
+  | 'tournament-break'
   | 'tournament-series-decider'
   | 'interview-question'
   | 'family-crisis-step'

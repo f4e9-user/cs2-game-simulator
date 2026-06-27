@@ -152,6 +152,20 @@ describe('injury rest integration', () => {
     expect(acted.actionResult.statusEffects).toBeUndefined();
   });
 
+  it('recovers fatigue every forced-rest round even with no rest event', () => {
+    const effects: string[] = [];
+    const acted = applyInjuryRiskTick(player({
+      restRounds: 2,
+      tags: ['injured', 'forced-rest'],
+      volatile: { feel: 0, tilt: 0, fatigue: 100 },
+    }), 'routine', effects);
+
+    // 强制休养必须净恢复疲劳，避免「休养却不掉疲劳」的空转
+    expect(acted.volatile.fatigue).toBeLessThan(100);
+    expect(acted.tags).toContain('forced-rest');
+    expect(effects.join(' ')).toContain('强制休养：身体恢复');
+  });
+
   it('lets very low constitution enter injury risk earlier under fatigue', () => {
     const effects: string[] = [];
     const acted = applyInjuryRiskTick(player({

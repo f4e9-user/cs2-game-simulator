@@ -14,6 +14,7 @@ import {
   CAREER_TIME_EXPERIENCE_RAW,
   CONSTITUTION_COLLAPSE,
   FEEL_CAP_DEFAULT,
+  FORCED_REST_RECOVERY,
   GROWTH_CAP,
   IMPLICIT_FAILURE_STRESS,
   INJURY_RISK_THRESHOLDS,
@@ -150,6 +151,14 @@ export function applyInjuryRiskTick(
 ): Player {
   const next = { ...player, tags: [...player.tags], volatile: { ...player.volatile } };
   if ((next.restRounds ?? 0) > 0) {
+    // 强制休养保底恢复：即便本回合没有触发休养事件（例如赛前期被 pendingMatch
+    // 上下文占用），强制休养也必须净掉一部分疲劳，避免空转。
+    const beforeFatigue = next.volatile.fatigue ?? 0;
+    const recoveredFatigue = clampFatigue(beforeFatigue - FORCED_REST_RECOVERY);
+    if (recoveredFatigue < beforeFatigue) {
+      next.volatile.fatigue = recoveredFatigue;
+      effects.push(`强制休养：身体恢复，疲劳 -${beforeFatigue - recoveredFatigue}`);
+    }
     setInjuryState(next, 'forced-rest');
     if (!next.tags.includes('injured')) next.tags.push('injured');
     return next;

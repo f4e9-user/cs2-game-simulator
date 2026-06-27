@@ -189,6 +189,14 @@ export const FATIGUE_DELTA_FLOOR_ROUTINE = 5; // 日常行动
 export const FATIGUE_DELTA_FLOOR_EVENT   = 2; // 随机事件
 export const FATIGUE_DELTA_FLOOR_MATCH   = 8; // 正式比赛
 
+// 系列赛（Bo3/Bo5）逐图疲劳折扣：单图不是一场独立比赛的消耗，
+// 配合中场休息的回血，避免一个系列赛直接把疲劳焊死在 100。
+export const SERIES_MAP_FATIGUE_SCALE = 0.6;
+
+// 强制休养期间每回合保底疲劳恢复：无论是否触发休养事件，
+// 强制休养都必须是净恢复，避免「休养却不掉疲劳」的空转。
+export const FORCED_REST_RECOVERY = 18;
+
 // 心态对压力增量的梯度乘数（仅作用于正值）
 export function stressMult(mentality: number): number {
   if (mentality >= 16) return 0.30;

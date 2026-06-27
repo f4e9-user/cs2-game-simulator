@@ -93,7 +93,8 @@ function resolveForcedGroupLoss(stageLosses = 0) {
 
   const eventPhase = endActionPhase(session).session;
   const map1 = applyChoice(eventPhase, 'match-play');
-  const map2 = applyChoice(map1.session, 'match-play');
+  const break1 = applyChoice(map1.session, 'break-recover');
+  const map2 = applyChoice(break1.session, 'match-play');
   return applyChoice(map2.session, 'series-confirm');
 }
 
@@ -115,13 +116,19 @@ describe('tournament series', () => {
     const map1 = applyChoice(eventPhase, 'match-play');
     expect(map1.session.player.round).toBe(20);
     expect(map1.session.player.stats.money).toBe(20);
-    expect(map1.session.currentEvent?.id).toContain('map-2');
+    // 第一张图后进入图间休息，而不是直接到第二张图
+    expect(map1.session.currentEvent?.id).toContain('-break-1');
 
-    const map2 = applyChoice(map1.session, 'match-play');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    expect(break1.session.player.round).toBe(20);
+    expect(break1.session.currentEvent?.id).toContain('map-2');
+
+    const map2 = applyChoice(break1.session, 'match-play');
     expect(map2.session.player.round).toBe(20);
     expect(map2.session.player.stats.money).toBe(20);
+    // 2-0 已分胜负，剩余的中场与第三张图一起跳过，直奔结算
     expect(map2.session.currentEvent?.id).toBe('tournament-y1-b-01--1');
-    expect(map2.session.activeEventSequence?.currentIndex).toBe(3);
+    expect(map2.session.activeEventSequence?.currentIndex).toBe(5);
 
     const final = applyChoice(map2.session, 'series-confirm');
     expect(final.session.phase).toBe('action');
@@ -145,10 +152,33 @@ describe('tournament series', () => {
 
     const eventPhase = endActionPhase(session).session;
     const map1 = applyChoice(eventPhase, 'match-play');
-    const map2 = applyChoice(map1.session, 'match-play');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    const map2 = applyChoice(break1.session, 'match-play');
     const final = applyChoice(map2.session, 'series-confirm');
 
     expect(final.result.fatigueChange).toBe(0);
+  });
+
+  it('inserts a halftime break between maps that recovers fatigue without advancing the round', () => {
+    const p = {
+      ...player(),
+      volatile: { feel: 0, tilt: 0, fatigue: 50 },
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    expect(map1.session.currentEvent?.id).toContain('-break-1');
+    const fatigueAfterMap = map1.session.player.volatile.fatigue;
+
+    const brk = applyChoice(map1.session, 'break-recover');
+    expect(brk.session.currentEvent?.id).toContain('map-2');
+    expect(brk.session.player.round).toBe(20);
+    expect(brk.session.player.volatile.fatigue).toBeLessThan(fatigueAfterMap);
   });
 
   it('uses a different simulation stream for each map in the same bo3 round', () => {
@@ -163,7 +193,8 @@ describe('tournament series', () => {
 
     const eventPhase = endActionPhase(session).session;
     const map1 = applyChoice(eventPhase, 'match-play');
-    const map2 = applyChoice(map1.session, 'match-play');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    const map2 = applyChoice(break1.session, 'match-play');
 
     expect(map1.session.player.round).toBe(map2.session.player.round);
     expect(map1.result.matchStats).toBeDefined();
@@ -183,8 +214,10 @@ describe('tournament series', () => {
 
     const eventPhase = endActionPhase(session).session;
     const map1 = applyChoice(eventPhase, 'match-play');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    // 在第二张图丢掉序列，强制从 currentEvent 还原（覆盖 map/break 交错后的索引还原）
     const restoredMap2Session = {
-      ...map1.session,
+      ...break1.session,
       activeEventSequence: undefined,
     };
     const map2 = applyChoice(restoredMap2Session, 'match-play');
@@ -206,8 +239,10 @@ describe('tournament series', () => {
 
     const eventPhase = endActionPhase(session).session;
     const map1 = applyChoice(eventPhase, 'match-play');
-    const map2 = applyChoice(map1.session, 'match-play');
-    const map3 = applyChoice(map2.session, 'match-play');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    const map2 = applyChoice(break1.session, 'match-play');
+    const break2 = applyChoice(map2.session, 'break-recover');
+    const map3 = applyChoice(break2.session, 'match-play');
     const final = applyChoice(map3.session, 'series-confirm');
 
     expect(final.session.player.tierChampionships.major).toBe(1);
