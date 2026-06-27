@@ -159,6 +159,28 @@ if (result.eventId === 'chain-rebuild-decision') {
 
 runtime 权威 `coreStatus` / `rebuildCorePlayerId` 在世界侧同步（玩家当前队 runtime）。
 
+### 6.3 与角色系统的联动（修复缺口 B / C）
+
+重建的"内部竞争"本质是角色竞争，必须和现有角色系统对齐，否则结晶老将无法被挑战、被边缘化又不影响角色字段。
+
+**B. 结晶角色的抗性**（决定节点判定时）：
+
+- 已 `roleCrystallized` 的玩家面对同角色新援时，`contested`/`rotation-risk` 概率**降低**（给"公认核心"一层抗性），但**不免疫**——重建对老将仍有牙。
+- 实现：`deriveRebuildCoreStatus`（§6.2）在判定时，若 `player.roleCrystallized && 新援角色 === player.activeRole`，给玩家侧加一档抗性权重；新援足够强（高 reputation）仍可击穿。
+- 同时复用现有"同角色队友 +25"的 `deriveRolePressure`（`roleTransition.ts:11`）：内部竞争阶段引入同角色新援后，角色压力本就会上升，与本判定一致。
+
+**C. coreStatus → 角色字段联动**（§6.2 后处理里一并执行）：
+
+| coreStatus | 对角色系统的影响 |
+|---|---|
+| `player-core` | 保 `activeRole`；若接近结晶可加速（`activeRoleRounds` 补足） |
+| `contested` | 不动 `activeRole`，但角色压力维持高位（需证明） |
+| `rotation-risk` | `teamStatus='rotation'`；角色压力升高、暂缓结晶 |
+| `transfer-listed` | 同上；允许走人，新队入队时按 `detectRoleOverlap` 重定角色 |
+| `benched` | **清 `activeRole`**（替补失去固定位置）；`roleCrystallized` 不强清，但失去 active 后压力高、易触发转型 |
+
+> 即：被边缘化（rotation-risk/benched）会真实作用到角色字段（清 active / 暂缓结晶 / 升压力），而非只改一个 coreStatus 标签。结晶给抗性、不给免疫，保证"老将被冲击但有底气"的体验。
+
 ---
 
 ## 7. 资本队渐进风险变体（设计 §9）
@@ -196,6 +218,7 @@ runtime 权威 `coreStatus` / `rebuildCorePlayerId` 在世界侧同步（玩家�
   - 结局：高表现→`player-core`、低表现+新援→`transfer-listed`；决定后 `rebuildPressure` 归零、链 tag 清除。
   - 防挫败：不存在"未经前置节点直接 benched"的路径。
   - 资本队：`capital-project` 触发阈值更低、冷却更短。
+  - 角色联动（§6.3）：同条件下 `roleCrystallized` 玩家进 `contested`/`rotation-risk` 概率低于未结晶（抗性非免疫，强新援仍可击穿）；`benched` 后 `activeRole` 被清、角色压力升高。
 - 回归：`multiEventQueue.test.ts` / `longEventChains.test.ts` 不被破坏（新增链不影响既有编排）。
 
 ---

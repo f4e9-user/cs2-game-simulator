@@ -150,6 +150,17 @@ archetype → 倾向（设计 10.2）决定**用什么类型**满足需求（资
 
 `player.roster: Teammate[]` 是 `WorldPlayer` 阵容的互动层镜像（Phase 3 映射）：队友进出转会后，**roster 快照需同步增删并按 id 重映射**（在转会执行后或下次入队/赛季刷新时）。
 
+### 7.1 转会后角色重算与补位（修复缺口 D）
+
+> 问题：现有 `detectRoleOverlap`（`club.ts:307`）只在**入队时**跑一次。赛季中转会改变了玩家所在队阵容（队友被挖、新援加入）后，角色组成变了却不重算——比如队里唯一 IGL 被挖走，玩家本该被推去补位指挥，但系统无感。
+
+修复（转会执行改动玩家队 `player.roster` 后触发）：
+
+- **重算角色重叠/缺口**：转会改动玩家 roster 后，重跑 `detectRoleOverlap(player, roster)` 与 `deriveRosterNeed(runtime)`，刷新玩家的角色重叠状态与队伍角色缺口（不再停留在入队时的快照）。
+- **关键角色出缺 → 补位事件**：若转会导致队伍缺关键角色（如 IGL 被挖、无人指挥），注入一次**角色补位/转型建议事件**（复用 `chain-role-transition-start` 链路），让玩家选择是否补位；接受则走现有转型流程（`roleTransition` → `prove-transition`）。
+- **新援同角色 → 竞争**：与 §7 第二行一致，新援与玩家 `activeRole` 重叠时，现有 `deriveRolePressure` 的"同角色队友 +25"（`roleTransition.ts:11`）自动升压，并可衔接 Phase 8 的 `contested` 轻量竞争事件。
+- **老将被替换判断**：撮合阶段（§6）评估世界队伍是否替换老化选手时，用 Phase 3 §3.4 的 `roleFitScore(ageAdjusted)` 判断该选手当前角色契合是否已下滑——下滑则倾向 `veteran-pickup`/`role-fix` 换人或推其转型，而非无依据替换。
+
 ---
 
 ## 8. 新闻与社媒透出（接入 `worldNews.ts`）
@@ -187,6 +198,7 @@ archetype → 倾向（设计 10.2）决定**用什么类型**满足需求（资
   - 确定性：同 seed 同窗口同结果。
   - 边界：每窗口转会数 ≤ 上限；静态远端队不参与。
 - 玩家相关：队友被挖 → `chain-teammate-poached` 出现且 `player.roster` 同步移除；玩家被关注 → `pendingOffer` 生成（复用 chain-rival-poach）；无"无预警剥夺"路径。
+- 转会后角色重算（§7.1）：队内唯一 IGL 被挖走后，`deriveRosterNeed` 出现 IGL 缺口并注入补位/转型事件；新援与玩家同角色时角色压力升高。
 - 新闻：`buildWorldTransferNews` 把 record/rumor 转为 `weeklyNews` 条目。
 - 回归：`worldClubs.test.ts` 升降级 + 转会窗口共存不破坏。
 
