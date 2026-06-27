@@ -1469,8 +1469,9 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 > - Phase 3 — [phase3-worldplayer-age-implementation.md](./phase3-worldplayer-age-implementation.md)
 > - Phase 4 — [phase4-tournament-instance-implementation.md](./phase4-tournament-instance-implementation.md)
 > - Phase 6-7 — [phase6-7-season-goal-implementation.md](./phase6-7-season-goal-implementation.md)
+> - Phase 8 — [phase8-rebuild-event-chain-implementation.md](./phase8-rebuild-event-chain-implementation.md)（基于 RoundPlan 新机制 c362cdf）
 >
-> 其余阶段（1/2/5/8）待细化。
+> 其余阶段（1/2/5）待细化。
 
 ### Phase 1：俱乐部身份数据
 
@@ -1589,6 +1590,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 - 不同俱乐部容忍度不同。
 
 ### Phase 8：重建事件链
+
+> 实现细化：[phase8-rebuild-event-chain-implementation.md](./phase8-rebuild-event-chain-implementation.md)（基于 RoundPlan 新机制 c362cdf）
 
 目标：
 
