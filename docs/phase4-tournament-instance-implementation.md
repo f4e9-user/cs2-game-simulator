@@ -286,6 +286,23 @@ const snapshot: WorldTournamentSnapshot = {
 - 真 MVP/选手新闻依赖 **Phase 3**（`WorldPlayer`）；无 Phase 3 时先出真比分/真名次/真黑马，MVP 字段留空。
 - 转会新闻依赖 **Phase 5**。
 
+### 8.6 单一真相源与落幕时机（修正"赛事提前落幕"）
+
+**问题**：同一赛事现有两条互不知情的轨道——(a) 玩家逐周打（`pendingMatch` 逐阶段，受 signup+2/备赛周拖慢，真实跨多周）；(b) 背景快照在赛事**名义结果周** `tournamentResultDate`（定义里写死）就生成冠军，`buildWorldTournamentNews` 在该周发"落幕"。两者不同步：玩家还在半决赛，名义结果周已到 → 新闻误报"该赛事落幕"。背景路径只把玩家**俱乐部**排除出名单（`clubId !== playerClubId`），并不知道"这个赛事玩家正在打、不该由我宣布结束"。
+
+**修正原则——一个赛事在世界侧只能有一个真相源：**
+
+- **玩家参加的赛事**：世界结果与落幕新闻**只由 `activeTournamentInstance` 驱动**，仅在实例 `status: 'completed'` 时发布（玩家被淘汰 → `fastForwardInstanceToCompletion` 快进其余队决出冠军 → 发布；玩家夺冠 → 发布）。落幕时间 = 玩家真实走完之时。
+- **背景快照路径必须跳过该赛事**：`worldClubs.ts:675-784` 生成快照前，跳过"存在 `activeTournamentInstance` 且 `tournamentId` 匹配"的赛事；`buildWorldTournamentNews` 的结果新闻改由"实例完成"触发，而非 `sameDate(current, tournamentResultDate)`。杜绝同一赛事被双重结算。
+- **逐轮报道**：玩家每轮结算时同步模拟同轮其余对阵（§5.3），世界新闻按真实轮次播报（打半决赛就报半决赛），"落幕"只在真正决出冠军时触发。
+
+**背景赛事（玩家完全未参加）的时机真实性：**
+
+- 在赛事**真实结果周**（不早于其赛程跨度 `bracket.length`）才结算，冠军取自 §8.3 的真实抽象 bracket。
+- 逐轮阶段新闻如需，需把抽象模拟分散到赛程跨度的多周（每周推进一轮发阶段新闻）；首版可只报"开赛 + 结果"两点，但**结果周必须真实、不可提前**。
+
+> 实现要点：背景快照与结果新闻都要能查询"该 tournamentId 是否有进行中的玩家实例"。建议在 `session` 上以 `activeTournamentInstance.tournamentId` 为准做跳过判断；玩家实例 `completed` 时再把其最终结果写入 `tournamentSnapshots`（统一供新闻读取），保证"玩家赛事"与"背景赛事"最终都经同一 snapshot 出口、但只有一个来源。
+
 ---
 
 ## 9. 确定性、迁移、存储
@@ -307,6 +324,7 @@ const snapshot: WorldTournamentSnapshot = {
 - 回写：参赛 club 按名次拿到 seasonPoints/recentResults。
 - 奖项：冠亚军、winner/loser MVP、玩家名次正确；玩家夺冠时 MVP 可为玩家。
 - **世界新闻（§8）**：背景赛事快照的 `finalScore` 为真实决赛比分（非 hash）、`championClubId` 来自快进 bracket、`participants.finalPlacement` 真实；`buildTournamentResultNews` 读到真比分/真黑马；有 Phase 3 时 MVP 非空。轻量背景实例不写入 `activeTournamentInstance`、不持久化完整 bracket。
+- **单一真相源（§8.6）**：玩家正在打某 S 级赛事且处于半决赛时，世界新闻**不得**出现该赛事"落幕"；只有玩家实例 `completed`（淘汰快进或夺冠）后才发布该赛事落幕新闻；背景快照路径跳过该 tournamentId，不重复结算。
 
 ---
 
@@ -316,7 +334,7 @@ const snapshot: WorldTournamentSnapshot = {
 2. **抽象模拟 + 快进 + 奖项**：`simulateAbstractMatch` / `advanceInstanceRound` / `fastForwardInstanceToCompletion` / `computeAwards`（4、6）。可纯单测，不接线。
 3. **接线对手来源**：signup 建实例（5.1）、`assignPendingMatchOpponent` 切换（5.2）。此步起玩家对手来自实例。
 4. **接线轮次推进**：`choice.ts` 结算后推进/收尾实例（5.3）、世界回写（5.4）。
-5. **背景赛事真实化 + 新闻进度驱动**：用 `lightweight` 背景实例替换 `worldClubs.ts:675-784` 的强度排序快照（8.3），`worldNews.ts` 改为读真实 snapshot/instance（8.4）。
+5. **背景赛事真实化 + 新闻进度驱动 + 单一真相源**：用 `lightweight` 背景实例替换 `worldClubs.ts:675-784` 的强度排序快照（8.3）；`worldNews.ts` 改为读真实 snapshot/instance（8.4）；**背景快照与结果新闻跳过玩家正在打的赛事，该赛事落幕由 `activeTournamentInstance` 完成时触发（8.6），修正"半决赛却报落幕"**；背景赛事结果不早于真实结果周。
 6. **前端赛事中心 + 接口透出**（7），按 tier 分层展示。
 7. **测试与平衡**（10），调字段规模/方差/回写权重。
 
