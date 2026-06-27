@@ -1466,14 +1466,17 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 ## 15. 推荐实施阶段
 
 > 已细化为可实现方案的阶段：
+> - Phase 1-2 — [phase1-2-club-identity-implementation.md](./phase1-2-club-identity-implementation.md)
 > - Phase 3 — [phase3-worldplayer-age-implementation.md](./phase3-worldplayer-age-implementation.md)
 > - Phase 4 — [phase4-tournament-instance-implementation.md](./phase4-tournament-instance-implementation.md)
 > - Phase 6-7 — [phase6-7-season-goal-implementation.md](./phase6-7-season-goal-implementation.md)
 > - Phase 8 — [phase8-rebuild-event-chain-implementation.md](./phase8-rebuild-event-chain-implementation.md)（基于 RoundPlan 新机制 c362cdf）
 >
-> 其余阶段（1/2/5）待细化。
+> 其余阶段（5 转会）待细化。
 
 ### Phase 1：俱乐部身份数据
+
+> 实现细化：[phase1-2-club-identity-implementation.md](./phase1-2-club-identity-implementation.md)（与 Phase 2 合并）
 
 目标：
 
@@ -1488,6 +1491,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 - 世界队伍池更像真实职业生态。
 
 ### Phase 2：身份影响运行态
+
+> 实现细化：[phase1-2-club-identity-implementation.md](./phase1-2-club-identity-implementation.md)（与 Phase 1 合并）
 
 目标：
 
