@@ -35,8 +35,10 @@ import {
   validateAllocation,
 } from '../engine/gameEngine.js';
 import { checkTournamentPromotion } from '../engine/stages.js';
+import { checkEnding } from '../engine/ending.js';
 import { buildSessionPayload } from '../engine/insights/index.js';
 import { applyMoneyTransaction } from '../engine/money.js';
+import { nowIso } from '../engine/utils.js';
 import { canSignUpForTournament, playerTeamMeetsRequirement, tournamentDirectEntryBypassApplies, tournamentRequiresQualificationSlot } from '../engine/tournamentEligibility.js';
 import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime, resolveClubDisplayInfo } from '../engine/worldClubs.js';
 import { createTournamentContext } from '../engine/tournamentContext.js';
@@ -121,6 +123,37 @@ const TEAM_LIFECYCLE_TAGS = [
 
 async function saveFinalizedSession(storage: ReturnType<typeof makeStorage>, session: GameSession): Promise<void> {
   await storage.sessions.save(finalizeGameSessionCareerSnapshot(session));
+}
+
+async function endCareerSession(storage: ReturnType<typeof makeStorage>, session: GameSession): Promise<GameSession> {
+  if (session.status === 'ended') return session;
+
+  const finalized = finalizeGameSessionCareerSnapshot(session);
+  const endedSession: GameSession = {
+    ...finalized,
+    player: {
+      ...finalized.player,
+      stage: 'retired',
+      pendingMatch: null,
+      pendingApplication: null,
+      pendingOffer: null,
+      tournamentContext: undefined,
+      currentWeekRoutineActions: [],
+      forceNextEvent: null,
+      forceMatchResult: null,
+    },
+    phase: 'action',
+    currentEvent: null,
+    queuedEvents: [],
+    weeklyNews: [],
+    activeEventSequence: undefined,
+    status: 'ended',
+    ending: checkEnding(finalized.player, true, 'career_ended'),
+    updatedAt: nowIso(),
+  };
+
+  await saveFinalizedSession(storage, endedSession);
+  return endedSession;
 }
 
 function deriveTeamOnboardingKind(previousPlayer: Player, nextPlayer: Player): TeamOnboardingKind {
@@ -269,6 +302,14 @@ function validateApiToken(authHeader: string | undefined, sessionToken: string):
   return token === sessionToken;
 }
 
+function getExecutionCtx(c: unknown): ExecutionContext | undefined {
+  try {
+    return (c as { executionCtx: ExecutionContext }).executionCtx;
+  } catch {
+    return undefined;
+  }
+}
+
 function getSessionPhase(session: GameSession): 'action' | 'event' {
   return session.phase ?? (session.currentEvent ? 'event' : 'action');
 }
@@ -304,7 +345,7 @@ app.use('/game/:sessionId/*', async (c, next) => {
 });
 
 app.get('/health', (c) => {
-  const ai = makeAiService(c.env, c.executionCtx);
+  const ai = makeAiService(c.env);
   return c.json({
     ok: true,
     ts: new Date().toISOString(),
@@ -322,6 +363,7 @@ app.post('/game/roll-traits', (c) => {
 app.post('/game/start', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const { name, traitIds, backgroundId, originRegion, stats } = body ?? {};
+  let normalizedStats: Stats | undefined;
 
   if (!Array.isArray(traitIds) || traitIds.length !== 3) {
     return c.json({ error: '必须选择 3 个特质' }, 400);
@@ -338,7 +380,11 @@ app.post('/game/start', async (c) => {
       return c.json({ error: '特质无效或重复' }, 400);
     }
     const { floor } = computeTraitMods(traits);
-    const err = validateAllocation(stats as Stats, floor);
+    normalizedStats = {
+      ...(stats as Stats),
+      experience: floor.experience,
+    };
+    const err = validateAllocation(normalizedStats, floor);
     if (err) return c.json({ error: err }, 400);
   }
 
@@ -348,7 +394,7 @@ app.post('/game/start', async (c) => {
       traitIds,
       backgroundId,
       originRegion: typeof originRegion === 'string' ? originRegion : undefined,
-      stats: stats as Stats | undefined,
+      stats: normalizedStats,
     });
     const seed = Math.floor(Math.random() * 0x7fffffff);
     const session = createSession(player, seed);
@@ -411,7 +457,7 @@ app.post('/game/:sessionId/choice', async (c) => {
     return c.json({ error: '当前不在事件阶段' }, 400);
   }
 
-  const ai = makeAiService(c.env, c.executionCtx);
+  const ai = makeAiService(c.env, getExecutionCtx(c));
 
   // 自定义行动：用 LLM 评判，映射为 rollBonus，使用第一个选项作为底牌
   let choiceId = rawChoiceId as string;
@@ -649,6 +695,40 @@ app.get('/game/:sessionId/tournaments', async (c) => {
   return c.json({
     open,
     pendingMatch: session.player.pendingMatch ?? null,
+  });
+});
+
+app.get('/game/:sessionId/tournaments/all', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  const currentYear = session.player.year ?? 1;
+  const currentWeek = session.player.week ?? 1;
+  const snapshots = session.worldClubs?.tournamentSnapshots ?? [];
+
+  const tournaments = buildYearTournaments(currentYear).map((tournament) => {
+    const snapshot = snapshots.find((item) =>
+      item.tournamentId === tournament.id &&
+      item.resultYear === currentYear &&
+      item.resultWeek < currentWeek,
+    );
+    return {
+      ...tournament,
+      isEnded: Boolean(snapshot),
+      resultYear: snapshot?.resultYear ?? null,
+      resultWeek: snapshot?.resultWeek ?? null,
+      championName: snapshot ? displayClubName(session, snapshot.championClubId) : null,
+      runnerUpName: snapshot ? displayClubName(session, snapshot.runnerUpClubId) : null,
+    };
+  });
+
+  return c.json({
+    year: currentYear,
+    week: currentWeek,
+    playerStage: session.player.stage,
+    pendingMatch: session.player.pendingMatch ?? null,
+    tournaments,
   });
 });
 
@@ -1035,12 +1115,7 @@ app.post('/game/:sessionId/end-action-phase', async (c) => {
     }
 
     const { session: updated, pickedEvent } = endActionPhase(session, aiEvents, aiEventCache);
-    session.player = updated.player;
-    session.phase = updated.phase;
-    session.currentEvent = updated.currentEvent;
-    session.activeEventSequence = updated.activeEventSequence;
-    session.updatedAt = updated.updatedAt;
-    await saveFinalizedSession(storage, session);
+    await saveFinalizedSession(storage, updated);
 
     if (aiEventCache) {
       try {
@@ -1050,9 +1125,9 @@ app.post('/game/:sessionId/end-action-phase', async (c) => {
       }
     }
 
-    return c.json(buildSessionPayload(session, {
-      phase: session.phase,
-      activeEventSequence: session.activeEventSequence ?? null,
+    return c.json(buildSessionPayload(updated, {
+      phase: updated.phase,
+      activeEventSequence: updated.activeEventSequence ?? null,
     }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1554,7 +1629,7 @@ app.get('/game/:sessionId/intro', async (c) => {
   const background = getBackground(session.player.backgroundId);
   if (!background) return c.json({ error: 'background not found' }, 400);
 
-  const ai = makeAiService(c.env, c.executionCtx);
+  const ai = makeAiService(c.env, getExecutionCtx(c));
   const intro = await ai.intro(session.player, traitObjects, background);
 
   // 写入 KV，永久缓存（intro 内容不会变）
@@ -1732,11 +1807,12 @@ app.get('/game/:sessionId/social-feed', async (c) => {
     return c.json({ posts: allPosts });
   }
 
-  const ai = makeAiService(c.env, c.executionCtx);
+  const ai = makeAiService(c.env, getExecutionCtx(c));
   const newPosts = await ai.simulateSocialFeed(
     session.player,
     session.history.slice(-5),
     session.leaderboard,
+    session.weeklyNews ?? [],
   );
   const worldPosts = buildWorldClubSocialPosts(session);
 
@@ -1772,7 +1848,7 @@ app.post('/game/:sessionId/narrate-stream', async (c) => {
     matchStats?: MatchStats;
   };
 
-  const ai = makeAiService(c.env, c.executionCtx);
+  const ai = makeAiService(c.env, getExecutionCtx(c));
   if (!ai.active) return c.json({ error: 'AI not active' }, 400);
 
   const input = {
@@ -1827,7 +1903,7 @@ app.post('/game/:sessionId/narrate-shop', async (c) => {
   };
 
   const baseNarrative = body.baseNarrative ?? '';
-  const ai = makeAiService(c.env, c.executionCtx);
+  const ai = makeAiService(c.env, getExecutionCtx(c));
   if (!ai.active) return c.json({ narrative: baseNarrative });
 
   const narrative = await ai.narrateShopPurchase({
@@ -1853,7 +1929,7 @@ app.get('/game/:sessionId/summary', async (c) => {
     return c.json({ error: '游戏尚未结束' }, 400);
   }
 
-  const ai = makeAiService(c.env, c.executionCtx);
+  const ai = makeAiService(c.env, getExecutionCtx(c));
   const summary = await ai.summarize(
     session.player,
     session.history,
@@ -1861,6 +1937,25 @@ app.get('/game/:sessionId/summary', async (c) => {
   );
 
   return c.json({ summary, ending: session.ending });
+});
+
+app.post('/game/:sessionId/end-career', async (c) => {
+  const id = c.req.param('sessionId');
+  const storage = makeStorage(c.env);
+  const session = await storage.sessions.load(id);
+  if (!session) return c.json({ error: 'session not found' }, 404);
+  if (!validateApiToken(c.req.header('authorization'), session.apiToken)) {
+    return c.json({ error: '无效的 API Token' }, 401);
+  }
+
+  const endedSession = await endCareerSession(storage, session);
+  return c.json(buildSessionPayload(endedSession, {
+    phase: endedSession.phase,
+    currentEvent: endedSession.currentEvent,
+    queuedEvents: endedSession.queuedEvents,
+    weeklyNews: endedSession.weeklyNews,
+    activeEventSequence: endedSession.activeEventSequence,
+  }));
 });
 
 export default app;

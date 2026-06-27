@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { CareerInsight, Player, RoundResult, SocialPost, Trait } from '@/lib/types';
+import type { CareerInsight, Player, RoundResult, SocialPost, Trait, WeeklyNewsItem } from '@/lib/types';
 import { STAGE_LABELS, formatTag } from '@/lib/format';
 
 function pickRecommendation(insight: CareerInsight | null) {
@@ -161,12 +161,8 @@ export function CareerCalendarCard({
 
 export function EventActivityPanel({
   history,
-  socialPosts,
-  socialLoading,
 }: {
   history: RoundResult[];
-  socialPosts?: SocialPost[];
-  socialLoading?: boolean;
 }) {
   const rows = [...history].reverse().slice(0, 10);
 
@@ -189,6 +185,110 @@ export function EventActivityPanel({
               <div className="timeline-narrative">{r.narrative}</div>
             </div>
           )) : <div className="panel-empty">还没有记录</div>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function WorldNewsPanel({
+  weeklyNews,
+  socialPosts,
+  socialLoading,
+}: {
+  weeklyNews?: WeeklyNewsItem[];
+  socialPosts?: SocialPost[];
+  socialLoading?: boolean;
+}) {
+  const [expandedNewsId, setExpandedNewsId] = useState<string | null>(null);
+  const newsRows = (weeklyNews ?? []).slice(-8).reverse();
+
+  return (
+    <section className="event-activity-grid">
+      <div className="event-focus">
+        <div className="panel-shell-head tight">
+          <span className="panel-shell-title">世界新闻</span>
+          <span className="panel-shell-subtitle">
+            {weeklyNews?.length ? `最新 ${newsRows.length}/${weeklyNews.length}` : '外部赛况'}
+          </span>
+        </div>
+        <div className="feed-scroll">
+          {newsRows.length > 0 ? (
+            newsRows.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="feed-card feed-card-button"
+                onClick={() => setExpandedNewsId((current) => current === item.id ? null : item.id)}
+              >
+                <div className="feed-card-head">
+                  <span className="feed-author">{item.title}</span>
+                  <span className="feed-role news">{item.type}</span>
+                </div>
+                <div className="feed-card-body">{item.narrative}</div>
+                {expandedNewsId === item.id ? (
+                  <div className="news-detail">
+                    <div className="news-detail-line">
+                      <span className="news-detail-label">来源</span>
+                      <span>{item.source?.kind ?? '新闻'}</span>
+                    </div>
+                    {item.source?.year && item.source?.week ? (
+                      <div className="news-detail-line">
+                        <span className="news-detail-label">时间</span>
+                        <span>Y{item.source.year} W{item.source.week}</span>
+                      </div>
+                    ) : null}
+                    {item.source?.tournamentId ? (
+                      <div className="news-detail-line">
+                        <span className="news-detail-label">赛事</span>
+                        <span>{item.source.tournamentId}</span>
+                      </div>
+                    ) : null}
+                    {item.report?.kind === 'world-tournament' ? (
+                      <>
+                        <div className="news-detail-line">
+                          <span className="news-detail-label">阶段</span>
+                          <span>{item.report.stage ?? '未知'}</span>
+                        </div>
+                        <div className="news-detail-line">
+                          <span className="news-detail-label">比分</span>
+                          <span>{item.report.scoreline ?? '未披露'}</span>
+                        </div>
+                        <div className="news-detail-line">
+                          <span className="news-detail-label">冠军</span>
+                          <span>{item.report.champion ?? '未知'}</span>
+                        </div>
+                        <div className="news-detail-line">
+                          <span className="news-detail-label">亚军</span>
+                          <span>{item.report.runnerUp ?? '未知'}</span>
+                        </div>
+                        {item.report.darkHorse ? (
+                          <div className="news-detail-line">
+                            <span className="news-detail-label">黑马</span>
+                            <span>{item.report.darkHorse}</span>
+                          </div>
+                        ) : null}
+                        {item.report.participants?.length ? (
+                          <div className="news-detail-participants">
+                            {item.report.participants.slice(0, 6).map((participant) => (
+                              <div key={`${item.id}-${participant.clubId}`} className="news-detail-participant">
+                                <span>{participant.seed}号种子 · {participant.clubName}</span>
+                                <span className="news-detail-muted">
+                                  VRS {participant.vrsScore} · 强度 {participant.power.toFixed(1)} · {participant.form >= 0 ? '+' : ''}{participant.form}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+              </button>
+            ))
+          ) : (
+            <div className="panel-empty">暂无世界新闻</div>
+          )}
         </div>
       </div>
 

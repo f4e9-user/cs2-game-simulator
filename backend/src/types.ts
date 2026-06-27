@@ -370,6 +370,34 @@ export interface ClubSeasonSummary {
   majorNewFaceClubIds: string[];
 }
 
+export interface WorldTournamentParticipant {
+  clubId: string;
+  seed: number;
+  vrsScore: number;
+  power: number;
+  form: number;
+}
+
+export interface WorldTournamentSnapshot {
+  id: string;
+  tournamentId: string;
+  tournamentName: string;
+  tier: TournamentTier;
+  year: number;
+  signupWeek: number;
+  resultYear: number;
+  resultWeek: number;
+  round: number;
+  participants: WorldTournamentParticipant[];
+  championClubId: string;
+  runnerUpClubId: string;
+  darkHorseClubId?: string;
+  upsetClubId?: string;
+  finalScore: string;
+  createdAt: string;
+  newsPublished?: boolean;
+}
+
 export interface WorldClubPool {
   season: number;
   activeClubIds: string[];
@@ -379,6 +407,7 @@ export interface WorldClubPool {
   processedTickKeysByClubId: Record<string, string[]>;
   lastGlobalTickRound?: number;
   seasonSummaries?: ClubSeasonSummary[];
+  tournamentSnapshots?: WorldTournamentSnapshot[];
 }
 
 export interface TournamentDirectEntryBypass {
@@ -639,6 +668,7 @@ export interface DynamicState {
   fame: number;
   restRounds: number;
   stressMaxRounds: number;
+  lastRoundEventCount?: number;
   year: number;
   week: number;
   pendingMatch: PendingMatch | null;
@@ -763,6 +793,44 @@ export interface GameEventPublic {
   title: string;
   narrative: string;
   choices: ChoicePublic[];
+}
+
+export interface WeeklyNewsItem {
+  id: string;
+  eventId: string;
+  type: EventType;
+  title: string;
+  narrative: string;
+  report?: WeeklyNewsReport;
+  source?: WeeklyNewsSource;
+  createdAt: string;
+}
+
+export interface WeeklyNewsReport {
+  kind: 'world-tournament';
+  stage?: string;
+  scoreline?: string;
+  champion?: string;
+  runnerUp?: string;
+  darkHorse?: string;
+  bracketSize?: number;
+  participants?: Array<{
+    clubId: string;
+    clubName: string;
+    seed: number;
+    vrsScore: number;
+    power: number;
+    form: number;
+  }>;
+}
+
+export interface WeeklyNewsSource {
+  kind: 'world-tournament' | 'world-club-season' | 'broadcast';
+  year?: number;
+  week?: number;
+  tournamentId?: string;
+  clubId?: string;
+  resultId?: string;
 }
 
 export type StatDelta = Partial<Omit<Stats, 'money'>>;
@@ -916,6 +984,9 @@ export interface GameSession {
   player: Player;
   phase: RoundPhase;
   currentEvent: GameEventPublic | null;
+  queuedEvents?: GameEventPublic[];
+  weeklyNews?: WeeklyNewsItem[];
+  roundPlan?: RoundPlan;
   activeEventSequence?: EventSequence;
   history: RoundResult[];
   status: SessionStatus;
@@ -988,6 +1059,29 @@ export interface EventNarrativeOverride {
   narrativeConstraints?: string[];
 }
 
+export type EventTone = 'heavy' | 'tense' | 'light';
+export type ThemeGroup = 'team' | 'competition' | 'money-life' | 'media' | 'growth';
+export type RoundArchetype = 'major-single' | 'team-drama' | 'money' | 'media' | 'growth' | 'quiet';
+
+export interface RoundTheme {
+  type: EventType;
+  group: ThemeGroup;
+  tags: string[];
+}
+
+export interface RoundPlan {
+  archetype: RoundArchetype;
+  theme?: RoundTheme;
+  tone?: EventTone;
+  targetCount: number;
+  servedCount: number;
+  servedEventIds: string[];
+  hardDecisionCap: number;
+  servedHardDecisions: number;
+}
+
+export type EventSeverity = 'critical' | 'important' | 'minor' | 'news' | 'background';
+
 export interface EventDef {
   id: string;
   type: EventType;
@@ -999,6 +1093,7 @@ export interface EventDef {
   requireTags?: string[];
   forbidTags?: string[];
   choices: ChoiceDef[];
+  severity?: EventSeverity;
   narrativeMeta?: EventNarrativeOverride;
 }
 

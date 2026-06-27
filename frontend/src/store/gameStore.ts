@@ -7,9 +7,11 @@ import type {
   LeaderboardTeam,
   Player,
   PromotionCheck,
+  RoundPlan,
   RoundResult,
   SessionStatus,
   TeamOffer,
+  WeeklyNewsItem,
 } from '@/lib/types';
 
 interface GameState {
@@ -17,6 +19,9 @@ interface GameState {
   apiToken: string | null;
   player: Player | null;
   currentEvent: GameEvent | null;
+  queuedEvents: GameEvent[];
+  weeklyNews: WeeklyNewsItem[];
+  roundPlan: RoundPlan | null;
   activeEventSequence: EventSequence | null;
   history: RoundResult[];
   status: SessionStatus;
@@ -40,12 +45,18 @@ interface GameState {
     sessionId: string;
     player: Player;
     currentEvent: GameEvent | null;
+    queuedEvents?: GameEvent[];
+    weeklyNews?: WeeklyNewsItem[];
+    roundPlan?: RoundPlan;
     careerInsight?: CareerInsight;
   }) => void;
   applyChoiceResponse: (args: {
     result: RoundResult;
     player: Player;
     currentEvent: GameEvent | null;
+    queuedEvents?: GameEvent[];
+    weeklyNews?: WeeklyNewsItem[];
+    roundPlan?: RoundPlan;
     activeEventSequence?: EventSequence;
     status: SessionStatus;
     ending?: string;
@@ -56,6 +67,9 @@ interface GameState {
   setPlayer: (player: Player) => void;
   setCareerInsight: (careerInsight: CareerInsight | null) => void;
   setCurrentEvent: (currentEvent: GameEvent | null) => void;
+  setQueuedEvents: (queuedEvents: GameEvent[]) => void;
+  setWeeklyNews: (weeklyNews: WeeklyNewsItem[]) => void;
+  setRoundPlan: (roundPlan: RoundPlan | null) => void;
   setActiveEventSequence: (activeEventSequence: EventSequence | null) => void;
   setPlayerState: (args: {
     player: Player;
@@ -77,6 +91,9 @@ export const useGameStore = create<GameState>((set) => ({
   apiToken: null,
   player: null,
   currentEvent: null,
+  queuedEvents: [],
+  weeklyNews: [],
+  roundPlan: null,
   activeEventSequence: null,
   history: [],
   status: 'active',
@@ -98,6 +115,9 @@ export const useGameStore = create<GameState>((set) => ({
       apiToken: session.apiToken,
       player: session.player,
       currentEvent: session.currentEvent,
+      queuedEvents: session.queuedEvents ?? [],
+      weeklyNews: session.weeklyNews ?? [],
+      roundPlan: session.roundPlan ?? null,
       activeEventSequence: session.activeEventSequence ?? null,
       history: session.history,
       status: session.status,
@@ -111,11 +131,14 @@ export const useGameStore = create<GameState>((set) => ({
       error: null,
     }),
 
-  hydrateFromStart: ({ sessionId, player, currentEvent, careerInsight }) =>
+  hydrateFromStart: ({ sessionId, player, currentEvent, queuedEvents, weeklyNews, careerInsight }) =>
     set({
       sessionId,
       player,
       currentEvent,
+      queuedEvents: queuedEvents ?? [],
+      weeklyNews: weeklyNews ?? [],
+      roundPlan: null,
       activeEventSequence: null,
       history: [],
       status: 'active',
@@ -130,6 +153,9 @@ export const useGameStore = create<GameState>((set) => ({
     result,
     player,
     currentEvent,
+    queuedEvents,
+    weeklyNews,
+    roundPlan,
     activeEventSequence,
     status,
     ending,
@@ -140,6 +166,9 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => ({
       player,
       currentEvent,
+      queuedEvents: queuedEvents ?? state.queuedEvents,
+      weeklyNews: weeklyNews ?? state.weeklyNews,
+      roundPlan: roundPlan ?? state.roundPlan,
       activeEventSequence: activeEventSequence ?? null,
       status,
       ending: ending ?? state.ending,
@@ -157,6 +186,9 @@ export const useGameStore = create<GameState>((set) => ({
   setPlayer: (player) => set({ player, pendingOffer: player.pendingOffer ?? null }),
   setCareerInsight: (careerInsight) => set({ careerInsight }),
   setCurrentEvent: (currentEvent) => set({ currentEvent }),
+  setQueuedEvents: (queuedEvents) => set({ queuedEvents }),
+  setWeeklyNews: (weeklyNews) => set({ weeklyNews }),
+  setRoundPlan: (roundPlan) => set({ roundPlan }),
   setActiveEventSequence: (activeEventSequence) => set({ activeEventSequence }),
   setPlayerState: ({ player, careerInsight, leaderboard }) =>
     set((state) => ({
@@ -177,6 +209,9 @@ export const useGameStore = create<GameState>((set) => ({
       sessionId: null,
       player: null,
       currentEvent: null,
+      queuedEvents: [],
+      weeklyNews: [],
+      roundPlan: null,
       activeEventSequence: null,
       history: [],
       status: 'active',

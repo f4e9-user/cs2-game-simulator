@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { Player, Trait } from '@/lib/types';
+import type { Player, RoundResult, Trait } from '@/lib/types';
 import { ENDING_LABELS, STAGE_LABELS, STAT_LABELS, formatTag } from '@/lib/format';
 import { buildCareerReview } from '@/lib/careerReview';
 
@@ -41,9 +41,10 @@ interface Props {
   player: Player;
   traits: Trait[];
   ending?: string;
+  history?: RoundResult[];
 }
 
-export function EndingPanel({ player, traits, ending }: Props) {
+export function EndingPanel({ player, traits, ending, history }: Props) {
   const playerTraits = player.traits
     .map((id) => traits.find((t) => t.id === id))
     .filter((t): t is Trait => Boolean(t));
@@ -57,6 +58,7 @@ export function EndingPanel({ player, traits, ending }: Props) {
   const isLegend = ending === 'legend';
   const isChampion = ending === 'champion' || ending === 'retired_on_top';
   const careerReview = buildCareerReview(player, ending);
+  const recentHistory = (history ?? []).slice(-8).reverse();
 
   return (
     <div className="ending-panel-rich">
@@ -105,6 +107,25 @@ export function EndingPanel({ player, traits, ending }: Props) {
           </div>
         </div>
       </div>
+
+      {recentHistory.length > 0 && (
+        <div className="ending-section">
+          <div className="ending-section-title">回合历史</div>
+          <div className="timeline-list">
+            {recentHistory.map((r) => (
+              <div key={`${r.round}-${r.eventId}`} className="timeline-row">
+                <div className="timeline-top">
+                  <span className="timeline-round">R{r.round}</span>
+                  <span className={`timeline-result ${r.success ? 'up' : 'down'}`}>{r.success ? '胜' : '负'}</span>
+                  <span className="timeline-title">{r.eventTitle}</span>
+                </div>
+                <div className="timeline-desc">→ {r.choiceLabel}</div>
+                <div className="timeline-narrative">{r.narrative}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Resources */}
       <div className="ending-section">

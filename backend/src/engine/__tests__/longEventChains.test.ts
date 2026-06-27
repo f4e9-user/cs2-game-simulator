@@ -67,13 +67,13 @@ describe('long event chain sequences', () => {
 
     expect(response.phase).toBe('event');
     expect(response.activeEventSequence?.type).toBe('club-interview');
-    expect(response.currentEvent?.id).toBe('club-interview-10-invite');
+    expect(response.currentEvent?.id).toBe('club-interview-9-invite');
     expect(response.currentEvent?.title).toBe('线下面试邀请');
 
     const prompt = applyChoice(response, 'continue').session;
 
     expect(prompt.phase).toBe('event');
-    expect(prompt.currentEvent?.id).toBe('club-interview-10-question-1');
+    expect(prompt.currentEvent?.id).toBe('club-interview-9-question-1');
     expect(prompt.activeEventSequence?.currentIndex).toBe(1);
   });
 });

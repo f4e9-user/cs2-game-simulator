@@ -19,6 +19,7 @@ import type {
   MatchStats,
   Player,
   RoleProfile,
+  RoundPlan,
   RoundPhase,
   RulesMeta,
   SessionSummary,
@@ -28,8 +29,11 @@ import type {
   StartGameResponse,
   Stats,
   TeamActionResult,
+  Tournament,
+  AllTournamentsResponse,
   TournamentsResponse,
   Trait,
+  WeeklyNewsItem,
 } from './types';
 
 // API base resolution priority (checked in order):
@@ -141,6 +145,10 @@ export const api = {
     }, apiToken),
   listTournaments: (sessionId: string) =>
     request<TournamentsResponse>(`/api/game/${sessionId}/tournaments`),
+  listAllTournaments: (sessionId: string) =>
+    request<AllTournamentsResponse>(
+      `/api/game/${sessionId}/tournaments/all`,
+    ),
   signup: (sessionId: string, tournamentId: string, apiToken?: string) =>
     request<{ pendingMatch: NonNullable<Player['pendingMatch']>; player: Player }>(
       `/api/game/${sessionId}/signup`,
@@ -172,8 +180,25 @@ export const api = {
       apiToken,
     ),
   endActionPhase: (sessionId: string, apiToken?: string) =>
-    request<{ player: Player; phase: 'event'; currentEvent: GameEvent | null; activeEventSequence?: EventSequence | null; careerInsight?: CareerInsight }>(
+    request<{ player: Player; phase: 'event'; currentEvent: GameEvent | null; queuedEvents?: GameEvent[]; weeklyNews?: WeeklyNewsItem[]; roundPlan?: RoundPlan; activeEventSequence?: EventSequence | null; careerInsight?: CareerInsight }>(
       `/api/game/${sessionId}/end-action-phase`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  endCareer: (sessionId: string, apiToken?: string) =>
+    request<{
+      status: 'ended';
+      ending?: string;
+      player: Player;
+      phase: 'action';
+      currentEvent: GameEvent | null;
+      queuedEvents?: GameEvent[];
+      weeklyNews?: WeeklyNewsItem[];
+      roundPlan?: RoundPlan;
+      activeEventSequence?: EventSequence | null;
+      careerInsight?: CareerInsight;
+    }>(
+      `/api/game/${sessionId}/end-career`,
       { method: 'POST' },
       apiToken,
     ),
@@ -241,6 +266,9 @@ export const api = {
       player: Player;
       phase?: RoundPhase;
       currentEvent?: GameEvent | null;
+      queuedEvents?: GameEvent[];
+      weeklyNews?: WeeklyNewsItem[];
+      roundPlan?: RoundPlan;
       activeEventSequence?: EventSequence | null;
       leaderboard?: LeaderboardTeam[];
       careerInsight?: CareerInsight;

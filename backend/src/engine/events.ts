@@ -10,17 +10,22 @@ import {
 import { calcSynergyBonus } from './synergy.js';
 import { deriveRolePressure } from './roleTransition.js';
 import type { AiEventPickCandidate } from '../ai/eventCache.js';
-import type { EventDef, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier, LeaderboardTeam, TeamIdentity } from '../types.js';
+import type { EventDef, EventType, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier, LeaderboardTeam, TeamIdentity, RoundPlan, ThemeGroup } from '../types.js';
 import { pickTournamentContextEvent } from './tournamentContext.js';
 import { effectiveHousingEventWeightMultiplier, housingEventTags } from './housing.js';
+import { roundPlanFit } from './roundPlan.js';
 
 export interface EventContext {
   player: Player;
   recentEventIds: string[];
+  recentThemeGroups?: ThemeGroup[];
   rng: () => number;
   leaderboard?: LeaderboardTeam[];
   aiEvents?: EventDef[];
   aiEventCandidates?: AiEventPickCandidate[];
+  excludedTypes?: EventType[];
+  excludedEventIds?: string[];
+  roundPlan?: RoundPlan;
 }
 
 function playerHasTeamIdentity(player: Player, identity: TeamIdentity): boolean {
@@ -45,14 +50,6 @@ function dynamicTags(player: Player): string[] {
   if (player.fame >= 15) out.push('famous');
   if (player.stats.money <= 1) out.push('cash-strapped');
   if (player.stats.constitution <= 2) out.push('frail');
-  // Major aftermath weeks: surface broadcast events to the non-participant.
-  // Major signups close at week 22/46; matches resolve week 23/47; we show
-  // broadcast at week 24/48 to give it space.
-  const w = player.week ?? 1;
-  const isMajorAftermath = w === 24 || w === 48;
-  const inMajorMatch = player.pendingMatch?.tier === 'major';
-  if (isMajorAftermath && !inMajorMatch) out.push('major-broadcast');
-
   // ── 特质派生 tag ───────────────────────────────────────────────
   // elite-prospect：有"枪法天才"(aim-god) 或 "天梯之王"(ranked-warrior) 特质
   const traitTags = player.traits.flatMap((id) => getTrait(id)?.tags ?? []);
@@ -425,7 +422,10 @@ export function buildInjuryAwareTournamentEvent(pm: PendingMatch): EventDef {
 }
 
 export function pickEvent(ctx: EventContext): EventDef | null {
-  const { player, recentEventIds, rng, aiEvents, aiEventCandidates } = ctx;
+  const { player, recentEventIds, rng, aiEvents, aiEventCandidates, excludedTypes, excludedEventIds, roundPlan } = ctx;
+  const planWeight = (event: EventDef) => roundPlanFit(event, roundPlan, player, ctx.recentThemeGroups ?? []);
+  const isExcluded = (event: EventDef) => excludedTypes?.includes(event.type) ?? false;
+  const isExcludedId = (event: EventDef) => excludedEventIds?.includes(event.id) ?? false;
   const realTags = new Set(player.tags);
   const synthTags = new Set([...player.tags, ...dynamicTags(player)]);
   const weightedAiCandidates = aiEventCandidates ?? aiEvents?.map((event) => ({ event, weightMultiplier: 1 })) ?? [];
@@ -434,7 +434,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   const pool = [
     ...getEventRegistry().getAll().filter((event) => event.type !== 'tournament-context'),
     ...candidateAiEvents,
-  ];
+  ].filter((event) => !isExcluded(event) && !isExcludedId(event));
 
   // 赛事隔离：阻断晋级事件和随机事件
   if (player.pendingMatch) {
@@ -442,17 +442,24 @@ export function pickEvent(ctx: EventContext): EventDef | null {
       player.pendingMatch.resolveYear === (player.year ?? 1) &&
       player.pendingMatch.resolveWeek === (player.week ?? 1);
     if (isMatchWeek) {
-      if ((player.restRounds ?? 0) > 0) {
-        return buildInjuryAwareTournamentEvent(player.pendingMatch);
+      if (excludedTypes?.includes('match')) return null;
+    if ((player.restRounds ?? 0) > 0) {
+      const injuryEvent = buildInjuryAwareTournamentEvent(player.pendingMatch);
+      if (!isExcludedId(injuryEvent)) return injuryEvent;
+      return null;
       }
-      return getEventById(`tournament-${player.pendingMatch.tournamentId}--${player.pendingMatch.stageIndex}`) ?? null;
+      const e = getEventById(`tournament-${player.pendingMatch.tournamentId}--${player.pendingMatch.stageIndex}`) ?? null;
+      if (e && !isExcludedId(e)) return e;
+      return null;
     }
-    return pickTournamentContextEvent(player, candidateAiEvents);
+    const tournamentContextEvent = pickTournamentContextEvent(player, candidateAiEvents);
+    if (tournamentContextEvent && !isExcludedId(tournamentContextEvent)) return tournamentContextEvent;
+    return null;
   }
 
   if (player.forceNextEvent) {
     const forcedEvent = getEventById(player.forceNextEvent);
-    if (forcedEvent) return forcedEvent;
+    if (forcedEvent && !isExcluded(forcedEvent) && !isExcludedId(forcedEvent)) return forcedEvent;
   }
 
   if ((player.restRounds ?? 0) > 0) {
@@ -463,7 +470,10 @@ export function pickEvent(ctx: EventContext): EventDef | null {
       !e.requireTags?.some((t) => !synthTags.has(t)) &&
       !e.forbidTags?.some((t) => synthTags.has(t))
     );
-    if (restPool.length > 0) return weightedPick(restPool, rng, () => 1);
+    if (restPool.length > 0) {
+      const picked = weightedPick(restPool, rng, (e) => planWeight(e));
+      if (!isExcludedId(picked)) return picked;
+    }
   }
 
   // 战队申请到期后必须先给回信，避免申请链路被普通随机事件长期挤掉。
@@ -474,7 +484,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
         e.stages.includes(player.stage) &&
         !e.requireTags?.some((t) => !synthTags.has(t)),
     );
-    return responseEvent ?? null;
+    if (responseEvent && !isExcluded(responseEvent) && !isExcludedId(responseEvent)) return responseEvent;
   }
 
   if (player.pendingApplication && synthTags.has('club-exception-ready')) {
@@ -488,13 +498,16 @@ export function pickEvent(ctx: EventContext): EventDef | null {
         !e.requireTags?.some((t) => !synthTags.has(t)) &&
         !e.forbidTags?.some((t) => synthTags.has(t)),
     );
-    if (exceptionPool.length > 0) return weightedPick(exceptionPool, rng, (e) => e.weight ?? 1);
+    if (exceptionPool.length > 0) {
+      const picked = weightedPick(exceptionPool, rng, (e) => (e.weight ?? 1) * planWeight(e));
+      if (!isExcludedId(picked)) return picked;
+    }
   }
 
   // 家人危机：非赛事期间最高优先级注入；赛事期间由赛事上下文结束后再处理
   if (synthTags.has('needs-family-crisis')) {
     const crisisEvent = pool.find((e) => e.id === 'family-crisis-illness');
-    return crisisEvent ?? null;
+    if (crisisEvent && !isExcluded(crisisEvent)) return crisisEvent;
   }
 
   // 破产恢复：持续破产且冷却结束时，直接注入家人/朋友救济事件
@@ -507,7 +520,10 @@ export function pickEvent(ctx: EventContext): EventDef | null {
         !e.requireTags?.some((t) => !synthTags.has(t)) &&
         !e.forbidTags?.some((t) => synthTags.has(t)),
     );
-    if (bailoutPool.length > 0) return weightedPick(bailoutPool, rng, (e) => stateWeight(e, player));
+    if (bailoutPool.length > 0) {
+      const picked = weightedPick(bailoutPool, rng, (e) => stateWeight(e, player) * planWeight(e));
+      if (!isExcluded(picked) && !isExcludedId(picked)) return picked;
+    }
   }
 
   // Promotion pending: inject the stage-specific narrative event.
@@ -515,7 +531,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     const gate = getGate(player.stage);
     if (gate) {
       const ev = PROMOTION_EVENTS.find((e) => e.id === gate.promotionEventId);
-      if (ev) return ev;
+      if (ev && !isExcluded(ev) && !isExcludedId(ev)) return ev;
     }
   }
 
@@ -529,8 +545,8 @@ export function pickEvent(ctx: EventContext): EventDef | null {
         !e.requireTags?.some((t) => !synthTags.has(t)) &&
         !e.forbidTags?.some((t) => synthTags.has(t)),
     );
-    const interviewEvent = weightedPick(interviewPool, rng, (e) => e.requireTags?.length ?? 1);
-    return interviewEvent ?? null;
+    const interviewEvent = weightedPick(interviewPool, rng, (e) => (e.requireTags?.length ?? 1) * planWeight(e));
+    if (interviewEvent && !isExcluded(interviewEvent) && !isExcludedId(interviewEvent)) return interviewEvent;
   }
 
   if (
@@ -550,7 +566,10 @@ export function pickEvent(ctx: EventContext): EventDef | null {
         !e.requireTags?.some((t) => !synthTags.has(t)) &&
         !e.forbidTags?.some((t) => synthTags.has(t)),
     );
-    if (politicsPool.length > 0) return weightedPick(politicsPool, rng, (e) => stateWeight(e, player));
+    if (politicsPool.length > 0) {
+      const picked = weightedPick(politicsPool, rng, (e) => stateWeight(e, player) * planWeight(e));
+      if (!isExcluded(picked) && !isExcludedId(picked)) return picked;
+    }
   }
 
   if (synthTags.has('role-transition-eligible')) {
@@ -562,7 +581,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
         !e.requireTags?.some((t) => !synthTags.has(t)) &&
         !e.forbidTags?.some((t) => synthTags.has(t)),
     );
-    if (roleTransitionStart) return roleTransitionStart;
+    if (roleTransitionStart && !isExcluded(roleTransitionStart) && !isExcludedId(roleTransitionStart)) return roleTransitionStart;
   }
 
   const eligible = pool.filter((e) => {
@@ -577,18 +596,35 @@ export function pickEvent(ctx: EventContext): EventDef | null {
 
   const aiEligible = eligible.filter((e) => aiWeightById.has(e.id));
   if (aiEligible.length > 0 && rng() < 0.6) {
-    return weightedPick(aiEligible, rng, (e) => stateWeight(e, player) * (aiWeightById.get(e.id) ?? 1));
+    const picked = weightedPick(aiEligible, rng, (e) => stateWeight(e, player) * (aiWeightById.get(e.id) ?? 1) * planWeight(e));
+    if (!isExcludedId(picked)) return picked;
   }
 
   if (eligible.length === 0) {
     const fallback = pool.filter(
-      (e) => e.type !== 'rest' && e.type !== 'routine' && e.stages.includes(player.stage),
+      (e) =>
+        e.type !== 'rest' &&
+        e.type !== 'routine' &&
+        e.stages.includes(player.stage) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
     );
     if (fallback.length === 0) return null;
-    return weightedPick(fallback, rng, (e) => stateWeight(e, player));
+    const picked = weightedPick(fallback, rng, (e) => stateWeight(e, player) * planWeight(e));
+    if (!isExcludedId(picked)) return picked;
+    return null;
   }
 
-  return weightedPick(eligible, rng, (e) => stateWeight(e, player) * (aiWeightById.get(e.id) ?? 1));
+  const picked = weightedPick(eligible, rng, (e) => stateWeight(e, player) * (aiWeightById.get(e.id) ?? 1) * planWeight(e));
+  if (isExcludedId(picked)) return null;
+  return picked;
+}
+
+export function pickRoundEvent(ctx: EventContext, plan: RoundPlan): EventDef | null {
+  return pickEvent({
+    ...ctx,
+    roundPlan: plan,
+  });
 }
 
 function weightedPick(

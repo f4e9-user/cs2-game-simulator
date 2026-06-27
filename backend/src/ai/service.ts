@@ -1,4 +1,4 @@
-import type { Background, Env, EventDef, GameEventPublic, LeaderboardTeam, Player, RoundResult, Trait } from '../types.js';
+import type { Background, Env, EventDef, GameEventPublic, LeaderboardTeam, Player, RoundResult, Trait, WeeklyNewsItem } from '../types.js';
 import { LlmLogger } from './logger.js';
 import { fetchWithRetry } from './fetchWithRetry.js';
 import {
@@ -38,7 +38,7 @@ export interface AiService {
   intro(player: Player, traits: Trait[], background: Background): Promise<string>;
   judgeCustomAction(playerInput: string, event: GameEventPublic, player: Player): Promise<CustomActionJudgment | null>;
   validateJudgment(playerInput: string, event: GameEventPublic, judgment: CustomActionJudgment): Promise<JudgmentValidation>;
-  simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]>;
+  simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[], weeklyNews?: WeeklyNewsItem[]): Promise<SocialFeedPost[]>;
   generateEvents(player: Player, history: RoundResult[], worldStorylines?: string[]): Promise<EventDef[] | null>;
   simulateLeaderboardTick?(
     teams: LeaderboardTeam[],
@@ -350,7 +350,7 @@ class TemplateNarrator implements AiService {
     return { valid: true };
   }
 
-  async simulateSocialFeed(player: Player, _recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
+  async simulateSocialFeed(player: Player, _recentHistory: RoundResult[], leaderboard: LeaderboardTeam[], _weeklyNews?: WeeklyNewsItem[]): Promise<SocialFeedPost[]> {
     return templateSocialFeed(player, leaderboard);
   }
 
@@ -491,7 +491,7 @@ abstract class BaseLlmNarrator implements AiService {
     return parsed.value;
   }
 
-  async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[]): Promise<SocialFeedPost[]> {
+  async simulateSocialFeed(player: Player, recentHistory: RoundResult[], leaderboard: LeaderboardTeam[], _weeklyNews?: WeeklyNewsItem[]): Promise<SocialFeedPost[]> {
     const traitRules = await this.buildTraitRules(player);
     const userPrompt = buildSocialFeedPrompt(player, recentHistory, leaderboard, traitRules);
     const text = await this.doChat(SOCIAL_SYSTEM_PROMPT, userPrompt, 1500, false, 'simulateSocialFeed');

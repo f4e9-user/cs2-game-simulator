@@ -29,6 +29,7 @@ const DEFAULT_OPENING_TAG_LIFETIME_ROUNDS: Partial<Record<string, number>> = {
   'opening-mechanical-gap': 48,
 };
 const DEFAULT_OPENING_MONEY = 20;
+const TRAIT_OPENING_STAT_KEYS: StatKey[] = [...CORE_STAT_KEYS, 'experience'];
 
 export interface InitInput {
   name: string;
@@ -139,7 +140,7 @@ export function computeTraitMods(traits: Trait[]): {
   const floor: Stats = { ...BASE_STATS };
   const negative: Stats = { ...BASE_STATS };
   for (const t of traits) {
-    for (const k of CORE_STAT_KEYS) {
+    for (const k of TRAIT_OPENING_STAT_KEYS) {
       const v = t.modifiers[k];
       if (typeof v !== 'number') continue;
       if (v > 0) floor[k] += v;

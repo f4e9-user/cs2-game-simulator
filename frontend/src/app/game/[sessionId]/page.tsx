@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { WelcomeCard } from '@/components/WelcomeCard';
 import { EventCard } from '@/components/EventCard';
@@ -21,21 +21,66 @@ import { LoanModal } from '@/components/LoanModal';
 import { InjuryAlertModal, buildInjuryAlertFromEffects, type InjuryAlert } from '@/components/InjuryAlertModal';
 import {
   CareerSuggestionStrip,
-  EventActivityPanel,
   PlayerProfilePanel,
+  WorldNewsPanel,
 } from '@/components/GameLayoutPanels';
 import { useGameStore } from '@/store/gameStore';
-import type { ActionResult, Player, RulesMeta, SocialPost, Trait } from '@/lib/types';
+import type { ActionResult, Player, RoundResult, RulesMeta, SocialPost, Trait } from '@/lib/types';
 import type { SettlementActionResult, SettlementShopResult } from '@/components/ResultPanel';
+
+function ResultSummaryBar({ result }: { result: RoundResult }) {
+  const ok = result.success;
+  const tier = result.resultTier;
+  const isMatch = Boolean(result.matchStats);
+  return (
+    <div className="settlement-result-panel result-summary-panel" style={{ marginBottom: 10 }}>
+      <div className="result-meta">
+        <span className={`result-badge ${tier ?? (ok ? 'success' : 'failure')}`}>
+          {tier === 'critical_success'
+            ? '大成功'
+            : tier === 'critical_failure'
+            ? '大失败'
+            : ok
+            ? '胜'
+            : '败'}
+        </span>
+        {isMatch ? (
+          <span className="result-roll" style={{ color: 'var(--fg-2)' }}>
+            Rating {result.matchStats!.rating.toFixed(2)} · 难度 {result.dc}
+          </span>
+        ) : (
+          <span className="result-roll">
+            d20 <strong>{result.naturalRoll ?? '?'}</strong> → {result.roll} vs DC {result.dc}
+          </span>
+        )}
+        <span
+          style={{
+            fontSize: 10,
+            color: 'var(--fg-2)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {result.choiceLabel}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function GamePage() {
   const params = useParams<{ sessionId: string }>();
+  const router = useRouter();
   const sessionId = params.sessionId;
 
   const {
     player,
     apiToken,
     currentEvent,
+    queuedEvents,
+    weeklyNews,
+    roundPlan,
     activeEventSequence,
     history,
     status,
@@ -60,6 +105,9 @@ export default function GamePage() {
     setTransitioning,
     clearOffer,
     setLeaderboard,
+    setQueuedEvents,
+    setWeeklyNews,
+    setRoundPlan,
     setLoading,
     setError,
     clearLastResult,
@@ -70,11 +118,12 @@ export default function GamePage() {
   const [shaking, setShaking] = useState(false);
   const [showNewGameModal, setShowNewGameModal] = useState(false);
   const [mobileTab, setMobileTab] = useState<'left' | 'center' | 'right'>('center');
-  const [centerTab, setCenterTab] = useState<'event' | 'schedule' | 'shop' | 'team' | 'leaderboard'>('event');
+  const [centerTab, setCenterTab] = useState<'event' | 'news' | 'schedule' | 'shop' | 'team' | 'leaderboard'>('event');
   const prevStress = useRef(0);
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
   const [socialLoading, setSocialLoading] = useState(false);
   const [showLoan, setShowLoan] = useState(false);
+  const [endingCareer, setEndingCareer] = useState(false);
   const [phase, setPhase] = useState<'action' | 'event' | 'settlement'>('action');
   const [actionResults, setActionResults] = useState<SettlementActionResult[]>([]);
   const [shopResults, setShopResults] = useState<SettlementShopResult[]>([]);
@@ -95,11 +144,18 @@ export default function GamePage() {
   );
   const [preloadedIntro, setPreloadedIntro] = useState<string | null>(null);
   const [introLoading, setIntroLoading] = useState(!welcomeDismissed);
+  const apiTokenStorageKey = `api-token-${sessionId}`;
 
   const dismissWelcome = () => {
     sessionStorage.setItem(storageKey, '1');
     setWelcomeDismissed(true);
   };
+
+  useEffect(() => {
+    if (apiToken) {
+      sessionStorage.setItem(apiTokenStorageKey, apiToken);
+    }
+  }, [apiToken, apiTokenStorageKey]);
 
   const refreshSessionSnapshot = useCallback(async () => {
     const seq = ++sessionRefreshSeqRef.current;
@@ -112,6 +168,9 @@ export default function GamePage() {
         leaderboard: session.leaderboard,
       });
       setCurrentEvent(session.currentEvent);
+      setQueuedEvents(session.queuedEvents ?? []);
+      setWeeklyNews(session.weeklyNews ?? []);
+      setRoundPlan(session.roundPlan ?? null);
       setActiveEventSequence(session.activeEventSequence ?? null);
       setPhase(session.phase ?? 'action');
     } catch (e) {
@@ -119,7 +178,7 @@ export default function GamePage() {
         setError(e instanceof Error ? e.message : String(e));
       }
     }
-  }, [sessionId, setActiveEventSequence, setCurrentEvent, setError, setPhase, setPlayerState]);
+  }, [sessionId, setActiveEventSequence, setCurrentEvent, setError, setPhase, setPlayerState, setQueuedEvents, setRoundPlan, setWeeklyNews]);
 
   const handlePlayerUpdate = useCallback((updatedPlayer: Player) => {
     setPlayer(updatedPlayer);
@@ -214,6 +273,9 @@ export default function GamePage() {
       setPlayer(res.player);
       setCareerInsight(res.careerInsight ?? null);
       setCurrentEvent(res.currentEvent);
+      setQueuedEvents(res.queuedEvents ?? []);
+      setWeeklyNews(res.weeklyNews ?? []);
+      setRoundPlan(res.roundPlan ?? null);
       setActiveEventSequence(res.activeEventSequence ?? null);
       setPhase(res.phase);
     } catch (e) {
@@ -222,6 +284,38 @@ export default function GamePage() {
       setTransitioning(false);
       setLoading(false);
     }
+  };
+
+  const clearSettlementState = () => {
+    setActionResults([]);
+    setShopResults([]);
+    setShopNarratives({});
+    setStreamingNarrative(null);
+    setSettlementLoading(false);
+    setIsNarrating(false);
+    setChoiceSubmitting(false);
+    setInjuryAlert(null);
+    clearLastResult();
+  };
+
+  const handleAdvanceRound = async () => {
+    if (loading || transitioning || choiceSubmitting || settlementLoading || !player) return;
+
+    if (phase === 'settlement') {
+      setTransitioning(true);
+      setError(null);
+      try {
+        await refreshSessionSnapshot();
+        clearSettlementState();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setTransitioning(false);
+      }
+      return;
+    }
+
+    await handleEndActionPhase();
   };
 
   const handleScheduleSignup = async (tournamentId: string) => {
@@ -250,20 +344,22 @@ export default function GamePage() {
   };
 
   const handleEnterNextRound = () => {
-    setTransitioning(true);
-    setTimeout(() => {
-      setTransitioning(false);
-      setPhase('action');
-      setActionResults([]);
-      setShopResults([]);
-      setShopNarratives({});
-      setStreamingNarrative(null);
-      setSettlementLoading(false);
-      setIsNarrating(false);
-      setChoiceSubmitting(false);
-      setInjuryAlert(null);
-      clearLastResult();
-    }, 400);
+    void handleAdvanceRound();
+  };
+
+  const handleEndCareer = async () => {
+    if (endingCareer || loading || transitioning || choiceSubmitting || !player) return;
+    setEndingCareer(true);
+    setError(null);
+    try {
+      await api.endCareer(sessionId, apiToken ?? undefined);
+      setShowNewGameModal(false);
+      router.push(`/game/${sessionId}/summary`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setEndingCareer(false);
+    }
   };
 
   const pickChoice = async (choiceId: string, customAction?: string) => {
@@ -412,6 +508,9 @@ export default function GamePage() {
   const ended = status === 'ended';
   const isCritical = (player.stress ?? 0) >= 100;
   const isResting = (player.restRounds ?? 0) > 0;
+  const advanceButtonLabel = phase === 'action'
+    ? '推进到事件决策阶段'
+    : '推进到下一回合';
   const actionLockedReason = isResting
     ? '休养期间不能进行日常行动、商店购买或队伍管理'
     : phase === 'settlement'
@@ -427,6 +526,13 @@ export default function GamePage() {
           visible
           title={choiceSubmitting ? '正在生成叙事...' : '正在切换回合...'}
           subtitle={choiceSubmitting ? '请稍候，系统正在处理你的选择' : '请稍候，回合正在切换'}
+        />
+      )}
+      {endingCareer && (
+        <TransitionOverlay
+          visible
+          title="正在整理生涯结算..."
+          subtitle="请稍候，系统正在生成正式结算页"
         />
       )}
 
@@ -455,11 +561,11 @@ export default function GamePage() {
                 <button
                   type="button"
                   className="primary-button round-advance-button"
-                  disabled={!isActionPhase || loading || transitioning || choiceSubmitting || settlementLoading}
-                  onClick={handleEndActionPhase}
-                  title={!isActionPhase ? '等待事件结算后进入下一回合' : undefined}
+                  disabled={loading || transitioning || choiceSubmitting || settlementLoading || phase === 'event'}
+                  onClick={handleAdvanceRound}
+                  title={phase === 'event' ? '等待事件结算后进入下一回合' : undefined}
                 >
-                  推进到下一回合 →
+                  {advanceButtonLabel} →
                 </button>
               </div>
             </>
@@ -470,7 +576,7 @@ export default function GamePage() {
         <main className="hud-center">
           {ended ? (
             <div className="center-tab-pane">
-              <EndingPanel player={player} traits={traits} ending={ending ?? undefined} />
+              <EndingPanel player={player} traits={traits} ending={ending ?? undefined} history={history} />
             </div>
           ) : !welcomeDismissed && history.length === 0 && !loading ? (
             <WelcomeCard
@@ -484,9 +590,9 @@ export default function GamePage() {
             <>
               {/* 标签栏 */}
               <div className="center-tabs">
-                {(['event', 'schedule', 'shop', 'team', 'leaderboard'] as const).map((tab) => {
+                {(['event', 'news', 'schedule', 'shop', 'team', 'leaderboard'] as const).map((tab) => {
                   const labels: Record<string, string> = {
-                    event: '事件', schedule: '赛程', shop: '商店', team: '战队', leaderboard: '排行榜',
+                    event: '事件', news: '新闻', schedule: '赛程', shop: '商店', team: '战队', leaderboard: '排行榜',
                   };
                   const hasDot = tab === 'event' && centerTab !== 'event' && (!!currentEvent || phase !== 'event');
                   return (
@@ -507,7 +613,10 @@ export default function GamePage() {
               <div className="center-tab-pane">
                 {centerTab === 'event' && (
                   <>
-                    {lastResult && (
+                    {lastResult && currentEvent && (
+                      <ResultSummaryBar result={lastResult} />
+                    )}
+                    {lastResult && !currentEvent && (
                       <ResultPanel
                         result={lastResult}
                         streamingNarrative={streamingNarrative}
@@ -517,7 +626,7 @@ export default function GamePage() {
                         shopResults={shopResults}
                         shopNarratives={shopNarratives}
                         onEnterNextRound={handleEnterNextRound}
-                        hideNextRound={Boolean(lastResult?.sequenceId) && !lastResult.sequenceFinal}
+                        hideNextRound
                       />
                     )}
                     {phase === 'action' ? (
@@ -539,7 +648,34 @@ export default function GamePage() {
                       lastResult ? null : <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>结算中…</div>
                     ) : phase === 'event' && currentEvent ? (
                       <>
+                        {roundPlan && (
+                          <div style={{ marginBottom: 10, padding: '8px 10px', border: '1px solid var(--line)', background: 'var(--panel-2)', borderRadius: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', fontSize: 11, color: 'var(--fg-2)' }}>
+                              <span>本周编排</span>
+                              <span>{roundPlan.servedCount}/{roundPlan.targetCount} · {roundPlan.archetype}</span>
+                            </div>
+                            <div style={{ marginTop: 6, height: 4, borderRadius: 999, background: 'var(--line)', overflow: 'hidden' }}>
+                              <div
+                                style={{
+                                  width: `${Math.min(100, (roundPlan.servedCount / Math.max(1, roundPlan.targetCount)) * 100)}%`,
+                                  height: '100%',
+                                  background: 'var(--accent)',
+                                }}
+                              />
+                            </div>
+                            <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 10, color: 'var(--fg-3)' }}>
+                              {roundPlan.theme && <span>{roundPlan.theme.group}</span>}
+                              {roundPlan.tone && <span>{roundPlan.tone}</span>}
+                              {roundPlan.theme?.tags?.length ? <span>{roundPlan.theme.tags.slice(0, 2).join(' · ')}</span> : null}
+                            </div>
+                          </div>
+                        )}
                         <EventCard event={currentEvent} sequence={activeEventSequence} />
+                        {queuedEvents.length > 0 && (
+                          <div style={{ marginTop: 8, fontSize: 11, color: 'var(--fg-3)' }}>
+                            本周剩余事件 {queuedEvents.length} 条
+                          </div>
+                        )}
                         <div style={{ marginTop: 8, marginBottom: 4, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-3)' }}>
                           选择行动
                         </div>
@@ -549,12 +685,15 @@ export default function GamePage() {
                       <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>等待下一回合…</div>
                     )}
                     {error && <div className="error" style={{ marginTop: 8 }}>错误：{error}</div>}
-                    <EventActivityPanel
-                      history={history}
-                      socialPosts={socialPosts}
-                      socialLoading={socialLoading}
-                    />
-                  </>
+                    </>
+                  )}
+
+                {centerTab === 'news' && (
+                  <WorldNewsPanel
+                    weeklyNews={weeklyNews}
+                    socialPosts={socialPosts}
+                    socialLoading={socialLoading}
+                  />
                 )}
 
                 {centerTab === 'shop' && (
@@ -571,6 +710,7 @@ export default function GamePage() {
 
                 {centerTab === 'schedule' && (
                   <ScheduleCalendarPanel
+                    sessionId={sessionId}
                     player={player}
                     insight={careerInsight}
                     busyTournamentId={signupBusyId}
@@ -648,6 +788,8 @@ export default function GamePage() {
                 leaderboard: res.leaderboard,
               });
               setCurrentEvent(res.currentEvent ?? null);
+              setQueuedEvents(res.queuedEvents ?? []);
+              setWeeklyNews(res.weeklyNews ?? []);
               setActiveEventSequence(res.activeEventSequence ?? null);
               setPhase(res.phase ?? 'action');
               clearOffer();
@@ -666,6 +808,8 @@ export default function GamePage() {
                 careerInsight: res.careerInsight,
               });
               setCurrentEvent(res.currentEvent ?? null);
+              setQueuedEvents(res.queuedEvents ?? []);
+              setWeeklyNews(res.weeklyNews ?? []);
               setActiveEventSequence(res.activeEventSequence ?? null);
               setPhase(res.phase ?? 'action');
               clearOffer();
@@ -695,24 +839,37 @@ export default function GamePage() {
       {/* New-game confirm modal */}
       {showNewGameModal && (
         <div className="modal-backdrop" onClick={() => setShowNewGameModal(false)}>
-          <div className="modal new-game-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="new-game-modal-warn">
-              开始新生涯将放弃当前档案，此操作不可逆。
-            </div>
-            <div className="new-game-modal-summary">
-              <EndingPanel player={player} traits={traits} ending={ending ?? undefined} />
-            </div>
+            <div className="modal new-game-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="new-game-modal-warn">
+                结束当前生涯将放弃当前档案，此操作不可逆。
+              </div>
+              <div className="new-game-modal-summary">
+              <EndingPanel player={player} traits={traits} ending={ending ?? undefined} history={history} />
+              </div>
+              {error && (
+                <div className="error" style={{ marginTop: 10 }}>
+                  错误：{error}
+                </div>
+              )}
             <div className="new-game-modal-actions">
               <button
                 type="button"
                 className="ghost-button"
                 onClick={() => setShowNewGameModal(false)}
+                disabled={endingCareer}
               >
                 取消
               </button>
-              <Link href="/" className="primary-button">
-                确认，开始新生涯
-              </Link>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  void handleEndCareer();
+                }}
+                disabled={endingCareer}
+              >
+                确认，结束当前生涯
+              </button>
             </div>
           </div>
         </div>
@@ -726,17 +883,8 @@ export default function GamePage() {
           style={{ fontSize: 11, padding: '3px 10px' }}
           onClick={() => setShowNewGameModal(true)}
         >
-          ← 新生涯
+          ← 结束当前生涯
         </button>
-        <span
-          style={{
-            fontSize: 10,
-            color: 'var(--fg-3)',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {sessionId.slice(0, 8)}…
-        </span>
         {player.restRounds > 0 && (
           <span className="status-alert danger">
             休养中 {player.restRounds}回合

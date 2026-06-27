@@ -48,7 +48,7 @@ describe('AI events in game engine', () => {
     expect(resolved.result.eventId).toBe('ai-rival-shadow');
   });
 
-  it('throws when the current AI event definition is missing from the AI event cache', () => {
+  it('falls back when the current AI event definition is missing from the AI event cache', () => {
     const player = initPlayer({
       name: 'TestPlayer',
       traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
@@ -58,7 +58,8 @@ describe('AI events in game engine', () => {
     const session = createSession(player, 1);
     session.currentEvent = toPublicEvent(event, player.rivals, player.roster ?? []);
 
-    expect(() => applyChoice(session, 'review', 0, [])).toThrow('unknown event: ai-rival-shadow');
+    const resolved = applyChoice(session, 'review', 0, []);
+    expect(resolved.result.eventId).toBe('ai-rival-shadow');
   });
 
   it('resolves the current AI event from the active cache envelope', () => {
@@ -78,5 +79,26 @@ describe('AI events in game engine', () => {
 
     const resolved = applyChoice(session, 'review', 0, [], cache);
     expect(resolved.result.eventId).toBe('ai-rival-shadow');
+  });
+
+  it('falls back to a generic ai event when the cache entry is missing for an old save', () => {
+    const player = initPlayer({
+      name: 'TestPlayer',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    const session = createSession(player, 1);
+    session.currentEvent = {
+      id: 'ai-relax-invite',
+      type: 'life',
+      title: '临时邀请',
+      narrative: '旧存档里的 AI 事件定义已经丢失。',
+      choices: [
+        { id: 'continue', label: '继续', description: '继续处理' },
+      ],
+    };
+
+    const resolved = applyChoice(session, 'continue', 0, []);
+    expect(resolved.result.eventId).toBe('ai-relax-invite');
   });
 });

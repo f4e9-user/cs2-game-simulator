@@ -19,6 +19,8 @@ export function createSession(player: Player, rngSeed: number): GameSession {
     apiToken,
     phase: 'action',
     currentEvent: null,
+    queuedEvents: [],
+    weeklyNews: [],
     history: [],
     status: 'active',
     createdAt: ts,
@@ -35,6 +37,8 @@ export function createSession(player: Player, rngSeed: number): GameSession {
     ...seededWorld,
     phase: 'action',
     currentEvent: null,
+    queuedEvents: [],
+    weeklyNews: [],
     leaderboard,
   };
 }

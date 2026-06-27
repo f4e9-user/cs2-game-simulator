@@ -181,6 +181,21 @@ function clubRecommendationScore(player: Player, club: ClubApplicationSummary): 
   return score;
 }
 
+function clubCanApply(player: Player, club: ClubApplicationSummary): { eligible: boolean; reason: string | null } {
+  const requiredIdx = ['rookie', 'youth', 'second', 'pro', 'retired'].indexOf(player.stage);
+  const clubRequiredIdx = ['rookie', 'youth', 'second', 'pro', 'retired'].indexOf(club.requiredStage as Player['stage']);
+  const rookieCanApplyToYouth =
+    player.stage === 'rookie' && club.requiredStage === 'youth' && rookieEligibility(player).eligible === true;
+
+  if (!rookieCanApplyToYouth && requiredIdx < clubRequiredIdx) {
+    return { eligible: false, reason: '阶段未达标' };
+  }
+  if (club.requiredFame !== undefined && (player.fame ?? 0) < club.requiredFame) {
+    return { eligible: false, reason: `名气需达到 ${club.requiredFame}` };
+  }
+  return { eligible: true, reason: null };
+}
+
 function marketSortKey(player: Player, club: ClubApplicationSummary, sort: MarketSort): number {
   switch (sort) {
     case 'salary-desc':
@@ -198,7 +213,7 @@ function marketSortKey(player: Player, club: ClubApplicationSummary, sort: Marke
 function getMarketStatus(summary?: ClubApplicationSummary['runtimeSummary']): MarketStatus {
   const form = summary?.currentForm ?? 50;
   if (form >= 65) return 'hot';
-  if (form <= 35) return 'cold';
+  if (form < 35) return 'cold';
   return 'stable';
 }
 
@@ -252,8 +267,6 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
       .catch(() => api.listClubs().then((res) => setClubs(res.clubs)).catch(() => {}));
   }, [sessionId]);
 
-  const stageOrder = ['rookie', 'youth', 'second', 'pro', 'retired'];
-  const playerStageIdx = stageOrder.indexOf(player.stage);
   const rookieCheck = player.stage === 'rookie' ? rookieEligibility(player) : null;
   const ap = player.actionPoints ?? 0;
   const isResting = (player.restRounds ?? 0) > 0;
@@ -326,12 +339,6 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
     return clubs.filter((club) => {
       if (club.isRival) return false;
       if (player.team && club.id === player.team.clubId) return false;
-      const requiredIdx = stageOrder.indexOf(club.requiredStage);
-      const rookieCanApplyToYouth =
-        player.stage === 'rookie' && club.requiredStage === 'youth' && rookieCheck?.eligible === true;
-      if (!rookieCanApplyToYouth && playerStageIdx < requiredIdx) return false;
-      if (club.requiredFame !== undefined && (player.fame ?? 0) < club.requiredFame) return false;
-
       const status = getMarketStatus(club.runtimeSummary);
       const clubNeeds = club.runtimeSummary?.needs ?? [];
       const textMatch =
@@ -352,10 +359,12 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
       if (diff !== 0) return diff;
       return a.name.localeCompare(b.name);
     });
-  }, [clubs, needs, player, playerStageIdx, rookieCheck?.eligible, regions, search, sort, statuses, tiers]);
+  }, [clubs, needs, player, regions, search, sort, statuses, tiers]);
 
   const recommendedClubs = eligibleClubs.filter((club) => clubRecommendationScore(player, club) >= 30);
   const otherClubs = eligibleClubs.filter((club) => !recommendedClubs.includes(club));
+  const marketClubs = otherClubs.length > 0 ? otherClubs : eligibleClubs;
+  const showRecommendedSection = recommendedClubs.length > 0 && recommendedClubs.length < eligibleClubs.length;
 
   const canApplyBase = enabled && !isResting && ap >= 25 && !loading && !hasPendingMatch && !player.pendingApplication;
 
@@ -411,8 +420,8 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
   };
 
   const renderMarketCard = (club: ClubApplicationSummary) => {
-    const rookieBlock = rookieCheck !== null && !rookieCheck.eligible;
-    const canApply = canApplyBase && !rookieBlock;
+    const application = clubCanApply(player, club);
+    const canApply = canApplyBase && application.eligible;
     const status = getMarketStatus(club.runtimeSummary);
     const needsList = club.runtimeSummary?.needs ?? [];
     const stories = club.runtimeSummary?.storylines ?? [];
@@ -461,7 +470,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
             disabled={!canApply}
             onClick={() => apply(club.id)}
           >
-            {rookieBlock ? '未达标' : ap < 25 ? 'AP 不足' : '发简历 -25 AP'}
+            {!application.eligible ? `未达标${application.reason ? ` · ${application.reason}` : ''}` : ap < 25 ? 'AP 不足' : '发简历 -25 AP'}
           </button>
         </div>
       </div>
@@ -619,7 +628,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
         </div>
       )}
 
-      {recommendedClubs.length > 0 && (
+      {showRecommendedSection && (
         <div className="market-section">
           <div className="market-section-title">推荐</div>
           <div className="market-list">{recommendedClubs.map(renderMarketCard)}</div>
@@ -629,7 +638,7 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
       <div className="market-section">
         <div className="market-section-title">转会市场</div>
         <div className="market-list">
-          {otherClubs.length > 0 ? otherClubs.map(renderMarketCard) : <div className="panel-empty">暂无符合条件的俱乐部</div>}
+          {marketClubs.length > 0 ? marketClubs.map(renderMarketCard) : <div className="panel-empty">暂无战队</div>}
         </div>
       </div>
     </div>

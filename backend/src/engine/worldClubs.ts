@@ -20,6 +20,8 @@ import type {
   TeammateRole,
   TeammateStats,
   TournamentTier,
+  WorldTournamentParticipant,
+  WorldTournamentSnapshot,
   WorldClubPool,
 } from '../types.js';
 import { makeRng, stageIndex } from './resolver.js';
@@ -406,6 +408,31 @@ function worldTournamentResultValue(tier: TournamentTier, result: 'win' | 'deep-
   return -Math.max(1, Math.round(base * 0.4));
 }
 
+function addWeeks(year: number, week: number, offset: number): { year: number; week: number } {
+  let y = year;
+  let w = week + offset;
+  while (w > 48) {
+    y += 1;
+    w -= 48;
+  }
+  return { year: y, week: w };
+}
+
+function tournamentSignupWeek(tournament: Tournament): number | null {
+  if (tournament.signupWeeks === 'always') return null;
+  return tournament.signupWeeks[0] ?? null;
+}
+
+function tournamentResultDate(tournament: Tournament, year: number): { year: number; week: number } | null {
+  const signupWeek = tournamentSignupWeek(tournament);
+  if (!signupWeek) return null;
+  return addWeeks(year, signupWeek, Math.max(2, tournament.bracket.length));
+}
+
+function tournamentSnapshotId(tournament: Tournament, resultYear: number, resultWeek: number): string {
+  return `${tournament.id}:${resultYear}:${resultWeek}`;
+}
+
 export function computeClubVrsScore(
   club: Pick<
     ClubRuntimeState,
@@ -629,20 +656,36 @@ function tickRuntime(
 function applyWorldTournamentTick(session: GameSession, tickRound: number, tickType: string): GameSession {
   const pool = session.worldClubs;
   if (!pool || tickType !== 'round') return session;
-  const week = ((Math.max(1, tickRound) - 1) % 48) + 1;
+  const week = session.player.week ?? (((Math.max(1, tickRound) - 1) % 48) + 1);
   const year = session.player.year ?? pool.season;
-  const tournaments = buildYearTournaments(year).filter((tournament) =>
-    tournament.signupWeeks === 'always' || tournament.signupWeeks.includes(week),
-  );
+  const candidateTournaments = [
+    ...buildYearTournaments(Math.max(1, year - 1)),
+    ...buildYearTournaments(year),
+  ];
+  const tournaments = candidateTournaments.filter((tournament) => {
+    const tournamentYear = Number(/^y(\d+)-/.exec(tournament.id)?.[1] ?? year);
+    const resultDate = tournamentResultDate(tournament, tournamentYear);
+    return resultDate?.year === year && resultDate.week === week;
+  });
   if (tournaments.length === 0) return session;
 
   let nextSession = session;
   let runtimeByClubId = { ...pool.runtimeByClubId };
   let processedTickKeysByClubId = { ...pool.processedTickKeysByClubId };
+  let tournamentSnapshots = [...(pool.tournamentSnapshots ?? [])];
   const candidateIds = unique([...pool.activeClubIds, ...pool.relevantClubIds, ...pool.staticClubIds]).slice(0, 48);
   const playerClubId = session.player.team?.clubId;
 
   for (const tournament of tournaments) {
+    const tournamentYear = Number(/^y(\d+)-/.exec(tournament.id)?.[1] ?? year);
+    const signupWeek = tournamentSignupWeek(tournament);
+    const resultDate = tournamentResultDate(tournament, tournamentYear);
+    if (!signupWeek || !resultDate) continue;
+    const snapshotId = tournamentSnapshotId(tournament, resultDate.year, resultDate.week);
+    if (tournamentSnapshots.some((snapshot) => snapshot.id === snapshotId)) continue;
+    const processedTournamentKey = `world-tournament:${snapshotId}`;
+    if ((processedTickKeysByClubId.__global ?? []).includes(processedTournamentKey)) continue;
+
     const eligibleIds = candidateIds
       .filter((clubId) => clubId !== playerClubId)
       .filter((clubId) => {
@@ -654,27 +697,39 @@ function applyWorldTournamentTick(session: GameSession, tickRound: number, tickT
         const bRuntime = runtimeByClubId[b] ?? createClubRuntimeState(nextSession, b);
         return computeClubVrsScore(bRuntime) - computeClubVrsScore(aRuntime);
       })
-      .slice(0, 6);
+      .slice(0, tournament.tier === 'major' ? 16 : 12);
+    if (eligibleIds.length < 2) continue;
 
-    for (const clubId of eligibleIds) {
-      const tickKey = `world-tournament:${tournament.id}:${tickRound}`;
-      const processed = processedTickKeysByClubId[clubId] ?? [];
-      if (processed.includes(tickKey)) continue;
-      const rng = makeRng(hashString(`${session.id}:world-tournament:${tournament.id}:${clubId}:${tickRound}`));
+    const participants = eligibleIds.map((clubId, index): WorldTournamentParticipant & { strength: number } => {
       const runtime = runtimeByClubId[clubId] ?? createClubRuntimeState(nextSession, clubId);
+      const rng = makeRng(hashString(`${session.id}:world-tournament:${tournament.id}:${clubId}:${tickRound}`));
+      const vrsScore = computeClubVrsScore(runtime);
       const power = calculateClubPower(runtime);
-      const score = computeClubVrsScore(runtime);
-      const strength = power + score / 25 + runtime.currentForm / 25 + rng() * 4;
-      const result: 'win' | 'deep-run' | 'early-exit' | 'loss' =
-        strength >= 18 ? 'win' :
-        strength >= 12 ? 'deep-run' :
-        strength >= 8 ? 'early-exit' :
-        'loss';
+      return {
+        clubId,
+        seed: index + 1,
+        vrsScore,
+        power,
+        form: runtime.currentForm,
+        strength: power + vrsScore / 25 + runtime.currentForm / 25 + rng() * 4,
+      };
+    }).sort((a, b) => b.strength - a.strength);
+    const champion = participants[0]!;
+    const runnerUp = participants[1]!;
+    const darkHorse = participants.find((participant) => participant.seed > Math.ceil(participants.length / 2) && participant.clubId === champion.clubId);
+    const upset = champion.seed > runnerUp.seed + 4 ? runnerUp : undefined;
+
+    for (const participant of participants) {
+      const runtime = runtimeByClubId[participant.clubId] ?? createClubRuntimeState(nextSession, participant.clubId);
+      const result: 'win' | 'deep-run' | 'early-exit' =
+        participant.clubId === champion.clubId ? 'win' :
+        participant.clubId === runnerUp.clubId || participant.seed <= 4 ? 'deep-run' :
+        'early-exit';
       const points = worldTournamentResultValue(tournament.tier, result);
-      const positive = result === 'win' || result === 'deep-run';
+      const positive = result !== 'early-exit';
       runtimeByClubId = {
         ...runtimeByClubId,
-        [clubId]: withVrsScore({
+        [participant.clubId]: withVrsScore({
           ...runtime,
           seasonPoints: Math.max(0, runtime.seasonPoints + points),
           currentForm: clamp(runtime.currentForm + (positive ? 5 : -4), -100, 100),
@@ -692,11 +747,32 @@ function applyWorldTournamentTick(session: GameSession, tickRound: number, tickT
           updatedRound: tickRound,
         }),
       };
-      processedTickKeysByClubId = {
-        ...processedTickKeysByClubId,
-        [clubId]: [...processed, tickKey].slice(-24),
-      };
     }
+    const snapshot: WorldTournamentSnapshot = {
+      id: snapshotId,
+      tournamentId: tournament.id,
+      tournamentName: tournament.displayName,
+      tier: tournament.tier,
+      year: tournamentYear,
+      signupWeek,
+      resultYear: resultDate.year,
+      resultWeek: resultDate.week,
+      round: tickRound,
+      participants: participants.map(({ strength: _strength, ...participant }) => participant),
+      championClubId: champion.clubId,
+      runnerUpClubId: runnerUp.clubId,
+      darkHorseClubId: darkHorse?.clubId,
+      upsetClubId: upset?.clubId,
+      finalScore: tournament.tier === 'major' || tournament.tier === 's-class'
+        ? (hashString(snapshotId) % 2 === 0 ? '3-1' : '3-2')
+        : (hashString(snapshotId) % 2 === 0 ? '2-0' : '2-1'),
+      createdAt: new Date(0).toISOString(),
+    };
+    tournamentSnapshots = [snapshot, ...tournamentSnapshots].slice(0, 48);
+    processedTickKeysByClubId = {
+      ...processedTickKeysByClubId,
+      __global: [...(processedTickKeysByClubId.__global ?? []), processedTournamentKey].slice(-96),
+    };
   }
 
   return {
@@ -705,6 +781,7 @@ function applyWorldTournamentTick(session: GameSession, tickRound: number, tickT
       ...pool,
       runtimeByClubId,
       processedTickKeysByClubId,
+      tournamentSnapshots,
     },
   };
 }

@@ -386,6 +386,34 @@ export interface ClubSeasonSummary {
   majorNewFaceClubIds: string[];
 }
 
+export interface WorldTournamentParticipant {
+  clubId: string;
+  seed: number;
+  vrsScore: number;
+  power: number;
+  form: number;
+}
+
+export interface WorldTournamentSnapshot {
+  id: string;
+  tournamentId: string;
+  tournamentName: string;
+  tier: TournamentTier;
+  year: number;
+  signupWeek: number;
+  resultYear: number;
+  resultWeek: number;
+  round: number;
+  participants: WorldTournamentParticipant[];
+  championClubId: string;
+  runnerUpClubId: string;
+  darkHorseClubId?: string;
+  upsetClubId?: string;
+  finalScore: string;
+  createdAt: string;
+  newsPublished?: boolean;
+}
+
 export interface WorldClubPool {
   season: number;
   activeClubIds: string[];
@@ -395,6 +423,7 @@ export interface WorldClubPool {
   processedTickKeysByClubId: Record<string, string[]>;
   lastGlobalTickRound?: number;
   seasonSummaries?: ClubSeasonSummary[];
+  tournamentSnapshots?: WorldTournamentSnapshot[];
 }
 
 export type PersonalityTag =
@@ -678,6 +707,7 @@ export interface DynamicState {
   fame: number;
   restRounds: number;
   stressMaxRounds: number;
+  lastRoundEventCount?: number;
   year: number;
   week: number;
   pendingMatch: PendingMatch | null;
@@ -834,6 +864,42 @@ export interface GameEvent {
   choices: Choice[];
 }
 
+export interface WeeklyNewsItem {
+  id: string;
+  eventId: string;
+  type: EventType;
+  title: string;
+  narrative: string;
+  report?: WeeklyNewsReport;
+  source?: {
+    kind: 'world-tournament' | 'world-club-season' | 'broadcast';
+    year?: number;
+    week?: number;
+    tournamentId?: string;
+    clubId?: string;
+    resultId?: string;
+  };
+  createdAt: string;
+}
+
+export interface WeeklyNewsReport {
+  kind: 'world-tournament';
+  stage?: string;
+  scoreline?: string;
+  champion?: string;
+  runnerUp?: string;
+  darkHorse?: string;
+  bracketSize?: number;
+  participants?: Array<{
+    clubId: string;
+    clubName: string;
+    seed: number;
+    vrsScore: number;
+    power: number;
+    form: number;
+  }>;
+}
+
 export interface MatchStats {
   kills: number;
   deaths: number;
@@ -892,6 +958,27 @@ export interface EventSequence {
   status: 'active' | 'completed' | 'cancelled';
   context: EventSequenceContext;
   cancelReason?: string;
+}
+
+export type EventTone = 'heavy' | 'tense' | 'light';
+export type ThemeGroup = 'team' | 'competition' | 'money-life' | 'media' | 'growth';
+export type RoundArchetype = 'major-single' | 'team-drama' | 'money' | 'media' | 'growth' | 'quiet';
+
+export interface RoundTheme {
+  type: EventType;
+  group: ThemeGroup;
+  tags: string[];
+}
+
+export interface RoundPlan {
+  archetype: RoundArchetype;
+  theme?: RoundTheme;
+  tone?: EventTone;
+  targetCount: number;
+  servedCount: number;
+  servedEventIds: string[];
+  hardDecisionCap: number;
+  servedHardDecisions: number;
 }
 
 export interface RoundResult {
@@ -1034,6 +1121,9 @@ export interface GameSession {
   player: Player;
   phase: RoundPhase;
   currentEvent: GameEvent | null;
+  queuedEvents?: GameEvent[];
+  weeklyNews?: WeeklyNewsItem[];
+  roundPlan?: RoundPlan;
   activeEventSequence?: EventSequence;
   history: RoundResult[];
   status: SessionStatus;
@@ -1104,9 +1194,25 @@ export interface Tournament {
   difficulty: number;
 }
 
+export interface TournamentWithResult extends Tournament {
+  isEnded: boolean;
+  resultYear: number | null;
+  resultWeek: number | null;
+  championName: string | null;
+  runnerUpName: string | null;
+}
+
 export interface TournamentsResponse {
   open: Tournament[];
   pendingMatch: PendingMatch | null;
+}
+
+export interface AllTournamentsResponse {
+  year: number;
+  week: number;
+  playerStage: Stage;
+  pendingMatch: PendingMatch | null;
+  tournaments: TournamentWithResult[];
 }
 
 export interface ChoiceResponse {
@@ -1114,6 +1220,9 @@ export interface ChoiceResponse {
   player: Player;
   phase: RoundPhase;
   currentEvent: GameEvent | null;
+  queuedEvents?: GameEvent[];
+  weeklyNews?: WeeklyNewsItem[];
+  roundPlan?: RoundPlan;
   activeEventSequence?: EventSequence;
   status: SessionStatus;
   ending?: string;

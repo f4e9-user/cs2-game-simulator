@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import app from '../../index.js';
 import { RULES_META } from '../../engine/constants.js';
 import { activateClubRuntime } from '../../engine/worldClubs.js';
-import type { Env, GameSession } from '../../types.js';
+import { buildYearTournaments } from '../../data/tournaments.js';
+import type { Env, GameSession, RoundResult } from '../../types.js';
 
 class MemoryStatement {
   private values: unknown[] = [];
@@ -111,6 +112,107 @@ describe('game routes', () => {
     expect(body).toEqual(RULES_META);
   });
 
+  it('returns all tournaments for the current year', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Tournament List Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string };
+
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const year = session.player.year ?? 1;
+    const currentWeek = 13;
+    const tournament = buildYearTournaments(year)[0]!;
+    const endedSession: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        week: currentWeek,
+      },
+      worldClubs: {
+        season: session.worldClubs?.season ?? year,
+        activeClubIds: session.worldClubs?.activeClubIds ?? [],
+        relevantClubIds: session.worldClubs?.relevantClubIds ?? [],
+        staticClubIds: session.worldClubs?.staticClubIds ?? [],
+        runtimeByClubId: session.worldClubs?.runtimeByClubId ?? {},
+        processedTickKeysByClubId: session.worldClubs?.processedTickKeysByClubId ?? {},
+        seasonSummaries: session.worldClubs?.seasonSummaries,
+        tournamentSnapshots: [{
+          id: 'snapshot-test',
+          tournamentId: tournament.id,
+          tournamentName: tournament.displayName,
+          tier: tournament.tier,
+          year,
+          signupWeek: 1,
+          resultYear: year,
+          resultWeek: 2,
+          round: 99,
+          participants: [],
+          championClubId: 'club-cyber-academy',
+          runnerUpClubId: 'club-apex-gaming',
+          finalScore: '2-1',
+          createdAt: new Date(0).toISOString(),
+        }],
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(endedSession.id, endedSession.player.name, endedSession.player.stage, endedSession.player.round, endedSession.status, endedSession.ending ?? null, JSON.stringify(endedSession), endedSession.createdAt, endedSession.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/tournaments/all`, {}, env);
+    const body = await res.json() as {
+      year?: number;
+      week?: number;
+      playerStage?: string;
+      tournaments?: Array<{ id: string; isEnded?: boolean; championName?: string | null; runnerUpName?: string | null }>;
+      error?: string;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.year).toBe(year);
+    expect(body.week).toBe(currentWeek);
+    expect(body.tournaments).toHaveLength(buildYearTournaments(year).length);
+    expect(body.tournaments?.[0]).toMatchObject({
+      isEnded: true,
+      championName: '赛博学院',
+      runnerUpName: 'Apex Gaming',
+    });
+  });
+
+  it('derives opening experience from traits when starting with client stats', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Scene Kid Starter',
+        traitIds: ['scene-kid', 'aim-god', 'tactical-mind'],
+        stats: {
+          intelligence: 5,
+          agility: 6,
+          mentality: 4,
+          constitution: 3,
+          experience: 0,
+          money: 0,
+        },
+      }),
+    }, env);
+    const body = await startRes.json() as { player?: GameSession['player']; error?: string };
+
+    expect(startRes.status, JSON.stringify(body)).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.player?.stats.experience).toBe(1);
+  });
+
   it('replays last-week routine actions through the game route and persists partial success', async () => {
     const env = makeEnv();
     const startRes = await app.request('https://localhost/api/game/start', {
@@ -166,6 +268,225 @@ describe('game routes', () => {
     const saved = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
     const savedBody = await saved.json() as GameSession;
     expect(savedBody.player.currentWeekRoutineActions).toEqual(['action-meditation']);
+  });
+
+  it('persists queued events and weekly news when ending the action phase', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Queue Route Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      phase: 'action',
+      weeklyNews: [
+        {
+          id: 'seed-news',
+          eventId: 'seed-news',
+          type: 'broadcast',
+          title: '种子新闻',
+          narrative: '种子新闻内容',
+          createdAt: '2026-01-02T00:00:00.000Z',
+        },
+      ],
+      player: {
+        ...session.player,
+        round: 12,
+        week: 12,
+        tags: ['club-origin-mismatch', 'club-exception-strength', 'major-broadcast'],
+        pendingApplication: {
+          clubId: 'club-cyber-academy',
+          clubName: '赛博学院',
+          appliedRound: 10,
+          responseRound: 12,
+        },
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/end-action-phase`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+    }, env);
+    const raw = await res.text();
+    const body = JSON.parse(raw) as GameSession & { error?: string };
+
+    expect(res.status, raw).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.currentEvent?.id).toBe('chain-club-response');
+    expect(body.queuedEvents ?? []).toHaveLength(0);
+    expect(body.weeklyNews?.map((item) => item.eventId)).toContain('seed-news');
+
+    const saved = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const savedBody = await saved.json() as GameSession;
+    expect(savedBody.queuedEvents ?? []).toHaveLength(0);
+    expect(savedBody.weeklyNews?.map((item) => item.eventId)).toContain('seed-news');
+  });
+
+  it('ends a career in place and exposes the final summary afterwards', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Summary Route Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const history: RoundResult[] = [
+      {
+        round: 1,
+        eventId: 'round-1',
+        eventType: 'daily',
+        eventTitle: '首周磨合',
+        choiceId: 'choice-1',
+        choiceLabel: '稳住节奏',
+        success: true,
+        roll: 18,
+        dc: 10,
+        narrative: '你稳住了开局。',
+        statChanges: {},
+        newStats: session.player.stats,
+        stageBefore: 'rookie',
+        stageAfter: 'rookie',
+        tagsAdded: [],
+        tagsRemoved: [],
+        passiveEffects: [],
+        qualificationChanges: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+      } as unknown as RoundResult,
+      {
+        round: 2,
+        eventId: 'round-2',
+        eventType: 'daily',
+        eventTitle: '继续推进',
+        choiceId: 'choice-2',
+        choiceLabel: '继续冲',
+        success: false,
+        roll: 6,
+        dc: 12,
+        narrative: '你在后半程吃到了一次失败。',
+        statChanges: {},
+        newStats: session.player.stats,
+        stageBefore: 'rookie',
+        stageAfter: 'rookie',
+        tagsAdded: [],
+        tagsRemoved: [],
+        passiveEffects: [],
+        qualificationChanges: [],
+        createdAt: '2026-01-02T00:00:00.000Z',
+      } as unknown as RoundResult,
+    ];
+    const seeded: GameSession = {
+      ...session,
+      phase: 'event',
+      currentEvent: {
+        id: 'seed-event',
+        type: 'daily',
+        title: '暂存事件',
+        narrative: '临时事件',
+        choices: [],
+      } as unknown as NonNullable<GameSession['currentEvent']>,
+      queuedEvents: [
+        {
+          id: 'seed-queued-event',
+          type: 'daily',
+          title: '队列事件',
+          narrative: '队列中的事件',
+          choices: [],
+        } as unknown as NonNullable<GameSession['currentEvent']>,
+      ],
+      history,
+      player: {
+        ...session.player,
+        stage: 'pro',
+        round: 22,
+        tournamentChampionships: 2,
+        championshipSeries: { pgl: 1, blast: 0, major: 0 },
+        pendingMatch: {
+          tournamentId: 't1',
+          tier: 's',
+          name: '预留赛事',
+          resolveYear: 1,
+          resolveWeek: 1,
+          stageIndex: 0,
+        },
+        pendingApplication: {
+          clubId: 'club-x',
+          clubName: '测试战队',
+          appliedRound: 20,
+          responseRound: 22,
+        },
+        pendingOffer: {
+          clubId: 'club-y',
+          clubName: '另一个战队',
+          tag: 'TY',
+          region: 'EU',
+          tier: 'pro',
+        } as GameSession['player']['pendingOffer'],
+      },
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const endRes = await app.request(`https://localhost/api/game/${started.sessionId}/end-career`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+    }, env);
+    const endBody = await endRes.json() as GameSession & { error?: string };
+
+    expect(endRes.status).toBe(200);
+    expect(endBody.error).toBeUndefined();
+    expect(endBody.status).toBe('ended');
+    expect(endBody.ending).toBe('career_ended');
+    expect(endBody.player.stage).toBe('retired');
+    expect(endBody.currentEvent).toBeNull();
+    expect(endBody.queuedEvents ?? []).toHaveLength(0);
+    expect(endBody.player.pendingMatch).toBeNull();
+    expect(endBody.player.pendingApplication).toBeNull();
+    expect(endBody.player.pendingOffer).toBeNull();
+
+    const saved = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const savedBody = await saved.json() as GameSession;
+    expect(savedBody.status).toBe('ended');
+    expect(savedBody.ending).toBe('career_ended');
+    expect(savedBody.player.stage).toBe('retired');
+
+    const summaryRes = await app.request(`https://localhost/api/game/${started.sessionId}/summary`, {
+      headers: {
+        authorization: `Bearer ${started.apiToken}`,
+      },
+    }, env);
+    const summaryBody = await summaryRes.json() as { summary?: string; ending?: string; error?: string };
+
+    expect(summaryRes.status).toBe(200);
+    expect(summaryBody.error).toBeUndefined();
+    expect(summaryBody.ending).toBe('career_ended');
+    expect(summaryBody.summary).toContain('完成了 2 轮生涯');
+    expect(summaryBody.summary).toContain('career_ended');
   });
 
   it('creates bank loans with the requested repayment duration', async () => {
@@ -588,6 +909,46 @@ describe('game routes', () => {
     expect(rivalPost?.handle).toBe(`@${rival.tag.toLowerCase()}_watch`);
     expect(rivalPost?.author).not.toContain('???');
     expect(rivalPost?.handle).not.toContain('???');
+  });
+
+  it('keeps world news out of social feed copy', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Feed Separation Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+
+    const initialRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const initial = await initialRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...initial,
+      weeklyNews: [{
+        id: 'news-1',
+        eventId: 'world-tournament-result:test',
+        type: 'broadcast',
+        title: 'Y1 W12 BLAST Bounty Season 1 开赛',
+        narrative: 'BLAST Bounty Season 1 开赛，签表和首轮对阵已经出炉。',
+        createdAt: new Date(0).toISOString(),
+      }],
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const feedRes = await app.request(`https://localhost/api/game/${started.sessionId}/social-feed`, {
+      headers: { authorization: `Bearer ${started.apiToken}` },
+    }, env, makeExecutionContext());
+    const body = await feedRes.json() as { posts?: Array<{ content: string }> };
+
+    expect(feedRes.status).toBe(200);
+    expect(body.posts?.some((post) => post.content.includes('BLAST Bounty Season 1 开赛'))).toBe(false);
   });
 
   it('updates core stats through the local debug endpoint', async () => {

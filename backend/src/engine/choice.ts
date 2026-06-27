@@ -77,12 +77,15 @@ import type {
   Buff,
   ChoiceDef,
   EventDef,
+  GameEventPublic,
   GameSession,
+  LeaderboardTeam,
   MatchStats,
   Player,
   RoundResult,
   Stats,
   TeammateRole,
+  WeeklyNewsItem,
 } from '../types.js';
 import {
   BROKE_MENTALITY_DRAIN,
@@ -147,6 +150,15 @@ import {
   recordTournamentContextMatchResult,
 } from './tournamentContext.js';
 import {
+  composeRoundPlan,
+  deriveRecentThemeGroups,
+  markRoundPlanServed,
+  reconcileRoundPlan,
+  roundPlanCountRemaining,
+} from './roundPlan.js';
+import type { RoundPlan } from '../types.js';
+import { pickRoundEvent } from './events.js';
+import {
   createTournamentSeriesSequence,
   requiredWins,
   type TournamentMapResult,
@@ -156,8 +168,10 @@ import {
   assignPendingMatchOpponent,
   activateClubRuntime,
   recordWorldTournamentResult,
+  resolveClubDisplayInfo,
   tickWorldClubRuntimes,
 } from './worldClubs.js';
+import { buildWorldTournamentNews } from './worldNews.js';
 
 const PROMOTION_DECLINE_COOLDOWN_ROUNDS = 4;
 const CLUB_INTERVIEW_IDS = new Set([
@@ -165,6 +179,268 @@ const CLUB_INTERVIEW_IDS = new Set([
   'chain-club-interview-open-match',
   'chain-club-interview-talent',
 ]);
+type EventImportance = 'critical' | 'important' | 'minor' | 'news' | 'background';
+
+function isNewsOnlyEvent(event: EventDef): boolean {
+  return event.type === 'broadcast' ||
+    event.id.startsWith('broadcast-') ||
+    (event.requireTags ?? []).includes('major-broadcast');
+}
+
+function eventImportance(event: EventDef): EventImportance {
+  if (event.severity) return event.severity;
+  if (isNewsOnlyEvent(event)) return 'news';
+  if (
+    event.type === 'match' ||
+    event.type === 'tournament-context' ||
+    event.type === 'bailout' ||
+    event.id.startsWith('promotion-') ||
+    event.id.startsWith('tourney-') ||
+    event.id === 'family-crisis-illness' ||
+    event.id === 'chain-team-conflict'
+  ) {
+    return 'critical';
+  }
+  if (
+    event.type === 'team' ||
+    event.type === 'tryout' ||
+    event.type === 'chains' ||
+    event.type === 'agent' ||
+    event.type === 'stress'
+  ) {
+    return 'important';
+  }
+  return 'minor';
+}
+
+function toWeeklyNewsItem(event: EventDef, session: GameSession): WeeklyNewsItem {
+  const publicEvent = toPublicEvent(event, session.player.rivals, session.player.roster ?? []);
+  return {
+    id: `${session.player.round ?? 0}-${event.id}`,
+    eventId: event.id,
+    type: event.type,
+    title: publicEvent.title,
+    narrative: publicEvent.narrative,
+    createdAt: nowIso(),
+  };
+}
+
+function clubName(session: GameSession, clubId: string): string {
+  const info = resolveClubDisplayInfo(session, clubId);
+  if (!info) return '未知战队';
+  return `${info.name} (${info.tag})`;
+}
+
+function buildWorldNewsForRound(session: GameSession): WeeklyNewsItem[] {
+  const existingIds = new Set((session.weeklyNews ?? []).map((item) => item.eventId));
+  const summaries = session.worldClubs?.seasonSummaries ?? [];
+  const items: WeeklyNewsItem[] = [];
+  for (const summary of summaries) {
+    const eventId = `world-club-season-summary:${summary.season}:${summary.round}`;
+    if (existingIds.has(eventId)) continue;
+    const segments: string[] = [];
+    if (summary.darkHorseClubIds.length > 0) {
+      segments.push(`${clubName(session, summary.darkHorseClubIds[0]!)} 成为本赛季黑马`);
+    }
+    if (summary.promotedClubIds.length > 0) {
+      segments.push(`${clubName(session, summary.promotedClubIds[0]!)} 完成升级`);
+    }
+    if (summary.fallenClubIds.length > 0) {
+      segments.push(`${clubName(session, summary.fallenClubIds[0]!)} 排名下滑`);
+    }
+    if (summary.majorNewFaceClubIds.length > 0) {
+      segments.push(`${clubName(session, summary.majorNewFaceClubIds[0]!)} 拿到大赛机会`);
+    }
+    if (segments.length === 0) continue;
+    items.push({
+      id: eventId,
+      eventId,
+      type: 'broadcast',
+      title: '世界战队赛季动态',
+      narrative: segments.join('，') + '。',
+      source: {
+        kind: 'world-club-season',
+        year: summary.season,
+        week: ((Math.max(1, summary.round) - 1) % 48) + 1,
+        resultId: eventId,
+      },
+      createdAt: nowIso(),
+    });
+  }
+  const tournamentNews = buildWorldTournamentNews(session);
+  for (const item of tournamentNews) {
+    if (existingIds.has(item.eventId) || items.some((entry) => entry.eventId === item.eventId)) continue;
+    items.push(item);
+  }
+  return items;
+}
+
+function pendingQueuedEvents(session: GameSession): GameEventPublic[] {
+  return session.queuedEvents ?? [];
+}
+
+function buildLegacyAiFallbackEvent(event: GameEventPublic): EventDef {
+  const choices = event.choices.length > 0 ? event.choices : [{
+    id: 'continue',
+    label: '继续',
+    description: '继续处理这条旧 AI 事件',
+  }];
+
+  return {
+    id: event.id,
+    type: event.type,
+    title: event.title || '临时事件',
+    narrative: event.narrative || '旧存档中的 AI 事件已失效，系统使用兼容事件继续结算。',
+    stages: ['rookie', 'youth', 'second', 'pro'],
+    difficulty: 0,
+    choices: choices.map((choice) => ({
+      id: choice.id,
+      label: choice.label,
+      description: choice.description,
+      check: {
+        primary: 'mentality',
+        dc: 0,
+      },
+      success: {
+        narrative: '你把这件事先处理完了。',
+      },
+      failure: {
+        narrative: '你把这件事先勉强处理过去。',
+      },
+    })),
+  };
+}
+
+function buildWeeklyEventSeed(
+  session: GameSession,
+  recentThemeGroups: ReturnType<typeof deriveRecentThemeGroups>,
+  aiEvents?: EventDef[],
+  aiEventCache?: AiEventCacheEnvelope,
+): { pickedEvent: EventDef | null; newsItems: WeeklyNewsItem[] } {
+  const newsItems: WeeklyNewsItem[] = [...buildWorldNewsForRound(session)];
+  const excludedEventIds = new Set<string>();
+  const recentEventIds = session.history.slice(-2).map((r) => r.eventId);
+  let pickedEvent: EventDef | null = null;
+  while (true) {
+    const candidate = pickEvent({
+      player: session.player,
+      recentEventIds: [...recentEventIds, ...excludedEventIds],
+      rng: makeRng(hashString(`${session.id}:${session.player.round}:${[...excludedEventIds].join(':')}:queue`)),
+      leaderboard: session.leaderboard,
+      aiEvents,
+      aiEventCandidates: buildAiPickCandidates(aiEventCache, session.player, session.history),
+      excludedEventIds: [...excludedEventIds],
+      recentThemeGroups,
+    });
+    if (!candidate) break;
+    excludedEventIds.add(candidate.id);
+    const importance = eventImportance(candidate);
+    if (importance === 'news') {
+      newsItems.push(toWeeklyNewsItem(candidate, session));
+      continue;
+    }
+    if (importance === 'background') continue;
+    if (!pickedEvent) {
+      pickedEvent = candidate;
+    }
+  }
+  return { pickedEvent, newsItems };
+}
+
+function continueWithQueuedEvents(
+  session: GameSession,
+  nextPlayer: Player,
+  result: RoundResult,
+  ending: string | undefined,
+  worldSession: GameSession,
+  leaderboard: LeaderboardTeam[],
+): { session: GameSession; result: RoundResult } {
+  const [nextEvent, ...restQueuedEvents] = pendingQueuedEvents(session);
+  const updated: GameSession = {
+    ...worldSession,
+    player: nextPlayer,
+    phase: nextEvent ? 'event' : 'action',
+    currentEvent: nextEvent ?? null,
+    queuedEvents: restQueuedEvents,
+    weeklyNews: session.weeklyNews ?? [],
+    activeEventSequence: undefined,
+    roundPlan: undefined,
+    history: [...session.history, result],
+    status: ending ? 'ended' : 'active',
+    ending: ending ?? session.ending,
+    updatedAt: nowIso(),
+    leaderboard,
+  };
+  return { session: updated, result };
+}
+
+function shouldContinueRound(plan: RoundPlan | undefined, ending: string | undefined): boolean {
+  return Boolean(plan && plan.targetCount > plan.servedCount && !ending);
+}
+
+function continueWithRoundPlan(
+  session: GameSession,
+  nextPlayer: Player,
+  result: RoundResult,
+  ending: string | undefined,
+  worldSession: GameSession,
+  leaderboard: LeaderboardTeam[],
+  aiEvents?: EventDef[],
+  aiEventCache?: AiEventCacheEnvelope,
+): { session: GameSession; result: RoundResult } | null {
+  const reconciled = reconcileRoundPlan(session.roundPlan, nextPlayer, result);
+  if (!reconciled || !shouldContinueRound(reconciled, ending)) return null;
+
+  const recentEventIds = [...session.history.slice(-2).map((r) => r.eventId), ...(reconciled?.servedEventIds ?? [])];
+  const recentThemeGroups = deriveRecentThemeGroups(session.history);
+  let excludedEventIds = new Set<string>(reconciled?.servedEventIds ?? []);
+  let pickedEvent: EventDef | null = null;
+
+  for (let attempts = 0; attempts < 12; attempts += 1) {
+    const candidate = pickRoundEvent({
+      player: nextPlayer,
+      recentEventIds,
+      rng: makeRng(hashString(`${session.id}:${nextPlayer.round}:${[...excludedEventIds].join(':')}:round-plan`)),
+      leaderboard: worldSession.leaderboard,
+      aiEvents,
+      aiEventCandidates: buildAiPickCandidates(aiEventCache, nextPlayer, session.history),
+      excludedEventIds: [...excludedEventIds],
+      recentThemeGroups,
+    }, reconciled);
+    if (!candidate) break;
+    const importance = eventImportance(candidate);
+    excludedEventIds.add(candidate.id);
+    if (importance === 'news' || importance === 'background') {
+      continue;
+    }
+    pickedEvent = candidate;
+    break;
+  }
+
+  if (!pickedEvent || !reconciled) return null;
+
+  const nextPlan = markRoundPlanServed(reconciled, pickedEvent);
+  const presentation = prepareRoundEventPresentation(
+    { ...worldSession, player: nextPlayer, activeEventSequence: undefined },
+    pickedEvent,
+  );
+  const updated: GameSession = {
+    ...worldSession,
+    player: nextPlayer,
+    phase: presentation.currentEvent ? 'event' : 'action',
+    currentEvent: presentation.currentEvent,
+    queuedEvents: [],
+    weeklyNews: session.weeklyNews ?? [],
+    activeEventSequence: presentation.activeEventSequence,
+    roundPlan: nextPlan,
+    history: [...session.history, result],
+    status: ending ? 'ended' : 'active',
+    ending: ending ?? session.ending,
+    updatedAt: nowIso(),
+    leaderboard,
+  };
+  return { session: updated, result };
+}
 
 function pickClubInterviewEvent(player: Player): EventDef | null {
   const preferredIds = [
@@ -214,6 +490,102 @@ function createClubInterviewSequence(player: Player, finalInterviewEvent: EventD
   );
 }
 
+function prepareRoundEventPresentation(
+  session: GameSession,
+  pickedEvent: EventDef | null,
+): {
+  activeEventSequence?: NonNullable<GameSession['activeEventSequence']>;
+  currentEvent: GameEventPublic | null;
+  presentedEvent: EventDef | null;
+} {
+  let activeEventSequence = session.activeEventSequence;
+  let eventToPresent = pickedEvent;
+  const nextPlayer = session.player;
+
+  const tournamentMatch = eventToPresent ? /^tournament-(.+)--(\d+)$/.exec(eventToPresent.id) : null;
+  if (tournamentMatch) {
+    const tournament = getTournament(tournamentMatch[1]!);
+    const stageIndex = parseInt(tournamentMatch[2]!, 10);
+    const stage = tournament?.bracket[stageIndex];
+    if (tournament && stage && (stage.seriesType === 'bo3' || stage.seriesType === 'bo5')) {
+      activeEventSequence = {
+        ...createTournamentSeriesSequence(tournament, stageIndex, matchBuffsForScope(nextPlayer.buffs ?? [], 'series')),
+        startedRound: nextPlayer.round,
+      };
+      eventToPresent = activeEventSequence.steps[0]?.generatedEvent ?? eventToPresent;
+    }
+  }
+  if (!activeEventSequence && eventToPresent && CLUB_INTERVIEW_IDS.has(eventToPresent.id)) {
+    activeEventSequence = createClubInterviewSequence(nextPlayer, eventToPresent);
+    eventToPresent = activeEventSequence.steps[0]?.generatedEvent ?? eventToPresent;
+  }
+  if (!activeEventSequence && eventToPresent?.id === 'family-crisis-illness') {
+    activeEventSequence = createNarrativeSequence(
+      `family-crisis-${nextPlayer.round}`,
+      'family-crisis',
+      nextPlayer.round,
+      [
+        buildSequencePromptEvent(
+          `family-crisis-${nextPlayer.round}-call`,
+          'life',
+          '家里的未接来电',
+          '训练间隙，手机屏幕亮了又灭。家里连续打来几个电话，你意识到这不是普通问候。',
+        ),
+        buildSequencePromptEvent(
+          `family-crisis-${nextPlayer.round}-pressure`,
+          'life',
+          '需要立刻决定',
+          '消息讲清楚后，压力一下压到眼前。你必须决定职业节奏和家里状况哪个先处理。',
+        ),
+        eventToPresent,
+      ],
+    );
+    eventToPresent = activeEventSequence.steps[0]?.generatedEvent ?? eventToPresent;
+  }
+  if (!activeEventSequence && eventToPresent?.id === 'chain-team-conflict') {
+    activeEventSequence = createNarrativeSequence(
+      `team-conflict-${nextPlayer.round}`,
+      'team-conflict',
+      nextPlayer.round,
+      [
+        buildSequencePromptEvent(
+          `team-conflict-${nextPlayer.round}-review`,
+          'team',
+          '复盘室里的火药味',
+          '复盘刚开始，几个关键回合就被反复拖回进度条。你能感觉到这次不是普通争论。',
+        ),
+        buildSequencePromptEvent(
+          `team-conflict-${nextPlayer.round}-private`,
+          'team',
+          '私下表态',
+          '会议暂停后，有人单独找你聊了几句。你知道接下来的表态会影响更衣室站位。',
+        ),
+        eventToPresent,
+      ],
+    );
+    eventToPresent = activeEventSequence.steps[0]?.generatedEvent ?? eventToPresent;
+  }
+  if (!activeEventSequence && eventToPresent?.id.startsWith('ai-')) {
+    const aiSequence = createAiSequenceFromEvent(eventToPresent, nextPlayer.round);
+    if (aiSequence) {
+      activeEventSequence = aiSequence;
+      eventToPresent = activeEventSequence.steps[0]?.generatedEvent ?? eventToPresent;
+    }
+  }
+
+  const transferTarget = nextPlayer.pendingDeparture
+    ? (nextPlayer.roster ?? []).find((tm) => tm.id === nextPlayer.pendingDeparture!.slotId)?.name
+    : undefined;
+
+  return {
+    activeEventSequence,
+    presentedEvent: eventToPresent,
+    currentEvent: eventToPresent
+      ? toPublicEvent(eventToPresent, nextPlayer.rivals, nextPlayer.roster ?? [], transferTarget)
+      : null,
+  };
+}
+
 export interface ApplyChoiceResult {
   session: GameSession;
   result: RoundResult;
@@ -230,10 +602,15 @@ export function applyChoice(
   const sessionPhase = session.currentEvent ? 'event' : (session.phase ?? 'action');
   if (sessionPhase !== 'event') throw new Error('not in event phase');
   if (!session.currentEvent) throw new Error('no pending event on this session');
+  const queuedEvents = pendingQueuedEvents(session);
+  const roundPlan = session.roundPlan;
 
   const resolveEventById = (eventId: string): EventDef | null => getEventById(eventId) ??
     resolveAiEventById(aiEventCache, eventId) ??
     aiEvents?.find((e) => e.id === eventId) ??
+    (session.currentEvent?.id === eventId && eventId.startsWith('ai-')
+      ? buildLegacyAiFallbackEvent(session.currentEvent)
+      : null) ??
     // Dynamically-generated prep events aren't in EVENT_POOL — reconstruct from pendingMatch
     (eventId.startsWith('tourney-prep-') && session.player.pendingMatch
       ? buildTournamentPrepEvent(session.player.pendingMatch)
@@ -258,7 +635,6 @@ export function applyChoice(
   if (effectiveActiveSequence && !activeSequenceStep) {
     throw new Error('active event sequence has no current step');
   }
-  const shouldAdvanceRound = effectiveActiveSequence ? isSequenceFinalStep(effectiveActiveSequence) : true;
 
   const eventDef = effectiveActiveSequence
     ? resolveSequenceEventForStep(activeSequenceStep!, resolveEventById)
@@ -394,6 +770,15 @@ export function applyChoice(
         rollBonus: effectiveRollBonus,
       });
   })();
+  const willStartClubInterviewSequence = !effectiveActiveSequence &&
+    eventDef.id === 'chain-club-response' &&
+    outcome.success &&
+    Boolean(pickClubInterviewEvent(session.player));
+  const shouldAdvanceRound = effectiveActiveSequence
+    ? isSequenceFinalStep(effectiveActiveSequence)
+    : roundPlan
+      ? roundPlanCountRemaining(roundPlan) === 0
+      : queuedEvents.length === 0 && !willStartClubInterviewSequence;
 
   const chosenStateDelta = outcomeStateDelta(outcome.chosenOutcome);
   const chosenResourceDelta = outcomeResourceDelta(outcome.chosenOutcome);
@@ -1397,7 +1782,9 @@ export function applyChoice(
           nextPlayer.roster ?? [],
           transferTarget,
         ),
+        queuedEvents,
         activeEventSequence: sequenceAdvance.sequence,
+        roundPlan: session.roundPlan,
         history: [...session.history, result],
         status: ending ? 'ended' : 'active',
         ending: ending ?? session.ending,
@@ -1408,18 +1795,6 @@ export function applyChoice(
 
     if (sequenceAdvance.cancelled) {
       passiveEffects.push(`事件流程取消：${sequenceAdvance.cancelReason ?? 'unknown'}`);
-      const updated: GameSession = {
-        ...session,
-        player: nextPlayer,
-        phase: 'action',
-        currentEvent: null,
-        activeEventSequence: undefined,
-        history: [...session.history, result],
-        status: ending ? 'ended' : 'active',
-        ending: ending ?? session.ending,
-        updatedAt: nowIso(),
-      };
-      return { session: updated, result };
     }
   }
 
@@ -1433,7 +1808,9 @@ export function applyChoice(
         player: nextPlayer,
         phase: 'event',
         currentEvent: toPublicEvent(firstInterviewStep, nextPlayer.rivals, nextPlayer.roster ?? []),
+        queuedEvents,
         activeEventSequence: interviewSequence,
+        roundPlan: session.roundPlan,
         history: [...session.history, result],
         status: ending ? 'ended' : 'active',
         ending: ending ?? session.ending,
@@ -1459,20 +1836,24 @@ export function applyChoice(
   }
   leaderboard = buildLeaderboard(worldSession, leaderboard);
 
-  const updated: GameSession = {
-    ...worldSession,
-    player: nextPlayer,
-    phase: 'action',
-    currentEvent: null,
-    activeEventSequence: undefined,
-    history: [...session.history, result],
-    status: ending ? 'ended' : 'active',
-    ending: ending ?? session.ending,
-    updatedAt: nowIso(),
+  const roundPlanContinuation = continueWithRoundPlan(
+    session,
+    nextPlayer,
+    result,
+    ending,
+    worldSession,
     leaderboard,
-  };
-
-  return { session: updated, result };
+    aiEvents,
+    aiEventCache,
+  );
+  if (roundPlanContinuation) return roundPlanContinuation;
+  if (roundPlan) {
+    nextPlayer = {
+      ...nextPlayer,
+      lastRoundEventCount: roundPlan.servedCount,
+    };
+  }
+  return continueWithQueuedEvents(session, nextPlayer, result, ending, worldSession, leaderboard);
 }
 
 export interface EndActionPhaseResult {
@@ -1490,101 +1871,20 @@ export function endActionPhase(
   const sessionPhase = session.phase ?? (session.currentEvent ? 'event' : 'action');
   if (sessionPhase !== 'action') throw new Error('not in action phase');
 
-  const nextPlayer = session.player;
-  const recentEventIds = session.history.slice(-2).map((r) => r.eventId);
-  const rng = makeRng(
-    hashString(session.id) ^ (((nextPlayer.round ?? 0) * 1000 + (nextPlayer.actionPoints ?? 0) + 17) * 2654435761),
-  );
-  let pickedEvent = pickEvent({
-    player: nextPlayer,
-    recentEventIds,
-    rng,
-    leaderboard: session.leaderboard,
-    aiEvents,
-    aiEventCandidates: buildAiPickCandidates(aiEventCache, nextPlayer, session.history),
-  });
-
-  const transferTarget = nextPlayer.pendingDeparture
-    ? (nextPlayer.roster ?? []).find((tm) => tm.id === nextPlayer.pendingDeparture!.slotId)?.name
-    : undefined;
-
-  let activeEventSequence = session.activeEventSequence;
-  const tournamentMatch = pickedEvent ? /^tournament-(.+)--(\d+)$/.exec(pickedEvent.id) : null;
-  if (tournamentMatch) {
-    const tournament = getTournament(tournamentMatch[1]!);
-    const stageIndex = parseInt(tournamentMatch[2]!, 10);
-    const stage = tournament?.bracket[stageIndex];
-    if (tournament && stage && (stage.seriesType === 'bo3' || stage.seriesType === 'bo5')) {
-      activeEventSequence = {
-        ...createTournamentSeriesSequence(tournament, stageIndex, matchBuffsForScope(nextPlayer.buffs ?? [], 'series')),
-        startedRound: nextPlayer.round,
-      };
-      pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
-    }
-  }
-  if (!activeEventSequence && pickedEvent && CLUB_INTERVIEW_IDS.has(pickedEvent.id)) {
-    activeEventSequence = createClubInterviewSequence(nextPlayer, pickedEvent);
-    pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
-  }
-  if (!activeEventSequence && pickedEvent?.id === 'family-crisis-illness') {
-    activeEventSequence = createNarrativeSequence(
-      `family-crisis-${nextPlayer.round}`,
-      'family-crisis',
-      nextPlayer.round,
-      [
-        buildSequencePromptEvent(
-          `family-crisis-${nextPlayer.round}-call`,
-          'life',
-          '家里的未接来电',
-          '训练间隙，手机屏幕亮了又灭。家里连续打来几个电话，你意识到这不是普通问候。',
-        ),
-        buildSequencePromptEvent(
-          `family-crisis-${nextPlayer.round}-pressure`,
-          'life',
-          '需要立刻决定',
-          '消息讲清楚后，压力一下压到眼前。你必须决定职业节奏和家里状况哪个先处理。',
-        ),
-        pickedEvent,
-      ],
-    );
-    pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
-  }
-  if (!activeEventSequence && pickedEvent?.id === 'chain-team-conflict') {
-    activeEventSequence = createNarrativeSequence(
-      `team-conflict-${nextPlayer.round}`,
-      'team-conflict',
-      nextPlayer.round,
-      [
-        buildSequencePromptEvent(
-          `team-conflict-${nextPlayer.round}-review`,
-          'team',
-          '复盘室里的火药味',
-          '复盘刚开始，几个关键回合就被反复拖回进度条。你能感觉到这次不是普通争论。',
-        ),
-        buildSequencePromptEvent(
-          `team-conflict-${nextPlayer.round}-private`,
-          'team',
-          '私下表态',
-          '会议暂停后，有人单独找你聊了几句。你知道接下来的表态会影响更衣室站位。',
-        ),
-        pickedEvent,
-      ],
-    );
-    pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
-  }
-  if (!activeEventSequence && pickedEvent?.id.startsWith('ai-')) {
-    const aiSequence = createAiSequenceFromEvent(pickedEvent, nextPlayer.round);
-    if (aiSequence) {
-      activeEventSequence = aiSequence;
-      pickedEvent = activeEventSequence.steps[0]?.generatedEvent ?? pickedEvent;
-    }
-  }
-
+  const workingSession = tickWorldClubRuntimes(session, session.player.round ?? 0, 'round');
+  const seed = buildWeeklyEventSeed(workingSession, deriveRecentThemeGroups(workingSession.history), aiEvents, aiEventCache);
+  const pickedEvent = seed.pickedEvent;
+  const roundPlan = pickedEvent ? composeRoundPlan(workingSession, pickedEvent) ?? undefined : undefined;
+  const presentation = prepareRoundEventPresentation(workingSession, pickedEvent);
+  const currentEvent = presentation.currentEvent;
   const updated: GameSession = {
-    ...session,
-    phase: 'event',
-    currentEvent: pickedEvent ? toPublicEvent(pickedEvent, nextPlayer.rivals, nextPlayer.roster ?? [], transferTarget) : null,
-    activeEventSequence,
+    ...workingSession,
+    phase: currentEvent ? 'event' : 'action',
+    currentEvent,
+    queuedEvents: [],
+    weeklyNews: [...(workingSession.weeklyNews ?? []), ...seed.newsItems],
+    activeEventSequence: presentation.activeEventSequence,
+    roundPlan,
     updatedAt: nowIso(),
   };
 
