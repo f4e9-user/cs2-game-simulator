@@ -26,6 +26,8 @@ type DebugAiStatus = {
   kvBound: boolean;
 };
 
+type DebugTab = 'player' | 'team' | 'events' | 'diagnostics';
+
 type FormState = {
   intelligence: string;
   agility: string;
@@ -115,6 +117,13 @@ const RESOURCE_FIELDS: Array<{ key: keyof Pick<FormState, 'money' | 'fame' | 'st
   { key: 'stress', label: '压力', hint: '0-100' },
   { key: 'round', label: '回合', hint: '调试时间推进' },
   { key: 'consecutiveLosses', label: '连败', hint: '影响部分事件' },
+];
+
+const DEBUG_TABS: Array<{ key: DebugTab; label: string; hint: string }> = [
+  { key: 'player', label: '玩家', hint: '基础属性、资源、JSON' },
+  { key: 'team', label: '战队', hint: '玩家战队和世界战队' },
+  { key: 'events', label: '回合', hint: '事件、赛事、状态' },
+  { key: 'diagnostics', label: '诊断', hint: 'Insight 和内部视图' },
 ];
 
 function pretty(value: unknown): string {
@@ -226,6 +235,7 @@ export default function DebugSessionPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [testLogMsg, setTestLogMsg] = useState<string | null>(null);
+  const [debugTab, setDebugTab] = useState<DebugTab>('player');
   const [clubFilter, setClubFilter] = useState('');
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
   const [clubRuntimeForm, setClubRuntimeForm] = useState<ClubRuntimeForm | null>(null);
@@ -625,8 +635,26 @@ export default function DebugSessionPage() {
 
       {notice && <div className="panel" style={{ color: 'var(--success)', borderColor: 'rgba(63,185,80,0.35)' }}>{notice}</div>}
 
-      <div className="grid grid-2">
-        <div className="panel">
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {DEBUG_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className="ghost-button"
+            onClick={() => setDebugTab(tab.key)}
+            style={{
+              borderColor: debugTab === tab.key ? 'rgba(255,91,31,0.45)' : undefined,
+              background: debugTab === tab.key ? 'rgba(255,91,31,0.08)' : undefined,
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid" style={{ gap: 16 }}>
+        {debugTab === 'player' && (
+          <div className="panel">
           <div className="panel-title">可编辑调试字段</div>
           {form && (
             <div style={{ display: 'grid', gap: 16 }}>
@@ -779,453 +807,461 @@ export default function DebugSessionPage() {
             </div>
           )}
         </div>
+        )}
 
-        <div className="grid" style={{ gap: 16 }}>
-          <div className="panel">
-            <div className="panel-title">AI / Session 字段</div>
-            <div style={{ display: 'grid', gap: 8, fontSize: 13, color: '#8b949e' }}>
-              <div>sessionId: <span style={{ color: '#e6edf3' }}>{session.id}</span></div>
-              <div>apiToken: <span style={{ color: '#e6edf3', fontFamily: 'monospace' }}>{session.apiToken}</span></div>
-              <div>growthSpent: <span style={{ color: '#e6edf3' }}>{session.player.growthSpent ?? 0}</span></div>
-              <div>growthCap: <span style={{ color: '#e6edf3' }}>{rulesMeta?.growthCap ?? 0}</span></div>
-              <div>growthRemaining: <span style={{ color: '#e6edf3' }}>{growthRemaining}</span></div>
-              <div>currentEvent: <span style={{ color: '#e6edf3' }}>{session.currentEvent ? session.currentEvent.id : '(none)'}</span></div>
-              <div>forceNextEvent: <span style={{ color: '#e6edf3' }}>{session.player.forceNextEvent ?? '(none)'}</span></div>
-              <div>forceMatchResult: <span style={{ color: '#e6edf3' }}>{session.player.forceMatchResult ?? '(none)'}</span></div>
-              <div>pendingMatch: <span style={{ color: '#e6edf3' }}>{session.player.pendingMatch ? 'yes' : 'no'}</span></div>
-              <div>teamVrs: <span style={{ color: '#e6edf3' }}>{session.player.team ? (session.worldClubs?.runtimeByClubId[session.player.team.clubId]?.vrsScore ?? 0) : '(no team)'}</span></div>
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-title">CareerInsight Debug</div>
-            {session.careerInsight ? (
-              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
-                <div>
-                  <span style={{ color: '#e6edf3', fontWeight: 600 }}>{session.careerInsight.stage.label}</span>
-                  {' '}· round {session.careerInsight.generatedAtRound}
-                </div>
-                <div>{session.careerInsight.headline}</div>
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>milestones</div>
-                  {session.careerInsight.milestones.map((item) => (
-                    <div key={item.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
-                      <div style={{ color: '#e6edf3' }}>{item.title} · {item.status}</div>
-                      <div>{item.progressText}</div>
-                      {item.missing.length > 0 && <div>missing: {item.missing.join(' / ')}</div>}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>risks</div>
-                  {session.careerInsight.risks.length > 0 ? session.careerInsight.risks.map((item) => (
-                    <div key={item.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
-                      <div style={{ color: '#e6edf3' }}>{item.title} · {item.severity}</div>
-                      <div>{item.reason}</div>
-                    </div>
-                  )) : <div>无风险项</div>}
-                </div>
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>recommendations</div>
-                  {session.careerInsight.recommendations.map((item) => (
-                    <div key={`${item.title}-${item.actionId ?? 'text'}`} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
-                      <div style={{ color: '#e6edf3' }}>{item.title} · {item.priority}</div>
-                      <div>{item.reason}</div>
-                    </div>
-                  ))}
-                </div>
-                <pre style={preStyle}>{pretty(session.careerInsight)}</pre>
-              </div>
-            ) : (
-              <div style={{ color: '#8b949e', fontSize: 13 }}>当前 session 未返回 careerInsight。</div>
-            )}
-          </div>
-
-          <div className="panel">
-            <div className="panel-title">事件流程 Debug</div>
-            {session.activeEventSequence ? (
-              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
-                <div>
-                  <span style={{ color: '#e6edf3', fontWeight: 600 }}>{session.activeEventSequence.id}</span>
-                  {' '}· {session.activeEventSequence.type}
-                  {' '}· step {session.activeEventSequence.currentIndex + 1}/{session.activeEventSequence.steps.length}
-                  {' '}· {session.activeEventSequence.status}
-                </div>
-                <div style={{ display: 'grid', gap: 6 }}>
-                  {session.activeEventSequence.steps.map((step, index) => (
-                    <div
-                      key={step.id}
-                      style={{
-                        border: index === session.activeEventSequence?.currentIndex ? '1px solid rgba(88,166,255,0.5)' : '1px solid #21262d',
-                        borderRadius: 6,
-                        padding: 8,
-                      }}
-                    >
-                      <div style={{ color: '#e6edf3' }}>
-                        {index + 1}. {step.id}
-                        {step.completeSequenceAfter ? ' · final' : ''}
+        {debugTab === 'events' && (
+          <>
+            <div className="panel">
+              <div className="panel-title">事件流程 Debug</div>
+              {session.activeEventSequence ? (
+                <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                  <div>
+                    <span style={{ color: '#e6edf3', fontWeight: 600 }}>{session.activeEventSequence.id}</span>
+                    {' '}· {session.activeEventSequence.type}
+                    {' '}· step {session.activeEventSequence.currentIndex + 1}/{session.activeEventSequence.steps.length}
+                    {' '}· {session.activeEventSequence.status}
+                  </div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {session.activeEventSequence.steps.map((step, index) => (
+                      <div
+                        key={step.id}
+                        style={{
+                          border: index === session.activeEventSequence?.currentIndex ? '1px solid rgba(88,166,255,0.5)' : '1px solid #21262d',
+                          borderRadius: 6,
+                          padding: 8,
+                        }}
+                      >
+                        <div style={{ color: '#e6edf3' }}>
+                          {index + 1}. {step.id}
+                          {step.completeSequenceAfter ? ' · final' : ''}
+                        </div>
+                        <div>eventId: {step.eventId ?? step.generatedEvent?.id ?? '(dynamic)'}</div>
+                        <div>generatedEvent: {step.generatedEvent ? 'yes' : 'no'}</div>
+                        {step.skipIf && <div>skipIf: {pretty(step.skipIf)}</div>}
                       </div>
-                      <div>eventId: {step.eventId ?? step.generatedEvent?.id ?? '(dynamic)'}</div>
-                      <div>generatedEvent: {step.generatedEvent ? 'yes' : 'no'}</div>
-                      {step.skipIf && <div>skipIf: {pretty(step.skipIf)}</div>}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  <pre style={preStyle}>{pretty(session.activeEventSequence.context)}</pre>
                 </div>
-                <pre style={preStyle}>{pretty(session.activeEventSequence.context)}</pre>
-              </div>
-            ) : (
-              <div style={{ color: '#8b949e', fontSize: 13 }}>当前没有 activeEventSequence。</div>
-            )}
-          </div>
+              ) : (
+                <div style={{ color: '#8b949e', fontSize: 13 }}>当前没有 activeEventSequence。</div>
+              )}
+            </div>
 
-          <div className="panel">
-            <div className="panel-title">赛事上下文 Debug</div>
-            {session.player.tournamentContext ? (
+            <div className="panel">
+              <div className="panel-title">赛事上下文 Debug</div>
+              {session.player.tournamentContext ? (
+                <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                  <div>
+                    <span style={{ color: '#e6edf3', fontWeight: 600 }}>{session.player.tournamentContext.tournamentId}</span>
+                    {' '}· stage {session.player.tournamentContext.stageIndex}
+                    {' '}· {session.player.tournamentContext.phase}
+                  </div>
+                  <div>
+                    queue {session.player.tournamentContext.contextEventQueue.length}
+                    {' '}· consumed {session.player.tournamentContext.consumedContextEventIds.length}
+                    {' '}· expires {session.player.tournamentContext.expiresAtRound ?? '(none)'}
+                  </div>
+                  {session.player.tournamentContext.lastMatchResult && (
+                    <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
+                      lastMatch: {session.player.tournamentContext.lastMatchResult.won ? 'win' : 'loss'}
+                      {' '}· {session.player.tournamentContext.lastMatchResult.teamScore}:{session.player.tournamentContext.lastMatchResult.enemyScore}
+                      {' '}· rating {session.player.tournamentContext.lastMatchResult.rating}
+                    </div>
+                  )}
+                  <pre style={preStyle}>{pretty(session.player.tournamentContext.contextEventQueue)}</pre>
+                </div>
+              ) : (
+                <div style={{ color: '#8b949e', fontSize: 13 }}>当前没有 tournamentContext。</div>
+              )}
+            </div>
+
+            <div className="panel">
+              <div className="panel-title">Queued / 伤病状态</div>
               <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
                 <div>
-                  <span style={{ color: '#e6edf3', fontWeight: 600 }}>{session.player.tournamentContext.tournamentId}</span>
-                  {' '}· stage {session.player.tournamentContext.stageIndex}
-                  {' '}· {session.player.tournamentContext.phase}
+                  <div style={{ color: '#e6edf3', fontWeight: 600, marginBottom: 6 }}>queued</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {queuedState.map((item) => (
+                      <span key={item.tag} className={`badge ${item.active ? 'success' : ''}`} title={item.tag}>
+                        {formatTag(item.tag)}: {item.active ? 'yes' : 'no'}
+                      </span>
+                    ))}
+                  </div>
                 </div>
                 <div>
-                  queue {session.player.tournamentContext.contextEventQueue.length}
-                  {' '}· consumed {session.player.tournamentContext.consumedContextEventIds.length}
-                  {' '}· expires {session.player.tournamentContext.expiresAtRound ?? '(none)'}
-                </div>
-                {session.player.tournamentContext.lastMatchResult && (
-                  <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
-                    lastMatch: {session.player.tournamentContext.lastMatchResult.won ? 'win' : 'loss'}
-                    {' '}· {session.player.tournamentContext.lastMatchResult.teamScore}:{session.player.tournamentContext.lastMatchResult.enemyScore}
-                    {' '}· rating {session.player.tournamentContext.lastMatchResult.rating}
+                  <div style={{ color: '#e6edf3', fontWeight: 600, marginBottom: 6 }}>injury</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {injuryState.map((item) => (
+                      <span key={item.tag} className={`badge ${item.active ? 'danger' : ''}`} title={item.tag}>
+                        {formatTag(item.tag)}: {item.active ? 'yes' : 'no'}
+                      </span>
+                    ))}
+                    <span className="badge">restRounds: {session.player.restRounds ?? 0}</span>
                   </div>
-                )}
-                <pre style={preStyle}>{pretty(session.player.tournamentContext.contextEventQueue)}</pre>
-              </div>
-            ) : (
-              <div style={{ color: '#8b949e', fontSize: 13 }}>当前没有 tournamentContext。</div>
-            )}
-          </div>
-
-          <div className="panel">
-            <div className="panel-title">Queued / 伤病状态</div>
-            <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
-              <div>
-                <div style={{ color: '#e6edf3', fontWeight: 600, marginBottom: 6 }}>queued</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {queuedState.map((item) => (
-                    <span key={item.tag} className={`badge ${item.active ? 'success' : ''}`} title={item.tag}>
-                      {formatTag(item.tag)}: {item.active ? 'yes' : 'no'}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: '#e6edf3', fontWeight: 600, marginBottom: 6 }}>injury</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {injuryState.map((item) => (
-                    <span key={item.tag} className={`badge ${item.active ? 'danger' : ''}`} title={item.tag}>
-                      {formatTag(item.tag)}: {item.active ? 'yes' : 'no'}
-                    </span>
-                  ))}
-                  <span className="badge">restRounds: {session.player.restRounds ?? 0}</span>
                 </div>
               </div>
             </div>
-          </div>
+          </>
+        )}
 
-          <div className="panel">
-            <div className="panel-title">AI 事件缓存</div>
-            {aiEventsMessage && <div style={{ marginBottom: 8, fontSize: 12, color: '#8b949e' }}>{aiEventsMessage}</div>}
-            <div style={{ fontSize: 13, color: '#8b949e', marginBottom: 8 }}>
-              共 {aiEvents.length} 条
-              {aiEventsValidCount !== null && aiEventsInvalidCount !== null
-                ? ` · 有效 ${aiEventsValidCount} · 无效 ${aiEventsInvalidCount}`
-                : ''}
-            </div>
-            <pre style={preStyle}>{pretty(aiEvents)}</pre>
-          </div>
-
-          <div className="panel">
-            <div className="panel-title">世界战队运行态</div>
-            {session.worldClubs ? (
-              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
-                <div>
-                  season {session.worldClubs.season} · active {session.worldClubs.activeClubIds.length} · relevant {session.worldClubs.relevantClubIds.length} · static {session.worldClubs.staticClubIds.length} · lastTick {session.worldClubs.lastGlobalTickRound ?? '(none)'}
-                </div>
-                {session.worldClubs.seasonSummaries?.[0] && (
-                  <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10 }}>
-                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>season summary {session.worldClubs.seasonSummaries[0].season}</div>
-                    <div>darkHorse: {session.worldClubs.seasonSummaries[0].darkHorseClubIds.join(', ') || '(none)'}</div>
-                    <div>promoted: {session.worldClubs.seasonSummaries[0].promotedClubIds.join(', ') || '(none)'}</div>
-                    <div>fallen: {session.worldClubs.seasonSummaries[0].fallenClubIds.join(', ') || '(none)'}</div>
-                  </div>
-                )}
-                {worldClubRows.length > 0 ? worldClubRows.map((club) => (
-                  <div key={club.clubId} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
-                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>{club.clubId} · {club.tier} · round {club.updatedRound}</div>
-                    <div>form {club.currentForm} · trust {club.clubTrust} · chemistry {club.internalChemistry} · stability {club.rosterStability} · points {club.seasonPoints}</div>
-                    <div>storylines: {club.activeStorylines.length > 0 ? club.activeStorylines.join(', ') : '(none)'}</div>
-                    <div>recent: {club.recentResults[0] ? `${club.recentResults[0].result} ${club.recentResults[0].tier} r${club.recentResults[0].round}` : '(none)'}</div>
-                    <div>ticks: {club.tickKeys.length > 0 ? club.tickKeys.join(', ') : '(none)'}</div>
-                  </div>
-                )) : (
-                  <div>尚未激活任何战队运行态。</div>
-                )}
+        {debugTab === 'diagnostics' && (
+          <>
+            <div className="panel">
+              <div className="panel-title">AI / Session 字段</div>
+              <div style={{ display: 'grid', gap: 8, fontSize: 13, color: '#8b949e' }}>
+                <div>sessionId: <span style={{ color: '#e6edf3' }}>{session.id}</span></div>
+                <div>apiToken: <span style={{ color: '#e6edf3', fontFamily: 'monospace' }}>{session.apiToken}</span></div>
+                <div>growthSpent: <span style={{ color: '#e6edf3' }}>{session.player.growthSpent ?? 0}</span></div>
+                <div>growthCap: <span style={{ color: '#e6edf3' }}>{rulesMeta?.growthCap ?? 0}</span></div>
+                <div>growthRemaining: <span style={{ color: '#e6edf3' }}>{growthRemaining}</span></div>
+                <div>currentEvent: <span style={{ color: '#e6edf3' }}>{session.currentEvent ? session.currentEvent.id : '(none)'}</span></div>
+                <div>forceNextEvent: <span style={{ color: '#e6edf3' }}>{session.player.forceNextEvent ?? '(none)'}</span></div>
+                <div>forceMatchResult: <span style={{ color: '#e6edf3' }}>{session.player.forceMatchResult ?? '(none)'}</span></div>
+                <div>pendingMatch: <span style={{ color: '#e6edf3' }}>{session.player.pendingMatch ? 'yes' : 'no'}</span></div>
+                <div>teamVrs: <span style={{ color: '#e6edf3' }}>{session.player.team ? (session.worldClubs?.runtimeByClubId[session.player.team.clubId]?.vrsScore ?? 0) : '(no team)'}</span></div>
               </div>
-            ) : (
-              <div style={{ color: '#8b949e', fontSize: 13 }}>worldClubs 未初始化</div>
-            )}
-          </div>
+            </div>
 
-          <div className="panel">
-            <div className="panel-title">队内身份 Debug</div>
-            {session.debugTeamIdentity ? (
-              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
-                <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
-                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>
-                    player · visible {session.debugTeamIdentity.player.visibleIdentity ?? '(none)'} · since {session.debugTeamIdentity.player.sinceRound ?? '(none)'}
-                  </div>
+            <div className="panel">
+              <div className="panel-title">CareerInsight Debug</div>
+              {session.careerInsight ? (
+                <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
                   <div>
-                    scores: {session.debugTeamIdentity.player.scores.length > 0
-                      ? session.debugTeamIdentity.player.scores.map((score) => `${score.identity}:${score.score}`).join(', ')
-                      : '(none)'}
+                    <span style={{ color: '#e6edf3', fontWeight: 600 }}>{session.careerInsight.stage.label}</span>
+                    {' '}· round {session.careerInsight.generatedAtRound}
                   </div>
-                  {session.debugTeamIdentity.player.scores.map((score) => (
-                    <div key={`player-${score.identity}`}>
-                      {score.identity} reasons: {score.reasons.join(' / ') || '(none)'}
-                    </div>
-                  ))}
+                  <div>{session.careerInsight.headline}</div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>milestones</div>
+                    {session.careerInsight.milestones.map((item) => (
+                      <div key={item.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
+                        <div style={{ color: '#e6edf3' }}>{item.title} · {item.status}</div>
+                        <div>{item.progressText}</div>
+                        {item.missing.length > 0 && <div>missing: {item.missing.join(' / ')}</div>}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>risks</div>
+                    {session.careerInsight.risks.length > 0 ? session.careerInsight.risks.map((item) => (
+                      <div key={item.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
+                        <div style={{ color: '#e6edf3' }}>{item.title} · {item.severity}</div>
+                        <div>{item.reason}</div>
+                      </div>
+                    )) : <div>无风险项</div>}
+                  </div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>recommendations</div>
+                    {session.careerInsight.recommendations.map((item) => (
+                      <div key={`${item.title}-${item.actionId ?? 'text'}`} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 8 }}>
+                        <div style={{ color: '#e6edf3' }}>{item.title} · {item.priority}</div>
+                        <div>{item.reason}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <pre style={preStyle}>{pretty(session.careerInsight)}</pre>
                 </div>
+              ) : (
+                <div style={{ color: '#8b949e', fontSize: 13 }}>当前 session 未返回 careerInsight。</div>
+              )}
+            </div>
 
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <div>
-                    caller: {session.debugTeamIdentity.caller
-                      ? `${session.debugTeamIdentity.caller.label} (${session.debugTeamIdentity.caller.type}, score ${session.debugTeamIdentity.caller.score})`
-                      : '(none)'}
-                  </div>
-                  <div>
-                    star: {session.debugTeamIdentity.star
-                      ? `${session.debugTeamIdentity.star.label} (${session.debugTeamIdentity.star.type}, score ${session.debugTeamIdentity.star.score})`
-                      : '(none)'}
-                  </div>
-                </div>
+            <div className="panel">
+              <div className="panel-title">AI 事件缓存</div>
+              {aiEventsMessage && <div style={{ marginBottom: 8, fontSize: 12, color: '#8b949e' }}>{aiEventsMessage}</div>}
+              <div style={{ fontSize: 13, color: '#8b949e', marginBottom: 8 }}>
+                共 {aiEvents.length} 条
+                {aiEventsValidCount !== null && aiEventsInvalidCount !== null
+                  ? ` · 有效 ${aiEventsValidCount} · 无效 ${aiEventsInvalidCount}`
+                  : ''}
+              </div>
+              <pre style={preStyle}>{pretty(aiEvents)}</pre>
+            </div>
 
-                {session.debugTeamIdentity.teammates.length > 0 ? session.debugTeamIdentity.teammates.map((tm) => (
-                  <div key={tm.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+            <div className="panel">
+              <div className="panel-title">队内身份 Debug</div>
+              {session.debugTeamIdentity ? (
+                <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                  <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
                     <div style={{ color: '#e6edf3', fontWeight: 600 }}>
-                      {tm.name} · {tm.id} · visible {tm.visibleIdentity ?? '(none)'} · since {tm.sinceRound ?? '(none)'}
+                      player · visible {session.debugTeamIdentity.player.visibleIdentity ?? '(none)'} · since {session.debugTeamIdentity.player.sinceRound ?? '(none)'}
                     </div>
                     <div>
-                      scores: {tm.scores.length > 0
-                        ? tm.scores.map((score) => `${score.identity}:${score.score}`).join(', ')
+                      scores: {session.debugTeamIdentity.player.scores.length > 0
+                        ? session.debugTeamIdentity.player.scores.map((score) => `${score.identity}:${score.score}`).join(', ')
                         : '(none)'}
                     </div>
-                    {tm.scores.map((score) => (
-                      <div key={`${tm.id}-${score.identity}`}>
+                    {session.debugTeamIdentity.player.scores.map((score) => (
+                      <div key={`player-${score.identity}`}>
                         {score.identity} reasons: {score.reasons.join(' / ') || '(none)'}
                       </div>
                     ))}
                   </div>
-                )) : (
-                  <div>当前没有 roster。</div>
-                )}
-              </div>
-            ) : (
-              <div style={{ color: '#8b949e', fontSize: 13 }}>debugTeamIdentity 未返回</div>
-            )}
-          </div>
 
-          <div className="panel">
-            <div className="panel-title">角色 Debug</div>
-            {session.debugRole ? (
-              <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
-                <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
-                  <div style={{ color: '#e6edf3', fontWeight: 600 }}>
-                    active {session.debugRole.activeRole ?? '(none)'} · preferred {session.debugRole.preferredRole ?? '(none)'}
-                  </div>
-                  <div>
-                    rounds: {session.debugRole.activeRoleRounds} · pressure: {session.debugRole.pressure} · crystallize: {String(session.debugRole.crystallizeReady)}
-                  </div>
-                  <div>threshold: {session.debugRole.crystallizeThreshold}</div>
-                </div>
-                <div style={{ display: 'grid', gap: 6 }}>
-                  {Object.entries(session.debugRole.fitScores).map(([role, score]) => (
-                    <div key={role}>{role}: {score}</div>
-                  ))}
-                </div>
-                {session.debugRole.roleTransition ? (
-                  <div>
-                    transition: {session.debugRole.roleTransition.targetRole} · stage {session.debugRole.roleTransition.stage ?? 'trial'} · source {session.debugRole.roleTransition.source ?? 'team-need'}
-                  </div>
-                ) : (
-                  <div>当前没有进行中的转型轨道。</div>
-                )}
-              </div>
-            ) : (
-              <div style={{ color: '#8b949e', fontSize: 13 }}>debugRole 未返回</div>
-            )}
-          </div>
-
-          <div className="panel">
-            <div className="panel-title">AI 状态</div>
-            {aiStatus ? (
-              <div style={{ display: 'grid', gap: 8, fontSize: 13, color: '#8b949e' }}>
-                <div>provider: <span style={{ color: '#e6edf3' }}>{aiStatus.provider}</span></div>
-                <div>model: <span style={{ color: '#e6edf3' }}>{aiStatus.model ?? '(none)'}</span></div>
-                <div>active: <span style={{ color: '#e6edf3' }}>{String(aiStatus.active)}</span></div>
-                <div>kvBound: <span style={{ color: '#e6edf3' }}>{String(aiStatus.kvBound)}</span></div>
-              </div>
-            ) : (
-              <div style={{ color: '#8b949e', fontSize: 13 }}>未加载</div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="panel" style={{ marginTop: 16 }}>
-        <div className="panel-title">世界战队编辑</div>
-        {!session.worldClubs ? (
-          <div className="stat-desc">当前 session 没有 worldClubs。</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr)', gap: 14 }}>
-            <div style={{ display: 'grid', gap: 10 }}>
-              <input
-                value={clubFilter}
-                onChange={(e) => setClubFilter(e.target.value)}
-                placeholder="搜索战队"
-                style={inputStyle}
-              />
-              <div style={{ maxHeight: 520, overflow: 'auto', display: 'grid', gap: 8 }}>
-                {visibleClubRows.map((club) => (
-                  <button
-                    key={club.clubId}
-                    type="button"
-                    onClick={() => setSelectedClubId(club.clubId)}
-                    style={{
-                      textAlign: 'left',
-                      padding: 10,
-                      borderRadius: 6,
-                      border: selectedClubId === club.clubId ? '1px solid rgba(255,91,31,0.45)' : '1px solid #21262d',
-                      background: selectedClubId === club.clubId ? 'rgba(255,91,31,0.08)' : '#0d1117',
-                      color: '#e6edf3',
-                    }}
-                  >
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{club.displayName ?? club.clubId}</div>
-                    <div style={{ fontSize: 11, color: '#8b949e', marginTop: 4 }}>
-                      {club.clubId} · {club.displayTag ?? '(no tag)'} · {club.displayRegion ?? '(no region)'}
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <div>
+                      caller: {session.debugTeamIdentity.caller
+                        ? `${session.debugTeamIdentity.caller.label} (${session.debugTeamIdentity.caller.type}, score ${session.debugTeamIdentity.caller.score})`
+                        : '(none)'}
                     </div>
-                    <div style={{ fontSize: 11, color: '#8b949e', marginTop: 4 }}>
-                      trust {club.clubTrust} · form {club.currentForm} · chem {club.internalChemistry} · stab {club.rosterStability} · vrs {club.vrsScore}
+                    <div>
+                      star: {session.debugTeamIdentity.star
+                        ? `${session.debugTeamIdentity.star.label} (${session.debugTeamIdentity.star.type}, score ${session.debugTeamIdentity.star.score})`
+                        : '(none)'}
                     </div>
-                  </button>
-                ))}
-              </div>
+                  </div>
+
+                  {session.debugTeamIdentity.teammates.length > 0 ? session.debugTeamIdentity.teammates.map((tm) => (
+                    <div key={tm.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+                      <div style={{ color: '#e6edf3', fontWeight: 600 }}>
+                        {tm.name} · {tm.id} · visible {tm.visibleIdentity ?? '(none)'} · since {tm.sinceRound ?? '(none)'}
+                      </div>
+                      <div>
+                        scores: {tm.scores.length > 0
+                          ? tm.scores.map((score) => `${score.identity}:${score.score}`).join(', ')
+                          : '(none)'}
+                      </div>
+                      {tm.scores.map((score) => (
+                        <div key={`${tm.id}-${score.identity}`}>
+                          {score.identity} reasons: {score.reasons.join(' / ') || '(none)'}
+                        </div>
+                      ))}
+                    </div>
+                  )) : (
+                    <div>当前没有 roster。</div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ color: '#8b949e', fontSize: 13 }}>debugTeamIdentity 未返回</div>
+              )}
             </div>
 
-            {selectedClub && clubRuntimeForm ? (
-              <div style={{ display: 'grid', gap: 14 }}>
-                <div className="panel" style={{ marginBottom: 0 }}>
-                  <div className="panel-title">运行态</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 10 }}>
-                    {(['clubTrust', 'currentForm', 'rosterStability', 'internalChemistry', 'vrsScore'] as const).map((key) => (
-                      <label key={key} style={labelStyle}>
-                        <span>{key}</span>
-                        <input
-                          type="number"
-                          value={clubRuntimeForm[key]}
-                          onChange={(e) => setClubRuntimeForm((prev) => prev ? { ...prev, [key]: e.target.value } : prev)}
-                          style={inputStyle}
-                        />
-                      </label>
+            <div className="panel">
+              <div className="panel-title">角色 Debug</div>
+              {session.debugRole ? (
+                <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                  <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+                    <div style={{ color: '#e6edf3', fontWeight: 600 }}>
+                      active {session.debugRole.activeRole ?? '(none)'} · preferred {session.debugRole.preferredRole ?? '(none)'}
+                    </div>
+                    <div>
+                      rounds: {session.debugRole.activeRoleRounds} · pressure: {session.debugRole.pressure} · crystallize: {String(session.debugRole.crystallizeReady)}
+                    </div>
+                    <div>threshold: {session.debugRole.crystallizeThreshold}</div>
+                  </div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {Object.entries(session.debugRole.fitScores).map(([role, score]) => (
+                      <div key={role}>{role}: {score}</div>
                     ))}
                   </div>
+                  {session.debugRole.roleTransition ? (
+                    <div>
+                      transition: {session.debugRole.roleTransition.targetRole} · stage {session.debugRole.roleTransition.stage ?? 'trial'} · source {session.debugRole.roleTransition.source ?? 'team-need'}
+                    </div>
+                  ) : (
+                    <div>当前没有进行中的转型轨道。</div>
+                  )}
                 </div>
+              ) : (
+                <div style={{ color: '#8b949e', fontSize: 13 }}>debugRole 未返回</div>
+              )}
+            </div>
 
-                <div className="panel" style={{ marginBottom: 0 }}>
-                  <div className="panel-title">fullRoster</div>
-                  <div style={{ display: 'grid', gap: 10 }}>
-                    {selectedClub.fullRoster.map((player) => {
-                      const playerForm = clubRosterForms[player.id] ?? initClubPlayerForm(player);
-                      return (
-                        <div key={player.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 10 }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
-                            <label style={labelStyle}>
-                              <span>id</span>
-                              <input value={playerForm.id} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, id: e.target.value } }))} style={inputStyle} />
-                            </label>
-                            <label style={labelStyle}>
-                              <span>name</span>
-                              <input value={playerForm.name} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, name: e.target.value } }))} style={inputStyle} />
-                            </label>
-                            <label style={labelStyle}>
-                              <span>role</span>
-                              <input value={playerForm.role} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, role: e.target.value as ClubPlayer['role'] } }))} style={inputStyle} />
-                            </label>
-                            <label style={labelStyle}>
-                              <span>personality</span>
-                              <input value={playerForm.personality} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, personality: e.target.value as ClubPlayer['personality'] } }))} style={inputStyle} />
-                            </label>
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 8 }}>
-                            {(['agility', 'intelligence', 'mentality', 'experience', 'internalChemistry'] as const).map((key) => (
-                              <label key={key} style={labelStyle}>
-                                <span>{key}</span>
-                                <input
-                                  type="number"
-                                  value={playerForm[key]}
-                                  onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, [key]: e.target.value } }))}
-                                  style={inputStyle}
-                                />
-                              </label>
-                            ))}
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-                            <label style={labelStyle}>
-                              <span>status</span>
-                              <input value={playerForm.status} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, status: e.target.value as ClubPlayer['status'] } }))} style={inputStyle} />
-                            </label>
-                            <label style={labelStyle}>
-                              <span>joinedRound</span>
-                              <input type="number" value={playerForm.joinedRound} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, joinedRound: e.target.value } }))} style={inputStyle} />
-                            </label>
-                            <label style={labelStyle}>
-                              <span>traits</span>
-                              <input value={playerForm.traits} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, traits: e.target.value } }))} style={inputStyle} />
-                            </label>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+            <div className="panel">
+              <div className="panel-title">AI 状态</div>
+              {aiStatus ? (
+                <div style={{ display: 'grid', gap: 8, fontSize: 13, color: '#8b949e' }}>
+                  <div>provider: <span style={{ color: '#e6edf3' }}>{aiStatus.provider}</span></div>
+                  <div>model: <span style={{ color: '#e6edf3' }}>{aiStatus.model ?? '(none)'}</span></div>
+                  <div>active: <span style={{ color: '#e6edf3' }}>{String(aiStatus.active)}</span></div>
+                  <div>kvBound: <span style={{ color: '#e6edf3' }}>{String(aiStatus.kvBound)}</span></div>
                 </div>
-
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <button type="button" className="primary-button" onClick={() => void submitClub()} disabled={clubSaving}>
-                    {clubSaving ? '保存中…' : '保存战队'}
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => {
-                      if (!selectedClub) return;
-                      setClubRuntimeForm(initClubRuntimeForm(selectedClub));
-                      setClubRosterForms(Object.fromEntries(selectedClub.fullRoster.map((player) => [player.id, initClubPlayerForm(player)])));
-                    }}
-                  >
-                    重置当前战队
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="stat-desc">请选择一个战队。</div>
-            )}
-          </div>
+              ) : (
+                <div style={{ color: '#8b949e', fontSize: 13 }}>未加载</div>
+              )}
+            </div>
+          </>
         )}
-      </div>
 
-      <div className="panel" style={{ marginTop: 16 }}>
-        <div className="panel-title">玩家战队编辑</div>
-        <div style={{ display: 'grid', gap: 12 }}>
+        {debugTab === 'team' && (
+          <>
+            <div className="panel">
+              <div className="panel-title">世界战队运行态</div>
+              {session.worldClubs ? (
+                <div style={{ display: 'grid', gap: 10, fontSize: 12, color: '#8b949e' }}>
+                  <div>
+                    season {session.worldClubs.season} · active {session.worldClubs.activeClubIds.length} · relevant {session.worldClubs.relevantClubIds.length} · static {session.worldClubs.staticClubIds.length} · lastTick {session.worldClubs.lastGlobalTickRound ?? '(none)'}
+                  </div>
+                  {session.worldClubs.seasonSummaries?.[0] && (
+                    <div style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10 }}>
+                      <div style={{ color: '#e6edf3', fontWeight: 600 }}>season summary {session.worldClubs.seasonSummaries[0].season}</div>
+                      <div>darkHorse: {session.worldClubs.seasonSummaries[0].darkHorseClubIds.join(', ') || '(none)'}</div>
+                      <div>promoted: {session.worldClubs.seasonSummaries[0].promotedClubIds.join(', ') || '(none)'}</div>
+                      <div>fallen: {session.worldClubs.seasonSummaries[0].fallenClubIds.join(', ') || '(none)'}</div>
+                    </div>
+                  )}
+                  {worldClubRows.length > 0 ? worldClubRows.map((club) => (
+                    <div key={club.clubId} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 4 }}>
+                      <div style={{ color: '#e6edf3', fontWeight: 600 }}>{club.clubId} · {club.tier} · round {club.updatedRound}</div>
+                      <div>form {club.currentForm} · trust {club.clubTrust} · chemistry {club.internalChemistry} · stability {club.rosterStability} · points {club.seasonPoints}</div>
+                      <div>storylines: {club.activeStorylines.length > 0 ? club.activeStorylines.join(', ') : '(none)'}</div>
+                      <div>recent: {club.recentResults[0] ? `${club.recentResults[0].result} ${club.recentResults[0].tier} r${club.recentResults[0].round}` : '(none)'}</div>
+                      <div>ticks: {club.tickKeys.length > 0 ? club.tickKeys.join(', ') : '(none)'}</div>
+                    </div>
+                  )) : (
+                    <div>尚未激活任何战队运行态。</div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ color: '#8b949e', fontSize: 13 }}>worldClubs 未初始化</div>
+              )}
+            </div>
+
+            <div className="panel">
+              <div className="panel-title">世界战队编辑</div>
+              {!session.worldClubs ? (
+                <div className="stat-desc">当前 session 没有 worldClubs。</div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr)', gap: 14 }}>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    <input
+                      value={clubFilter}
+                      onChange={(e) => setClubFilter(e.target.value)}
+                      placeholder="搜索战队"
+                      style={inputStyle}
+                    />
+                    <div style={{ maxHeight: 520, overflow: 'auto', display: 'grid', gap: 8 }}>
+                      {visibleClubRows.map((club) => (
+                        <button
+                          key={club.clubId}
+                          type="button"
+                          onClick={() => setSelectedClubId(club.clubId)}
+                          style={{
+                            textAlign: 'left',
+                            padding: 10,
+                            borderRadius: 6,
+                            border: selectedClubId === club.clubId ? '1px solid rgba(255,91,31,0.45)' : '1px solid #21262d',
+                            background: selectedClubId === club.clubId ? 'rgba(255,91,31,0.08)' : '#0d1117',
+                            color: '#e6edf3',
+                          }}
+                        >
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{club.displayName ?? club.clubId}</div>
+                          <div style={{ fontSize: 11, color: '#8b949e', marginTop: 4 }}>
+                            {club.clubId} · {club.displayTag ?? '(no tag)'} · {club.displayRegion ?? '(no region)'}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#8b949e', marginTop: 4 }}>
+                            trust {club.clubTrust} · form {club.currentForm} · chem {club.internalChemistry} · stab {club.rosterStability} · vrs {club.vrsScore}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {selectedClub && clubRuntimeForm ? (
+                    <div style={{ display: 'grid', gap: 14 }}>
+                      <div className="panel" style={{ marginBottom: 0 }}>
+                        <div className="panel-title">运行态</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 10 }}>
+                          {(['clubTrust', 'currentForm', 'rosterStability', 'internalChemistry', 'vrsScore'] as const).map((key) => (
+                            <label key={key} style={labelStyle}>
+                              <span>{key}</span>
+                              <input
+                                type="number"
+                                value={clubRuntimeForm[key]}
+                                onChange={(e) => setClubRuntimeForm((prev) => prev ? { ...prev, [key]: e.target.value } : prev)}
+                                style={inputStyle}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="panel" style={{ marginBottom: 0 }}>
+                        <div className="panel-title">fullRoster</div>
+                        <div style={{ display: 'grid', gap: 10 }}>
+                          {selectedClub.fullRoster.map((player) => {
+                            const playerForm = clubRosterForms[player.id] ?? initClubPlayerForm(player);
+                            return (
+                              <div key={player.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 10 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+                                  <label style={labelStyle}>
+                                    <span>id</span>
+                                    <input value={playerForm.id} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, id: e.target.value } }))} style={inputStyle} />
+                                  </label>
+                                  <label style={labelStyle}>
+                                    <span>name</span>
+                                    <input value={playerForm.name} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, name: e.target.value } }))} style={inputStyle} />
+                                  </label>
+                                  <label style={labelStyle}>
+                                    <span>role</span>
+                                    <input value={playerForm.role} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, role: e.target.value as ClubPlayer['role'] } }))} style={inputStyle} />
+                                  </label>
+                                  <label style={labelStyle}>
+                                    <span>personality</span>
+                                    <input value={playerForm.personality} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, personality: e.target.value as ClubPlayer['personality'] } }))} style={inputStyle} />
+                                  </label>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 8 }}>
+                                  {(['agility', 'intelligence', 'mentality', 'experience', 'internalChemistry'] as const).map((key) => (
+                                    <label key={key} style={labelStyle}>
+                                      <span>{key}</span>
+                                      <input
+                                        type="number"
+                                        value={playerForm[key]}
+                                        onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, [key]: e.target.value } }))}
+                                        style={inputStyle}
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                                  <label style={labelStyle}>
+                                    <span>status</span>
+                                    <input value={playerForm.status} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, status: e.target.value as ClubPlayer['status'] } }))} style={inputStyle} />
+                                  </label>
+                                  <label style={labelStyle}>
+                                    <span>joinedRound</span>
+                                    <input type="number" value={playerForm.joinedRound} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, joinedRound: e.target.value } }))} style={inputStyle} />
+                                  </label>
+                                  <label style={labelStyle}>
+                                    <span>traits</span>
+                                    <input value={playerForm.traits} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, traits: e.target.value } }))} style={inputStyle} />
+                                  </label>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <button type="button" className="primary-button" onClick={() => void submitClub()} disabled={clubSaving}>
+                          {clubSaving ? '保存中…' : '保存战队'}
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          onClick={() => {
+                            if (!selectedClub) return;
+                            setClubRuntimeForm(initClubRuntimeForm(selectedClub));
+                            setClubRosterForms(Object.fromEntries(selectedClub.fullRoster.map((player) => [player.id, initClubPlayerForm(player)])));
+                          }}
+                        >
+                          重置当前战队
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="stat-desc">请选择一个战队。</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="panel">
+              <div className="panel-title">玩家战队编辑</div>
+              <div style={{ display: 'grid', gap: 12 }}>
           <label style={{ ...labelStyle, alignItems: 'flex-start' }}>
             <span>启用战队编辑</span>
             <input
@@ -1400,9 +1436,12 @@ export default function DebugSessionPage() {
           </div>
         </div>
       </div>
+          </>
+        )}
+      </div>
     </div>
-  );
-}
+      );
+    }
 
 const inputStyle: CSSProperties = {
   background: '#0b0f14',
