@@ -234,7 +234,61 @@ if (eliminated || isFinal) {
 
 ---
 
-## 8. 确定性、迁移、存储
+## 8. 世界新闻集成与背景赛事真实化
+
+> 目的：让 `worldNews.ts` 的新闻**按真实赛程进度报道**，而非现状的"日期窗口模板 + 假比分"。
+
+### 8.1 现状根因（已核对 c362cdf）
+
+- **背景赛事结果是"一次性强度排序"**：`tickWorldClubRuntimes`（`worldClubs.ts:675-784`）给每队算 `strength = power + vrs/25 + form/25 + rng*4`，排序后第一名即冠军、第二名即亚军，无逐轮对阵 → 高 VRS 恒赢、扁平可预测。
+- **比分是假的**：`finalScore = hashString % 2 ? '3-1' : '3-2'`，与强弱无关。
+- **开赛/阶段新闻是模板**：`buildTournamentOpeningNews` 的 focus 队是按 VRS 取的 top-N（非真名单）；`buildTournamentStageNews` 的阶段用周偏移 `currentOffset-1` 猜（非真实当前轮）。
+- 无 MVP/选手（无 `WorldPlayer`）、无转会新闻。
+
+### 8.2 两类赛事、两套真实化路径
+
+- **玩家参加的赛事**：已有 `activeTournamentInstance`（本方案主体）。新闻直接读实例的真实 `stages[].matches[]`（真名单、真比分、真 standout、真 awards），**按实例 round 推进驱动**新闻，而非日期窗口。
+- **背景赛事（玩家未参加）**：**复用本方案的抽象 bracket**取代现状"排序+假分"。即把 `worldClubs.ts:675-784` 的快照生成改为：用 `eligibleClubIdsForTournament` 选场 → `createTournamentInstance`（轻量、不持久化全量）→ `fastForwardInstanceToCompletion`（`simulateAbstractMatch` 逐轮）→ 产出真实 `WorldTournamentSnapshot`（真冠军路径、**真比分**、真 standout/MVP）。
+
+### 8.3 背景赛事快照升级（改 `worldClubs.ts:675-784`）
+
+```ts
+// 改前：strength 排序选冠军 + hash 假比分
+// 改后：
+const instance = createTournamentInstance(nextSession, tournament, season, { lightweight: true });
+const completed = fastForwardInstanceToCompletion(instance, rng);   // 复用 §4
+const awards = computeAwards(completed);                            // 复用 §6
+const snapshot: WorldTournamentSnapshot = {
+  ...,
+  championClubId: awards.championClubId,
+  runnerUpClubId: awards.runnerUpClubId,
+  finalScore: finalMatchScore(completed),        // 真比分，取自决赛 match.score
+  darkHorseClubId: darkHorseFrom(completed),     // 真黑马（低种子打进深轮）
+  mvpPlayerId: awards.winnerMvp.playerId,        // Phase 3：真 MVP
+  participants: completed.teams.map(...),         // 真名次 finalPlacement
+};
+```
+
+- `lightweight: true`：背景实例只算到 awards/snapshot，**不写入 `activeTournamentInstance`、不持久化完整 bracket**，只落 `WorldTournamentSnapshot`（保持存档体积，符合 §1.4）。
+- 参赛队的 `seasonPoints` / `recentResults` / form 回写沿用现状逻辑，但 `result`（win/deep-run/early-exit）改为取自**真实 `finalPlacement`**，而非 seed 近似。
+
+### 8.4 新闻改为进度驱动（改 `worldNews.ts`）
+
+- **结果新闻**（`buildTournamentResultNews`）：已读 `tournamentSnapshots`，升级后自动拿到真比分、真黑马、真 MVP（加 `report.mvp` 字段）。
+- **开赛新闻**（`buildTournamentOpeningNews`）：focus 队改为读 snapshot/instance 的**真实参赛名单种子**，而非 top-VRS 猜测。
+- **阶段新闻**（`buildTournamentStageNews`）：玩家赛事用 `activeTournamentInstance` 的真实当前 round；背景赛事因一次性快进无逐轮过程，阶段新闻退化为"开赛 + 结果"两点（或在 snapshot 里保留每轮 winner 摘要供阶段播报，按需）。
+- **选手/MVP 新闻**：Phase 3 落地后，结果新闻可点名 MVP；开赛新闻可提及明星选手。
+- **转会新闻**：Phase 5 的 `buildWorldTransferNews` 并入同一 `weeklyNews` 流（见 phase5 文档 §8）。
+
+### 8.5 依赖与顺序
+
+- 背景赛事真实化**依赖本方案的 `createTournamentInstance` / `simulateAbstractMatch` / `fastForwardInstanceToCompletion` / `computeAwards`**（§3/4/6）已实现——所以它是 Phase 4 的**自然延伸**，不是独立系统。
+- 真 MVP/选手新闻依赖 **Phase 3**（`WorldPlayer`）；无 Phase 3 时先出真比分/真名次/真黑马，MVP 字段留空。
+- 转会新闻依赖 **Phase 5**。
+
+---
+
+## 9. 确定性、迁移、存储
 
 - 所有随机走 `makeRng(hashString(...))`，种子含 `session.id:tournamentId:season`，保证跨读一致与回放稳定。
 - 旧存档无 `activeTournamentInstance` 字段：可选字段，缺省 `null`，进行中的旧 `pendingMatch` 无实例则走回退随机对手（向后兼容，无需迁移）。
@@ -242,7 +296,7 @@ if (eliminated || isFinal) {
 
 ---
 
-## 9. 测试
+## 10. 测试
 
 - `tournamentInstance.test.ts`：
   - 字段规模/来源按 tier 正确（C=8…Major=32）；玩家必入；种子按 VRS（S/Major）。
@@ -252,16 +306,18 @@ if (eliminated || isFinal) {
 - 集成：`assignPendingMatchOpponent` 在有实例时返回实例对手、无实例时回退随机（回归现有 `tournamentSeries.test.ts` / opponent 测试）。
 - 回写：参赛 club 按名次拿到 seasonPoints/recentResults。
 - 奖项：冠亚军、winner/loser MVP、玩家名次正确；玩家夺冠时 MVP 可为玩家。
+- **世界新闻（§8）**：背景赛事快照的 `finalScore` 为真实决赛比分（非 hash）、`championClubId` 来自快进 bracket、`participants.finalPlacement` 真实；`buildTournamentResultNews` 读到真比分/真黑马；有 Phase 3 时 MVP 非空。轻量背景实例不写入 `activeTournamentInstance`、不持久化完整 bracket。
 
 ---
 
-## 10. 实施步骤（PR 切分）
+## 11. 实施步骤（PR 切分）
 
 1. **类型 + 实例生成**：types.ts（第 2 节）、`tournamentInstance.ts` 的 `createTournamentInstance` + 字段/种子（3.x），抽出 `eligibleClubIdsForTournament` 共享函数。纯新增，不改现有行为。
 2. **抽象模拟 + 快进 + 奖项**：`simulateAbstractMatch` / `advanceInstanceRound` / `fastForwardInstanceToCompletion` / `computeAwards`（4、6）。可纯单测，不接线。
 3. **接线对手来源**：signup 建实例（5.1）、`assignPendingMatchOpponent` 切换（5.2）。此步起玩家对手来自实例。
 4. **接线轮次推进**：`choice.ts` 结算后推进/收尾实例（5.3）、世界回写（5.4）。
-5. **前端赛事中心 + 接口透出**（7），按 tier 分层展示。
-6. **测试与平衡**（9），调字段规模/方差/回写权重。
+5. **背景赛事真实化 + 新闻进度驱动**：用 `lightweight` 背景实例替换 `worldClubs.ts:675-784` 的强度排序快照（8.3），`worldNews.ts` 改为读真实 snapshot/instance（8.4）。
+6. **前端赛事中心 + 接口透出**（7），按 tier 分层展示。
+7. **测试与平衡**（10），调字段规模/方差/回写权重。
 
-第 1-2 步纯离线可测、零行为变更；第 3-4 步替换对手来源并打通赛场推进；第 5 步出 UI；第 6 步收口。对手情报"解锁分层"（4.6）与 Major 小组/瑞士精细化可作为后续增量，不阻塞首版。
+第 1-2 步纯离线可测、零行为变更；第 3-4 步替换对手来源并打通赛场推进；**第 5 步把世界新闻从模板升级为真实赛程报道（背景赛事复用同一抽象 bracket）**；第 6 步出 UI；第 7 步收口。对手情报"解锁分层"（4.6）、Major 小组/瑞士精细化、背景赛事逐轮阶段播报可作为后续增量，不阻塞首版。
