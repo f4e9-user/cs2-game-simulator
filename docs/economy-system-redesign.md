@@ -1,5 +1,6 @@
 # 经济系统重构设计
 
+> 实现细化：[economy-system-implementation.md](./economy-system-implementation.md)
 > 文档状态：设计
 > 文档日期：2026-06-27
 > 适用范围：玩家收入、球员身价与合同、支出与金钱去处、与俱乐部/赛事/转会/年龄系统的经济联动、饰品风险资产
@@ -12,7 +13,7 @@
 
 **收入**：月薪（`salaryTracker`，`choice.ts:836`，每 `payCycle=4` 回合入账；纠纷可降 0.8 后恢复）、赛事奖金（`reward.money`，C 级≈8-10K，目前近定额）、房产出租（`housing.ts` `city.rentalIncome`）、一次性事件（赞助/直播片段/博彩/诈骗）。
 **支出**：房租（tier×城市）、设施维护、按揭、商店/外设、贷款还款（`loan.ts` 本金×利率）、家庭危机、搬家/装修。
-**机制**：`money` 是 `Stats` 字段（单位 K，**未被 `clampStats` 封顶**——`player.ts` 显式排除 money/experience，故"拆出 Stats"仅为可选清理、非 bug）；`creditScore`（贷款门槛<50）；破产链（`cash-strapped`/`broke`→bailout）；生涯终结（家庭危机未付 / 长期破产）。
+**机制**：`money` 是 `Stats` 字段（单位 K）。开局分配的 `clampStats` 不动 money，但**运行时每笔 `applyMoneyTransaction` 都被夹到 `[0, MONEY_MAX=999]`**（`money.ts:15` / `constants.ts:61`）——即 money 有 **999K 硬上限**，新增经常性收入后成功生涯会撞顶、收入溢出，须先校准（见实现方案 §8）。`creditScore`（贷款门槛<50）；破产链（`cash-strapped`/`broke`→bailout）；生涯终结（家庭危机未付 / 长期破产）。
 **核心问题**：收入薄且几乎全被动月薪；fame 几乎不变现；奖金不接 Phase 4 名次；无球员身价；晚期无金钱去处。
 
 ---
@@ -139,7 +140,7 @@ agent?: { signed: boolean; cutRate: number };
 skinHoldings?: SkinHolding[];
 ```
 
-- `money` 维持在 `Stats`（未被 clamp，无 bug）；**可选**后续清理为独立账户字段，非本次必须。
+- `money` 维持在 `Stats`；**运行时受 `MONEY_MAX` 上限约束**，本次须提升上限（实现方案 §8）；拆出 `Stats` 为独立账户字段是可选清理，非本次必须。
 - 奖金/收入流入账统一经 `applyMoneyTransaction`（`money.ts:15`）。
 
 ---
