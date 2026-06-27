@@ -1465,14 +1465,15 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 
 ## 15. 推荐实施阶段
 
-> 已细化为可实现方案的阶段：
+> 全部 8 个阶段均已细化为可实现方案（建议落地顺序见各文档；总顺序见 Phase 5 文档结尾）：
 > - Phase 1-2 — [phase1-2-club-identity-implementation.md](./phase1-2-club-identity-implementation.md)
 > - Phase 3 — [phase3-worldplayer-age-implementation.md](./phase3-worldplayer-age-implementation.md)
 > - Phase 4 — [phase4-tournament-instance-implementation.md](./phase4-tournament-instance-implementation.md)
+> - Phase 5 — [phase5-world-transfer-implementation.md](./phase5-world-transfer-implementation.md)
 > - Phase 6-7 — [phase6-7-season-goal-implementation.md](./phase6-7-season-goal-implementation.md)
 > - Phase 8 — [phase8-rebuild-event-chain-implementation.md](./phase8-rebuild-event-chain-implementation.md)（基于 RoundPlan 新机制 c362cdf）
 >
-> 其余阶段（5 转会）待细化。
+> **推荐落地总顺序（依赖驱动）**：Phase 1-2 → 3 → 4 → 6-7 → 8 → 5。
 
 ### Phase 1：俱乐部身份数据
 
@@ -1545,6 +1546,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 - 赛事奖项和最终名次能展示在前端。
 
 ### Phase 5：世界选手转会模拟
+
+> 实现细化：[phase5-world-transfer-implementation.md](./phase5-world-transfer-implementation.md)
 
 目标：
 
