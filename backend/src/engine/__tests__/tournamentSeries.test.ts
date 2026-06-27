@@ -138,6 +138,41 @@ describe('tournament series', () => {
     expect(final.session.player.tournamentChampionships).toBeGreaterThan(0);
     expect(final.result.sequenceFinal).toBe(true);
     expect(final.result.matchStats?.kills).toBeGreaterThan(0);
+    expect(final.result.seriesScore).toEqual({ player: 2, opponent: 0 });
+    expect(final.result.matchStats?.teamScore).toBeGreaterThan(20);
+  });
+
+  it('keeps map numbering, break score context, and final map breakdown separate', () => {
+    const p = {
+      ...player(),
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    expect((map1.result as any).seriesStepKind).toBe('map');
+    expect((map1.result as any).seriesMapIndex).toBe(1);
+    expect((map1.result as any).seriesMapCount).toBe(3);
+
+    const break1 = applyChoice(map1.session, 'break-recover');
+    expect((break1.result as any).seriesStepKind).toBe('break');
+    expect((break1.result as any).seriesMapIndex).toBe(1);
+    expect((break1.result as any).seriesScore).toEqual({ player: 1, opponent: 0 });
+
+    const map2 = applyChoice(break1.session, 'match-play');
+    const final = applyChoice(map2.session, 'series-confirm');
+    expect((final.result as any).seriesStepKind).toBe('final');
+    expect((final.result as any).seriesScore).toEqual({ player: 2, opponent: 0 });
+    expect((final.result as any).seriesMaps).toHaveLength(2);
+    expect((final.result as any).seriesMaps[0]).toMatchObject({
+      mapName: expect.any(String),
+      teamScore: expect.any(Number),
+      enemyScore: expect.any(Number),
+    });
   });
 
   it('does not add extra fatigue on series confirmation after completed maps', () => {
@@ -317,8 +352,8 @@ describe('tournament series', () => {
       seriesType: 'bo3',
       mapPool: ['Mirage', 'Inferno', 'Nuke'],
       maps: [
-        { mapName: 'Mirage', won: true, teamScore: 13, enemyScore: 10, kills: 20, deaths: 15, assists: 5, headshotRate: 0.45, rating: 1.12 },
-        { mapName: 'Inferno', won: false, teamScore: 10, enemyScore: 13, kills: 16, deaths: 18, assists: 6, headshotRate: 0.39, rating: 0.98 },
+        { mapNumber: 1, mapName: 'Mirage', won: true, teamScore: 13, enemyScore: 10, kills: 20, deaths: 15, assists: 5, headshotRate: 0.45, rating: 1.12 },
+        { mapNumber: 2, mapName: 'Inferno', won: false, teamScore: 10, enemyScore: 13, kills: 16, deaths: 18, assists: 6, headshotRate: 0.39, rating: 0.98 },
       ],
       playerMapWins: 1,
       opponentMapWins: 1,

@@ -910,6 +910,13 @@ export interface MatchStats {
   enemyScore: number;
 }
 
+export interface SeriesMapSummary {
+  mapNumber: number;
+  mapName: string;
+  teamScore: number;
+  enemyScore: number;
+}
+
 export type ResultTier = 'critical_success' | 'success' | 'failure' | 'critical_failure';
 
 export type EventSequenceType =
@@ -1010,6 +1017,15 @@ export interface RoundResult {
   fatigueChange: number;
   buffsAdded: Buff[];
   matchStats?: MatchStats;
+  seriesScore?: {
+    player: number;
+    opponent: number;
+  };
+  seriesStepKind?: 'map' | 'break' | 'final';
+  seriesMapIndex?: number;
+  seriesMapCount?: number;
+  seriesMapName?: string;
+  seriesMaps?: SeriesMapSummary[];
   sequenceId?: string;
   sequenceType?: EventSequenceType;
   sequenceStepIndex?: number;
@@ -1098,7 +1114,7 @@ export interface CareerInsight {
     tone: 'neutral' | 'available' | 'locked' | 'active' | 'major' | 'warning';
     source: 'career-goal' | 'tournament-calendar' | 'pending-match' | 'tournament-context' | 'system';
     tournamentId?: string;
-    action?: 'signup' | 'withdraw' | 'none';
+    action?: 'signup' | 'preregister' | 'withdraw' | 'none';
     detail?: string;
   }>;
   blockers: Array<{

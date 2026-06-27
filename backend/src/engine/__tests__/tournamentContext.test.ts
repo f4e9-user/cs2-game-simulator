@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getTournament } from '../../data/tournaments.js';
 import { applyChoice, createSession, initPlayer } from '../gameEngine.js';
 import { pickEvent, toPublicEvent } from '../events.js';
-import { createTournamentContext } from '../tournamentContext.js';
+import { createTournamentContext, pickTournamentContextEvent } from '../tournamentContext.js';
 import type { PendingMatch, Player, Stage } from '../../types.js';
 
 function player(): Player {
@@ -89,11 +89,43 @@ describe('tournament context events', () => {
     expect(picked?.id).toBe('tournament-context-goal-setting');
   });
 
+  it('keeps preregistered middle weeks quiet until the week before match', () => {
+    const t = getTournament('y1-c-01');
+    expect(t).toBeDefined();
+    const pm = {
+      ...pendingMatch(),
+      resolveWeek: 14,
+    };
+    const p = {
+      ...player(),
+      round: 5,
+      week: 7,
+      pendingMatch: pm,
+    };
+    p.tournamentContext = {
+      ...createTournamentContext(p, pm, t!),
+      phase: 'signup',
+      signedUpAtRound: 4,
+    };
+    expect(pickTournamentContextEvent(p, [])).toBeNull();
+
+    p.week = 13;
+    p.tournamentContext = {
+      ...p.tournamentContext!,
+      phase: 'pre-match',
+    };
+
+    const picked = pickTournamentContextEvent(p, []);
+    expect(picked?.type).toBe('tournament-context');
+    expect(['tournament-context-baseline-prep', 'tournament-context-locker-silence', 'tournament-context-travel-hotel-noise']).toContain(picked?.id);
+  });
+
   it('does not write team fields for no-team tournament context settlement', () => {
     const t = getTournament('y1-c-01')!;
     const pm = pendingMatch();
     const p = {
       ...player(),
+      week: 5,
       housing: { tier: 'shared-housing' as const, movedAtRound: 0, cityId: 'regional-hub' as const },
       pendingMatch: pm,
     };
@@ -129,6 +161,7 @@ describe('tournament context events', () => {
     const pm = pendingMatch();
     const p = {
       ...player(),
+      week: 9,
       team: {
         clubId: 'club-test-na',
         name: 'NA Test',
@@ -151,14 +184,9 @@ describe('tournament context events', () => {
       recentEventIds: [],
       rng: () => 0.1,
     });
-
-    expect(event?.type).toBe('tournament-context');
-    expect(event?.id).toBe('tournament-context-baseline-prep');
-    expect(event?.choices.map((choice) => choice.id)).toEqual([
-      'demo-review',
-      'physical-prep',
-      'mental-reset',
-    ]);
+    expect(event).toBeDefined();
+    expect(event?.type).toBe('ranked');
+    expect(event?.id).not.toContain('tournament-context');
   });
 
   it('injects travel recovery context events before baseline prep for cross-region tournaments', () => {
@@ -166,6 +194,7 @@ describe('tournament context events', () => {
     const pm = awayPendingMatch();
     const p = {
       ...player(),
+      week: 5,
       housing: { tier: 'shared-housing' as const, movedAtRound: 0, cityId: 'local-city' as const },
       pendingMatch: pm,
     };
@@ -181,6 +210,7 @@ describe('tournament context events', () => {
       rng: () => 0.1,
     });
 
+    expect(event).toBeDefined();
     expect(event?.type).toBe('tournament-context');
     expect(event?.id).toBe('tournament-context-travel-hotel-noise');
   });

@@ -1623,6 +1623,35 @@ input[type='text']:focus {
   font-size: 12px;
 }
 
+.action-group-subpanel {
+  margin: 2px 0 8px;
+  padding: 8px 0 0 12px;
+  border-left: 1px solid var(--border-soft);
+}
+
+.action-group-subtitle {
+  margin: 0 0 6px;
+  color: var(--fg-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.action-group-subpanel .action-item {
+  gap: 4px;
+}
+
+.action-group-subpanel .action-btn-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.action-group-subpanel .action-btn-desc {
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
 .event-activity-grid {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
@@ -2745,6 +2774,13 @@ input[type='text']:focus {
   margin-bottom: 8px;
 }
 
+.match-stats-head {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg-2);
+}
+
 .match-score-row {
   display: flex;
   align-items: baseline;
@@ -2775,6 +2811,95 @@ input[type='text']:focus {
   font-size: 24px;
   font-weight: 400;
   color: var(--fg-3);
+}
+
+.series-score-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+
+.series-score-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.series-score-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg-2);
+}
+
+.series-score-map {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg-3);
+}
+
+.series-score-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+}
+
+.series-score-team {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.series-score-sep {
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--fg-3);
+}
+
+.series-score-foot {
+  font-size: 11px;
+  color: var(--fg-3);
+  text-align: center;
+}
+
+.series-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+
+.series-map-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--fg-2);
+}
+
+.series-map-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-map-score {
+  flex: 0 0 auto;
+  color: var(--fg-1);
+  font-weight: 700;
 }
 
 .match-stats-grid {

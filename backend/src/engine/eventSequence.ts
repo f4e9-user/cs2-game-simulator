@@ -141,6 +141,15 @@ export function sequenceResultFields(sequence: EventSequence): Pick<
   };
 }
 
+export function sequenceStepKind(sequence: EventSequence): 'map' | 'break' | 'final' | undefined {
+  const step = getCurrentSequenceStep(sequence);
+  if (!step || sequence.type !== 'tournament-series') return undefined;
+  if (step.dynamicEventKind === 'tournament-map') return 'map';
+  if (step.dynamicEventKind === 'tournament-break') return 'break';
+  if (step.dynamicEventKind === 'tournament-series-decider') return 'final';
+  return undefined;
+}
+
 function shouldSkipStep(
   step: EventSequenceStep,
   sequence: EventSequence,

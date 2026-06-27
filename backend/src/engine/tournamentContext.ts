@@ -41,6 +41,7 @@ export function createTournamentContext(
 export function pickTournamentContextEvent(player: Player, aiEvents: EventDef[] = []): EventDef | null {
   const context = enqueueAiTournamentContextCandidates(player, aiEvents);
   if (!context || !player.pendingMatch) return null;
+  if (context.phase === 'signup' && player.round !== context.signedUpAtRound) return null;
   if (context.phase === 'match' || context.phase === 'complete') return null;
 
   const queue = [...context.contextEventQueue]
@@ -70,6 +71,7 @@ function enqueueAiTournamentContextCandidates(
 ): TournamentContext | undefined {
   const context = normalizeTournamentContextPhase(player);
   if (!context || !player.pendingMatch || context.phase === 'match' || context.phase === 'complete') return context;
+  if (context.phase === 'signup' && player.round !== context.signedUpAtRound) return context;
 
   const existing = new Set(context.contextEventQueue.map((ref) => `${ref.phase}:${ref.stageIndex}:${ref.eventId}`));
   const aiRefs = aiEvents
@@ -208,14 +210,14 @@ export function normalizeTournamentContextPhase(player: Player): TournamentConte
   const pendingMatch = player.pendingMatch;
   if (!context) return undefined;
   if (!pendingMatch) return context.phase === 'post-match' ? context : context;
-  const isMatchWeek =
-    pendingMatch.resolveYear === (player.year ?? 1) &&
-    pendingMatch.resolveWeek === (player.week ?? 1);
-  const phase: TournamentContextPhase = isMatchWeek
+  const currentYear = player.year ?? 1;
+  const currentWeek = player.week ?? 1;
+  const weeksUntilMatch = (pendingMatch.resolveYear - currentYear) * 48 + (pendingMatch.resolveWeek - currentWeek);
+  const phase: TournamentContextPhase = weeksUntilMatch <= 0
     ? 'match'
-    : context.phase === 'signup' && player.round === context.signedUpAtRound
-      ? 'signup'
-      : 'pre-match';
+    : weeksUntilMatch === 1
+      ? 'pre-match'
+      : 'signup';
   return {
     ...context,
     stageIndex: pendingMatch.stageIndex,

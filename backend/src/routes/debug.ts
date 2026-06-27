@@ -21,6 +21,8 @@ import type {
   ForcedMatchResult,
   PendingMatch,
   Stage,
+  ClubPlayer,
+  ClubRuntimeState,
 } from '../types.js';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -29,6 +31,7 @@ const STAGES: Stage[] = ['rookie', 'youth', 'second', 'pro', 'retired'];
 const CLUB_TIERS: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
 const FORCED_MATCH_RESULTS: ForcedMatchResult[] = ['win', 'loss'];
 const DEBUG_CORE_STATS = ['intelligence', 'agility', 'experience', 'mentality', 'constitution'] as const;
+const DEBUG_PLAYER_STAT_KEYS = ['agility', 'intelligence', 'mentality', 'experience'] as const;
 
 function isLocalDebugRequest(url: string): boolean {
   const hostname = new URL(url).hostname.toLowerCase();
@@ -54,6 +57,70 @@ function isPendingMatch(value: unknown): value is PendingMatch {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isClubPlayer(value: unknown): value is ClubPlayer {
+  if (!isObject(value)) return false;
+  return typeof value.id === 'string'
+    && typeof value.name === 'string'
+    && typeof value.role === 'string'
+    && isObject(value.stats)
+    && DEBUG_PLAYER_STAT_KEYS.every((key) => Number.isFinite((value.stats as Record<string, unknown>)[key]))
+    && Array.isArray(value.traits)
+    && value.traits.every((trait) => typeof trait === 'string')
+    && typeof value.personality === 'string'
+    && Number.isFinite(value.joinedRound)
+    && typeof value.status === 'string';
+}
+
+function normalizeClubPlayerPatch(player: ClubPlayer, patch: unknown): ClubPlayer {
+  if (!isObject(patch)) return player;
+  const next: ClubPlayer = {
+    ...player,
+    ...('id' in patch && typeof patch.id === 'string' ? { id: patch.id } : {}),
+    ...('name' in patch && typeof patch.name === 'string' ? { name: patch.name } : {}),
+    ...('role' in patch && typeof patch.role === 'string' ? { role: patch.role as ClubPlayer['role'] } : {}),
+    ...('personality' in patch && typeof patch.personality === 'string' ? { personality: patch.personality as ClubPlayer['personality'] } : {}),
+    ...('joinedRound' in patch && Number.isFinite(patch.joinedRound) ? { joinedRound: Math.round(Number(patch.joinedRound)) } : {}),
+    ...('status' in patch && typeof patch.status === 'string' ? { status: patch.status as ClubPlayer['status'] } : {}),
+    ...('internalChemistry' in patch && patch.internalChemistry !== undefined ? { internalChemistry: Number(patch.internalChemistry) } : {}),
+  };
+  if (isObject(patch.stats)) {
+    next.stats = {
+      ...player.stats,
+      ...Object.fromEntries(
+        DEBUG_PLAYER_STAT_KEYS
+          .filter((key) => patch.stats && Number.isFinite((patch.stats as Record<string, unknown>)[key]))
+          .map((key) => [key, Number((patch.stats as Record<string, unknown>)[key])]),
+      ),
+    };
+  }
+  if (Array.isArray((patch as { traits?: unknown }).traits)) {
+    next.traits = (patch as { traits: unknown[] }).traits.filter((trait): trait is string => typeof trait === 'string');
+  }
+  return next;
+}
+
+function applyClubRuntimePatch(runtime: ClubRuntimeState, patch: unknown): ClubRuntimeState {
+  if (!isObject(patch)) return runtime;
+  const next: ClubRuntimeState = { ...runtime };
+  if (patch.clubTrust !== undefined && Number.isFinite(patch.clubTrust)) next.clubTrust = Math.round(Number(patch.clubTrust));
+  if (patch.currentForm !== undefined && Number.isFinite(patch.currentForm)) next.currentForm = Math.round(Number(patch.currentForm));
+  if (patch.rosterStability !== undefined && Number.isFinite(patch.rosterStability)) next.rosterStability = Math.round(Number(patch.rosterStability));
+  if (patch.internalChemistry !== undefined && Number.isFinite(patch.internalChemistry)) next.internalChemistry = Math.round(Number(patch.internalChemistry));
+  if (patch.vrsScore !== undefined && Number.isFinite(patch.vrsScore)) next.vrsScore = Math.round(Number(patch.vrsScore));
+  if (Array.isArray((patch as { fullRoster?: unknown }).fullRoster)) {
+    const roster = (patch as { fullRoster: unknown[] }).fullRoster;
+    next.fullRoster = roster
+      .map((item, index) => {
+        if (isClubPlayer(item)) return item;
+        if (!isObject(item)) return null;
+        const base = runtime.fullRoster[index];
+        return base ? normalizeClubPlayerPatch(base, item) : null;
+      })
+      .filter((item): item is ClubPlayer => Boolean(item));
+  }
+  return next;
 }
 
 app.post('/debug/:sessionId', async (c) => {
@@ -88,6 +155,7 @@ app.post('/debug/:sessionId', async (c) => {
     teamMonthlySalary,
     teamTier,
     teamVrsScore,
+    worldClubUpdates,
   } = body ?? {};
 
   if (money !== undefined && !Number.isFinite(money)) {
@@ -167,6 +235,19 @@ app.post('/debug/:sessionId', async (c) => {
   if (teamVrsScore !== undefined && (!Number.isFinite(teamVrsScore) || teamVrsScore < 0)) {
     return c.json({ error: 'teamVrsScore 必须是非负数字' }, 400);
   }
+  if (worldClubUpdates !== undefined) {
+    if (!isObject(worldClubUpdates)) {
+      return c.json({ error: 'worldClubUpdates 必须是对象' }, 400);
+    }
+    for (const [clubId, patch] of Object.entries(worldClubUpdates)) {
+      if (typeof clubId !== 'string' || !clubId) {
+        return c.json({ error: 'worldClubUpdates 的 key 必须是战队 ID' }, 400);
+      }
+      if (patch !== null && !isObject(patch)) {
+        return c.json({ error: `worldClubUpdates.${clubId} 必须是对象` }, 400);
+      }
+    }
+  }
 
   if (money !== undefined) session.player.stats.money = money;
   if (stage !== undefined) session.player.stage = stage;
@@ -218,6 +299,26 @@ app.post('/debug/:sessionId', async (c) => {
       session.worldClubs = worldClubs;
       session.leaderboard = buildLeaderboard(session);
     }
+  }
+
+  if (worldClubUpdates !== undefined) {
+    const worldClubs = session.worldClubs ?? {
+      season: session.player.year ?? 1,
+      activeClubIds: [],
+      relevantClubIds: [],
+      staticClubIds: [],
+      runtimeByClubId: {},
+      processedTickKeysByClubId: {},
+    };
+    for (const [clubId, patch] of Object.entries(worldClubUpdates as Record<string, unknown>)) {
+      const existing = worldClubs.runtimeByClubId[clubId] ?? createClubRuntimeState(session, clubId);
+      worldClubs.runtimeByClubId[clubId] = applyClubRuntimePatch(existing, patch);
+      if (!worldClubs.activeClubIds.includes(clubId)) {
+        worldClubs.activeClubIds = [...worldClubs.activeClubIds, clubId];
+      }
+    }
+    session.worldClubs = worldClubs;
+    session.leaderboard = buildLeaderboard(session);
   }
 
   session.updatedAt = new Date().toISOString();

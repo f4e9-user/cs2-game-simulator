@@ -686,7 +686,7 @@ export function applyChoice(
         }
         const mapIndex = context.maps.length;
         const mapName = context.mapPool[mapIndex] ?? `Map ${mapIndex + 1}`;
-        tournamentSeriesMapResult = matchSimToTournamentMapResult(mapName, pendingMatchSim);
+        tournamentSeriesMapResult = matchSimToTournamentMapResult(mapIndex + 1, mapName, pendingMatchSim);
         return buildTournamentMapResolveResult(session.player, pendingMatchSim);
       }
     }
@@ -698,7 +698,14 @@ export function applyChoice(
       if (t) {
         const matchPlayer = playerWithSeriesBuffSnapshot(session.player, context);
         pendingMatchSim = aggregateSeriesMatchResult(matchPlayer, context);
-        return buildMatchResolveResult(matchPlayer, pendingMatchSim, t, stageIdx);
+        const result = buildMatchResolveResult(matchPlayer, pendingMatchSim, t, stageIdx);
+        return {
+          ...result,
+          seriesScore: {
+            player: context.playerMapWins,
+            opponent: context.opponentMapWins,
+          },
+        };
       }
     }
 
@@ -770,6 +777,9 @@ export function applyChoice(
         rollBonus: effectiveRollBonus,
       });
   })();
+  const seriesContext = effectiveActiveSequence?.type === 'tournament-series'
+    ? (effectiveActiveSequence.context as unknown as TournamentSeriesContext)
+    : undefined;
   const willStartClubInterviewSequence = !effectiveActiveSequence &&
     eventDef.id === 'chain-club-response' &&
     outcome.success &&
@@ -1492,6 +1502,31 @@ export function applyChoice(
     createdAt: nowIso(),
   };
 
+  if (seriesContext && activeSequenceStep?.dynamicEventKind === 'tournament-map') {
+    const mapIndex = seriesContext.maps.length;
+    const mapNumber = mapIndex + 1;
+    const mapName = seriesContext.mapPool[mapIndex] ?? `Map ${mapNumber}`;
+    result.seriesStepKind = 'map';
+    result.seriesMapIndex = mapNumber;
+    result.seriesMapCount = seriesContext.mapPool.length;
+    result.seriesMapName = mapName;
+  } else if (seriesContext && activeSequenceStep?.dynamicEventKind === 'tournament-break') {
+    const lastMap = seriesContext.maps[seriesContext.maps.length - 1];
+    result.seriesStepKind = 'break';
+    result.seriesMapIndex = lastMap?.mapNumber ?? seriesContext.maps.length;
+    result.seriesMapCount = seriesContext.mapPool.length;
+    result.seriesMapName = lastMap?.mapName;
+  } else if (seriesContext && activeSequenceStep?.dynamicEventKind === 'tournament-series-decider') {
+    result.seriesStepKind = 'final';
+    result.seriesMapCount = seriesContext.mapPool.length;
+    result.seriesMaps = seriesContext.maps.map((map) => ({
+      mapNumber: map.mapNumber,
+      mapName: map.mapName,
+      teamScore: map.teamScore,
+      enemyScore: map.enemyScore,
+    }));
+  }
+
   const ending = checkEnding(nextPlayer, outcome.endRun, outcome.endReason);
 
   // ── 赛事进度 ──
@@ -1766,6 +1801,21 @@ export function applyChoice(
           opponentMapWins,
         } as unknown as Record<string, unknown>,
       };
+    }
+    if (sequenceForAdvance.type === 'tournament-series') {
+      const context = sequenceForAdvance.context as unknown as TournamentSeriesContext;
+      result.seriesScore = {
+        player: context.playerMapWins,
+        opponent: context.opponentMapWins,
+      };
+      if (result.seriesStepKind === 'final') {
+        result.seriesMaps = context.maps.map((map, index) => ({
+          mapNumber: map.mapNumber ?? index + 1,
+          mapName: map.mapName,
+          teamScore: map.teamScore,
+          enemyScore: map.enemyScore,
+        }));
+      }
     }
     const sequenceAdvance = advanceEventSequence(sequenceForAdvance, result, nextPlayer, resolveEventById);
     if (sequenceAdvance.nextStepEvent && sequenceAdvance.sequence) {

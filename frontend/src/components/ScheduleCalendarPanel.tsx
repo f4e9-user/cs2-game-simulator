@@ -199,14 +199,14 @@ export function ScheduleCalendarPanel({
                     {block.detail && block.detail !== block.status && (
                       <div className="schedule-block-detail">{block.detail}</div>
                     )}
-                    {block.action === 'signup' && block.tournamentId && (
+                    {(block.action === 'signup' || block.action === 'preregister') && block.tournamentId && (
                       <button
                         type="button"
                         className="schedule-signup"
                         disabled={busyTournamentId === block.tournamentId}
                         onClick={() => onSignup?.(block.tournamentId!)}
                       >
-                        {busyTournamentId === block.tournamentId ? '…' : '报名'}
+                        {busyTournamentId === block.tournamentId ? '…' : block.action === 'preregister' ? '预报名' : '报名'}
                       </button>
                     )}
                   </div>
@@ -251,6 +251,9 @@ export function ScheduleCalendarPanel({
                     <span>{tournament.brand}</span>
                     <span>{tournament.region ?? '全球'}</span>
                     <span>{tournament.stages.join(' / ')}</span>
+                    {tournament.isEnded && tournament.resultYear != null && tournament.resultWeek != null && (
+                      <span>Y{tournament.resultYear} W{tournament.resultWeek}</span>
+                    )}
                   </div>
                 </div>
                 <div className="schedule-list-side">

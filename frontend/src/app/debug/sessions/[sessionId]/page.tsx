@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatTag } from '@/lib/format';
-import type { GameSession, RulesMeta, SessionSummary, StatKey } from '@/lib/types';
+import type { ClubPlayer, ClubRuntimeState, GameSession, RulesMeta, SessionSummary, StatKey } from '@/lib/types';
 
 type DebugAiStatus = {
   provider: string;
@@ -34,6 +34,29 @@ type FormState = {
   teamTier: string;
   teamVrsScore: string;
   pendingMatch: string;
+};
+
+type ClubPlayerForm = {
+  id: string;
+  name: string;
+  role: ClubPlayer['role'];
+  personality: ClubPlayer['personality'];
+  status: ClubPlayer['status'];
+  joinedRound: string;
+  internalChemistry: string;
+  agility: string;
+  intelligence: string;
+  mentality: string;
+  experience: string;
+  traits: string;
+};
+
+type ClubRuntimeForm = {
+  clubTrust: string;
+  currentForm: string;
+  rosterStability: string;
+  internalChemistry: string;
+  vrsScore: string;
 };
 
 const CORE_STAT_FIELDS: Array<{ key: Exclude<StatKey, 'money'>; label: string; hint: string }> = [
@@ -82,6 +105,33 @@ function initForm(session: GameSession): FormState {
   };
 }
 
+function initClubRuntimeForm(runtime: ClubRuntimeState): ClubRuntimeForm {
+  return {
+    clubTrust: String(runtime.clubTrust ?? 0),
+    currentForm: String(runtime.currentForm ?? 0),
+    rosterStability: String(runtime.rosterStability ?? 0),
+    internalChemistry: String(runtime.internalChemistry ?? 0),
+    vrsScore: String(runtime.vrsScore ?? 0),
+  };
+}
+
+function initClubPlayerForm(player: ClubPlayer): ClubPlayerForm {
+  return {
+    id: player.id,
+    name: player.name,
+    role: player.role,
+    personality: player.personality,
+    status: player.status,
+    joinedRound: String(player.joinedRound ?? 0),
+    internalChemistry: String(player.internalChemistry ?? 50),
+    agility: String(player.stats.agility ?? 0),
+    intelligence: String(player.stats.intelligence ?? 0),
+    mentality: String(player.stats.mentality ?? 0),
+    experience: String(player.stats.experience ?? 0),
+    traits: (player.traits ?? []).join(', '),
+  };
+}
+
 export default function DebugSessionPage() {
   const params = useParams<{ sessionId: string }>();
   const sessionId = params.sessionId;
@@ -94,10 +144,15 @@ export default function DebugSessionPage() {
   const [rulesMeta, setRulesMeta] = useState<RulesMeta | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [clubSaving, setClubSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [testLogMsg, setTestLogMsg] = useState<string | null>(null);
+  const [clubFilter, setClubFilter] = useState('');
+  const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
+  const [clubRuntimeForm, setClubRuntimeForm] = useState<ClubRuntimeForm | null>(null);
+  const [clubRosterForms, setClubRosterForms] = useState<Record<string, ClubPlayerForm>>({});
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -164,6 +219,43 @@ export default function DebugSessionPage() {
         tickKeys: pool.processedTickKeysByClubId[runtime.clubId] ?? [],
       }));
   }, [session]);
+
+  const visibleClubRows = useMemo(() => {
+    const q = clubFilter.trim().toLowerCase();
+    if (!q) return worldClubRows;
+    return worldClubRows.filter((club) => [
+      club.clubId,
+      club.displayName ?? '',
+      club.displayTag ?? '',
+      club.displayRegion ?? '',
+      club.tier,
+    ].some((value) => value.toLowerCase().includes(q)));
+  }, [clubFilter, worldClubRows]);
+
+  const selectedClub = useMemo(() => {
+    if (!session?.worldClubs || !selectedClubId) return null;
+    return session.worldClubs.runtimeByClubId[selectedClubId] ?? null;
+  }, [selectedClubId, session]);
+
+  useEffect(() => {
+    if (!selectedClubId && visibleClubRows.length > 0) {
+      setSelectedClubId(visibleClubRows[0]!.clubId);
+    }
+  }, [selectedClubId, visibleClubRows]);
+
+  useEffect(() => {
+    if (!selectedClub) return;
+    setClubRuntimeForm(initClubRuntimeForm(selectedClub));
+    setClubRosterForms(Object.fromEntries(selectedClub.fullRoster.map((player) => [player.id, initClubPlayerForm(player)])));
+  }, [selectedClubId, selectedClub]);
+
+  useEffect(() => {
+    if (!session?.worldClubs) {
+      setSelectedClubId(null);
+      setClubRuntimeForm(null);
+      setClubRosterForms({});
+    }
+  }, [session?.worldClubs]);
 
   const queuedState = useMemo(() => {
     if (!session) return [];
@@ -233,6 +325,56 @@ export default function DebugSessionPage() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const submitClub = async () => {
+    if (!session?.worldClubs || !selectedClubId || !clubRuntimeForm) return;
+    setClubSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const roster = selectedClub?.fullRoster ?? [];
+      const fullRoster = roster.map((player) => {
+        const draft = clubRosterForms[player.id] ?? initClubPlayerForm(player);
+        return {
+          ...player,
+          id: draft.id.trim() || player.id,
+          name: draft.name.trim() || player.name,
+          role: draft.role,
+          personality: draft.personality,
+          status: draft.status,
+          joinedRound: Number(draft.joinedRound),
+          internalChemistry: Number(draft.internalChemistry),
+          traits: draft.traits.split(',').map((v) => v.trim()).filter(Boolean),
+          stats: {
+            ...player.stats,
+            agility: Number(draft.agility),
+            intelligence: Number(draft.intelligence),
+            mentality: Number(draft.mentality),
+            experience: Number(draft.experience),
+          },
+        };
+      });
+
+      const worldClubUpdates = {
+        [selectedClubId]: {
+          clubTrust: Number(clubRuntimeForm.clubTrust),
+          currentForm: Number(clubRuntimeForm.currentForm),
+          rosterStability: Number(clubRuntimeForm.rosterStability),
+          internalChemistry: Number(clubRuntimeForm.internalChemistry),
+          vrsScore: Number(clubRuntimeForm.vrsScore),
+          fullRoster,
+        },
+      };
+
+      await api.updateDebugWorldClubs(sessionId, { worldClubUpdates });
+      setNotice(`已保存世界战队 ${selectedClubId}`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setClubSaving(false);
     }
   };
 
@@ -764,6 +906,147 @@ export default function DebugSessionPage() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="panel" style={{ marginTop: 16 }}>
+        <div className="panel-title">世界战队编辑</div>
+        {!session.worldClubs ? (
+          <div className="stat-desc">当前 session 没有 worldClubs。</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '280px minmax(0, 1fr)', gap: 14 }}>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <input
+                value={clubFilter}
+                onChange={(e) => setClubFilter(e.target.value)}
+                placeholder="搜索战队"
+                style={inputStyle}
+              />
+              <div style={{ maxHeight: 520, overflow: 'auto', display: 'grid', gap: 8 }}>
+                {visibleClubRows.map((club) => (
+                  <button
+                    key={club.clubId}
+                    type="button"
+                    onClick={() => setSelectedClubId(club.clubId)}
+                    style={{
+                      textAlign: 'left',
+                      padding: 10,
+                      borderRadius: 6,
+                      border: selectedClubId === club.clubId ? '1px solid rgba(255,91,31,0.45)' : '1px solid #21262d',
+                      background: selectedClubId === club.clubId ? 'rgba(255,91,31,0.08)' : '#0d1117',
+                      color: '#e6edf3',
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{club.displayName ?? club.clubId}</div>
+                    <div style={{ fontSize: 11, color: '#8b949e', marginTop: 4 }}>
+                      {club.clubId} · {club.displayTag ?? '(no tag)'} · {club.displayRegion ?? '(no region)'}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#8b949e', marginTop: 4 }}>
+                      trust {club.clubTrust} · form {club.currentForm} · chem {club.internalChemistry} · stab {club.rosterStability} · vrs {club.vrsScore}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selectedClub && clubRuntimeForm ? (
+              <div style={{ display: 'grid', gap: 14 }}>
+                <div className="panel" style={{ marginBottom: 0 }}>
+                  <div className="panel-title">运行态</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 10 }}>
+                    {(['clubTrust', 'currentForm', 'rosterStability', 'internalChemistry', 'vrsScore'] as const).map((key) => (
+                      <label key={key} style={labelStyle}>
+                        <span>{key}</span>
+                        <input
+                          type="number"
+                          value={clubRuntimeForm[key]}
+                          onChange={(e) => setClubRuntimeForm((prev) => prev ? { ...prev, [key]: e.target.value } : prev)}
+                          style={inputStyle}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="panel" style={{ marginBottom: 0 }}>
+                  <div className="panel-title">fullRoster</div>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {selectedClub.fullRoster.map((player) => {
+                      const playerForm = clubRosterForms[player.id] ?? initClubPlayerForm(player);
+                      return (
+                        <div key={player.id} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 10 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+                            <label style={labelStyle}>
+                              <span>id</span>
+                              <input value={playerForm.id} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, id: e.target.value } }))} style={inputStyle} />
+                            </label>
+                            <label style={labelStyle}>
+                              <span>name</span>
+                              <input value={playerForm.name} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, name: e.target.value } }))} style={inputStyle} />
+                            </label>
+                            <label style={labelStyle}>
+                              <span>role</span>
+                              <input value={playerForm.role} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, role: e.target.value as ClubPlayer['role'] } }))} style={inputStyle} />
+                            </label>
+                            <label style={labelStyle}>
+                              <span>personality</span>
+                              <input value={playerForm.personality} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, personality: e.target.value as ClubPlayer['personality'] } }))} style={inputStyle} />
+                            </label>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 8 }}>
+                            {(['agility', 'intelligence', 'mentality', 'experience', 'internalChemistry'] as const).map((key) => (
+                              <label key={key} style={labelStyle}>
+                                <span>{key}</span>
+                                <input
+                                  type="number"
+                                  value={playerForm[key]}
+                                  onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, [key]: e.target.value } }))}
+                                  style={inputStyle}
+                                />
+                              </label>
+                            ))}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                            <label style={labelStyle}>
+                              <span>status</span>
+                              <input value={playerForm.status} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, status: e.target.value as ClubPlayer['status'] } }))} style={inputStyle} />
+                            </label>
+                            <label style={labelStyle}>
+                              <span>joinedRound</span>
+                              <input type="number" value={playerForm.joinedRound} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, joinedRound: e.target.value } }))} style={inputStyle} />
+                            </label>
+                            <label style={labelStyle}>
+                              <span>traits</span>
+                              <input value={playerForm.traits} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, traits: e.target.value } }))} style={inputStyle} />
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button type="button" className="primary-button" onClick={() => void submitClub()} disabled={clubSaving}>
+                    {clubSaving ? '保存中…' : '保存战队'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      if (!selectedClub) return;
+                      setClubRuntimeForm(initClubRuntimeForm(selectedClub));
+                      setClubRosterForms(Object.fromEntries(selectedClub.fullRoster.map((player) => [player.id, initClubPlayerForm(player)])));
+                    }}
+                  >
+                    重置当前战队
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="stat-desc">请选择一个战队。</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

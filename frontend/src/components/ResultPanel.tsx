@@ -116,6 +116,9 @@ export function ResultPanel({
   const tier = result.resultTier;
   const isCrit = tier === 'critical_success' || tier === 'critical_failure';
   const isMatch = Boolean(result.matchStats);
+  const isSeriesMap = result.sequenceType === 'tournament-series' && result.seriesStepKind === 'map' && Boolean(result.matchStats);
+  const isSeriesBreak = result.sequenceType === 'tournament-series' && result.seriesStepKind === 'break';
+  const isSeriesFinal = result.sequenceType === 'tournament-series' && result.seriesStepKind === 'final';
   const pendingShopNarratives = shopResults.some((shop) => !(shop.itemId in shopNarratives));
   const loadingActive = Boolean(settlementLoading || isNarrating || pendingShopNarratives);
 
@@ -187,7 +190,28 @@ export function ResultPanel({
         </span>
       </div>
 
-      {result.matchStats && <MatchStatsCard stats={result.matchStats} won={ok} />}
+      {result.seriesScore ? (
+        <SeriesScoreCard
+          score={result.seriesScore}
+          won={ok}
+          kind={isSeriesFinal ? 'final' : isSeriesBreak ? 'break' : isSeriesMap ? 'map' : 'series'}
+          label={result.seriesMapIndex && result.seriesMapCount
+            ? `Map ${result.seriesMapIndex}/${result.seriesMapCount}${result.seriesMapName ? ` · ${result.seriesMapName}` : ''}`
+            : undefined}
+        />
+      ) : result.matchStats ? (
+        <MatchStatsCard stats={result.matchStats} won={ok} />
+      ) : null}
+
+      {isSeriesMap && result.matchStats && (
+        <MatchStatsCard
+          stats={result.matchStats}
+          won={ok}
+          label={result.seriesMapName && result.seriesMapIndex && result.seriesMapCount
+            ? `Map ${result.seriesMapIndex}/${result.seriesMapCount} · ${result.seriesMapName}`
+            : undefined}
+        />
+      )}
 
       <div className="result-narrative">
         {isNarrating && !streamingNarrative ? (
@@ -393,13 +417,14 @@ function ratingColor(rating: number): string {
   return 'var(--danger)';
 }
 
-function MatchStatsCard({ stats, won }: { stats: MatchStats; won: boolean }) {
+function MatchStatsCard({ stats, won, label }: { stats: MatchStats; won: boolean; label?: string }) {
   const { kills, deaths, assists, headshotRate, rating, teamScore, enemyScore } = stats;
   const kd = (kills / deaths).toFixed(2);
   const hsrPct = Math.round(headshotRate * 100);
 
   return (
     <div className="match-stats-card">
+      {label && <div className="match-stats-head">{label}</div>}
       <div className="match-score-row">
         <span className={`match-score-team ${won ? 'won' : 'lost'}`}>{teamScore}</span>
         <span className="match-score-sep">:</span>
@@ -425,6 +450,34 @@ function MatchStatsCard({ stats, won }: { stats: MatchStats; won: boolean }) {
           </div>
           <div className="match-stat-label">Rating</div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SeriesScoreCard({
+  score,
+  won,
+  kind,
+  label,
+}: {
+  score: { player: number; opponent: number };
+  won: boolean;
+  kind?: 'map' | 'break' | 'final' | 'series';
+  label?: string;
+}) {
+  return (
+    <div className="series-score-strip">
+      <div className="series-score-head">
+        <span className="series-score-label">
+          {kind === 'break' ? '中场休息' : kind === 'final' ? '系列赛结算' : '系列赛比分'}
+        </span>
+        {label && <span className="series-score-map">{label}</span>}
+      </div>
+      <div className="series-score-value">
+        <span className={`series-score-team ${won ? 'won' : 'lost'}`}>{score.player}</span>
+        <span className="series-score-sep">-</span>
+        <span className={`series-score-team ${won ? 'lost' : 'won'}`}>{score.opponent}</span>
       </div>
     </div>
   );

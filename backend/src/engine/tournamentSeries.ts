@@ -2,6 +2,7 @@ import type { Buff, EventDef, EventSequence } from '../types.js';
 import type { Tournament } from '../data/tournaments.js';
 
 export interface TournamentMapResult {
+  mapNumber: number;
   mapName: string;
   won: boolean;
   teamScore: number;

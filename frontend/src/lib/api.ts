@@ -119,8 +119,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  getSession: (sessionId: string) =>
-    request<GameSession>(`/api/game/${sessionId}`),
+  getSession: (sessionId: string, apiToken?: string) =>
+    request<GameSession>(`/api/game/${sessionId}`, {}, apiToken),
   getDebugSession: (sessionId: string) =>
     request<GameSession>(`/api/debug/sessions/${sessionId}`),
   getRulesMeta: () =>
@@ -133,6 +133,11 @@ export const api = {
     request<{ events: unknown[]; message?: string; validCount?: number; invalidCount?: number }>(`/api/debug/ai-events/${sessionId}`),
   updateDebugSession: (sessionId: string, body: Record<string, unknown>) =>
     request<{ player: Player }>(`/api/debug/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateDebugWorldClubs: (sessionId: string, body: Record<string, unknown>) =>
+    request<{ player: Player; leaderboard?: LeaderboardTeam[] }>(`/api/debug/${sessionId}`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),

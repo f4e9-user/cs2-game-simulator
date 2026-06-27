@@ -653,6 +653,131 @@ describe('game routes', () => {
     expect(body.player?.pendingMatch?.qualificationSlotUsed).toBeUndefined();
   });
 
+  it('lets rookie players use A-open tickets to bypass stage requirements when signing up', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'A Open Signup Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        stage: 'rookie',
+        year: 1,
+        week: 4,
+        fame: 10,
+        team: {
+          clubId: 'dragon-raiders',
+          name: '龙腾电竞',
+          tag: 'DRG',
+          region: 'CN',
+          tier: 'semi-pro',
+          monthlySalary: 28,
+          joinedRound: session.player.round,
+        },
+        qualificationSlots: { 'a-open': 1 },
+        teamQualificationSlots: {},
+      },
+      leaderboard: [{ name: '龙腾电竞', tag: 'DRG', region: 'CN', points: 4, isPlayer: true }],
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/signup`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+      body: JSON.stringify({ tournamentId: 'y1-a-open-01' }),
+    }, env);
+    const body = await res.json() as { player?: GameSession['player']; error?: string };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.player?.pendingMatch?.tournamentId).toBe('y1-a-open-01');
+    expect(body.player?.pendingMatch?.qualificationSlotUsed).toBe('a-open');
+  });
+
+  it('allows future preregistration and keeps the middle weeks as normal action weeks', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Future Signup Tester',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string; apiToken: string };
+    const sessionRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
+    const session = await sessionRes.json() as GameSession;
+    const seeded: GameSession = {
+      ...session,
+      player: {
+        ...session.player,
+        stage: 'pro',
+        year: 1,
+        week: 6,
+        fame: 40,
+        team: {
+          clubId: 'dragon-raiders',
+          name: '龙腾电竞',
+          tag: 'DRG',
+          region: 'CN',
+          tier: 'pro',
+          monthlySalary: 65,
+          joinedRound: session.player.round,
+        },
+        qualificationSlots: {},
+        teamQualificationSlots: {},
+      },
+      leaderboard: [{ name: '龙腾电竞', tag: 'DRG', region: 'CN', points: 20, isPlayer: true }],
+    };
+    await env.DB.prepare(
+      'INSERT INTO sessions (id, name, stage, round, status, ending, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    )
+      .bind(seeded.id, seeded.player.name, seeded.player.stage, seeded.player.round, seeded.status, seeded.ending ?? null, JSON.stringify(seeded), seeded.createdAt, seeded.updatedAt)
+      .run();
+
+    const res = await app.request(`https://localhost/api/game/${started.sessionId}/signup`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${started.apiToken}`,
+      },
+      body: JSON.stringify({ tournamentId: 'y1-s-main-02' }),
+    }, env);
+    const body = await res.json() as { player?: GameSession['player']; error?: string };
+
+    expect(res.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.player?.pendingMatch?.tournamentId).toBe('y1-s-main-02');
+    expect(body.player?.pendingMatch?.resolveWeek).toBe(14);
+
+    const updatedRes = await app.request(`https://localhost/api/game/${started.sessionId}`, {
+      headers: { authorization: `Bearer ${started.apiToken}` },
+    }, env);
+    const updated = await updatedRes.json() as GameSession & { careerInsight?: import('../../engine/insights/types.js').CareerInsight };
+    expect(updated.player.tournamentContext?.phase).toBe('signup');
+    expect(updated.careerInsight?.calendarBlocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'commitment', week: 7, status: '等待比赛' }),
+      expect.objectContaining({ kind: 'commitment', week: 13, status: '备赛周' }),
+      expect.objectContaining({ kind: 'match', week: 14, status: '比赛周' }),
+    ]));
+  });
+
   it('returns housing metadata and lets action-phase players switch housing', async () => {
     const env = makeEnv();
     const metaRes = await app.request('https://localhost/api/game/meta/housing');

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { useGameStore } from '@/store/gameStore';
-import type { ClubApplicationSummary, ClubTier, Player, TeamActionResult, Teammate } from '@/lib/types';
+import type { ClubApplicationSummary, ClubTier, Player, Teammate } from '@/lib/types';
 
 const TIER_LABELS: Record<string, string> = {
   youth: '青训',
@@ -281,9 +281,6 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
     const record = weeklyTeamActions[key];
     return record?.year === currentYear && record.week === currentWeek ? record.count : 0;
   };
-  const practiceTotal = Object.entries(weeklyTeamActions)
-    .filter(([key, record]) => key.startsWith('practice:') && record.year === currentYear && record.week === currentWeek)
-    .reduce((sum, [, record]) => sum + record.count, 0);
   const synergy = explainSynergy(player);
   const voiceStatus = player.team ? (trustLabel(player.teamTrust ?? 50)) : null;
 
@@ -315,22 +312,6 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
-    }
-  };
-
-  const runTeamAction = async (
-    key: string,
-    fn: () => Promise<{ player: Player; result: TeamActionResult }>,
-  ) => {
-    setBusyAction(key);
-    setError(null);
-    try {
-      const res = await fn();
-      onPlayerUpdate(res.player);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusyAction(null);
     }
   };
 
@@ -388,9 +369,6 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
   );
 
   const renderTeammateCard = (tm: Teammate) => {
-    const practiceKey = `practice:${tm.id}`;
-    const practiced = teamActionCount(practiceKey) >= 1;
-    const canPractice = enabled && !inMatchWeek && !busyAction && ap >= 55 && !practiced && practiceTotal < 1;
     return (
       <div key={tm.id} className="roster-card">
         <div className="roster-card-top">
@@ -405,15 +383,6 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
           ) : (
             <span className="profile-chip faint">身份未定</span>
           )}
-          <button
-            type="button"
-            className="ghost-button roster-practice-button"
-            disabled={!canPractice}
-            onClick={() => runTeamAction(practiceKey, () => api.teamPractice(sessionId, tm.id, apiToken ?? undefined))}
-            title={practiced ? '本周已加练' : practiceTotal >= 1 ? '本周加练次数已满' : undefined}
-          >
-            {practiced ? '已加练' : practiceTotal >= 1 ? '已满' : ap < 55 ? 'AP 不足' : '加练 -55'}
-          </button>
         </div>
       </div>
     );

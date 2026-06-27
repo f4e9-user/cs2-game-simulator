@@ -443,10 +443,10 @@ export function pickEvent(ctx: EventContext): EventDef | null {
       player.pendingMatch.resolveWeek === (player.week ?? 1);
     if (isMatchWeek) {
       if (excludedTypes?.includes('match')) return null;
-    if ((player.restRounds ?? 0) > 0) {
-      const injuryEvent = buildInjuryAwareTournamentEvent(player.pendingMatch);
-      if (!isExcludedId(injuryEvent)) return injuryEvent;
-      return null;
+      if ((player.restRounds ?? 0) > 0) {
+        const injuryEvent = buildInjuryAwareTournamentEvent(player.pendingMatch);
+        if (!isExcludedId(injuryEvent)) return injuryEvent;
+        return null;
       }
       const e = getEventById(`tournament-${player.pendingMatch.tournamentId}--${player.pendingMatch.stageIndex}`) ?? null;
       if (e && !isExcludedId(e)) return e;
@@ -454,7 +454,6 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     }
     const tournamentContextEvent = pickTournamentContextEvent(player, candidateAiEvents);
     if (tournamentContextEvent && !isExcludedId(tournamentContextEvent)) return tournamentContextEvent;
-    return null;
   }
 
   if (player.forceNextEvent) {

@@ -38,8 +38,10 @@ import { checkTournamentPromotion } from '../engine/stages.js';
 import { checkEnding } from '../engine/ending.js';
 import { buildSessionPayload } from '../engine/insights/index.js';
 import { applyMoneyTransaction } from '../engine/money.js';
+import { advanceWeek } from '../engine/calendar.js';
 import { nowIso } from '../engine/utils.js';
-import { canSignUpForTournament, playerTeamMeetsRequirement, tournamentDirectEntryBypassApplies, tournamentRequiresQualificationSlot } from '../engine/tournamentEligibility.js';
+import { canSignUpForTournament, playerTeamMeetsRequirement, resolveTournamentSignupWeek, tournamentDirectEntryBypassApplies, tournamentRequiresQualificationSlot } from '../engine/tournamentEligibility.js';
+import { tournamentQualificationStageWaiverApplies } from '../engine/tournamentEligibility.js';
 import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime, resolveClubDisplayInfo } from '../engine/worldClubs.js';
 import { createTournamentContext } from '../engine/tournamentContext.js';
 import { buildRoleDebug, buildTeamIdentityDebug } from '../engine/debugPayload.js';
@@ -752,7 +754,9 @@ app.post('/game/:sessionId/signup', async (c) => {
 
   const t = getTournament(tournamentId);
   if (!t) return c.json({ error: '未知赛事' }, 400);
-  if (!t.stages.includes(player.stage)) {
+  const playerPoints = activeSession.leaderboard?.find((t) => t.isPlayer)?.points ?? 0;
+  const stageWaived = tournamentQualificationStageWaiverApplies(player, t, playerPoints);
+  if (!t.stages.includes(player.stage) && !stageWaived) {
     return c.json({ error: '当前阶段不符合参赛资格' }, 400);
   }
   if (
@@ -764,7 +768,6 @@ app.post('/game/:sessionId/signup', async (c) => {
       400,
     );
   }
-  const playerPoints = activeSession.leaderboard?.find((t) => t.isPlayer)?.points ?? 0;
   if (t.pointsRequired !== undefined && playerPoints < t.pointsRequired) {
     return c.json(
       { error: `战队 VRS 不足，需要 ≥ ${t.pointsRequired}（当前 ${playerPoints}）` },
@@ -803,15 +806,24 @@ app.post('/game/:sessionId/signup', async (c) => {
       }
     }
   }
-  const week = player.week ?? 1;
-  const inWindow =
-    t.signupWeeks === 'always' || t.signupWeeks.includes(week);
-  if (!inWindow) {
-    return c.json({ error: '当前周不在该赛事报名窗口' }, 400);
-  }
   if (player.pendingMatch) {
     return c.json({ error: '已经报名了一项赛事，先打完再说' }, 400);
   }
+  const currentYear = player.year ?? 1;
+  const currentWeek = player.week ?? 1;
+  const targetSignupWeek = resolveTournamentSignupWeek(player, t, playerPoints, currentWeek);
+  if (targetSignupWeek === null) {
+    return c.json({ error: '该赛事不在未来 12 周预报名窗口内' }, 400);
+  }
+  if (!canSignUpForTournament(player, t, playerPoints, targetSignupWeek)) {
+    return c.json({ error: '当前资格不足，不能报名该赛事' }, 400);
+  }
+  const tournamentYearMatch = /^y(\d+)-/.exec(t.id);
+  const tournamentYear = tournamentYearMatch ? Number(tournamentYearMatch[1]) : currentYear;
+  let resolveYear = tournamentYear;
+  let resolveWeek = targetSignupWeek;
+  ({ year: resolveYear, week: resolveWeek } = advanceWeek(resolveYear, resolveWeek));
+  ({ year: resolveYear, week: resolveWeek } = advanceWeek(resolveYear, resolveWeek));
   let usedQualificationSlot: string | undefined;
   let usedQualificationSlotOwner: 'player' | 'team' | undefined;
   let usedQualificationSlotExpiresAt: { year: number; week: number } | undefined;
@@ -864,16 +876,6 @@ app.post('/game/:sessionId/signup', async (c) => {
     }
   }
 
-  const year = session.player.year ?? 1;
-  // Schedule the match 2 weeks out so the player gets a full action phase
-  // in the round after signup (week+1 shows the prep event with AP=100),
-  // and AP is only locked on the actual match week (week+2).
-  const adv1 = week >= 48 ? { year: year + 1, week: 1 } : { year, week: week + 1 };
-  const next =
-    adv1.week >= 48
-      ? { year: adv1.year + 1, week: 1 }
-      : { year: adv1.year, week: adv1.week + 1 };
-
   const initialStageIndex = tournamentInitialStageIndex(t, session.player.team?.tier ?? null);
   const pendingMatch = {
     tournamentId: t.id,
@@ -885,8 +887,8 @@ app.post('/game/:sessionId/signup', async (c) => {
     qualificationSlotUsed: usedQualificationSlot,
     qualificationSlotOwner: usedQualificationSlotOwner,
     qualificationSlotExpiresAt: usedQualificationSlotExpiresAt,
-    resolveYear: next.year,
-    resolveWeek: next.week,
+    resolveYear,
+    resolveWeek,
     stageIndex: initialStageIndex,
     stageLosses: 0,
   };

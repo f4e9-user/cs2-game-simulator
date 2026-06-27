@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildYearTournaments } from '../../data/tournaments.js';
-import { canSignUpForTournament } from '../tournamentEligibility.js';
+import { canSignUpForTournament, resolveTournamentSignupWeek, tournamentOpportunityStatus } from '../tournamentEligibility.js';
 import { createSession, initPlayer } from '../gameEngine.js';
 import type { ClubTier, Stage } from '../../types.js';
 
@@ -100,6 +100,18 @@ describe('tournament eligibility', () => {
     expect(canSignUpForTournament(proPlayer, iemOpenQualifier, 20, 6)).toBe(false);
   });
 
+  it('lets rookie players use A-open tickets to bypass stage requirements', () => {
+    const tournaments = buildYearTournaments(1);
+    const aOpen = tournaments.find((tournament) => tournament.id === 'y1-a-open-01');
+    if (!aOpen) throw new Error('missing A-open fixture');
+
+    const rookiePlayer = makePlayer('rookie', 'youth');
+    rookiePlayer.qualificationSlots = { 'a-open': 1 };
+
+    expect(canSignUpForTournament(rookiePlayer, aOpen, 20, 4)).toBe(true);
+    expect(tournamentOpportunityStatus(rookiePlayer, aOpen, 20, 4)).toBe('可报名');
+  });
+
   it('allows ranking bypass for qualifying pro and top teams', () => {
     const tournaments = buildYearTournaments(1);
     const pglClosed = tournaments.find((tournament) => tournament.id === 'y1-s-closed-02');
@@ -115,5 +127,16 @@ describe('tournament eligibility', () => {
     expect(canSignUpForTournament(topPlayer, pglMajor, 150, 48)).toBe(true);
     expect(canSignUpForTournament(proPlayer, iemMain, 95, 11)).toBe(true);
     expect(canSignUpForTournament(lowPlayer, pglClosed, 90, 11)).toBe(false);
+  });
+
+  it('resolves the first future signup window for preregistration', () => {
+    const tournaments = buildYearTournaments(1);
+    const blastBounty = tournaments.find((tournament) => tournament.id === 'y1-s-main-02');
+    if (!blastBounty) throw new Error('missing BLAST Bounty fixture');
+
+    const proPlayer = makePlayer('pro', 'pro');
+
+    expect(resolveTournamentSignupWeek(proPlayer, blastBounty, 20, 6)).toBe(12);
+    expect(tournamentOpportunityStatus(proPlayer, blastBounty, 20, 12)).toBe('可预报名');
   });
 });

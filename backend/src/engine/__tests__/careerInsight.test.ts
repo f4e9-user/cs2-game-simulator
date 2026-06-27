@@ -241,8 +241,8 @@ describe('buildCareerInsight', () => {
         kind: 'opportunity',
         week: 12,
         title: expect.stringContaining('BLAST Bounty'),
-        status: '可报名窗口',
-        action: 'none',
+        status: '可预报名',
+        action: 'preregister',
       }),
     ]));
   });
@@ -310,7 +310,7 @@ describe('buildCareerInsight', () => {
         signedUpAtWeek: 6,
         resolveYear: 5,
         resolveWeek: 10,
-        phase: 'pre-match',
+        phase: 'signup',
         contextEventQueue: [],
         consumedContextEventIds: [],
         pressureLevel: 2,
@@ -320,8 +320,8 @@ describe('buildCareerInsight', () => {
 
     expect(insight.calendarBlocks).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'commitment', week: 6, status: '已报名' }),
-      expect.objectContaining({ kind: 'commitment', week: 7, status: '备赛周' }),
-      expect.objectContaining({ kind: 'commitment', week: 8, status: '备赛周' }),
+      expect.objectContaining({ kind: 'commitment', week: 7, status: '等待比赛' }),
+      expect.objectContaining({ kind: 'commitment', week: 8, status: '等待比赛' }),
       expect.objectContaining({ kind: 'commitment', week: 9, status: '备赛周' }),
       expect.objectContaining({ kind: 'match', week: 10, status: '比赛周' }),
     ]));

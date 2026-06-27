@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { useGameStore } from '@/store/gameStore';
-import type { ActionResult, Player, RulesMeta, Stage, TeamActionResult } from '@/lib/types';
+import type { ActionResult, Player, RulesMeta, Stage, TeamActionResult, Teammate } from '@/lib/types';
 
 interface ActionMeta {
   id: string;
@@ -145,6 +145,8 @@ const TEAM_TRAINING_FOCUS_OPTIONS = [
   { id: 'defense', label: '防守纪律' },
   { id: 'mental', label: '心态稳定' },
 ] as const;
+
+const TEAM_PRACTICE_WEEKLY_TOTAL_LIMIT = 1;
 
 interface Props {
   sessionId: string;
@@ -301,6 +303,7 @@ export function ActionPanel({ sessionId, player, enabled, actionPointMax, injury
   const [error, setError] = useState<string | null>(null);
   const [forcedRestConfirm, setForcedRestConfirm] = useState<{ action: ActionMeta; reason: string } | null>(null);
   const [mode, setMode] = useState<'daily' | 'team'>('daily');
+  const [showPracticePanel, setShowPracticePanel] = useState(false);
   const [teamActionResult, setTeamActionResult] = useState<TeamActionResult | null>(null);
   const apiToken = useGameStore((s) => s.apiToken);
 
@@ -389,6 +392,10 @@ export function ActionPanel({ sessionId, player, enabled, actionPointMax, injury
     player.team &&
     player.roster?.some((tm) => tm.id === player.pendingDeparture?.slotId),
   );
+  const roster = player.roster ?? [];
+  const practiceTotal = Object.entries(weeklyTeamActions)
+    .filter(([key, record]) => key.startsWith('practice:') && record.year === currentYear && record.week === currentWeek)
+    .reduce((sum, [, record]) => sum + record.count, 0);
   const canRetain = Boolean(
     enabled &&
     !panelDisabledReason &&
@@ -402,6 +409,42 @@ export function ActionPanel({ sessionId, player, enabled, actionPointMax, injury
     player.visibleTeamIdentity === 'caller' ||
     player.visibleTeamIdentity === 'star' ||
     player.visibleTeamIdentity === 'star-caller';
+
+  const practiceDisabledReason = (teammateId: string): string | null => {
+    if (!enabled || panelDisabledReason) {
+      return panelDisabledReason || '先完成本回合事件决策';
+    }
+    if (!player.team) return '当前没有战队';
+    if (ap < 55) return 'AP 不足';
+    const practiceKey = `practice:${teammateId}`;
+    if (practiceTotal >= TEAM_PRACTICE_WEEKLY_TOTAL_LIMIT) return `本周加练次数已满（${TEAM_PRACTICE_WEEKLY_TOTAL_LIMIT} 次）`;
+    if (teamActionCount(practiceKey) >= 1) return '本周已经和这名队友加练过';
+    return null;
+  };
+
+  const renderPracticeRow = (tm: Teammate) => {
+    const lockedReason = practiceDisabledReason(tm.id);
+    const canDo = lockedReason === null && busyId === null;
+    return (
+      <div key={tm.id} className="action-item">
+        <button
+          type="button"
+          className="action-btn"
+          disabled={!canDo || busyId === `practice:${tm.id}`}
+          onClick={() => void runTeamAction(`practice:${tm.id}`, () => api.teamPractice(sessionId, tm.id, apiToken ?? undefined))}
+          title={lockedReason ?? undefined}
+        >
+          <div className="action-btn-body">
+            <div className="action-btn-label">和 {tm.name} 加练</div>
+            <div className="action-btn-desc">
+              {tm.role} · 均值 {Math.round(((tm.stats.agility + tm.stats.intelligence + tm.stats.mentality + tm.stats.experience) / 4) * 10) / 10} · 默契 {tm.chemistry ?? 50}
+            </div>
+          </div>
+          <span className="ap-cost-badge">-55 AP</span>
+        </button>
+      </div>
+    );
+  };
 
   const runTeamAction = async (
     actionId: string,
@@ -510,6 +553,36 @@ export function ActionPanel({ sessionId, player, enabled, actionPointMax, injury
         <div className={`action-list ${panelDisabledReason ? 'panel-disabled' : ''}`}>
           <div className="action-group">
             <div className="action-group-title">团队管理</div>
+            <div className="action-item">
+              <button
+                type="button"
+                className="action-btn"
+                disabled={Boolean(panelDisabledReason) || roster.length === 0}
+                onClick={() => setShowPracticePanel((value) => !value)}
+                title={
+                  panelDisabledReason
+                    ?? (roster.length === 0
+                      ? '当前没有可加练的队友'
+                      : undefined)
+                }
+              >
+                <div className="action-btn-body">
+                  <div className="action-btn-label">{showPracticePanel ? '收起加练' : '加练'}</div>
+                  <div className="action-btn-desc">选择一名队友进行加练。</div>
+                </div>
+                <span className="ap-cost-badge">-55 AP</span>
+              </button>
+            </div>
+            {showPracticePanel && (
+              <div className="action-group-subpanel">
+                <div className="action-group-subtitle">队友加练</div>
+                {roster.length > 0 ? (
+                  roster.map((tm) => renderPracticeRow(tm))
+                ) : (
+                  <div className="panel-empty">当前没有可加练的队友</div>
+                )}
+              </div>
+            )}
             {[
               {
                 id: 'team-meeting',

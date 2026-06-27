@@ -260,8 +260,9 @@ export function aggregateSeriesMatchResult(
   };
 }
 
-export function matchSimToTournamentMapResult(mapName: string, sim: MatchSimResult): TournamentMapResult {
+export function matchSimToTournamentMapResult(mapNumber: number, mapName: string, sim: MatchSimResult): TournamentMapResult {
   return {
+    mapNumber,
     mapName,
     won: sim.won,
     teamScore: sim.teamScore,

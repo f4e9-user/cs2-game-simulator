@@ -63,7 +63,7 @@ function PendingDepartureAlert({ player }: { player: Player }) {
     ? `${target!.name} 正在考虑 ${departure.destTeamName} 的邀请，可以在团队管理中尝试挽留。`
     : departure.rumorShown
       ? '队内已经出现转会传闻，但还没有明确是谁在接触外部队伍。等待相关事件确认后，才会开放具名挽留。'
-      : '阵容稳定性正在恶化，暂时只是后台风险；出现转会传闻事件前，玩家不应该知道具体是谁。';
+      : '内部风险升高，转会传闻尚未浮出水面。';
 
   return (
     <div className="profile-alert danger">

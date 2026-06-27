@@ -87,7 +87,7 @@ export interface CalendarBlockInsight {
   tone: 'neutral' | 'available' | 'locked' | 'active' | 'major' | 'warning';
   source: 'career-goal' | 'tournament-calendar' | 'pending-match' | 'tournament-context' | 'system';
   tournamentId?: string;
-  action?: 'signup' | 'withdraw' | 'none';
+  action?: 'signup' | 'preregister' | 'withdraw' | 'none';
   detail?: string;
 }
 

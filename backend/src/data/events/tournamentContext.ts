@@ -22,7 +22,7 @@ export const TOURNAMENT_CONTEXT_EVENTS: TournamentContextEventDef[] = [
     narrative: '报名确认发进群里后，所有人都在等你表态：这次到底是冲成绩，还是当作练兵。',
     stages: ['rookie', 'youth', 'second', 'pro'],
     difficulty: 1,
-    contextPhase: ['signup', 'pre-match'],
+    contextPhase: ['signup'],
     choices: [
       {
         id: 'aim-title',

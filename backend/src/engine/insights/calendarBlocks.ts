@@ -55,11 +55,12 @@ function tournamentBlock(
 ): CalendarBlockInsight {
   const currentYear = session.player.year ?? 1;
   const currentWeek = session.player.week ?? 1;
-  const isCurrentWeek = year === currentYear && week === currentWeek;
+  const isFutureWeek = year > currentYear || (year === currentYear && week > currentWeek);
   const available = canSignUpForTournament(session.player, tournament, playerPoints, week);
-  const canSubmitSignup = available && isCurrentWeek && !session.player.pendingMatch;
+  const actionKind = isFutureWeek ? 'preregister' : 'signup';
+  const canSubmitSignup = available && !session.player.pendingMatch;
   const status = available
-    ? canSubmitSignup ? '可报名' : '可报名窗口'
+    ? isFutureWeek ? '可预报名' : canSubmitSignup ? '可报名' : '可报名窗口'
     : tournamentOpportunityStatus(session.player, tournament, playerPoints, week);
   const tier = tournamentTierLabel(tournament);
   return {
@@ -74,7 +75,7 @@ function tournamentBlock(
     tone: available ? 'available' : tierTone(tier) === 'major' ? 'major' : 'locked',
     source: 'tournament-calendar',
     tournamentId: tournament.id,
-    action: canSubmitSignup ? 'signup' : 'none',
+    action: canSubmitSignup && !session.player.pendingMatch ? actionKind : 'none',
     detail: status,
   };
 }
@@ -117,7 +118,7 @@ function pendingMatchBlocks(player: Player): CalendarBlockInsight[] {
     const { year, week } = addWeeks(currentYear, currentWeek, offset);
     const isSignupWeek = year === signedUpAtYear && week === signedUpAtWeek;
     const isMatchWeek = year === pending.resolveYear && week === pending.resolveWeek;
-    const contextPhase = player.tournamentContext?.phase;
+    const weeksUntilMatch = weekDistance(year, week, pending.resolveYear, pending.resolveWeek);
     blocks.push({
       id: `pending:${pending.tournamentId}:${year}:${week}`,
       year,
@@ -130,11 +131,11 @@ function pendingMatchBlocks(player: Player): CalendarBlockInsight[] {
         ? '比赛周'
         : isSignupWeek
           ? '已报名'
-          : contextPhase === 'pre-match'
+          : weeksUntilMatch === 1
             ? '备赛周'
             : '等待比赛',
       tone: isMatchWeek ? 'active' : 'warning',
-      source: contextPhase ? 'tournament-context' : 'pending-match',
+      source: weeksUntilMatch === 1 || isSignupWeek || isMatchWeek ? 'tournament-context' : 'pending-match',
       tournamentId: pending.tournamentId,
       action: isSignupWeek ? 'withdraw' : 'none',
       detail: `阶段 ${pending.stageIndex + 1}`,

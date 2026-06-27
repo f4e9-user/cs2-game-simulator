@@ -30,14 +30,17 @@ export default function GameSummaryPage() {
     setError(null);
     setSummaryError(null);
 
-    Promise.all([api.getSession(sessionId), api.listTraits()])
+    const token = sessionStorage.getItem(tokenKey) ?? undefined;
+    Promise.all([
+      api.getSession(sessionId, token),
+      api.listTraits(),
+    ])
       .then(async ([sessionRes, traitsRes]) => {
         if (cancelled) return;
         setSession(sessionRes);
         setTraits(traitsRes.traits);
         setEnding(sessionRes.ending ?? null);
 
-        const token = sessionStorage.getItem(tokenKey);
         if (!token) {
           setSummaryError('缺少结算鉴权信息，无法拉取 LLM 总结。');
           return;

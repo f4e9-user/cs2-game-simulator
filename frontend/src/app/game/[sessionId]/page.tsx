@@ -32,6 +32,15 @@ function ResultSummaryBar({ result }: { result: RoundResult }) {
   const ok = result.success;
   const tier = result.resultTier;
   const isMatch = Boolean(result.matchStats);
+  const isSeries = result.sequenceType === 'tournament-series' && Boolean(result.seriesScore);
+  const isBreak = result.seriesStepKind === 'break';
+  const isMapStep = result.seriesStepKind === 'map' && Boolean(result.matchStats);
+  const seriesScoreText = result.seriesScore ? `${result.seriesScore.player}-${result.seriesScore.opponent}` : null;
+  const mapScoreText = result.matchStats ? `${result.matchStats.teamScore}:${result.matchStats.enemyScore}` : null;
+  const seriesLabel = result.seriesMapIndex && result.seriesMapCount
+    ? `Map ${result.seriesMapIndex}/${result.seriesMapCount}`
+    : null;
+  const seriesMapHead = seriesLabel && result.seriesMapName ? `${seriesLabel} · ${result.seriesMapName}` : seriesLabel;
   return (
     <div className="settlement-result-panel result-summary-panel" style={{ marginBottom: 10 }}>
       <div className="result-meta">
@@ -65,6 +74,37 @@ function ResultSummaryBar({ result }: { result: RoundResult }) {
           {result.choiceLabel}
         </span>
       </div>
+      {isSeries && seriesScoreText && (
+        <div className="series-score-strip">
+          <div className="series-score-head">
+            <span className="series-score-label">
+              {isBreak ? '中场休息' : result.seriesStepKind === 'final' ? '系列赛结算' : isMapStep && seriesMapHead ? seriesMapHead : '系列赛比分'}
+            </span>
+            {!isMapStep && seriesLabel && <span className="series-score-map">{seriesLabel}</span>}
+          </div>
+          <div className="series-score-value">
+            <span className="series-score-team">{isMapStep && mapScoreText ? mapScoreText : seriesScoreText}</span>
+          </div>
+          {isMapStep && seriesScoreText && (
+            <div className="series-score-foot">系列赛 {seriesScoreText}</div>
+          )}
+          {isBreak && seriesLabel && seriesScoreText && (
+            <div className="series-score-foot">
+              {seriesLabel} 后当前总比分 {seriesScoreText}
+            </div>
+          )}
+        </div>
+      )}
+      {result.seriesStepKind === 'final' && Array.isArray(result.seriesMaps) && result.seriesMaps.length > 0 && (
+        <div className="series-map-list">
+          {result.seriesMaps.map((map) => (
+            <div key={map.mapNumber} className="series-map-row">
+              <span className="series-map-name">Map {map.mapNumber} {map.mapName}</span>
+              <span className="series-map-score">{map.teamScore}:{map.enemyScore}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { buildYearTournaments, type Tournament } from '../data/tournaments.js';
 import { getTrait } from '../data/traits.js';
 import { getClubProfile } from '../data/clubProfiles.js';
 import { getGate } from './stages.js';
-import { canSeeTournamentOpportunity, tournamentOpportunityStatus } from './tournamentEligibility.js';
+import { canSeeTournamentOpportunity, tournamentOpportunityStatus, tournamentQualificationStageWaiverApplies } from './tournamentEligibility.js';
 
 export interface CareerGoalProgress {
   id: string;
@@ -60,7 +60,9 @@ function tierLabel(tiers: string[]): string {
 }
 
 function isUpcomingTournament(player: Player, tournament: Tournament): boolean {
-  if (!tournament.stages.includes(player.stage)) return false;
+  if (!tournament.stages.includes(player.stage)) {
+    return tournamentQualificationStageWaiverApplies(player, tournament, 0);
+  }
   if (tournament.signupWeeks === 'always') return true;
   const currentWeek = player.week ?? 1;
   return tournament.signupWeeks.some((week) => (

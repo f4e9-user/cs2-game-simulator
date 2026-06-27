@@ -6,6 +6,8 @@ import {
   qualificationSlotOwner,
 } from './qualification.js';
 
+const WEEKS_PER_YEAR = 48;
+
 export function playerTeamMeetsRequirement(playerTeam: PlayerTeam | null, required: ClubTier | null): boolean {
   if (!required) return true;
   if (!playerTeam) return false;
@@ -44,6 +46,16 @@ function hasUsableQualificationSlot(player: Player, tournament: Tournament): boo
     });
 }
 
+export function tournamentQualificationStageWaiverApplies(
+  player: Player,
+  tournament: Tournament,
+  playerPoints: number,
+): boolean {
+  if (!tournament.qualificationTargets?.length) return false;
+  if (tournamentDirectEntryBypassApplies(player.team, tournament, playerPoints)) return true;
+  return hasUsableQualificationSlot(player, tournament);
+}
+
 function tournamentQualificationTierWaiverApplies(
   player: Player,
   tournament: Tournament,
@@ -57,6 +69,15 @@ function tournamentQualificationTierWaiverApplies(
     return teamTier === 'pro' || teamTier === 'top';
   }
   return false;
+}
+
+function parseTournamentYear(tournament: Tournament): number {
+  const match = /^y(\d+)-/.exec(tournament.id);
+  return match ? Number(match[1]) : 1;
+}
+
+function calendarIndex(year: number, week: number): number {
+  return year * WEEKS_PER_YEAR + week;
 }
 
 export function tournamentRequiresQualificationSlot(
@@ -76,7 +97,9 @@ export function canSignUpForTournament(
   playerPoints: number,
   week = player.week ?? 1,
 ): boolean {
-  if (!tournament.stages.includes(player.stage)) return false;
+  const stageOk = tournament.stages.includes(player.stage);
+  const stageWaived = tournamentQualificationStageWaiverApplies(player, tournament, playerPoints);
+  if (!stageOk && !stageWaived) return false;
   if (tournament.fameRequired !== undefined && (player.fame ?? 0) < tournament.fameRequired) return false;
   if (tournament.pointsRequired !== undefined && playerPoints < tournament.pointsRequired) return false;
   if (tournament.signupWeeks !== 'always' && !tournament.signupWeeks.includes(week)) return false;
@@ -97,27 +120,59 @@ export function canSignUpForTournament(
   return true;
 }
 
+export function resolveTournamentSignupWeek(
+  player: Player,
+  tournament: Tournament,
+  playerPoints: number,
+  currentWeek = player.week ?? 1,
+  lookaheadWeeks = 12,
+): number | null {
+  if (tournament.signupWeeks === 'always') {
+    return currentWeek;
+  }
+
+  const currentYear = player.year ?? 1;
+  const currentIndex = calendarIndex(currentYear, currentWeek);
+  const tournamentYear = parseTournamentYear(tournament);
+  const signupDates = tournament.signupWeeks.map((week) => ({
+    year: tournamentYear,
+    week,
+  }));
+
+  const candidate = signupDates
+    .filter(({ year, week }) => {
+      const index = calendarIndex(year, week);
+      return index >= currentIndex && index <= currentIndex + lookaheadWeeks;
+    })
+    .sort((a, b) => calendarIndex(a.year, a.week) - calendarIndex(b.year, b.week))[0];
+
+  if (!candidate) return null;
+  return canSignUpForTournament(player, tournament, playerPoints, candidate.week) ? candidate.week : null;
+}
+
 export function canSeeTournamentOpportunity(
   player: Player,
   tournament: Tournament,
   playerPoints: number,
 ): boolean {
-  const week = tournament.signupWeeks === 'always'
-    ? (player.week ?? 1)
-    : tournament.signupWeeks.find((candidate) => candidate >= (player.week ?? 1));
-  if (week === undefined) return false;
-  return canSignUpForTournament(player, tournament, playerPoints, week);
+  const week = resolveTournamentSignupWeek(player, tournament, playerPoints);
+  return week !== null;
 }
 
 export function tournamentOpportunityStatus(
   player: Player,
   tournament: Tournament,
   playerPoints: number,
-  week = tournament.signupWeeks === 'always'
-    ? (player.week ?? 1)
-    : tournament.signupWeeks.find((candidate) => candidate >= (player.week ?? 1)) ?? (player.week ?? 1),
+  week = resolveTournamentSignupWeek(player, tournament, playerPoints) ?? (player.week ?? 1),
 ): string {
-  if (!tournament.stages.includes(player.stage)) return '阶段不符';
+  const currentYear = player.year ?? 1;
+  const currentWeek = player.week ?? 1;
+  const currentIndex = calendarIndex(currentYear, currentWeek);
+  const weekIndex = calendarIndex(parseTournamentYear(tournament), week);
+  const isFutureWeek = weekIndex > currentIndex;
+  const stageOk = tournament.stages.includes(player.stage);
+  const stageWaived = tournamentQualificationStageWaiverApplies(player, tournament, playerPoints);
+  if (!stageOk && !stageWaived) return '阶段不符';
   if (tournament.fameRequired !== undefined && (player.fame ?? 0) < tournament.fameRequired) {
     return `名气不足 ${player.fame ?? 0}/${tournament.fameRequired}`;
   }
@@ -125,7 +180,7 @@ export function tournamentOpportunityStatus(
     return `VRS 不足 ${playerPoints}/${tournament.pointsRequired}`;
   }
   if (tournament.signupWeeks !== 'always' && !tournament.signupWeeks.includes(week)) {
-    return '未到报名周';
+    return isFutureWeek ? '未到预报名周' : '未到报名周';
   }
   const teamReq = tournament.teamRequirement ?? null;
   const teamOk = playerTeamMeetsRequirement(player.team, teamReq);
@@ -142,5 +197,5 @@ export function tournamentOpportunityStatus(
     if (owner === 'team' && player.team?.teamStatus !== 'starter') return '需首发资格';
     return `缺${qualificationSlotLabel(missing)}`;
   }
-  return '可报名';
+  return isFutureWeek ? '可预报名' : '可报名';
 }
