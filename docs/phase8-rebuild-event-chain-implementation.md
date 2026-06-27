@@ -149,13 +149,21 @@ if (result.eventId === 'chain-rebuild-decision') {
   updated.player.team.coreStatus = status;           // 快照
   // 副作用：
   // player-core → teamTrust↑、薪资↑、teamStatus 'starter'
-  // rotation-risk → teamStatus 'rotation' + 期限
+  // rotation-risk → teamStatus 'rotation' + 期限、薪资↓（见下）
   // transfer-listed → 生成 pendingOffer 离队选项 / 允许申请
-  // benched → teamStatus 'rotation'，fame 微降
+  // benched → teamStatus 'rotation'，fame 微降、薪资↓（见下）
   updated.player.team.rebuildPressure = 0;            // 重置
   // 清链 tag
 }
 ```
+
+**coreStatus → 玩家经济（修复缺口 #7）**：边缘化必须真实作用到收入，资本队"高薪高压"的代价才成立。
+
+- `player-core`：`monthlySalary × 1.1~1.25`（升薪续约感）、teamTrust↑。
+- `contested`：薪资不变（仍需证明）。
+- `rotation-risk` / `benched`：`monthlySalary × 0.7~0.85`（替补减薪），改 `player.team.monthlySalary` 并经 `salaryTracker` 在下次发薪生效。
+- `transfer-listed`：薪资不变，但开放离队（`pendingOffer`/允许申请）。
+- **与破产链联动**：减薪后若玩家进入现金紧张（现有 `cash-strapped`/`broke` 链路），自然衔接 bailout 系统——即"被边缘化→减薪→财务压力"这条因果打通，而非各管各的。减薪幅度计入 §2（cross-cutting）的 `adversityLoad`，受复合压力闸门约束，避免与同期其他负面叠加过猛。
 
 runtime 权威 `coreStatus` / `rebuildCorePlayerId` 在世界侧同步（玩家当前队 runtime）。
 

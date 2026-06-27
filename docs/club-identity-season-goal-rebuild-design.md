@@ -1474,6 +1474,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 > - Phase 8 — [phase8-rebuild-event-chain-implementation.md](./phase8-rebuild-event-chain-implementation.md)（基于 RoundPlan 新机制 c362cdf）
 >
 > **推荐落地总顺序（依赖驱动）**：Phase 1-2 → 3 → 4 → 6-7 → 8 → 5。
+>
+> 跨 Phase 的系统级议题（世界代际更替、复合压力、事件仲裁、统一 rollover 时序、AI 一致性、VRS 长期模型、长程验证、累积迁移、信息披露）见 [cross-cutting-systems-design.md](./cross-cutting-systems-design.md)。
 
 ### Phase 1：俱乐部身份数据
 
