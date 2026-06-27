@@ -87,8 +87,9 @@ export function restoreTournamentSeriesSequenceFromEvent(
   player: Player,
 ): NonNullable<GameSession['activeEventSequence']> | null {
   const mapMatch = /^tournament-series-(.+)-(\d+)-map-(\d+)$/.exec(currentEventId);
+  const breakMatch = /^tournament-series-(.+)-(\d+)-break-(\d+)$/.exec(currentEventId);
   const finalMatch = /^tournament-(.+)--(\d+)$/.exec(currentEventId);
-  const match = mapMatch ?? finalMatch;
+  const match = mapMatch ?? breakMatch ?? finalMatch;
   if (!match) return null;
 
   const tournamentId = match[1]!;
@@ -102,9 +103,11 @@ export function restoreTournamentSeriesSequenceFromEvent(
     stageIndex,
     matchBuffsForScope(player.buffs ?? [], 'series'),
   );
-  const currentIndex = mapMatch
-    ? parseInt(mapMatch[3]!, 10) - 1
-    : sequence.steps.length - 1;
+  // 按事件 id 直接定位步骤索引：map 与 break 交错后，map-N 不再固定在 N-1，
+  // 用 findIndex 比硬算偏移更稳健，也天然支持中场（break）步骤的还原。
+  const currentIndex = sequence.steps.findIndex(
+    (step) => step.generatedEvent?.id === currentEventId,
+  );
   if (currentIndex < 0 || currentIndex >= sequence.steps.length) return null;
 
   const currentStep = sequence.steps[currentIndex];
