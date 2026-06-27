@@ -1465,6 +1465,13 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 
 ## 15. 推荐实施阶段
 
+> 已细化为可实现方案的阶段：
+> - Phase 3 — [phase3-worldplayer-age-implementation.md](./phase3-worldplayer-age-implementation.md)
+> - Phase 4 — [phase4-tournament-instance-implementation.md](./phase4-tournament-instance-implementation.md)
+> - Phase 6-7 — [phase6-7-season-goal-implementation.md](./phase6-7-season-goal-implementation.md)
+>
+> 其余阶段（1/2/5/8）待细化。
+
 ### Phase 1：俱乐部身份数据
 
 目标：
@@ -1495,6 +1502,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 
 ### Phase 3：选手数据库与年龄系统
 
+> 实现细化：[phase3-worldplayer-age-implementation.md](./phase3-worldplayer-age-implementation.md)
+
 目标：
 
 - 为结构化队伍生成或加载 5 名首发选手。
@@ -1511,6 +1520,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 - 玩家年龄不会无预警永久扣除已有核心属性。
 
 ### Phase 4：赛事实例与赛事中心
+
+> 实现细化：[phase4-tournament-instance-implementation.md](./phase4-tournament-instance-implementation.md)
 
 目标：
 
@@ -1547,6 +1558,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 
 ### Phase 6：面试生成赛季目标
 
+> 实现细化：[phase6-7-season-goal-implementation.md](./phase6-7-season-goal-implementation.md)（与 Phase 7 合并）
+
 目标：
 
 - 签约时生成 `seasonGoal`。
@@ -1560,6 +1573,8 @@ UI 应显示情报可信度，例如“公开信息”“推测分析”“已�
 - 目标能随新赛季刷新。
 
 ### Phase 7：赛季目标评估
+
+> 实现细化：[phase6-7-season-goal-implementation.md](./phase6-7-season-goal-implementation.md)（与 Phase 6 合并）
 
 目标：
 
