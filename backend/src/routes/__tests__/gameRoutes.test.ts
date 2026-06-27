@@ -1115,6 +1115,81 @@ describe('game routes', () => {
     expect(body.player?.stats.money).toBe(20);
   });
 
+  it('updates the player team and roster through the local debug endpoint', async () => {
+    const env = makeEnv();
+    const startRes = await app.request('https://localhost/api/game/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Team Debugger',
+        traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      }),
+    }, env);
+    const started = await startRes.json() as { sessionId: string };
+
+    const debugRes = await app.request(`https://localhost/api/debug/${started.sessionId}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        playerTeam: {
+          clubId: 'club-debug-unit',
+          name: '调试战队',
+          tag: 'DBG',
+          region: 'CN',
+          tier: 'semi-pro',
+          monthlySalary: 42,
+          joinedRound: 8,
+          teamStatus: 'starter',
+          joinMode: 'fill-vacancy',
+          joinReason: 'debug-only',
+        },
+        playerRoster: [{
+          id: 'tm-debug-1',
+          name: 'Alpha',
+          role: 'IGL',
+          personality: 'supportive',
+          growthSpent: 2,
+          chemistry: 73,
+          visibleIdentity: 'caller',
+          identitySinceRound: 8,
+          stats: {
+            agility: 10,
+            intelligence: 11,
+            mentality: 12,
+            experience: 13,
+          },
+          traits: ['igl', 'tactical'],
+        }],
+      }),
+    }, env);
+    const body = await debugRes.json() as { player?: GameSession['player']; error?: string; leaderboard?: GameSession['leaderboard'] };
+
+    expect(debugRes.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.player?.team).toMatchObject({
+      clubId: 'club-debug-unit',
+      name: '调试战队',
+      tag: 'DBG',
+      region: 'CN',
+      tier: 'semi-pro',
+      monthlySalary: 42,
+      joinedRound: 8,
+      teamStatus: 'starter',
+      joinMode: 'fill-vacancy',
+      joinReason: 'debug-only',
+    });
+    expect(body.player?.roster).toHaveLength(1);
+    expect(body.player?.roster?.[0]).toMatchObject({
+      id: 'tm-debug-1',
+      name: 'Alpha',
+      role: 'IGL',
+      personality: 'supportive',
+      chemistry: 73,
+      visibleIdentity: 'caller',
+    });
+    expect(body.leaderboard?.find((row) => row.isPlayer)?.clubId).toBe('club-debug-unit');
+  });
+
   it('refreshes leaderboard VRS after debug updates the player club VRS', async () => {
     const env = makeEnv();
     const startRes = await app.request('https://localhost/api/game/start', {

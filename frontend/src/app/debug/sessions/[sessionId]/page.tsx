@@ -5,7 +5,19 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatTag } from '@/lib/format';
-import type { ClubPlayer, ClubRuntimeState, GameSession, RulesMeta, SessionSummary, StatKey } from '@/lib/types';
+import type {
+  ClubPlayer,
+  ClubRuntimeState,
+  ClubTier,
+  GameSession,
+  PlayerJoinMode,
+  PlayerTeam,
+  RulesMeta,
+  SessionSummary,
+  StatKey,
+  Teammate,
+  VisiblePlayerTeamIdentity,
+} from '@/lib/types';
 
 type DebugAiStatus = {
   provider: string;
@@ -34,6 +46,36 @@ type FormState = {
   teamTier: string;
   teamVrsScore: string;
   pendingMatch: string;
+};
+
+type PlayerTeamForm = {
+  clubId: string;
+  name: string;
+  tag: string;
+  region: string;
+  tier: ClubTier;
+  monthlySalary: string;
+  joinedRound: string;
+  teamStatus: '' | NonNullable<PlayerTeam['teamStatus']>;
+  teamStatusUntilRound: string;
+  joinMode: '' | NonNullable<PlayerTeam['joinMode']>;
+  joinReason: string;
+};
+
+type PlayerRosterForm = {
+  id: string;
+  name: string;
+  role: Teammate['role'];
+  personality: Teammate['personality'];
+  growthSpent: string;
+  chemistry: string;
+  visibleIdentity: '' | VisiblePlayerTeamIdentity;
+  identitySinceRound: string;
+  agility: string;
+  intelligence: string;
+  mentality: string;
+  experience: string;
+  traits: string;
 };
 
 type ClubPlayerForm = {
@@ -132,6 +174,40 @@ function initClubPlayerForm(player: ClubPlayer): ClubPlayerForm {
   };
 }
 
+function initPlayerTeamForm(team: PlayerTeam | null): PlayerTeamForm {
+  return {
+    clubId: team?.clubId ?? '',
+    name: team?.name ?? '',
+    tag: team?.tag ?? '',
+    region: team?.region ?? '',
+    tier: team?.tier ?? 'youth',
+    monthlySalary: team ? String(team.monthlySalary ?? 0) : '',
+    joinedRound: team ? String(team.joinedRound ?? 0) : '',
+    teamStatus: team?.teamStatus ?? '',
+    teamStatusUntilRound: team?.teamStatusUntilRound !== undefined ? String(team.teamStatusUntilRound) : '',
+    joinMode: team?.joinMode ?? '',
+    joinReason: team?.joinReason ?? '',
+  };
+}
+
+function initPlayerRosterForm(player: Teammate): PlayerRosterForm {
+  return {
+    id: player.id,
+    name: player.name,
+    role: player.role,
+    personality: player.personality,
+    growthSpent: String(player.growthSpent ?? 0),
+    chemistry: String(player.chemistry ?? 50),
+    visibleIdentity: player.visibleIdentity ?? '',
+    identitySinceRound: player.identitySinceRound !== undefined ? String(player.identitySinceRound) : '',
+    agility: String(player.stats.agility ?? 0),
+    intelligence: String(player.stats.intelligence ?? 0),
+    mentality: String(player.stats.mentality ?? 0),
+    experience: String(player.stats.experience ?? 0),
+    traits: (player.traits ?? []).join(', '),
+  };
+}
+
 export default function DebugSessionPage() {
   const params = useParams<{ sessionId: string }>();
   const sessionId = params.sessionId;
@@ -145,6 +221,7 @@ export default function DebugSessionPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [clubSaving, setClubSaving] = useState(false);
+  const [playerTeamSaving, setPlayerTeamSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
@@ -153,6 +230,9 @@ export default function DebugSessionPage() {
   const [selectedClubId, setSelectedClubId] = useState<string | null>(null);
   const [clubRuntimeForm, setClubRuntimeForm] = useState<ClubRuntimeForm | null>(null);
   const [clubRosterForms, setClubRosterForms] = useState<Record<string, ClubPlayerForm>>({});
+  const [playerTeamEnabled, setPlayerTeamEnabled] = useState(false);
+  const [playerTeamForm, setPlayerTeamForm] = useState<PlayerTeamForm | null>(null);
+  const [playerRosterForms, setPlayerRosterForms] = useState<PlayerRosterForm[]>([]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -248,6 +328,13 @@ export default function DebugSessionPage() {
     setClubRuntimeForm(initClubRuntimeForm(selectedClub));
     setClubRosterForms(Object.fromEntries(selectedClub.fullRoster.map((player) => [player.id, initClubPlayerForm(player)])));
   }, [selectedClubId, selectedClub]);
+
+  useEffect(() => {
+    if (!session) return;
+    setPlayerTeamEnabled(Boolean(session.player.team));
+    setPlayerTeamForm(initPlayerTeamForm(session.player.team));
+    setPlayerRosterForms((session.player.roster ?? []).map((player) => initPlayerRosterForm(player)));
+  }, [session]);
 
   useEffect(() => {
     if (!session?.worldClubs) {
@@ -378,6 +465,86 @@ export default function DebugSessionPage() {
     }
   };
 
+  const submitPlayerTeam = async () => {
+    if (!session || !playerTeamForm) return;
+    setPlayerTeamSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const currentTeam = session.player.team;
+      const currentRoster = session.player.roster ?? [];
+      const body: Record<string, unknown> = {};
+
+      if (!playerTeamEnabled) {
+        body.playerTeam = null;
+        body.playerRoster = null;
+      } else {
+        body.playerTeam = {
+          clubId: playerTeamForm.clubId.trim() || currentTeam?.clubId || '',
+          name: playerTeamForm.name.trim() || currentTeam?.name || '',
+          tag: playerTeamForm.tag.trim() || currentTeam?.tag || '',
+          region: playerTeamForm.region.trim() || currentTeam?.region || '',
+          tier: playerTeamForm.tier,
+          monthlySalary: playerTeamForm.monthlySalary.trim() ? Number(playerTeamForm.monthlySalary) : (currentTeam?.monthlySalary ?? 0),
+          joinedRound: playerTeamForm.joinedRound.trim() ? Number(playerTeamForm.joinedRound) : (currentTeam?.joinedRound ?? session.player.round),
+          ...(playerTeamForm.teamStatus ? { teamStatus: playerTeamForm.teamStatus } : {}),
+          ...(playerTeamForm.teamStatusUntilRound.trim() ? { teamStatusUntilRound: Number(playerTeamForm.teamStatusUntilRound) } : {}),
+          ...(playerTeamForm.joinMode ? { joinMode: playerTeamForm.joinMode } : {}),
+          ...(playerTeamForm.joinReason.trim() ? { joinReason: playerTeamForm.joinReason.trim() } : {}),
+        };
+        body.playerRoster = playerRosterForms.map((draft, index) => {
+          const base = currentRoster[index];
+          return {
+            id: draft.id.trim() || base?.id || `teammate-${index + 1}`,
+            name: draft.name.trim() || base?.name || `队友${index + 1}`,
+            role: draft.role,
+            personality: draft.personality,
+            growthSpent: draft.growthSpent.trim() ? Number(draft.growthSpent) : (base?.growthSpent ?? 0),
+            chemistry: draft.chemistry.trim() ? Number(draft.chemistry) : (base?.chemistry ?? 50),
+            ...(draft.visibleIdentity ? { visibleIdentity: draft.visibleIdentity } : base?.visibleIdentity ? { visibleIdentity: base.visibleIdentity } : {}),
+            ...(draft.identitySinceRound.trim() ? { identitySinceRound: Number(draft.identitySinceRound) } : base?.identitySinceRound !== undefined ? { identitySinceRound: base.identitySinceRound } : {}),
+            stats: {
+              agility: draft.agility.trim() ? Number(draft.agility) : (base?.stats.agility ?? 0),
+              intelligence: draft.intelligence.trim() ? Number(draft.intelligence) : (base?.stats.intelligence ?? 0),
+              mentality: draft.mentality.trim() ? Number(draft.mentality) : (base?.stats.mentality ?? 0),
+              experience: draft.experience.trim() ? Number(draft.experience) : (base?.stats.experience ?? 0),
+            },
+            traits: draft.traits.split(',').map((v) => v.trim()).filter(Boolean),
+          };
+        });
+      }
+
+      await api.updateDebugSession(sessionId, body);
+      setNotice('已保存玩家战队');
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPlayerTeamSaving(false);
+    }
+  };
+
+  const addRosterRow = () => {
+    setPlayerRosterForms((prev) => [
+      ...prev,
+      {
+        id: `teammate-${prev.length + 1}`,
+        name: `队友${prev.length + 1}`,
+        role: 'Support',
+        personality: 'grinder',
+        growthSpent: '0',
+        chemistry: '50',
+        visibleIdentity: '',
+        identitySinceRound: '',
+        agility: '0',
+        intelligence: '0',
+        mentality: '0',
+        experience: '0',
+        traits: '',
+      },
+    ]);
+  };
+
   const writeTestLog = async () => {
     setTestLogMsg(null);
     try {
@@ -386,6 +553,13 @@ export default function DebugSessionPage() {
     } catch (e) {
       setTestLogMsg(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const resetPlayerTeamForm = () => {
+    if (!session) return;
+    setPlayerTeamEnabled(Boolean(session.player.team));
+    setPlayerTeamForm(initPlayerTeamForm(session.player.team));
+    setPlayerRosterForms((session.player.roster ?? []).map((player) => initPlayerRosterForm(player)));
   };
 
   if (loading && !session) {
@@ -1047,6 +1221,184 @@ export default function DebugSessionPage() {
             )}
           </div>
         )}
+      </div>
+
+      <div className="panel" style={{ marginTop: 16 }}>
+        <div className="panel-title">玩家战队编辑</div>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <label style={{ ...labelStyle, alignItems: 'flex-start' }}>
+            <span>启用战队编辑</span>
+            <input
+              type="checkbox"
+              checked={playerTeamEnabled}
+              onChange={(e) => setPlayerTeamEnabled(e.target.checked)}
+            />
+            <span style={hintStyle}>{playerTeamEnabled ? '会写入 player.team 和 player.roster。' : '关闭后会清空玩家战队和队友阵容。'}</span>
+          </label>
+
+          {playerTeamForm && playerTeamEnabled && (
+            <>
+              <div style={sectionStyle}>
+                <div style={sectionHeaderStyle}>
+                  <span>战队基础信息</span>
+                  <span>空白会沿用当前值。</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+                  <label style={labelStyle}>
+                    <span>clubId</span>
+                    <input value={playerTeamForm.clubId} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, clubId: e.target.value } : prev)} style={inputStyle} />
+                  </label>
+                  <label style={labelStyle}>
+                    <span>name</span>
+                    <input value={playerTeamForm.name} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, name: e.target.value } : prev)} style={inputStyle} />
+                  </label>
+                  <label style={labelStyle}>
+                    <span>tag</span>
+                    <input value={playerTeamForm.tag} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, tag: e.target.value } : prev)} style={inputStyle} />
+                  </label>
+                  <label style={labelStyle}>
+                    <span>region</span>
+                    <input value={playerTeamForm.region} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, region: e.target.value } : prev)} style={inputStyle} />
+                  </label>
+                  <label style={labelStyle}>
+                    <span>tier</span>
+                    <select value={playerTeamForm.tier} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, tier: e.target.value as ClubTier } : prev)} style={inputStyle}>
+                      {['youth', 'semi-pro', 'pro', 'top'].map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                  </label>
+                  <label style={labelStyle}>
+                    <span>monthlySalary</span>
+                    <input type="number" value={playerTeamForm.monthlySalary} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, monthlySalary: e.target.value } : prev)} style={inputStyle} />
+                  </label>
+                  <label style={labelStyle}>
+                    <span>joinedRound</span>
+                    <input type="number" value={playerTeamForm.joinedRound} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, joinedRound: e.target.value } : prev)} style={inputStyle} />
+                  </label>
+                  <label style={labelStyle}>
+                    <span>teamStatus</span>
+                    <select value={playerTeamForm.teamStatus} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, teamStatus: e.target.value as PlayerTeamForm['teamStatus'] } : prev)} style={inputStyle}>
+                      <option value="">(继承)</option>
+                      <option value="starter">starter</option>
+                      <option value="trial">trial</option>
+                      <option value="rotation">rotation</option>
+                    </select>
+                  </label>
+                  <label style={labelStyle}>
+                    <span>teamStatusUntilRound</span>
+                    <input type="number" value={playerTeamForm.teamStatusUntilRound} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, teamStatusUntilRound: e.target.value } : prev)} style={inputStyle} />
+                  </label>
+                  <label style={labelStyle}>
+                    <span>joinMode</span>
+                    <select value={playerTeamForm.joinMode} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, joinMode: e.target.value as PlayerJoinMode | '' } : prev)} style={inputStyle}>
+                      <option value="">(继承)</option>
+                      <option value="replace-starter">replace-starter</option>
+                      <option value="fill-vacancy">fill-vacancy</option>
+                      <option value="trial-sixth">trial-sixth</option>
+                      <option value="rotation">rotation</option>
+                    </select>
+                  </label>
+                  <label style={{ ...labelStyle, gridColumn: '1 / -1' }}>
+                    <span>joinReason</span>
+                    <textarea value={playerTeamForm.joinReason} onChange={(e) => setPlayerTeamForm((prev) => prev ? { ...prev, joinReason: e.target.value } : prev)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
+                  </label>
+                </div>
+              </div>
+
+              <div style={sectionStyle}>
+                <div style={sectionHeaderStyle}>
+                  <span>队友阵容</span>
+                  <span>{playerRosterForms.length} 人</span>
+                </div>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {playerRosterForms.map((player, index) => (
+                    <div key={`${player.id}-${index}`} style={{ border: '1px solid #21262d', borderRadius: 6, padding: 10, display: 'grid', gap: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                        <div style={{ color: '#e6edf3', fontSize: 13, fontWeight: 600 }}>队友 {index + 1}</div>
+                        <button type="button" className="ghost-button" onClick={() => setPlayerRosterForms((prev) => prev.filter((_, i) => i !== index))}>
+                          删除
+                        </button>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+                        <label style={labelStyle}>
+                          <span>id</span>
+                          <input value={player.id} onChange={(e) => setPlayerRosterForms((prev) => prev.map((item, i) => i === index ? { ...item, id: e.target.value } : item))} style={inputStyle} />
+                        </label>
+                        <label style={labelStyle}>
+                          <span>name</span>
+                          <input value={player.name} onChange={(e) => setPlayerRosterForms((prev) => prev.map((item, i) => i === index ? { ...item, name: e.target.value } : item))} style={inputStyle} />
+                        </label>
+                        <label style={labelStyle}>
+                          <span>role</span>
+                          <input value={player.role} onChange={(e) => setPlayerRosterForms((prev) => prev.map((item, i) => i === index ? { ...item, role: e.target.value as Teammate['role'] } : item))} style={inputStyle} />
+                        </label>
+                        <label style={labelStyle}>
+                          <span>personality</span>
+                          <input value={player.personality} onChange={(e) => setPlayerRosterForms((prev) => prev.map((item, i) => i === index ? { ...item, personality: e.target.value as Teammate['personality'] } : item))} style={inputStyle} />
+                        </label>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 8 }}>
+                        {(['agility', 'intelligence', 'mentality', 'experience', 'growthSpent'] as const).map((key) => (
+                          <label key={key} style={labelStyle}>
+                            <span>{key}</span>
+                            <input
+                              type="number"
+                              value={player[key]}
+                              onChange={(e) => setPlayerRosterForms((prev) => prev.map((item, i) => i === index ? { ...item, [key]: e.target.value } : item))}
+                              style={inputStyle}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                        <label style={labelStyle}>
+                          <span>chemistry</span>
+                          <input type="number" value={player.chemistry} onChange={(e) => setPlayerRosterForms((prev) => prev.map((item, i) => i === index ? { ...item, chemistry: e.target.value } : item))} style={inputStyle} />
+                        </label>
+                        <label style={labelStyle}>
+                          <span>visibleIdentity</span>
+                          <select value={player.visibleIdentity} onChange={(e) => setPlayerRosterForms((prev) => prev.map((item, i) => i === index ? { ...item, visibleIdentity: e.target.value as PlayerRosterForm['visibleIdentity'] } : item))} style={inputStyle}>
+                            <option value="">(空)</option>
+                            <option value="caller">caller</option>
+                            <option value="star">star</option>
+                            <option value="glue">glue</option>
+                            <option value="problem">problem</option>
+                            <option value="veteran">veteran</option>
+                            <option value="rookie">rookie</option>
+                            <option value="star-caller">star-caller</option>
+                          </select>
+                        </label>
+                        <label style={labelStyle}>
+                          <span>identitySinceRound</span>
+                          <input type="number" value={player.identitySinceRound} onChange={(e) => setPlayerRosterForms((prev) => prev.map((item, i) => i === index ? { ...item, identitySinceRound: e.target.value } : item))} style={inputStyle} />
+                        </label>
+                      </div>
+                      <label style={labelStyle}>
+                        <span>traits</span>
+                        <input value={player.traits} onChange={(e) => setPlayerRosterForms((prev) => prev.map((item, i) => i === index ? { ...item, traits: e.target.value } : item))} style={inputStyle} />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" className="ghost-button" onClick={addRosterRow}>新增队友</button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {!playerTeamEnabled && (
+            <div className="stat-desc">玩家当前没有战队时，可以先开启编辑再填入战队和队友信息。</div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button type="button" className="primary-button" onClick={() => void submitPlayerTeam()} disabled={playerTeamSaving}>
+              {playerTeamSaving ? '保存中…' : '保存玩家战队'}
+            </button>
+            <button type="button" className="ghost-button" onClick={resetPlayerTeamForm}>
+              重置玩家战队
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

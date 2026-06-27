@@ -6,6 +6,8 @@ import { makeStorage } from '../storage/index.js';
 import { createClubRuntimeState } from '../engine/worldClubs.js';
 import { buildSessionPayload } from '../engine/insights/index.js';
 import { buildRoleDebug, buildTeamIdentityDebug } from '../engine/debugPayload.js';
+import { detectRoleOverlap } from '../engine/team.js';
+import { refreshVisibleTeamIdentities } from '../engine/teamIdentity.js';
 import {
   aiEventCacheKey,
   aiEventsFromCache,
@@ -23,12 +25,19 @@ import type {
   Stage,
   ClubPlayer,
   ClubRuntimeState,
+  PlayerTeam,
+  Teammate,
 } from '../types.js';
 
 const app = new Hono<{ Bindings: Env }>();
 
 const STAGES: Stage[] = ['rookie', 'youth', 'second', 'pro', 'retired'];
 const CLUB_TIERS: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
+const TEAM_STATUSES: NonNullable<PlayerTeam['teamStatus']>[] = ['starter', 'trial', 'rotation'];
+const PLAYER_JOIN_MODES: NonNullable<PlayerTeam['joinMode']>[] = ['replace-starter', 'fill-vacancy', 'trial-sixth', 'rotation'];
+const TEAM_PERSONALITIES = ['strict', 'supportive', 'star', 'grinder', 'drama'] as const;
+const TEAM_ROLES = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'] as const;
+const TEAM_IDENTITIES = ['caller', 'star', 'glue', 'problem', 'veteran', 'rookie', 'star-caller'] as const;
 const FORCED_MATCH_RESULTS: ForcedMatchResult[] = ['win', 'loss'];
 const DEBUG_CORE_STATS = ['intelligence', 'agility', 'experience', 'mentality', 'constitution'] as const;
 const DEBUG_PLAYER_STAT_KEYS = ['agility', 'intelligence', 'mentality', 'experience'] as const;
@@ -101,6 +110,96 @@ function normalizeClubPlayerPatch(player: ClubPlayer, patch: unknown): ClubPlaye
   return next;
 }
 
+function isTeammate(value: unknown): value is Teammate {
+  if (!isObject(value)) return false;
+  return typeof value.id === 'string'
+    && typeof value.name === 'string'
+    && typeof value.role === 'string'
+    && TEAM_ROLES.includes(value.role as Teammate['role'])
+    && typeof value.personality === 'string'
+    && TEAM_PERSONALITIES.includes(value.personality as NonNullable<Teammate['personality']>)
+    && isObject(value.stats)
+    && DEBUG_PLAYER_STAT_KEYS.every((key) => Number.isFinite((value.stats as Record<string, unknown>)[key]))
+    && Array.isArray(value.traits)
+    && value.traits.every((trait) => typeof trait === 'string')
+    && Number.isFinite(value.growthSpent)
+    && (value.chemistry === undefined || Number.isFinite(value.chemistry))
+    && (value.visibleIdentity === undefined || (typeof value.visibleIdentity === 'string' && TEAM_IDENTITIES.includes(value.visibleIdentity as Teammate['visibleIdentity'])))
+    && (value.identitySinceRound === undefined || Number.isInteger(value.identitySinceRound));
+}
+
+function normalizeTeammatePatch(teammate: Teammate, patch: unknown): Teammate {
+  if (!isObject(patch)) return teammate;
+  const next: Teammate = {
+    ...teammate,
+    ...('id' in patch && typeof patch.id === 'string' ? { id: patch.id } : {}),
+    ...('name' in patch && typeof patch.name === 'string' ? { name: patch.name } : {}),
+    ...('role' in patch && typeof patch.role === 'string' ? { role: patch.role as Teammate['role'] } : {}),
+    ...('personality' in patch && typeof patch.personality === 'string' ? { personality: patch.personality as Teammate['personality'] } : {}),
+    ...('growthSpent' in patch && Number.isFinite(patch.growthSpent) ? { growthSpent: Math.max(0, Math.round(Number(patch.growthSpent))) } : {}),
+    ...('chemistry' in patch && Number.isFinite(patch.chemistry) ? { chemistry: Math.round(Number(patch.chemistry)) } : {}),
+    ...('visibleIdentity' in patch && typeof patch.visibleIdentity === 'string' ? { visibleIdentity: patch.visibleIdentity as Teammate['visibleIdentity'] } : {}),
+    ...('identitySinceRound' in patch && Number.isInteger(patch.identitySinceRound) ? { identitySinceRound: Math.round(Number(patch.identitySinceRound)) } : {}),
+  };
+  if (isObject(patch.stats)) {
+    next.stats = {
+      ...teammate.stats,
+      ...Object.fromEntries(
+        DEBUG_PLAYER_STAT_KEYS
+          .filter((key) => patch.stats && Number.isFinite((patch.stats as Record<string, unknown>)[key]))
+          .map((key) => [key, Number((patch.stats as Record<string, unknown>)[key])]),
+      ),
+    };
+  }
+  if (Array.isArray((patch as { traits?: unknown }).traits)) {
+    next.traits = (patch as { traits: unknown[] }).traits.filter((trait): trait is string => typeof trait === 'string');
+  }
+  return next;
+}
+
+function normalizePlayerTeamPatch(team: PlayerTeam | null, patch: unknown): PlayerTeam | null {
+  if (patch === null) return null;
+  if (!isObject(patch)) return team;
+  const base: PlayerTeam = team ?? {
+    clubId: '',
+    name: '',
+    tag: '',
+    region: '',
+    tier: 'youth',
+    monthlySalary: 0,
+    joinedRound: 0,
+  };
+  const next: PlayerTeam = {
+    ...base,
+    ...('clubId' in patch && typeof patch.clubId === 'string' ? { clubId: patch.clubId } : {}),
+    ...('name' in patch && typeof patch.name === 'string' ? { name: patch.name } : {}),
+    ...('tag' in patch && typeof patch.tag === 'string' ? { tag: patch.tag } : {}),
+    ...('region' in patch && typeof patch.region === 'string' ? { region: patch.region } : {}),
+    ...('tier' in patch && typeof patch.tier === 'string' ? { tier: patch.tier as ClubTier } : {}),
+    ...('monthlySalary' in patch && Number.isFinite(patch.monthlySalary) ? { monthlySalary: Math.round(Number(patch.monthlySalary)) } : {}),
+    ...('joinedRound' in patch && Number.isFinite(patch.joinedRound) ? { joinedRound: Math.round(Number(patch.joinedRound)) } : {}),
+    ...('teamStatus' in patch && typeof patch.teamStatus === 'string' ? { teamStatus: patch.teamStatus as PlayerTeam['teamStatus'] } : {}),
+    ...('teamStatusUntilRound' in patch && Number.isInteger(patch.teamStatusUntilRound) ? { teamStatusUntilRound: Math.round(Number(patch.teamStatusUntilRound)) } : {}),
+    ...('joinMode' in patch && typeof patch.joinMode === 'string' ? { joinMode: patch.joinMode as PlayerTeam['joinMode'] } : {}),
+    ...('joinReason' in patch && typeof patch.joinReason === 'string' ? { joinReason: patch.joinReason } : {}),
+  };
+  return next;
+}
+
+function normalizePlayerRosterPatch(roster: Teammate[] | null, patch: unknown): Teammate[] | null {
+  if (patch === null) return null;
+  if (!Array.isArray(patch)) return roster;
+  const baseRoster = roster ?? [];
+  return patch
+    .map((item, index) => {
+      if (isTeammate(item)) return item;
+      if (!isObject(item)) return null;
+      const base = baseRoster[index];
+      return base ? normalizeTeammatePatch(base, item) : null;
+    })
+    .filter((item): item is Teammate => Boolean(item));
+}
+
 function applyClubRuntimePatch(runtime: ClubRuntimeState, patch: unknown): ClubRuntimeState {
   if (!isObject(patch)) return runtime;
   const next: ClubRuntimeState = { ...runtime };
@@ -152,6 +251,8 @@ app.post('/debug/:sessionId', async (c) => {
     roleTransition,
     stats,
     tags,
+    playerTeam,
+    playerRoster,
     teamMonthlySalary,
     teamTier,
     teamVrsScore,
@@ -222,9 +323,46 @@ app.post('/debug/:sessionId', async (c) => {
       return c.json({ error: 'roleTransition 结构无效' }, 400);
     }
   }
+  if (playerTeam !== undefined && playerTeam !== null && !isObject(playerTeam)) {
+    return c.json({ error: 'playerTeam 必须是对象或 null' }, 400);
+  }
+  if (playerRoster !== undefined && playerRoster !== null) {
+    if (!Array.isArray(playerRoster)) {
+      return c.json({ error: 'playerRoster 必须是数组或 null' }, 400);
+    }
+    for (const [index, teammate] of playerRoster.entries()) {
+      if (teammate !== null && !isObject(teammate)) {
+        return c.json({ error: `playerRoster[${index}] 必须是对象或 null` }, 400);
+      }
+    }
+  }
 
-  if ((teamMonthlySalary !== undefined || teamTier !== undefined || teamVrsScore !== undefined) && !session.player.team) {
+  const nextPlayerTeam = playerTeam !== undefined
+    ? normalizePlayerTeamPatch(session.player.team, playerTeam)
+    : session.player.team;
+
+  if ((teamMonthlySalary !== undefined || teamTier !== undefined || teamVrsScore !== undefined) && !nextPlayerTeam) {
     return c.json({ error: '玩家当前没有战队，不能覆盖战队合同字段' }, 400);
+  }
+  if (nextPlayerTeam) {
+    if (nextPlayerTeam.clubId.trim() === '' || nextPlayerTeam.name.trim() === '' || nextPlayerTeam.tag.trim() === '' || nextPlayerTeam.region.trim() === '') {
+      return c.json({ error: 'playerTeam 的 clubId/name/tag/region 不能为空' }, 400);
+    }
+    if (!CLUB_TIERS.includes(nextPlayerTeam.tier)) {
+      return c.json({ error: 'playerTeam.tier 无效' }, 400);
+    }
+    if (!Number.isFinite(nextPlayerTeam.monthlySalary) || nextPlayerTeam.monthlySalary < 0) {
+      return c.json({ error: 'playerTeam.monthlySalary 必须是非负数字' }, 400);
+    }
+    if (!Number.isInteger(nextPlayerTeam.joinedRound)) {
+      return c.json({ error: 'playerTeam.joinedRound 必须是整数' }, 400);
+    }
+    if (nextPlayerTeam.teamStatus !== undefined && !TEAM_STATUSES.includes(nextPlayerTeam.teamStatus)) {
+      return c.json({ error: 'playerTeam.teamStatus 无效' }, 400);
+    }
+    if (nextPlayerTeam.joinMode !== undefined && !PLAYER_JOIN_MODES.includes(nextPlayerTeam.joinMode)) {
+      return c.json({ error: 'playerTeam.joinMode 无效' }, 400);
+    }
   }
   if (teamMonthlySalary !== undefined && !Number.isFinite(teamMonthlySalary)) {
     return c.json({ error: 'teamMonthlySalary 必须是数字' }, 400);
@@ -270,6 +408,13 @@ app.post('/debug/:sessionId', async (c) => {
     }
   }
 
+  if (playerTeam !== undefined) {
+    session.player.team = nextPlayerTeam;
+  }
+  if (playerRoster !== undefined) {
+    session.player.roster = normalizePlayerRosterPatch(session.player.roster, playerRoster);
+  }
+
   if (session.player.team) {
     if (teamMonthlySalary !== undefined) session.player.team.monthlySalary = teamMonthlySalary;
     if (teamTier !== undefined) session.player.team.tier = teamTier;
@@ -297,7 +442,6 @@ app.post('/debug/:sessionId', async (c) => {
       };
       if (!worldClubs.activeClubIds.includes(clubId)) worldClubs.activeClubIds = [...worldClubs.activeClubIds, clubId];
       session.worldClubs = worldClubs;
-      session.leaderboard = buildLeaderboard(session);
     }
   }
 
@@ -318,8 +462,16 @@ app.post('/debug/:sessionId', async (c) => {
       }
     }
     session.worldClubs = worldClubs;
-    session.leaderboard = buildLeaderboard(session);
   }
+
+  session.player = refreshVisibleTeamIdentities(session.player, true);
+  if (session.player.team) {
+    session.player.team = {
+      ...session.player.team,
+      roleOverlap: detectRoleOverlap(session.player, session.player.roster ?? []),
+    };
+  }
+  session.leaderboard = buildLeaderboard(session);
 
   session.updatedAt = new Date().toISOString();
   await storage.sessions.save(finalizeGameSessionCareerSnapshot(session));
