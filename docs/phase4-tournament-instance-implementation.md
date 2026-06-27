@@ -303,6 +303,44 @@ const snapshot: WorldTournamentSnapshot = {
 
 > 实现要点：背景快照与结果新闻都要能查询"该 tournamentId 是否有进行中的玩家实例"。建议在 `session` 上以 `activeTournamentInstance.tournamentId` 为准做跳过判断；玩家实例 `completed` 时再把其最终结果写入 `tournamentSnapshots`（统一供新闻读取），保证"玩家赛事"与"背景赛事"最终都经同一 snapshot 出口、但只有一个来源。
 
+### 8.7 背景赛事保真度分级（Tier 1 / Tier 3）与成本控制
+
+背景赛事的抽象有两档保真度，**按赛事重要性与是否被玩家看见分级触发**，不一刀切。
+
+| 档 | 做法 | 单场胜负 | 选手数据 | 成本 |
+|---|---|---|---|---|
+| **Tier 1（默认/兜底）** | §8.3 的概率 bracket 快进 | logistic 胜率 + 逐图掷骰出真比分 | 加权抽 1-2 standout | 低（一届 ~N 场数值运算） |
+| **Tier 3（高保真，按需）** | 全引擎逐图模拟 | 复用 `matchSimulator` 跑队 vs 队，出真实图分 | **每名 `WorldPlayer` 每图产 rating/击杀/死亡/ADR**，全员 `TournamentPlayerPerformance` | 高（见下） |
+
+#### 8.7.1 Tier 3 算法
+
+1. **单图全引擎**：新增 `simulateClubMap(rosterA, rosterB, context, rng)`，把 `matchSimulator.ts` 的玩家中心派生（`aimBase`/`decisionBase`/`stability`，`matchSimulator.ts:174-193`）改造成"队 vs 队"——两队战力由各自 5 名 `WorldPlayer` 的 Phase 3 年龄修正后属性聚合，产**真实图分**（回合差）+ 每名选手一条 stat 行（rating/kills/deaths/impact 由 `stats+form+role+对位+方差` 生成）。
+2. **系列赛多图**：bo3/bo5 逐图跑，图间带**动量**（赢图 +、输图 −）与**疲劳**（每图累加，高龄按 Phase 3 衰减更快）。
+3. **整届 bracket**：每对阵跑系列赛，全员 stat 行累加成 `TournamentPlayerPerformance`（设计 11.5）。
+4. **奖项/叙事全用真值**：MVP = 累计 rating 最高（统计真值，非抽取）；最佳新秀/突破手按真实数据；黑马/upset 从真实战果检测；决胜图高光进新闻文案。
+5. **跨赛事连续性**：赛后 form/疲劳/声望/转会身价（喂 Phase 5）/年龄经验更新，带入下一站。
+
+#### 8.7.2 成本与压制（关键）
+
+诚实成本：一届 Major 32 队单淘汰 ≈ 31 系列 × ~2.5 图 × 10 人 ≈ 近 800 次选手级运算；整赛季几十站 → 每次赛季结算上万次。必须有选择地用：
+
+1. **分级触发**：只有 **S / Major（及有 storyline / 玩家关注）** 默认 Tier 3；C/B/A 用 Tier 1。
+2. **懒计算/按需**：背景赛事默认只存 Tier 1 结果；**仅当玩家打开该赛事详情、或它是本周焦点赛事**时，才即时升级跑 Tier 3 出完整数据（`snapshot.fidelity: 'tier1' | 'tier3'` 标记，已升级则缓存复用）。玩家看不到的不算。
+3. **采样选手**：Tier 3 时只对**晋级深轮的队**产全员 stat 行，早出局的队聚合近似——不影响奖项候选。
+4. **分摊多周**：配合 8.6 背景逐轮时机，每周只跑一轮而非结算周一次性跑完。
+
+#### 8.7.3 触发规则（推荐默认）
+
+- 默认：所有背景赛事走 **Tier 1**（结果周出真冠军/真比分/真名次）。
+- 升级到 **Tier 3** 的条件（任一）：tier ∈ {s-class, major}；或玩家在赛事中心打开该赛事详情（懒触发）；或该赛事被标为本周焦点 / 含活跃 storyline。
+- 玩家**亲自参加**的赛事不走这里——由 `activeTournamentInstance` 驱动（§8.6），其玩家本人比赛本就是真实系列赛，其余队按需 Tier 1/3。
+
+#### 8.7.4 类型/落点增量
+
+- `WorldTournamentSnapshot` 加 `fidelity: 'tier1' | 'tier3'`、可选 `playerPerformances?: TournamentPlayerPerformance[]`（Tier 3 时填、采样后的）。
+- 新增 `simulateClubMap`（`tournamentInstance.ts` 或 `matchSimulator.ts` 抽出共享核）。
+- Tier 3 依赖 **Phase 3**（`WorldPlayer` 属性/年龄）；无 Phase 3 时 Tier 3 不可用，全部回落 Tier 1。
+
 ---
 
 ## 9. 确定性、迁移、存储
@@ -325,6 +363,7 @@ const snapshot: WorldTournamentSnapshot = {
 - 奖项：冠亚军、winner/loser MVP、玩家名次正确；玩家夺冠时 MVP 可为玩家。
 - **世界新闻（§8）**：背景赛事快照的 `finalScore` 为真实决赛比分（非 hash）、`championClubId` 来自快进 bracket、`participants.finalPlacement` 真实；`buildTournamentResultNews` 读到真比分/真黑马；有 Phase 3 时 MVP 非空。轻量背景实例不写入 `activeTournamentInstance`、不持久化完整 bracket。
 - **单一真相源（§8.6）**：玩家正在打某 S 级赛事且处于半决赛时，世界新闻**不得**出现该赛事"落幕"；只有玩家实例 `completed`（淘汰快进或夺冠）后才发布该赛事落幕新闻；背景快照路径跳过该 tournamentId，不重复结算。
+- **保真度分级（§8.7，若实现 Tier 3）**：默认 Tier 1；S/Major 或玩家打开详情时升级 Tier 3 并缓存（`snapshot.fidelity`）；Tier 3 产全员/采样 `TournamentPlayerPerformance`、MVP 取累计 rating 真值；无 Phase 3 时回落 Tier 1。
 
 ---
 
@@ -338,4 +377,4 @@ const snapshot: WorldTournamentSnapshot = {
 6. **前端赛事中心 + 接口透出**（7），按 tier 分层展示。
 7. **测试与平衡**（10），调字段规模/方差/回写权重。
 
-第 1-2 步纯离线可测、零行为变更；第 3-4 步替换对手来源并打通赛场推进；**第 5 步把世界新闻从模板升级为真实赛程报道（背景赛事复用同一抽象 bracket）**；第 6 步出 UI；第 7 步收口。对手情报"解锁分层"（4.6）、Major 小组/瑞士精细化、背景赛事逐轮阶段播报可作为后续增量，不阻塞首版。
+第 1-2 步纯离线可测、零行为变更；第 3-4 步替换对手来源并打通赛场推进；**第 5 步把世界新闻从模板升级为真实赛程报道（背景赛事默认 Tier 1 概率 bracket）**；第 6 步出 UI；第 7 步收口。后续增量（不阻塞首版）：对手情报"解锁分层"（4.6）、Major 小组/瑞士精细化、背景赛事逐轮阶段播报、**§8.7 的 Tier 3 全引擎模拟（S/Major + 按需懒触发，依赖 Phase 3）**。
