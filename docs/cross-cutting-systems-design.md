@@ -8,6 +8,8 @@
 
 本文件覆盖头脑风暴中确认的系统性缺口：世界代际更替（§1）、复合下行压力（§2）、事件链仲裁（§3）、统一 rollover 时序（§4）、AI 一致性（§5）、VRS 长期模型（§6）、长程验证（§7）、累积迁移（§8）、信息渐进披露（§9）。
 
+> 经济系统重构（收入流 / 球员身价 / 金钱去处 / 饰品风险资产）单列于 [economy-system-redesign.md](./economy-system-redesign.md)；其 §6 VRS 与本文 §6、其经济健康不变量与本文 §7 长程验证互相衔接。
+
 > 补：玩家退役/生涯终局**已存在**（`ending.ts` 的 `checkEnding`：legend/champion/retired_on_top/loyal-veteran/quiet_exit 等 + 主动结束 + `finalizePlayerCareerSnapshot` 名人堂结算）。唯一需对齐：Phase 3 年龄系统要与现有 `MAX_ROUNDS`/结局阈值协调，别出现"38 岁还在硬打且无衰退结局"——年龄进入 twilight 且属性大幅衰减时，应提高触发 `retired_on_top`/主动退役提示的权重（见 §4 时序第 3 步后挂一个年龄退役检查）。
 
 ---
