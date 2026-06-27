@@ -27,6 +27,13 @@
 
 `clubArchetype` 是高层身份，其机制表达**复用 `ClubProfile`**：新增 archetype → 默认 ClubProfile 预设的映射，`getClubProfile` 的回退链改为 **每队 override > archetype 预设 > tier 默认 > DEFAULT**。这样不会出现"archetype 一套、rosterStyle 一套"的双轨。
 
+> 与 A 案（WorldPlayer 取代 ClubPlayer）的关系——三层正交，互不取代：
+> - `clubArchetype`：俱乐部高层**身份标签**层。
+> - `ClubProfile`（`data/clubProfiles.ts`）：俱乐部**风格/行为配置**层（rosterStyle、各类 bias、managementModifiers、politicsBias），是**生成 `WorldPlayer` 的配置**，本身不含任何选手记录。
+> - `WorldPlayer`（Phase 3 / A 案）：阵容里**具体选手记录**层，取代的是 `ClubPlayer`（单个队员模型），与 ClubProfile 不在同一层。
+>
+> 即：A 案换的是"选手数据"（ClubPlayer→WorldPlayer），本节改的是"俱乐部风格配置"（archetype 驱动 ClubProfile）。`generateFullRoster` 读 `ClubProfile` 的 bias 来**生成** `WorldPlayer`——配置层喂数据层，两者协同、互不取代。本节"避免双轨"仅指 `clubArchetype` ↔ `ClubProfile.rosterStyle` 这两个同属"俱乐部风格"的概念别各管各的，与 WorldPlayer 无关。
+
 ### 1.2 heritage/capital 用"archetype×tier 派生默认"，避免手调 48 支
 
 只给每支队**显式标 `clubArchetype`**（48 个枚举值，工作量小）。`heritage`/`capital` 默认由 `(archetype, tier)` 查表 + 确定性抖动派生；只对**旗舰队**（顶级老牌豪门、标志性资本队）写显式 `heritage`/`capital` override。这样数据工作量可控又有差异。
