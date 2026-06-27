@@ -174,6 +174,18 @@ const stats = applyAgeToStats(player.stats, player.age);
 
 成长写入处（`resolver.ts:153` 一带，`CORE_STAT_KEYS` 成长逻辑）用 `scaleGrowthByAge(growthKey, amount, player.age)` 缩放后再写入 `growthSpent` / `stats`。年轻吃敏捷/体能红利、老将吃智力/心态/经验红利由此体现。
 
+### 3.4 年龄 → 角色契合与转型（修复"老将转型"缺口）
+
+> 问题：本设计 2.4 说"老将靠角色转型维持竞争力"，但现有 `deriveRolePressure`（`roleTransition.ts:3`）**没有任何年龄/属性契合项**——老将敏捷掉了，系统不会因此推他从机械型角色（Entry/AWPer，吃 agility）转向脑力型角色（IGL/Support，吃 intelligence/mentality/experience）。不补则"老将转型"只是文案。
+
+修复（两处小改，全部复用既有角色契合评分）：
+
+1. **角色契合读年龄修正后属性**：`roleFitScore`（角色契合评分，结晶时已用，`choice.ts:923`）改为对 `applyAgeToStats(player.stats, player.age)`（§3.1 的派生函数）打分。这样老将的机械型角色契合自然下滑、脑力型上升，无需新公式。
+2. **角色压力加"契合下滑"项**：`deriveRolePressure` 增一项——当**存在比当前 `activeRole` 契合更高的角色**（差值超阈值，如 ≥ 15）时 `+15~20`。老化导致更适合转脑力位时，压力上升，自然推动转型。
+3. **年龄触发转型建议事件**（可选增量）：当 2 成立且玩家年龄进入 `veteran`/`twilight`（§2.1）时，注入一次角色转型建议事件（复用现有 `chain-role-transition-start` 链路），文案点明"敏捷下滑，可考虑转向指挥/辅助"。
+
+> 注意叠加：年龄只通过"年龄修正后属性"影响契合，**不另外硬扣角色契合分**，与 §3 的"分层不双叠"一致。世界选手（WorldPlayer）同样可用 `roleFitScore(ageAdjusted)` 评估，供 Phase 5 转会判断老将是否该转型/被替换。
+
 ---
 
 ## 4. 选手生成与映射迁移
@@ -243,6 +255,7 @@ const stats = applyAgeToStats(player.stats, player.age);
 - `matchSimulator` 测试：同属性下，老将（32+）`personalPower` 低于 prime，但 `stabilityBonus`（mentality）更高，验证派生不写回 `player.stats`。
 - `teamManagement.test.ts` / 入队相关：`worldPlayerToTeammate` 降维正确（Teammate 仍 4 项、值含年龄效果）。
 - 赛季 rollover 测试：跨年后 `player.age` 与世界选手 age 各 +1，玩家队友快照按新年龄刷新。
+- 年龄→角色（§3.4）：高龄机械型（Entry/AWPer）选手 `roleFitScore(ageAdjusted)` 低于其脑力型角色，且存在更优角色时 `deriveRolePressure` 升高；prime 期不触发。
 
 ---
 
