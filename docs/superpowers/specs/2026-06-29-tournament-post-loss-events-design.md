@@ -499,7 +499,7 @@ requireMatchResult: 'loss'
 5. 普通失败在选满 2 个后停止；淘汰失败在选满 3 个后停止。
 6. 如果最终队列为空，补 `tournament-context-loss-demo-review`。
 
-AI 生成的 `tournament-context` 事件不能绕过这些上限、互斥和强负面限制。
+AI 生成的 `tournament-context` 事件不能绕过这些上限、互斥和强负面限制。手写画像事件优先于 AI 事件；AI 事件只作为补位，不能抢占 `elimination`、`blowout-loss`、`close-loss`、`player-underperformed` 这些核心画像位置。
 
 建议优先级：
 
@@ -548,6 +548,13 @@ isGrowthEvent?: boolean;
 - `isSevereNegative` 用于限制同场强负面事件最多 1 个。
 - `isGrowthEvent` 用于限制同场成长型赛后事件最多 1 个。
 
+过期清理规则：
+
+- `post-match` 事件继续使用 `expiresAtRound = player.round + 2`。
+- 过期未消费的赛后事件直接丢弃。
+- 过期事件不补发、不转普通事件、不延续到下一场赛事。
+- 如果下一场赛事已经开始或新的 `tournamentContext` 已创建，旧赛后事件不能污染新赛事队列。
+
 ## 与现有事件的关系
 
 现有事件 `tournament-context-post-loss-blame` 已覆盖“赛后分锅”，但范围偏宽，容易同时承担复盘和情绪冲突。
@@ -559,7 +566,12 @@ isGrowthEvent?: boolean;
 
 推荐方案是第二种，避免事件池里出现两个语义过近的“输球分锅”事件。
 
-如果迁移旧事件 ID 会影响已有存档或测试，可以保留旧 ID 作为兼容别名，但事件池中只应有一个可被调度的“分锅”语义事件。
+旧 ID 迁移策略：
+
+- 事件数据中只保留新的 `tournament-context-loss-locker-blame` 作为可调度事件。
+- `tournament-context-post-loss-blame` 不再进入 `TOURNAMENT_CONTEXT_EVENTS` 调度池。
+- 如果已有存档、测试或队列引用旧 ID，只在消费/查找层做兼容映射到新 ID。
+- 兼容映射不能重新生成旧事件，也不能让旧 ID 和新 ID 同时入队。
 
 ## 平衡原则
 
