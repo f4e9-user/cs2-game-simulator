@@ -90,10 +90,16 @@ kdDiff = kills - deaths;
 - `minRoundDiff` / `maxRoundDiff`：限制比分差，用于区分惜败和惨败。
 - `minPlayerRating` / `maxPlayerRating`：限制个人 rating，用于识别尽力局或拉胯局。
 - `minKdDiff` / `maxKdDiff`：限制击杀死亡差，用于辅助 rating 判断。
-- `minRecentTournamentLosses`：用于后续连败压力。本次可以先写入类型和文档，若没有可靠历史统计，可暂不启用对应事件。
+- `minRecentTournamentLosses`：第一版直接读取 `player.consecutiveLosses`，用于表达连败压力，不新增历史数组或额外统计字段。
 - `postMatchAny`：至少满足其中一个条件组即可通过，用于表达 OR 条件。
 
 这些字段只在 `contextPhase: ['post-match']` 且 `lastMatchResult` 存在时参与匹配。没有 `lastMatchResult` 时，带有这些字段的事件不能命中。
+
+`minRecentTournamentLosses` 的第一版边界：
+
+- 只读取当前玩家已有的 `player.consecutiveLosses`。
+- 只用于提高已有失败事件的匹配精度，例如 `loss-public-pressure`、`loss-locker-blame`、`loss-coach-review`。
+- 不引入新的“连败事件链”或新的赛事历史存储结构。
 
 ## 失败画像
 
@@ -195,6 +201,7 @@ kdDiff = kills - deaths;
 
 - `stages: ['second', 'pro']`
 - 可选 `minStress: 45`
+- 可选 `minRecentTournamentLosses: 2`
 
 适合事件：
 
@@ -442,7 +449,7 @@ requireMatchResult: 'loss'
 
 事件 ID：`tournament-context-loss-public-pressure`
 
-用途：补充媒体、解说、粉丝评价带来的压力，尤其适合较高阶段赛事。
+用途：补充媒体、解说、粉丝评价带来的压力和名气损失，尤其适合较高阶段赛事。
 
 建议条件：
 
@@ -453,8 +460,15 @@ requireMatchResult: 'loss'
 
 建议选择：
 
-- `give-measured-response`：克制回应。成功降低压力或维持口碑，失败增加压力。
-- `stay-offline`：不看外界评价。成功降低压力和疲劳，失败可能错过调整信息。
+- `give-measured-response`：克制回应。成功降低压力、名气不变；失败增加压力并小幅损失名气。
+- `stay-offline`：不看外界评价。成功降低压力和疲劳，但名气小幅流失；失败增加压力并损失更多名气。
+
+建议效果：
+
+- `give-measured-response` 成功：`stateDelta.stress: -3`，`resourceDelta.fame: 0`。
+- `give-measured-response` 失败：`stateDelta.stress: 5`，`resourceDelta.fame: -2`。
+- `stay-offline` 成功：`stateDelta.stress: -5`，`stateDelta.fatigue: -3`，`resourceDelta.fame: -1`。
+- `stay-offline` 失败：`stateDelta.stress: 3`，`resourceDelta.fame: -3`。
 
 可用 trait：
 
@@ -467,11 +481,25 @@ requireMatchResult: 'loss'
 
 建议规则：
 
-- 每场失败最多入队 2-3 个 `post-match` 事件。
+- 每场普通失败最多入队 `2` 个 `post-match` 事件。
+- `requireFinalStage` 的淘汰失败最多入队 `3` 个 `post-match` 事件。
 - 强画像事件优先于通用事件。
 - 同一画像组最多入队 1 个事件。
 - 强负面事件最多入队 1 个。
-- 没有任何精确画像命中时，回退到 `tournament-context-loss-demo-review` 或 `tournament-context-loss-team-rally`。
+- `tournament-context-loss-locker-blame` 与 `tournament-context-loss-team-rally` 默认互斥；只有淘汰出局时允许同场共存。
+- 没有任何精确画像命中时，回退到 `tournament-context-loss-demo-review`。
+- 有队伍且队列不足 2 个时，优先补 `tournament-context-loss-team-rally`，但仍遵守互斥和强负面限制。
+
+建议挑选流程：
+
+1. 先筛出所有匹配当前失败画像的 `post-match` 事件。
+2. 按优先级分组排序。
+3. 每个 group 只保留 priority 最高的 1 个事件。
+4. 如果已选入一个强负面事件，则跳过其余强负面事件。
+5. 普通失败在选满 2 个后停止；淘汰失败在选满 3 个后停止。
+6. 如果最终队列为空，补 `tournament-context-loss-demo-review`。
+
+AI 生成的 `tournament-context` 事件不能绕过这些上限、互斥和强负面限制。
 
 建议优先级：
 
@@ -510,6 +538,16 @@ type TournamentContextEventGroup =
 
 如果暂时不想扩展事件定义类型，也可以先在 `postMatchRefs(...)` 内用 `Record<string, group>` 管理分组。文档推荐前者，因为事件数据和调度语义放在一起更清楚。
 
+建议额外维护布尔分类，便于调度器直接判断：
+
+```ts
+isSevereNegative?: boolean;
+isGrowthEvent?: boolean;
+```
+
+- `isSevereNegative` 用于限制同场强负面事件最多 1 个。
+- `isGrowthEvent` 用于限制同场成长型赛后事件最多 1 个。
+
 ## 与现有事件的关系
 
 现有事件 `tournament-context-post-loss-blame` 已覆盖“赛后分锅”，但范围偏宽，容易同时承担复盘和情绪冲突。
@@ -533,6 +571,18 @@ type TournamentContextEventGroup =
 - 情绪冲突类：团队信任波动大，个人压力波动中等。
 - 鼓励恢复类：降低压力/疲劳，成长收益较少。
 - 外界质疑类：主要围绕压力和媒体感受，不直接大幅影响战力。
+- 赛后失败事件原则上不作为名气增长来源；媒体处理成功只止损，不额外加名气，避免名气过快接近上限。
+- 赛事结算本身的 `lossFame` 代表“参赛曝光”；赛后外界质疑中的负 `fame` 代表“舆论折损”，允许抵消这部分曝光，但不应额外叠成大型媒体危机。
+- 单个赛后失败事件的 `fame` 变动建议控制在 `0` 到 `-3`；更重的名气打击交给独立媒体危机链，例如已有 `media-backlash` 相关事件。
+
+成长和 buff 上限：
+
+- 每场失败最多出现 `1` 个成长型赛后事件。
+- 成长型赛后事件包括：`loss-demo-review`、`loss-close-rounds`、`loss-clutch-regret`、`loss-system-exposed`、`loss-coach-review`、`loss-carry-not-enough`。
+- 赛后事件给出的 buff 只允许短期效果，`remainingUses` 建议为 `1-2`。
+- 赛后事件不提供直接提高赛事胜率的乘区 buff。
+- 优先使用 `growthMultiplier`、`stress`、`fatigue`、`teamTrustDelta`、`teamChemistryDelta` 这类间接收益。
+- 同 ID buff 重复获取时继续追加 `remainingUses`，不插入重复 buff。
 
 建议避免：
 
@@ -554,11 +604,19 @@ type TournamentContextEventGroup =
 - K-D 为 -5 以下时可作为拉胯局辅助条件。
 - `requireTeam: true` 的事件不会给无队伍玩家触发。
 - 低团队信任或高压力条件能正确筛选更衣室分锅事件。
+- `minRecentTournamentLosses` 第一版使用 `player.consecutiveLosses`，不依赖新的赛事历史结构。
 - final stage loss 可以命中淘汰出局事件。
-- 同一失败赛后队列不超过 2-3 个事件。
+- 普通失败赛后队列最多 2 个事件。
+- 淘汰失败赛后队列最多 3 个事件。
 - 同一画像组最多入队 1 个事件。
 - 强负面事件同场最多入队 1 个。
+- `locker-blame` 与 `team-rally` 在普通失败中默认互斥。
+- 成长型赛后事件同场最多入队 1 个。
+- AI 生成的 `tournament-context` 事件也受队列上限、group 限制和强负面限制。
+- `give-measured-response` 成功不增加名气。
+- 赛后失败事件不会提供正 `fame`。
 - 如果复用旧 `tournament-context-post-loss-blame`，确认不会出现重复 ID 或语义重复事件。
+- 赛后成长 buff 的 `remainingUses` 控制在 `1-2`。
 - 新增赛后匹配字段不参与 match simulator 胜率、对手强度或结算计算。
 
 ## 非目标
