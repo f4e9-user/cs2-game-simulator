@@ -124,7 +124,7 @@ function isTeammate(value: unknown): value is Teammate {
     && value.traits.every((trait) => typeof trait === 'string')
     && Number.isFinite(value.growthSpent)
     && (value.chemistry === undefined || Number.isFinite(value.chemistry))
-    && (value.visibleIdentity === undefined || (typeof value.visibleIdentity === 'string' && TEAM_IDENTITIES.includes(value.visibleIdentity as Teammate['visibleIdentity'])))
+    && (value.visibleIdentity === undefined || (typeof value.visibleIdentity === 'string' && TEAM_IDENTITIES.includes(value.visibleIdentity as (typeof TEAM_IDENTITIES)[number])))
     && (value.identitySinceRound === undefined || Number.isInteger(value.identitySinceRound));
 }
 

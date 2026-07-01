@@ -564,12 +564,23 @@ export interface PendingApplication {
   clubName: string;
   appliedRound: number;
   responseRound: number;
+  path?: 'open-match' | 'talent' | 'youth-score';
+  score?: number;
+  result?: 'pass' | 'tryout' | 'reject';
   originRegion?: string;
   originPreference?: ClubOriginPreference;
   originFit?: ClubOriginFit;
   originFitBonus?: number;
   exceptionBonus?: number;
   exceptionReasons?: string[];
+}
+
+export interface StagePressureState {
+  level: 'none' | 'watch' | 'at_risk';
+  season: number;
+  score: number;
+  reasons: string[];
+  evaluatedRound: number;
 }
 
 export interface TeamOffer {
@@ -719,12 +730,14 @@ export interface DynamicState {
   weeklyShopPurchases: Record<string, { year: number; week: number; count: number }>;
   weeklyTeamActions: Record<string, { year: number; week: number; count: number }>;
   team: PlayerTeam | null;
+  unattachedSinceRound?: number;
   pendingApplication: PendingApplication | null;
   qualificationSlots: Record<string, number>;
   teamQualificationSlots: Record<string, number>;
   qualificationSlotBatches?: QualificationSlotBatch[];
   teamQualificationSlotBatches?: QualificationSlotBatch[];
   consecutiveLosses: number;
+  seasonInjuryRestWeeks?: number;
   everHadTeam: boolean;
   contractRenewals: number;
   forceNextEvent: string | null;
@@ -831,6 +844,7 @@ export interface Player extends DynamicState {
   tierParticipations: Record<string, number>;
   tierChampionships: Record<string, number>;
   championshipSeries?: Record<string, number>;
+  stagePressure?: StagePressureState;
   promotionPending: Stage | null;
   promotionCooldown: number;
   pendingOffer: TeamOffer | null;
@@ -1051,6 +1065,13 @@ export interface CareerInsight {
     summary: string;
     mainObjective: string;
     nextStage?: string;
+  };
+  stagePressure?: {
+    level: 'none' | 'watch' | 'at_risk';
+    score: number;
+    season: number;
+    reasons: string[];
+    summary: string;
   };
   headline: string;
   onboarding?: {

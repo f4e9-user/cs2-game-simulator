@@ -1648,6 +1648,42 @@ export const CHAIN_EVENTS: EventDef[] = [
     ],
   },
 
+  {
+    id: 'chain-club-youth-score',
+    type: 'tryout',
+    title: '青训回复',
+    narrative:
+      '你收到了青训战队的回复。对方没有让你跑流程，而是直接给了一个结果。',
+    stages: ['rookie'],
+    difficulty: 2,
+    weight: 10,
+    requireTags: ['application-youth-score-ready'],
+    choices: [
+      {
+        id: 'read-score',
+        label: '打开结果',
+        description: '看看这次申请算出来是什么。',
+        check: {
+          primary: 'experience',
+          secondary: 'intelligence',
+          dc: 0,
+        },
+        success: {
+          narrative: '系统提示：青训申请结果已确认。',
+          tags: {
+            remove: ['application-youth-score-ready'],
+          },
+        },
+        failure: {
+          narrative: '系统提示：青训申请结果已确认。',
+          tags: {
+            remove: ['application-youth-score-ready'],
+          },
+        },
+      },
+    ],
+  },
+
   // ── 面试事件 ──────────────────────────────────────────────────
   {
     id: 'chain-club-interview',
@@ -1811,46 +1847,45 @@ export const CHAIN_EVENTS: EventDef[] = [
     ],
   },
 
-  // ── 新人面试（天赋路线）──────────────────────────────────────────
+  // ── 新人面试（天赋路线）─────────────────────────────────────
   {
     id: 'chain-club-interview-talent',
     type: 'tryout',
-    title: '俱乐部面试 — 天赋说话',
+    title: '俱乐部面试 — 天赋验证',
     narrative:
-      '星探把你带进会客室，顺手把一套外设推到你面前："我们不看简历，先打一局看看。"教练在旁边默默盯着你的手。',
+      '你坐在俱乐部的会客室里。教练没有先看履历，只是把几段你的第一视角录像停在桌面上："我们想知道，这些镜头是不是偶然。"',
     stages: ['rookie'],
     difficulty: 3,
     weight: 10,
     requireTags: ['interview-ready', 'application-path-talent'],
     choices: [
       {
-        id: 'raw-aim-showcase',
-        label: '全力发挥，枪法压制对手',
-        description: '你的优势就是准星，把它拉到极限。',
+        id: 'break-down-instinct',
+        label: '拆解自己如何读到那个时机',
+        description: '证明这不只是手感，而是能复现的判断。',
         check: {
-          primary: 'agility',
-          dc: 9,
-          traitBonuses: { mechanical: 3, solo: 2, aimer: 3, clutch: 2 },
-          traitPenalties: { support: 1 },
+          primary: 'intelligence',
+          secondary: 'agility',
+          dc: 10,
+          traitBonuses: { tactical: 2, mechanical: 2, clutch: 1 },
+          traitPenalties: { shy: 1 },
         },
         success: {
-          narrative: '十五分钟内你打出了教练从没在同龄人身上见过的准星控制。他把键盘推回来："行了，条件我们来谈。"',
+          narrative: '你把那些看似本能的处理讲成了完整决策链。教练听完后点了点头："有天赋，也有脑子。"',
           stateDelta: {
-            feel: 1,
-            stress: -10,
+            stress: -5,
           },
           resourceDelta: {
-            fame: 3,
+            fame: 2,
           },
           tags: {
             remove: ['interview-pending', 'interview-ready', 'application-path-talent'],
           },
         },
         failure: {
-          narrative: '有几球你打出了不错的东西，但整体不够稳定。教练皱了皱眉："天赋能看到，但现在还差点火候。"',
+          narrative: '你知道自己当时为什么那样打，但说不清。经理合上电脑，只说会再观察一段时间。',
           stateDelta: {
             stress: 10,
-            feel: -0.5,
           },
           tags: {
             remove: ['interview-pending', 'interview-ready', 'application-path-talent'],
@@ -1858,31 +1893,31 @@ export const CHAIN_EVENTS: EventDef[] = [
         },
       },
       {
-        id: 'talk-potential',
-        label: '聊自己的成长空间和学习能力',
-        description: '天赋是起点，可塑性才是俱乐部最想要的。',
+        id: 'prove-ceiling',
+        label: '直接强调自己的上限和爆发力',
+        description: '让对方先相信你值得培养。',
         check: {
-          primary: 'intelligence',
+          primary: 'agility',
           secondary: 'mentality',
-          dc: 10,
-          traitBonuses: { tactical: 2, steady: 2, igl: 1 },
-          traitPenalties: { ego: 2, shy: 1 },
+          dc: 11,
+          traitBonuses: { mechanical: 3, solo: 2, clutch: 1 },
+          traitPenalties: { support: 1, shy: 1 },
         },
         success: {
-          narrative: '你坦诚自己经验不多，但清楚自己的短板在哪。教练听完点头："知道自己缺什么的人，教起来最省心。"',
+          narrative: '你把话说得很直接："现在不稳定，但上限够高。"教练看着那几段录像，最终笑了笑："我们赌一次。"',
           stateDelta: {
+            feel: 0.5,
             stress: -5,
           },
           resourceDelta: {
-            fame: 1,
+            fame: 2,
           },
           tags: {
             remove: ['interview-pending', 'interview-ready', 'application-path-talent'],
           },
-          dailyGrowth: 'intelligence',
         },
         failure: {
-          narrative: '你讲了不少，但对方显然更想看实力而不是听故事。面试气氛有点尴尬地结束了。',
+          narrative: '你想把气势撑起来，但对方更在意可持续性。面试在一句"先回去等通知"里结束了。',
           stateDelta: {
             stress: 10,
           },

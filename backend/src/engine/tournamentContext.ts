@@ -1,4 +1,9 @@
-import { TOURNAMENT_CONTEXT_EVENTS, type TournamentContextEventDef } from '../data/events/tournamentContext.js';
+import {
+  TOURNAMENT_CONTEXT_EVENTS,
+  type TournamentContextEventDef,
+  type TournamentContextEventGroup,
+  type TournamentContextPostMatchCondition,
+} from '../data/events/tournamentContext.js';
 import type { Tournament } from '../data/tournaments.js';
 import type {
   EventDef,
@@ -40,7 +45,8 @@ export function createTournamentContext(
 
 export function pickTournamentContextEvent(player: Player, aiEvents: EventDef[] = []): EventDef | null {
   const context = enqueueAiTournamentContextCandidates(player, aiEvents);
-  if (!context || !player.pendingMatch) return null;
+  if (!context) return null;
+  if (!player.pendingMatch && context.phase !== 'post-match') return null;
   if (context.phase === 'signup' && player.round !== context.signedUpAtRound) return null;
   if (context.phase === 'match' || context.phase === 'complete') return null;
 
@@ -51,9 +57,10 @@ export function pickTournamentContextEvent(player: Player, aiEvents: EventDef[] 
     .sort((a, b) => b.priority - a.priority);
 
   for (const ref of queue) {
-    if (context.consumedContextEventIds.includes(ref.eventId)) continue;
+    const eventId = canonicalTournamentContextEventId(ref.eventId);
+    if (context.consumedContextEventIds.includes(eventId)) continue;
     const event = ref.generatedEvent ??
-      TOURNAMENT_CONTEXT_EVENTS.find((candidate) => candidate.id === ref.eventId);
+      TOURNAMENT_CONTEXT_EVENTS.find((candidate) => candidate.id === eventId);
     if (event && tournamentContextEventMatches(event, player, context.phase)) return event;
   }
 
@@ -109,19 +116,21 @@ function isAiTournamentContextEvent(
 export function markTournamentContextEventConsumed(player: Player, eventId: string): Player {
   const context = player.tournamentContext;
   if (!context) return player;
-  const isContextEvent = eventId.startsWith('tournament-context-') ||
-    context.contextEventQueue.some((ref) => ref.eventId === eventId);
+  const canonicalEventId = canonicalTournamentContextEventId(eventId);
+  const isContextEvent = canonicalEventId.startsWith('tournament-context-') ||
+    context.contextEventQueue.some((ref) => canonicalTournamentContextEventId(ref.eventId) === canonicalEventId);
   if (!isContextEvent) return player;
 
-  const consumed = context.consumedContextEventIds.includes(eventId)
+  const consumed = context.consumedContextEventIds.includes(canonicalEventId)
     ? context.consumedContextEventIds
-    : [...context.consumedContextEventIds, eventId];
+    : [...context.consumedContextEventIds, canonicalEventId];
   return {
     ...player,
     tournamentContext: {
       ...context,
       consumedContextEventIds: consumed,
-      contextEventQueue: context.contextEventQueue.filter((ref) => ref.eventId !== eventId),
+      contextEventQueue: context.contextEventQueue
+        .filter((ref) => canonicalTournamentContextEventId(ref.eventId) !== canonicalEventId),
     },
   };
 }
@@ -158,6 +167,7 @@ export function recordTournamentContextMatchResult(
   won: boolean,
   isFinalStage: boolean,
   isChampion: boolean,
+  aiEvents: EventDef[] = [],
 ): Player {
   const context = player.tournamentContext;
   if (!context) return player;
@@ -174,14 +184,22 @@ export function recordTournamentContextMatchResult(
     headshotRate: matchStats?.headshotRate ?? 0,
   };
 
-  const nextContext: TournamentContext = {
+  const contextWithResult: TournamentContext = {
     ...context,
     phase: 'post-match',
     lastMatchResult: result,
     expiresAtRound: player.round + 2,
+  };
+  const playerWithResult: Player = {
+    ...player,
+    tournamentContext: contextWithResult,
+  };
+
+  const nextContext: TournamentContext = {
+    ...contextWithResult,
     contextEventQueue: [
       ...context.contextEventQueue,
-      ...postMatchRefs(context, player, won, isChampion),
+      ...postMatchRefs(contextWithResult, playerWithResult, won, isChampion, isFinalStage, aiEvents),
     ],
   };
 
@@ -258,22 +276,122 @@ function postMatchRefs(
   player: Player,
   won: boolean,
   isChampion: boolean,
+  isFinalStage: boolean,
+  aiEvents: EventDef[] = [],
 ): TournamentContextEventRef[] {
-  return TOURNAMENT_CONTEXT_EVENTS
+  const handAuthored = TOURNAMENT_CONTEXT_EVENTS
     .filter((event) => event.contextPhase.includes('post-match'))
     .filter((event) => {
       if (event.requireMatchResult === 'win' && !won) return false;
       if (event.requireMatchResult === 'loss' && won) return false;
       if (event.requireChampion && !isChampion) return false;
       return tournamentContextEventMatches(event, player, 'post-match');
-    })
-    .map((event) => ({
-      eventId: event.id,
-      phase: 'post-match' as const,
-      stageIndex: context.stageIndex,
-      priority: priorityForEvent(event, context, 'post-match'),
-      expiresAtRound: player.round + 2,
-    }));
+    });
+
+  const aiPostMatch = aiEvents
+    .filter((event) => isAiTournamentContextEvent(event, player, 'post-match'))
+    .filter((event) => event.type === 'tournament-context')
+    .map((event) => event as EventDef & { contextPhase?: TournamentContextPhase[] })
+    .filter((event) => event.contextPhase?.includes('post-match') ?? false);
+
+  const selected = won
+    ? handAuthored
+    : selectPostMatchEvents(handAuthored, aiPostMatch, context, player, isFinalStage);
+
+  return selected.map((event) => ({
+    eventId: event.id,
+    phase: 'post-match' as const,
+    stageIndex: context.stageIndex,
+    priority: 'contextPhase' in event && event.type === 'tournament-context'
+      ? priorityForEvent(event as TournamentContextEventDef, context, 'post-match')
+      : context.stakesLevel + context.pressureLevel,
+    expiresAtRound: player.round + 2,
+    generatedEvent: event.id.startsWith('ai-') ? event : undefined,
+  }));
+}
+
+function selectPostMatchEvents(
+  handAuthored: TournamentContextEventDef[],
+  aiEvents: EventDef[],
+  context: TournamentContext,
+  player: Player,
+  isFinalStage: boolean,
+): Array<TournamentContextEventDef | EventDef> {
+  const maxEvents = isFinalStage ? 3 : 2;
+  const selected: Array<TournamentContextEventDef | EventDef> = [];
+  const usedGroups = new Set<TournamentContextEventGroup | 'ai-filler'>();
+  let hasSevereNegative = false;
+  let hasGrowthEvent = false;
+
+  const sorted = [...handAuthored].sort((a, b) => {
+    const groupDiff = postMatchGroupRank(a.group) - postMatchGroupRank(b.group);
+    if (groupDiff !== 0) return groupDiff;
+    return priorityForEvent(b, context, 'post-match') - priorityForEvent(a, context, 'post-match');
+  });
+
+  for (const event of sorted) {
+    if (selected.length >= maxEvents) break;
+    const group = event.group ?? 'generic-review';
+    if (usedGroups.has(group)) continue;
+    if (!isFinalStage && conflictsWithSelectedPostMatchEvent(event, selected)) continue;
+    if (event.isSevereNegative && hasSevereNegative) continue;
+    if (event.isGrowthEvent && hasGrowthEvent) continue;
+    selected.push(event);
+    usedGroups.add(group);
+    hasSevereNegative = hasSevereNegative || event.isSevereNegative === true;
+    hasGrowthEvent = hasGrowthEvent || event.isGrowthEvent === true;
+  }
+
+  if (selected.length === 0) {
+    const fallback = handAuthored.find((event) => event.id === 'tournament-context-loss-demo-review');
+    if (fallback) {
+      selected.push(fallback);
+      usedGroups.add(fallback.group ?? 'generic-review');
+      hasGrowthEvent = hasGrowthEvent || fallback.isGrowthEvent === true;
+    }
+  }
+
+  if (selected.length < maxEvents && player.team && !usedGroups.has('team-rally')) {
+    const rally = handAuthored.find((event) => event.id === 'tournament-context-loss-team-rally');
+    if (rally && (isFinalStage || !conflictsWithSelectedPostMatchEvent(rally, selected))) {
+      selected.push(rally);
+      usedGroups.add('team-rally');
+    }
+  }
+
+  for (const event of aiEvents) {
+    if (selected.length >= maxEvents) break;
+    if (usedGroups.has('ai-filler')) continue;
+    selected.push(event);
+    usedGroups.add('ai-filler');
+  }
+
+  return selected.slice(0, maxEvents);
+}
+
+function conflictsWithSelectedPostMatchEvent(
+  event: TournamentContextEventDef,
+  selected: Array<TournamentContextEventDef | EventDef>,
+): boolean {
+  const ids = new Set(selected.map((candidate) => candidate.id));
+  if (event.id === 'tournament-context-loss-locker-blame' && ids.has('tournament-context-loss-team-rally')) return true;
+  if (event.id === 'tournament-context-loss-team-rally' && ids.has('tournament-context-loss-locker-blame')) return true;
+  return false;
+}
+
+function postMatchGroupRank(group: TournamentContextEventGroup | undefined): number {
+  switch (group) {
+    case 'elimination': return 0;
+    case 'blowout-loss': return 1;
+    case 'close-loss': return 1;
+    case 'player-carried': return 2;
+    case 'player-underperformed': return 2;
+    case 'team-conflict': return 3;
+    case 'team-rally': return 3;
+    case 'public-pressure': return 4;
+    case 'generic-review': return 5;
+    default: return 6;
+  }
 }
 
 function tournamentContextEventMatches(
@@ -289,12 +407,71 @@ function tournamentContextEventMatches(
   if (event.minStress !== undefined && (player.stress ?? 0) < event.minStress) return false;
   if (event.minFatigue !== undefined && (player.volatile?.fatigue ?? 0) < event.minFatigue) return false;
   if (event.maxTeamTrust !== undefined && (player.teamTrust ?? 0) > event.maxTeamTrust) return false;
+  if (!postMatchConditionsMatch(event, player, phase)) return false;
   if (event.travelRequired) {
     const travel = pendingAwayTournamentTravelContext(player);
     if (!travel) return false;
     if (event.travelRequired === 'city' && !travel.hasCityVenue) return false;
     if (event.travelRequired === 'cross-region' && travel.distance !== 'cross-region') return false;
   }
+  return true;
+}
+
+function postMatchConditionsMatch(
+  event: EventDef | TournamentContextEventDef,
+  player: Player,
+  phase: TournamentContextPhase,
+): boolean {
+  if (phase !== 'post-match' || !('contextPhase' in event)) return true;
+  const hasPostMatchConditions = hasDirectPostMatchCondition(event) ||
+    (event.postMatchAny !== undefined && event.postMatchAny.length > 0) ||
+    event.minRecentTournamentLosses !== undefined ||
+    event.requireFinalStage !== undefined;
+  if (!hasPostMatchConditions) return true;
+
+  const result = player.tournamentContext?.lastMatchResult;
+  if (!result) return false;
+
+  if (event.requireFinalStage !== undefined && result.isFinalStage !== event.requireFinalStage) return false;
+  if (event.minRecentTournamentLosses !== undefined &&
+    (player.consecutiveLosses ?? 0) < event.minRecentTournamentLosses) return false;
+  if (!postMatchConditionMatches(event, result)) return false;
+  if (event.postMatchAny && event.postMatchAny.length > 0 &&
+    !event.postMatchAny.some((condition) => postMatchConditionMatches(condition, result))) {
+    return false;
+  }
+  return true;
+}
+
+function hasDirectPostMatchCondition(event: TournamentContextEventDef): boolean {
+  return event.minTeamScore !== undefined ||
+    event.maxTeamScore !== undefined ||
+    event.minEnemyScore !== undefined ||
+    event.maxEnemyScore !== undefined ||
+    event.minRoundDiff !== undefined ||
+    event.maxRoundDiff !== undefined ||
+    event.minPlayerRating !== undefined ||
+    event.maxPlayerRating !== undefined ||
+    event.minKdDiff !== undefined ||
+    event.maxKdDiff !== undefined;
+}
+
+function postMatchConditionMatches(
+  condition: TournamentContextPostMatchCondition,
+  result: TournamentContextMatchResult,
+): boolean {
+  const roundDiff = Math.abs(result.teamScore - result.enemyScore);
+  const kdDiff = result.kills - result.deaths;
+  if (condition.minTeamScore !== undefined && result.teamScore < condition.minTeamScore) return false;
+  if (condition.maxTeamScore !== undefined && result.teamScore > condition.maxTeamScore) return false;
+  if (condition.minEnemyScore !== undefined && result.enemyScore < condition.minEnemyScore) return false;
+  if (condition.maxEnemyScore !== undefined && result.enemyScore > condition.maxEnemyScore) return false;
+  if (condition.minRoundDiff !== undefined && roundDiff < condition.minRoundDiff) return false;
+  if (condition.maxRoundDiff !== undefined && roundDiff > condition.maxRoundDiff) return false;
+  if (condition.minPlayerRating !== undefined && result.rating < condition.minPlayerRating) return false;
+  if (condition.maxPlayerRating !== undefined && result.rating > condition.maxPlayerRating) return false;
+  if (condition.minKdDiff !== undefined && kdDiff < condition.minKdDiff) return false;
+  if (condition.maxKdDiff !== undefined && kdDiff > condition.maxKdDiff) return false;
   return true;
 }
 
@@ -310,6 +487,11 @@ function priorityForEvent(
   if (event.requireMatchResult) priority += 2;
   if (event.travelRequired) priority += 2;
   return priority;
+}
+
+function canonicalTournamentContextEventId(eventId: string): string {
+  if (eventId === 'tournament-context-post-loss-blame') return 'tournament-context-loss-locker-blame';
+  return eventId;
 }
 
 function stakesLevelForTournament(tournament: Tournament): number {

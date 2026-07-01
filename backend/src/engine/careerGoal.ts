@@ -1,6 +1,5 @@
 import type { Player, Stage } from '../types.js';
 import { buildYearTournaments, type Tournament } from '../data/tournaments.js';
-import { getTrait } from '../data/traits.js';
 import { getClubProfile } from '../data/clubProfiles.js';
 import { getGate } from './stages.js';
 import { canSeeTournamentOpportunity, tournamentOpportunityStatus, tournamentQualificationStageWaiverApplies } from './tournamentEligibility.js';
@@ -140,11 +139,7 @@ export function buildCareerGoal(player: Player, playerPoints = 0): CareerGoal {
     const rookieParticipations = sumTiers(player.tierParticipations ?? {}, ['c', 'b']);
     const bParticipations = sumTiers(player.tierParticipations ?? {}, ['b']);
     const rookieChampionships = sumTiers(player.tierChampionships ?? {}, ['c', 'b']);
-    const traitTags = player.traits.flatMap((traitId) => getTrait(traitId)?.tags ?? []);
-    const hasTalentPath = traitTags.includes('aimer');
-    const readyForYouthApplication = player.team?.tier === 'youth'
-      || hasTalentPath
-      || (rookieParticipations >= 3 && bParticipations >= 1 && rookieChampionships >= 1);
+    const readyForYouthApplication = true;
 
     return {
       stage: player.stage,
@@ -170,16 +165,20 @@ export function buildCareerGoal(player: Player, playerPoints = 0): CareerGoal {
   if (gate) {
     const participations = sumTiers(player.tierParticipations ?? {}, gate.tiers);
     const championships = sumTiers(player.tierChampionships ?? {}, gate.champTiers);
+    const gateGoals = [
+      progress(`${gate.tiers.join('-')}-participations`, `${tierLabel(gate.tiers)}参赛`, participations, gate.minParticipations),
+      progress(`${gate.champTiers.join('-')}-championships`, `${tierLabel(gate.champTiers)}冠军`, championships, gate.minChampionships),
+      ...(typeof gate.minFame === 'number'
+        ? [progress('fame', '名气', player.fame ?? 0, gate.minFame)]
+        : []),
+    ];
     return {
       stage: player.stage,
       stageLabel: STAGE_LABELS[player.stage],
       summary: `${tierLabel(gate.tiers)}参赛和夺冠，晋级${STAGE_LABELS[gate.to]}。`,
       teamHint: hint,
       nextStageLabel: STAGE_LABELS[gate.to],
-      goals: [
-        progress(`${gate.tiers.join('-')}-participations`, `${tierLabel(gate.tiers)}参赛`, participations, gate.minParticipations),
-        progress(`${gate.champTiers.join('-')}-championships`, `${tierLabel(gate.champTiers)}冠军`, championships, gate.minChampionships),
-      ],
+      goals: gateGoals,
       opportunities: upcomingOpportunities(
         player,
         playerPoints,

@@ -27,6 +27,7 @@ export function CareerInsightPanel({ insight }: Props) {
   const visibleRecommendations = insight?.recommendations?.slice(0, 3) ?? [];
   const visibleOpportunities = insight?.opportunities?.slice(0, 12) ?? [];
   const mainMilestone = insight?.milestones?.[0];
+  const stagePressure = insight?.stagePressure;
   const playerExplanations = insight?.explanations?.filter((item) => item.visibility === 'player').slice(0, 2) ?? [];
   const showOnboarding = insight?.onboarding && !onboardingHidden && insight.onboarding.mode !== 'hidden';
 
@@ -44,6 +45,24 @@ export function CareerInsightPanel({ insight }: Props) {
 
       <div className="career-insight-summary">{insight.stage.summary}</div>
       <div className="career-insight-summary strong">{insight.stage.mainObjective}</div>
+
+      {stagePressure && (
+        <div className="career-insight-block">
+          <div className="career-insight-block-title">身份压力</div>
+          <div className={`career-insight-card risk-${stagePressure.level === 'at_risk' ? 'danger' : 'warning'}`}>
+            <div className="career-insight-row-title">
+              <span>{stagePressure.summary}</span>
+              <span>{stagePressure.level === 'at_risk' ? '高危' : '观察'}</span>
+            </div>
+            {stagePressure.reasons.length > 0 && (
+              <ul>
+                {stagePressure.reasons.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            )}
+            <div className="career-insight-hint">赛季结算会根据连续压力决定是否回落。</div>
+          </div>
+        </div>
+      )}
 
       {showOnboarding && insight?.onboarding && (
         <div className="career-insight-onboarding">

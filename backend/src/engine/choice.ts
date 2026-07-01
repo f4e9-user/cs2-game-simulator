@@ -362,7 +362,7 @@ function continueWithQueuedEvents(
     phase: nextEvent ? 'event' : 'action',
     currentEvent: nextEvent ?? null,
     queuedEvents: restQueuedEvents,
-    weeklyNews: session.weeklyNews ?? [],
+    weeklyNews: worldSession.weeklyNews ?? session.weeklyNews ?? [],
     activeEventSequence: undefined,
     roundPlan: undefined,
     history: [...session.history, result],
@@ -430,7 +430,7 @@ function continueWithRoundPlan(
     phase: presentation.currentEvent ? 'event' : 'action',
     currentEvent: presentation.currentEvent,
     queuedEvents: [],
-    weeklyNews: session.weeklyNews ?? [],
+    weeklyNews: worldSession.weeklyNews ?? session.weeklyNews ?? [],
     activeEventSequence: presentation.activeEventSequence,
     roundPlan: nextPlan,
     history: [...session.history, result],
@@ -443,6 +443,10 @@ function continueWithRoundPlan(
 }
 
 function pickClubInterviewEvent(player: Player): EventDef | null {
+  if (player.stage === 'rookie' && player.pendingApplication?.path === 'youth-score') {
+    const event = getEventById('chain-club-youth-score');
+    if (event) return event;
+  }
   const preferredIds = [
     player.tags.includes('application-path-open-match') ? 'chain-club-interview-open-match' : null,
     player.tags.includes('application-path-talent') ? 'chain-club-interview-talent' : null,
@@ -906,7 +910,16 @@ export function applyChoice(
   });
 
   if (chosenEffects.buffAdd) {
-    buffs = [...buffs, chosenEffects.buffAdd];
+    const existing = buffs.find((buff) => buff.id === chosenEffects.buffAdd!.id);
+    buffs = [
+      ...buffs.filter((buff) => buff.id !== chosenEffects.buffAdd!.id),
+      existing
+        ? {
+            ...chosenEffects.buffAdd,
+            remainingUses: existing.remainingUses + chosenEffects.buffAdd.remainingUses,
+          }
+        : chosenEffects.buffAdd,
+    ];
   }
 
   if (eventDef.type === 'match') {
@@ -1031,6 +1044,7 @@ export function applyChoice(
     ? advanceWeek(session.player.year ?? 1, session.player.week ?? 1)
     : { year: session.player.year ?? 1, week: session.player.week ?? 1 };
 
+  const injuryRestRoundsBeforeAdvance = restRounds;
   if (shouldAdvanceRound && restRounds > 0) {
     restRounds -= 1;
     if (restRounds === 0) {
@@ -1111,6 +1125,9 @@ export function applyChoice(
     qualificationSlotBatches: nextQualificationSlotBatches,
     teamQualificationSlotBatches: nextTeamQualificationSlotBatches,
     consecutiveLosses,
+    seasonInjuryRestWeeks: shouldAdvanceRound && injuryRestRoundsBeforeAdvance > 0
+      ? (session.player.seasonInjuryRestWeeks ?? 0) + 1
+      : (session.player.seasonInjuryRestWeeks ?? 0),
     consecutiveBrokeRounds,
   };
   if (shouldAdvanceRound) {
@@ -1645,6 +1662,7 @@ export function applyChoice(
           outcome.success,
           isFinal,
           isFinal && outcome.success,
+          aiEvents,
         );
       }
       nextPlayer.pendingMatch = null;
@@ -1768,6 +1786,9 @@ export function applyChoice(
   // 离队后清除 pendingDeparture（玩家自己离队）
   if (!nextPlayer.team) {
     nextPlayer.pendingDeparture = undefined;
+    nextPlayer.unattachedSinceRound = nextPlayer.unattachedSinceRound ?? nextPlayer.round;
+  } else {
+    nextPlayer.unattachedSinceRound = undefined;
   }
 
   if (nextPlayer.forceNextEvent && nextPlayer.forceNextEvent === eventDef.id) {
@@ -1870,11 +1891,83 @@ export function applyChoice(
     }
   }
 
+  if (eventDef.id === 'chain-club-youth-score') {
+    const app = session.player.pendingApplication;
+    if (!app || app.path !== 'youth-score' || !app.result) {
+      throw new Error('no scored youth application on this session');
+    }
+    const applicationTags = new Set([
+      'applying',
+      'application-youth-score-ready',
+      'application-response-ready',
+      'application-path-open-match',
+      'application-path-talent',
+      'interview-pending',
+      'interview-ready',
+      'club-origin-match',
+      'club-origin-regional',
+      'club-origin-mismatch',
+      'club-origin-open',
+      'club-exception-ready',
+      'club-exception-strength',
+      'club-exception-roster',
+      'club-exception-scouted',
+      'club-exception-roster-window',
+      'club-exception-referenced',
+    ]);
+    if (app.result === 'reject') {
+      nextPlayer.tags = dedupe([...nextPlayer.tags.filter((tag) => !applicationTags.has(tag)), 'club-rejected-notify']);
+      if (nextPlayer.tagExpiry) {
+        nextPlayer.tagExpiry = { ...nextPlayer.tagExpiry };
+        for (const tag of applicationTags) delete nextPlayer.tagExpiry[tag];
+      }
+      nextPlayer.pendingApplication = null;
+    } else {
+      const offer = generateTeamOffer(app.clubId);
+      const score = app.score ?? 0;
+      const teamStatus = score >= 85
+        ? 'starter'
+        : score >= 75
+          ? 'rotation'
+          : 'trial';
+      const teamStatusUntilRound = teamStatus === 'starter'
+        ? undefined
+        : teamStatus === 'rotation'
+          ? nextPlayer.round + 12
+          : nextPlayer.round + 8;
+      const monthlySalary = score >= 85
+        ? offer.monthlySalary
+        : score >= 75
+          ? Math.max(1, Math.floor(offer.monthlySalary * 0.8))
+          : Math.max(1, Math.floor(offer.monthlySalary * 0.6));
+      nextPlayer.pendingOffer = {
+        ...offer,
+        monthlySalary,
+        teamStatus,
+        ...(teamStatusUntilRound ? { teamStatusUntilRound } : {}),
+        joinMode: teamStatus === 'starter'
+          ? 'fill-vacancy'
+          : teamStatus === 'rotation'
+            ? 'rotation'
+            : 'trial-sixth',
+      };
+      nextPlayer.pendingApplication = null;
+      nextPlayer.tags = nextPlayer.tags.filter((tag) => !applicationTags.has(tag));
+      if (nextPlayer.tagExpiry) {
+        nextPlayer.tagExpiry = { ...nextPlayer.tagExpiry };
+        for (const tag of applicationTags) delete nextPlayer.tagExpiry[tag];
+      }
+    }
+  }
+
   let worldSession = { ...worldStateSession, player: nextPlayer };
   if (nextPlayer.team) {
     worldSession = activateClubRuntime(worldSession, nextPlayer.team.clubId, 'player-team-active');
   }
-  worldSession = tickWorldClubRuntimes(worldSession, nextPlayer.round, 'round');
+  worldSession = {
+    ...worldSession,
+    history: [...session.history, result],
+  };
   if (worldTournamentResult) {
     worldSession = recordWorldTournamentResult(
       worldSession,
@@ -1883,7 +1976,10 @@ export function applyChoice(
       worldTournamentResult.isFinalStage,
       worldTournamentResult.opponentClubId,
     );
+    nextPlayer = worldSession.player;
   }
+  worldSession = tickWorldClubRuntimes(worldSession, nextPlayer.round, 'round');
+  nextPlayer = worldSession.player;
   leaderboard = buildLeaderboard(worldSession, leaderboard);
 
   const roundPlanContinuation = continueWithRoundPlan(

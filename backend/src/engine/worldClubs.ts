@@ -25,6 +25,8 @@ import type {
   WorldClubPool,
 } from '../types.js';
 import { makeRng, stageIndex } from './resolver.js';
+import { evaluateStagePressure, minimumStageForTeamTier } from './stageProgression.js';
+import { nowIso } from './utils.js';
 
 const WORLD_CLUBS_VERSION = 1;
 const ROLES: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
@@ -208,12 +210,6 @@ function eligibleTiersForClub(tier: ClubTier): TournamentTier[] {
 }
 
 const CLUB_TIER_ORDER: ClubTier[] = ['youth', 'semi-pro', 'pro', 'top'];
-const TIER_MIN_STAGE: Record<ClubTier, Stage> = {
-  youth: 'youth',
-  'semi-pro': 'second',
-  pro: 'pro',
-  top: 'pro',
-};
 const TIER_SALARY_RANGE: Record<ClubTier, [number, number]> = {
   youth: [10, 20],
   'semi-pro': [20, 50],
@@ -310,7 +306,7 @@ function syncPlayerTeamTierFromRuntime(player: Player, runtimeByClubId: Record<s
   if (!runtime || runtime.tier === player.team.tier) return player;
   const change = runtime.lastTierChange ?? createTierChange(currentTeam.tier, runtime.tier, player.year ?? 1, player.round ?? 0);
   const direction = change.direction;
-  const minStage = TIER_MIN_STAGE[runtime.tier];
+  const minStage = minimumStageForTeamTier(runtime.tier);
   const nextStage = stageIndex(minStage) > stageIndex(player.stage) ? minStage : player.stage;
   const adjustedPlayer = adjustPlayerRosterForTierChange(player, direction);
   return {
@@ -325,6 +321,39 @@ function syncPlayerTeamTierFromRuntime(player: Player, runtimeByClubId: Record<s
       monthlySalary: salaryForTierChange(currentTeam.monthlySalary, runtime.tier, direction),
       lastTierChange: change,
     },
+  };
+}
+
+function stageLabel(stage: Stage): string {
+  const labels: Record<Stage, string> = {
+    rookie: '路人新人',
+    youth: '青训',
+    second: '二线',
+    pro: '职业',
+    retired: '退役',
+  };
+  return labels[stage];
+}
+
+function buildStageNewsItem(
+  id: string,
+  title: string,
+  narrative: string,
+  player: Player,
+) {
+  return {
+    id,
+    eventId: id,
+    type: 'broadcast' as const,
+    title,
+    narrative,
+    source: {
+      kind: 'broadcast' as const,
+      year: player.year ?? 1,
+      week: player.week ?? 1,
+      resultId: id,
+    },
+    createdAt: nowIso(),
   };
 }
 
@@ -949,8 +978,8 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
           ...next.qualificationState,
           eligibleTiers: eligibleTiersForClub(promotedTier),
         },
-        activeStorylines: addUnique(next.activeStorylines, 'promoted-after-breakout-season'),
-        pendingStoryFlags: addUnique(next.pendingStoryFlags, 'promoted-after-breakout-season'),
+        activeStorylines: addUnique(next.activeStorylines ?? [], 'promoted-after-breakout-season'),
+        pendingStoryFlags: addUnique(next.pendingStoryFlags ?? [], 'promoted-after-breakout-season'),
         lastTierChange: change,
       }, change.direction);
     }
@@ -965,8 +994,8 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
           ...next.qualificationState,
           eligibleTiers: eligibleTiersForClub(fallenTier),
         },
-        activeStorylines: addUnique(next.activeStorylines, 'fallen-giant'),
-        pendingStoryFlags: addUnique(next.pendingStoryFlags, 'fallen-giant'),
+        activeStorylines: addUnique(next.activeStorylines ?? [], 'fallen-giant'),
+        pendingStoryFlags: addUnique(next.pendingStoryFlags ?? [], 'fallen-giant'),
         lastTierChange: change,
       }, change.direction);
     }
@@ -995,9 +1024,67 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
     majorNewFaceClubIds,
   };
 
+  const stageBeforeSync = session.player.stage;
+  let nextPlayer = syncPlayerTeamTierFromRuntime(session.player, runtimeByClubId);
+  const syncedStage = nextPlayer.stage;
+  const newsItems = [...(session.weeklyNews ?? [])];
+  const stageSyncNews = syncedStage !== stageBeforeSync && stageIndex(syncedStage) > stageIndex(stageBeforeSync)
+    ? buildStageNewsItem(
+      `stage-floor-sync:${pool.season}:${tickRound}:${syncedStage}`,
+      '个人身份同步抬升',
+      `战队升入更高生态位，你的个人身份由 ${stageLabel(stageBeforeSync)} 同步抬升至 ${stageLabel(syncedStage)}。`,
+      nextPlayer,
+    )
+    : null;
+
+  const pressureEvaluation = evaluateStagePressure(
+    { ...session, player: nextPlayer },
+    nextPlayer,
+    { resultSeason: pool.season, stateSeason: currentSeason },
+  );
+  nextPlayer = {
+    ...nextPlayer,
+    stagePressure: pressureEvaluation.pressure,
+    seasonInjuryRestWeeks: 0,
+  };
+  if (pressureEvaluation.demoted && pressureEvaluation.demotionTo) {
+    const beforeStage = nextPlayer.stage;
+    nextPlayer = {
+      ...nextPlayer,
+      stage: pressureEvaluation.demotionTo,
+      stagePressure: {
+        level: 'none',
+        season: currentSeason,
+        score: 0,
+        reasons: [],
+        evaluatedRound: tickRound,
+      },
+      seasonInjuryRestWeeks: 0,
+    };
+    const id = `stage-demotion:${pool.season}:${tickRound}:${beforeStage}:${pressureEvaluation.demotionTo}`;
+    newsItems.push(buildStageNewsItem(
+      id,
+      '职业身份下滑',
+      `赛季结算后，市场价值受损，你的个人身份由 ${stageLabel(beforeStage)} 回落至 ${stageLabel(pressureEvaluation.demotionTo)}。原因：${pressureEvaluation.reason ?? '赛季压力过高'}。`,
+      nextPlayer,
+    ));
+  } else if (pressureEvaluation.pressure.level !== 'none') {
+    const id = `stage-pressure:${pool.season}:${tickRound}:${pressureEvaluation.pressure.level}`;
+    newsItems.push(buildStageNewsItem(
+      id,
+      pressureEvaluation.pressure.level === 'at_risk' ? '职业身份高危' : '职业身份受压',
+      `赛季结算后，你的职业身份压力为 ${pressureEvaluation.pressure.score} 分。原因：${pressureEvaluation.pressure.reasons.join('；')}。`,
+      nextPlayer,
+    ));
+  }
+  if (stageSyncNews && stageIndex(nextPlayer.stage) >= stageIndex(syncedStage)) {
+    newsItems.push(stageSyncNews);
+  }
+
   return {
     ...session,
-    player: syncPlayerTeamTierFromRuntime(session.player, runtimeByClubId),
+    player: nextPlayer,
+    weeklyNews: newsItems,
     worldClubs: {
       ...pool,
       season: currentSeason,

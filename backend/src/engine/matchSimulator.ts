@@ -120,10 +120,9 @@ function deriveEnemyPower(context: MatchContext): number {
   if (!context.opponent) return clamp(base, 20, 90);
   const opponent = context.opponent;
   const powerComponent = (opponent.power - 8) * 3;
-  const vrsComponent = Math.min(18, Math.sqrt(Math.max(0, opponent.vrsScore)) * 1.4);
   const formComponent = opponent.form / 12;
   const stageComponent = Math.max(0, context.stageIndex) * 1.5;
-  return clamp(base + powerComponent + vrsComponent + formComponent + stageComponent, 20, 90);
+  return clamp(base + powerComponent + formComponent + stageComponent, 20, 90);
 }
 
 function roleMatchModifiers(player: Player): { personalPower: number; teamPower: number; rating: number; summary: string | null } {

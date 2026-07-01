@@ -91,6 +91,19 @@ describe('buildCareerGoal', () => {
     expect(goal.opportunities[0]?.week).toBeGreaterThanOrEqual(6);
   });
 
+  it('marks rookie youth application eligibility ready under scored application rules', () => {
+    const goal = buildCareerGoal(player({
+      stage: 'rookie',
+      tierParticipations: {},
+      tierChampionships: {},
+      traits: [],
+    }));
+
+    expect(goal.goals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'youth-application', completed: true }),
+    ]));
+  });
+
   it('uses tournament gates for youth and second stages', () => {
     const youthGoal = buildCareerGoal(player({
       stage: 'youth',
@@ -112,6 +125,19 @@ describe('buildCareerGoal', () => {
     expect(secondGoal.goals).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'A 级赛事参赛', current: 3, target: 3, completed: true }),
       expect.objectContaining({ label: 'A 级赛事冠军', current: 0, target: 1, completed: false }),
+    ]));
+  });
+
+  it('includes the fame gate for second to pro promotion goals', () => {
+    const goal = buildCareerGoal(player({
+      stage: 'second',
+      fame: 12,
+      tierParticipations: { a: 3 },
+      tierChampionships: { a: 1 },
+    }));
+
+    expect(goal.goals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'fame', label: '名气', current: 12, target: 25, completed: false }),
     ]));
   });
 

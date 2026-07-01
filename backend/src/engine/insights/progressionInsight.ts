@@ -1,6 +1,6 @@
 import type { Player, Stage } from '../../types.js';
 import { buildCareerGoal, type CareerGoal } from '../careerGoal.js';
-import type { MilestoneInsight, OpportunityInsight, PromotionInsight, StageInsight } from './types.js';
+import type { MilestoneInsight, OpportunityInsight, PromotionInsight, StageInsight, StagePressureInsight } from './types.js';
 
 const STAGE_LABELS: Record<Stage, string> = {
   rookie: '路人新人',
@@ -124,5 +124,18 @@ export function buildPromotionInsight(player: Player, milestones: MilestoneInsig
     progressText: milestone?.progressText ?? goal.summary,
     missing: milestone?.missing ?? [],
     nextStep: milestone?.nextStep,
+  };
+}
+
+export function buildStagePressureInsight(player: Player): StagePressureInsight | undefined {
+  const pressure = player.stagePressure;
+  if (!pressure || pressure.level === 'none') return undefined;
+  const levelText = pressure.level === 'at_risk' ? '高危' : '观察';
+  return {
+    level: pressure.level,
+    score: pressure.score,
+    season: pressure.season,
+    reasons: pressure.reasons,
+    summary: `职业身份压力：${levelText}（${pressure.score} 分）`,
   };
 }

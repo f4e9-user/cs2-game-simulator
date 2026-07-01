@@ -69,6 +69,15 @@ function dynamicTags(player: Player): string[] {
   if (app && player.round >= app.responseRound && !player.tags.includes('interview-pending')) {
     out.push('application-response-ready');
   }
+  if (
+    app &&
+    player.round >= app.responseRound &&
+    player.stage === 'rookie' &&
+    app.path === 'youth-score' &&
+    !player.tags.includes('interview-pending')
+  ) {
+    out.push('application-youth-score-ready');
+  }
   // interview-pending 由 chain-club-response 成功后写入，独立于 pendingApplication
   if (player.tags.includes('interview-pending')) {
     out.push('interview-ready');
@@ -476,6 +485,15 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   }
 
   // 战队申请到期后必须先给回信，避免申请链路被普通随机事件长期挤掉。
+  if (player.pendingApplication && synthTags.has('application-youth-score-ready')) {
+    const youthScoreEvent = pool.find(
+      (e) =>
+        e.id === 'chain-club-youth-score' &&
+        e.stages.includes(player.stage) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)),
+    );
+    if (youthScoreEvent && !isExcluded(youthScoreEvent) && !isExcludedId(youthScoreEvent)) return youthScoreEvent;
+  }
   if (synthTags.has('application-response-ready')) {
     const responseEvent = pool.find(
       (e) =>

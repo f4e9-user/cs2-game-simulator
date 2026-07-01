@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyChoice, createSession } from '../gameEngine.js';
 import { toPublicEvent } from '../events.js';
 import { simulateMatch } from '../matchSimulator.js';
-import type { Player } from '../../types.js';
+import type { EventDef, Player } from '../../types.js';
 import { getEventById } from '../../data/events/index.js';
 
 function player(overrides: Partial<Player>): Player {
@@ -333,6 +333,43 @@ describe('simulateMatch', () => {
     expect(concrete.winProb).toBeLessThan(generic.winProb);
   });
 
+  it('ignores opponent vrs score when resolving match strength', () => {
+    const p = player({
+      stats: {
+        agility: 14,
+        intelligence: 12,
+        experience: 10,
+        money: 0,
+        mentality: 12,
+        constitution: 10,
+      },
+      volatile: { feel: 1, tilt: 0, fatigue: 10 },
+      stage: 'pro',
+    });
+    const context = {
+      tier: 'a' as const,
+      progressionTier: 'a' as const,
+      entryType: 'direct_signup' as const,
+      stageIndex: 1,
+      effectiveDifficulty: 4,
+      opponent: {
+        power: 16,
+        vrsScore: 0,
+        form: 35,
+      },
+    };
+
+    const low = simulateMatch(p, context, rng([0.5, 0.5, 0.5, 0.5, 0.5, 0.5]));
+    const high = simulateMatch(
+      p,
+      { ...context, opponent: { ...context.opponent, vrsScore: 9999 } },
+      rng([0.5, 0.5, 0.5, 0.5, 0.5, 0.5]),
+    );
+
+    expect(high.winProb).toBe(low.winProb);
+    expect(high.won).toBe(low.won);
+  });
+
   it('consumes pre-match intel on tournament match experience growth', () => {
     const p = player({
       stats: {
@@ -378,5 +415,60 @@ describe('simulateMatch', () => {
     const updated = applyChoice(session, 'match-play');
     const buff = updated.session.player.buffs.find((entry) => entry.id === 'pre-match-intel');
     expect(buff?.remainingUses).toBe(1);
+  });
+
+  it('merges repeated pre-match intel into one buff with stacked uses', () => {
+    const p = player({
+      buffs: [
+        {
+          id: 'pre-match-intel',
+          label: '赛前情报',
+          actionTag: 'match',
+          growthKey: 'experience',
+          growthMultiplier: 1.15,
+          remainingUses: 1,
+          consumeOn: 'growth',
+        },
+      ],
+    });
+    const session = createSession(p, 1);
+    const event: EventDef = {
+      id: 'tournament-context-intel-review',
+      type: 'tournament-context',
+      title: '对手录像分析',
+      narrative: '赛前情报测试',
+      stages: ['rookie', 'youth', 'second', 'pro'],
+      difficulty: 1,
+      choices: [
+        {
+          id: 'review',
+          label: '做分析',
+          description: '获得赛前情报',
+          check: { primary: 'intelligence', dc: 0 },
+          success: {
+            narrative: '分析完成。',
+            effects: {
+              buffAdd: {
+                id: 'pre-match-intel',
+                label: '赛前情报',
+                actionTag: 'match',
+                growthKey: 'experience',
+                growthMultiplier: 1.15,
+                remainingUses: 2,
+                consumeOn: 'growth',
+              },
+            },
+          },
+          failure: { narrative: '没分析出来。' },
+        },
+      ],
+    };
+    session.currentEvent = toPublicEvent(event, []);
+
+    const updated = applyChoice(session, 'review', 20, [event]);
+    const matching = updated.session.player.buffs.filter((entry) => entry.id === 'pre-match-intel');
+
+    expect(matching).toHaveLength(1);
+    expect(matching[0]?.remainingUses).toBe(3);
   });
 });

@@ -137,6 +137,24 @@ describe('buildCareerInsight', () => {
     expect(insight).not.toHaveProperty('careerGoal');
   });
 
+  it('keeps second-to-pro promotion locked until fame gate is met', () => {
+    const insight = buildCareerInsight(session({
+      stage: 'second',
+      fame: 12,
+      tierParticipations: { a: 3 },
+      tierChampionships: { a: 1 },
+    }));
+
+    expect(insight.milestones[0]).toMatchObject({
+      id: 'second-to-pro',
+      status: 'in_progress',
+    });
+    expect(insight.promotion.ready).toBe(false);
+    expect(insight.promotion.missing).toEqual(expect.arrayContaining([
+      expect.stringContaining('名气'),
+    ]));
+  });
+
   it('builds a response-only session payload without persisting insight or debug fields', () => {
     const savedSession = {
       ...session({

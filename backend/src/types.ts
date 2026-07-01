@@ -556,12 +556,23 @@ export interface PendingApplication {
   clubName: string;
   appliedRound: number;
   responseRound: number;
+  path?: 'open-match' | 'talent' | 'youth-score';
+  score?: number;
+  result?: 'pass' | 'tryout' | 'reject';
   originRegion?: string;
   originPreference?: ClubOriginPreference;
   originFit?: ClubOriginFit;
   originFitBonus?: number;
   exceptionBonus?: number;
   exceptionReasons?: string[];
+}
+
+export interface StagePressureState {
+  level: 'none' | 'watch' | 'at_risk';
+  season: number;
+  score: number;
+  reasons: string[];
+  evaluatedRound: number;
 }
 
 export interface TeamOffer {
@@ -571,6 +582,9 @@ export interface TeamOffer {
   tier: ClubTier;
   region: string;
   monthlySalary: number;
+  teamStatus?: 'starter' | 'trial' | 'rotation';
+  teamStatusUntilRound?: number;
+  joinMode?: PlayerJoinMode;
 }
 
 export interface PendingDeparture {
@@ -680,12 +694,14 @@ export interface DynamicState {
   weeklyShopPurchases: Record<string, { year: number; week: number; count: number }>;
   weeklyTeamActions: Record<string, { year: number; week: number; count: number }>;
   team: PlayerTeam | null;
+  unattachedSinceRound?: number;
   pendingApplication: PendingApplication | null;
   qualificationSlots: Record<string, number>;
   teamQualificationSlots: Record<string, number>;
   qualificationSlotBatches?: QualificationSlotBatch[];
   teamQualificationSlotBatches?: QualificationSlotBatch[];
   consecutiveLosses: number;         // 连续赛事失利计数
+  seasonInjuryRestWeeks?: number;
   everHadTeam: boolean;               // 是否曾拥有过战队（用于结局判定）
   contractRenewals: number;           // 续约次数（用于 loyal-veteran 结局）
   forceNextEvent: string | null;
@@ -762,6 +778,7 @@ export interface Player extends DynamicState {
   tierParticipations: Record<string, number>;
   tierChampionships: Record<string, number>;
   championshipSeries?: Record<string, number>;
+  stagePressure?: StagePressureState;
   promotionPending: Stage | null;
   promotionCooldown: number;
   pendingOffer: TeamOffer | null;

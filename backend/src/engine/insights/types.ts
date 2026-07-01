@@ -4,6 +4,7 @@ export interface CareerInsight {
   generatedAtRound: number;
   stage: StageInsight;
   promotion: PromotionInsight;
+  stagePressure?: StagePressureInsight;
   headline: string;
   onboarding?: OnboardingInsight;
   priorities: PriorityInsight[];
@@ -34,6 +35,14 @@ export interface PromotionInsight {
   progressText: string;
   missing: string[];
   nextStep?: string;
+}
+
+export interface StagePressureInsight {
+  level: 'none' | 'watch' | 'at_risk';
+  score: number;
+  season: number;
+  reasons: string[];
+  summary: string;
 }
 
 export interface CareerInsightCompatibility {

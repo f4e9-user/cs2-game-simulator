@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getTournament } from '../../data/tournaments.js';
-import { createSession, initPlayer, respondTeamOffer } from '../gameEngine.js';
+import { getEventById } from '../../data/events/index.js';
+import { createSession, initPlayer, respondTeamOffer, applyChoice } from '../gameEngine.js';
 import {
   assignPendingMatchOpponent,
   activateClubRuntime,
@@ -13,6 +14,7 @@ import {
   tickWorldClubRuntimes,
 } from '../worldClubs.js';
 import type { PendingMatch } from '../../types.js';
+import { toPublicEvent } from '../events.js';
 
 function session() {
   const player = initPlayer({
@@ -254,6 +256,7 @@ describe('world club runtime', () => {
       toTier: 'semi-pro',
       direction: 'promotion',
     });
+    expect(nextSeason.weeklyNews?.some((item) => item.eventId.startsWith('stage-floor-sync:'))).toBe(true);
     expect(nextSeason.player.teamQualificationSlots).toEqual({});
     expect(nextSeason.player.teamQualificationSlotBatches).toEqual([]);
     expect(nextSeason.player.pendingMatch).toBeNull();
@@ -314,6 +317,296 @@ describe('world club runtime', () => {
       toTier: 'semi-pro',
       direction: 'relegation',
     });
+  });
+
+  it('records watch-level stage pressure at season rollover', () => {
+    const baseSession = session();
+    const activated = activateClubRuntime({
+      ...baseSession,
+      player: {
+        ...baseSession.player,
+        stage: 'second',
+        fame: 12,
+        year: 2,
+        round: 49,
+        team: {
+          clubId: 'club-cyber-academy',
+          name: '赛博学院',
+          tag: 'CYA',
+          region: '亚太',
+          tier: 'youth' as const,
+          monthlySalary: 10,
+          joinedRound: 40,
+        },
+      },
+      history: [38, 40, 42].map((round, index) => ({
+        round,
+        eventId: `tournament-y1-a-0${index + 1}--0`,
+        eventType: 'match' as const,
+        eventTitle: 'A test',
+        choiceId: 'x',
+        choiceLabel: 'x',
+        success: false,
+        roll: 1,
+        dc: 10,
+        narrative: 'loss',
+        statChanges: {},
+        newStats: baseSession.player.stats,
+        stageBefore: 'second' as const,
+        stageAfter: 'second' as const,
+        tagsAdded: [],
+        tagsRemoved: [],
+        passiveEffects: [],
+        qualificationChanges: [],
+        stressChange: 0,
+        fameChange: 0,
+        feelChange: 0,
+        tiltChange: 0,
+        fatigueChange: 0,
+        buffsAdded: [],
+        createdAt: new Date(0).toISOString(),
+      })),
+    }, 'club-cyber-academy', 'test');
+    const previousSeason = activated.worldClubs!.season;
+
+    const nextSeason = tickWorldClubRuntimes({
+      ...activated,
+      worldClubs: {
+        ...activated.worldClubs!,
+        season: previousSeason,
+      },
+    }, 49, 'round');
+
+    expect(nextSeason.player.stagePressure).toMatchObject({
+      level: 'watch',
+      score: 3,
+      season: 2,
+    });
+    expect(nextSeason.weeklyNews?.some((item) => item.eventId.startsWith('stage-pressure:'))).toBe(true);
+  });
+
+  it('marks at-risk pressure without demotion on the first high-risk season', () => {
+    const baseSession = session();
+    const activated = activateClubRuntime({
+      ...baseSession,
+      player: {
+        ...baseSession.player,
+        stage: 'pro',
+        fame: 12,
+        stress: 90,
+        year: 2,
+        round: 49,
+        team: {
+          clubId: 'club-dragon-corp',
+          name: 'Dragon Corp',
+          tag: 'DRG',
+          region: '中国',
+          tier: 'pro' as const,
+          monthlySalary: 65,
+          joinedRound: 1,
+        },
+        stagePressure: {
+          level: 'none',
+          season: 1,
+          score: 0,
+          reasons: [],
+          evaluatedRound: 48,
+        },
+      },
+    }, 'club-dragon-corp', 'test');
+
+    const nextSeason = tickWorldClubRuntimes(activated, 49, 'round');
+
+    expect(nextSeason.player.stage).toBe('pro');
+    expect(nextSeason.player.stagePressure).toMatchObject({
+      level: 'at_risk',
+      score: 5,
+      season: 2,
+    });
+  });
+
+  it('demotes stage after consecutive at-risk season pressure', () => {
+    const baseSession = session();
+    const activated = activateClubRuntime({
+      ...baseSession,
+      player: {
+        ...baseSession.player,
+        stage: 'pro',
+        fame: 12,
+        stress: 90,
+        year: 2,
+        round: 49,
+        tags: ['cheat'],
+        team: {
+          clubId: 'club-dragon-corp',
+          name: 'Dragon Corp',
+          tag: 'DRG',
+          region: '中国',
+          tier: 'pro' as const,
+          monthlySalary: 65,
+          joinedRound: 1,
+        },
+        stagePressure: {
+          level: 'at_risk',
+          season: 1,
+          score: 5,
+          reasons: ['previous'],
+          evaluatedRound: 48,
+        },
+      },
+    }, 'club-dragon-corp', 'test');
+
+    const nextSeason = tickWorldClubRuntimes(activated, 49, 'round');
+
+    expect(nextSeason.player.stage).toBe('second');
+    expect(nextSeason.player.stagePressure).toMatchObject({
+      level: 'none',
+      score: 0,
+      season: 2,
+    });
+    expect(nextSeason.weeklyNews?.some((item) => item.eventId.startsWith('stage-demotion:'))).toBe(true);
+  });
+
+  it('demotes from the newly synced pro stage when pressure wins the same rollover', () => {
+    const baseSession = session();
+    const activated = activateClubRuntime({
+      ...baseSession,
+      player: {
+        ...baseSession.player,
+        stage: 'second',
+        fame: 0,
+        stress: 90,
+        year: 2,
+        round: 49,
+        tags: ['cheat'],
+        team: {
+          clubId: 'club-rising-force',
+          name: '崛起之力',
+          tag: 'RF',
+          region: '亚太',
+          tier: 'semi-pro' as const,
+          monthlySalary: 20,
+          joinedRound: 1,
+        },
+        stagePressure: {
+          level: 'at_risk',
+          season: 1,
+          score: 5,
+          reasons: ['previous'],
+          evaluatedRound: 48,
+        },
+      },
+    }, 'club-rising-force', 'test');
+    const runtime = activated.worldClubs!.runtimeByClubId['club-rising-force']!;
+
+    const nextSeason = tickWorldClubRuntimes({
+      ...activated,
+      worldClubs: {
+        ...activated.worldClubs!,
+        runtimeByClubId: {
+          ...activated.worldClubs!.runtimeByClubId,
+          'club-rising-force': {
+            ...runtime,
+            seasonPoints: 40,
+            currentForm: 35,
+          },
+        },
+      },
+    }, 49, 'round');
+
+    expect(nextSeason.worldClubs?.runtimeByClubId['club-rising-force']?.tier).toBe('pro');
+    expect(nextSeason.player.team?.tier).toBe('pro');
+    expect(nextSeason.player.stage).toBe('second');
+    expect(nextSeason.player.stagePressure).toMatchObject({
+      level: 'none',
+      score: 0,
+      season: 2,
+    });
+    expect(nextSeason.weeklyNews?.some((item) => item.eventId.startsWith('stage-demotion:'))).toBe(true);
+    expect(nextSeason.weeklyNews?.some((item) => item.eventId.startsWith('stage-floor-sync:'))).toBe(false);
+  });
+
+  it('evaluates a newly synced pro stage against pro pressure immediately', () => {
+    const baseSession = session();
+    const activated = activateClubRuntime({
+      ...baseSession,
+      player: {
+        ...baseSession.player,
+        stage: 'second',
+        fame: 12,
+        stress: 0,
+        year: 2,
+        round: 49,
+        tags: [],
+        team: {
+          clubId: 'club-rising-force',
+          name: '崛起之力',
+          tag: 'RF',
+          region: '亚太',
+          tier: 'semi-pro' as const,
+          monthlySalary: 20,
+          joinedRound: 1,
+        },
+        stagePressure: {
+          level: 'none',
+          season: 1,
+          score: 0,
+          reasons: [],
+          evaluatedRound: 48,
+        },
+      },
+      history: [{
+        round: 40,
+        eventId: 'tournament-y1-a-01--1',
+        eventType: 'match' as const,
+        eventTitle: 'A test',
+        choiceId: 'x',
+        choiceLabel: 'x',
+        success: true,
+        roll: 20,
+        dc: 10,
+        narrative: 'deep run',
+        statChanges: {},
+        newStats: baseSession.player.stats,
+        stageBefore: 'second' as const,
+        stageAfter: 'second' as const,
+        tagsAdded: [],
+        tagsRemoved: [],
+        passiveEffects: [],
+        qualificationChanges: [],
+        stressChange: 0,
+        fameChange: 0,
+        feelChange: 0,
+        tiltChange: 0,
+        fatigueChange: 0,
+        buffsAdded: [],
+        createdAt: new Date(0).toISOString(),
+      }],
+    }, 'club-rising-force', 'test');
+    const runtime = activated.worldClubs!.runtimeByClubId['club-rising-force']!;
+
+    const nextSeason = tickWorldClubRuntimes({
+      ...activated,
+      worldClubs: {
+        ...activated.worldClubs!,
+        runtimeByClubId: {
+          ...activated.worldClubs!.runtimeByClubId,
+          'club-rising-force': {
+            ...runtime,
+            seasonPoints: 40,
+            currentForm: 35,
+          },
+        },
+      },
+    }, 49, 'round');
+
+    expect(nextSeason.player.stage).toBe('pro');
+    expect(nextSeason.player.stagePressure).toMatchObject({
+      level: 'at_risk',
+      score: 4,
+      season: 2,
+    });
+    expect(nextSeason.weeklyNews?.some((item) => item.eventId.startsWith('stage-pressure:'))).toBe(true);
   });
 
   it('ticks rival mapped clubs as active world clubs', () => {
@@ -426,5 +719,76 @@ describe('world club runtime', () => {
 
     expect(after.seasonPoints).toBeGreaterThan(before.seasonPoints);
     expect(computeClubVrsScore(after)).toBeGreaterThan(computeClubVrsScore(before));
+  });
+
+  it('records a final-week tournament result before season rollover promotion checks', () => {
+    const tournament = getTournament('y1-c-01');
+    if (!tournament) throw new Error('missing fixture tournament');
+    const event = getEventById(`tournament-${tournament.id}--${tournament.bracket.length - 1}`);
+    if (!event) throw new Error('missing final event');
+    const baseSession = session();
+    const withTeam = {
+      ...baseSession,
+      phase: 'event' as const,
+      player: {
+        ...baseSession.player,
+        stage: 'youth' as const,
+        round: 48,
+        year: 1,
+        week: 48,
+        forceMatchResult: 'win' as const,
+        stats: {
+          ...baseSession.player.stats,
+          agility: 20,
+          intelligence: 20,
+          experience: 20,
+          mentality: 20,
+        },
+        team: {
+          clubId: 'club-cyber-academy',
+          name: '赛博学院',
+          tag: 'CYA',
+          region: '亚太',
+          tier: 'youth' as const,
+          monthlySalary: 10,
+          joinedRound: 1,
+        },
+        pendingMatch: {
+          tournamentId: tournament.id,
+          tier: tournament.tier,
+          name: tournament.displayName,
+          displayName: tournament.displayName,
+          resolveYear: 1,
+          resolveWeek: 48,
+          stageIndex: tournament.bracket.length - 1,
+        },
+      },
+      currentEvent: toPublicEvent(event, []),
+    };
+    const activated = activateClubRuntime(withTeam, 'club-cyber-academy', 'test');
+    const runtime = activated.worldClubs!.runtimeByClubId['club-cyber-academy']!;
+    const prepared = {
+      ...activated,
+      worldClubs: {
+        ...activated.worldClubs!,
+        runtimeByClubId: {
+          ...activated.worldClubs!.runtimeByClubId,
+          'club-cyber-academy': {
+            ...runtime,
+            seasonPoints: 35,
+            currentForm: 35,
+          },
+        },
+      },
+    };
+
+    const choiceId = event.choices[0]?.id;
+    if (!choiceId) throw new Error('missing final choice');
+    const updated = applyChoice(prepared, choiceId, 20).session;
+
+    expect(updated.player.year).toBe(2);
+    expect(updated.worldClubs?.runtimeByClubId['club-cyber-academy']?.tier).toBe('semi-pro');
+    expect(updated.player.team?.tier).toBe('semi-pro');
+    expect(updated.worldClubs?.seasonSummaries?.[0]?.promotedClubIds).toContain('club-cyber-academy');
   });
 });

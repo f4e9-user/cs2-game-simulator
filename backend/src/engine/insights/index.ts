@@ -3,7 +3,7 @@ import { buildActionRecommendations } from './actionRecommendation.js';
 import { buildCalendarBlocks } from './calendarBlocks.js';
 import { buildBlockerInsights, buildEventExplanations } from './eventReason.js';
 import { buildOnboardingInsight } from './onboardingInsight.js';
-import { buildProgressionMilestones, buildProgressionOpportunities, buildPromotionInsight, buildStageInsight } from './progressionInsight.js';
+import { buildProgressionMilestones, buildProgressionOpportunities, buildPromotionInsight, buildStageInsight, buildStagePressureInsight } from './progressionInsight.js';
 import { buildRiskInsights } from './riskInsight.js';
 import type { CareerInsight, PriorityInsight } from './types.js';
 
@@ -53,6 +53,7 @@ export function buildCareerInsight(session: GameSession, playerPoints = 0): Care
   const stage = buildStageInsight(session.player);
   const milestones = buildProgressionMilestones(session.player, playerPoints);
   const promotion = buildPromotionInsight(session.player, milestones, playerPoints);
+  const stagePressure = buildStagePressureInsight(session.player);
   const opportunities = buildProgressionOpportunities(session.player, playerPoints);
   const calendarBlocks = buildCalendarBlocks(session, opportunities, playerPoints);
   const risks = buildRiskInsights(session.player);
@@ -65,6 +66,7 @@ export function buildCareerInsight(session: GameSession, playerPoints = 0): Care
     generatedAtRound: session.player.round ?? 0,
     stage,
     promotion,
+    stagePressure,
     headline: `${stage.label}｜${stage.mainObjective}`,
     onboarding: buildOnboardingInsight(session.player),
     priorities: buildPriorities(partial),

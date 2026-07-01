@@ -201,6 +201,39 @@ describe('injury rest integration', () => {
     expect(resolved.session.player.tags).toContain('forced-rest');
   });
 
+  it('counts the first week when an event starts a new injury rest period', () => {
+    const session = createSession(player({
+      pendingMatch: null,
+      restRounds: 0,
+      seasonInjuryRestWeeks: 3,
+      actionPoints: 100,
+    }), 1);
+    session.phase = 'event';
+    session.currentEvent = toPublicEvent(getEventById('skin-epic-hacked')!);
+
+    const resolved = applyChoice(session, 'damage-control', 20);
+
+    expect(resolved.session.player.restRounds).toBe(1);
+    expect(resolved.session.player.seasonInjuryRestWeeks).toBe(4);
+  });
+
+  it('counts the final week when a forced rest period completes', () => {
+    const session = createSession(player({
+      pendingMatch: null,
+      restRounds: 1,
+      seasonInjuryRestWeeks: 3,
+      tags: ['injured', 'forced-rest'],
+      actionPoints: 100,
+    }), 1);
+    session.phase = 'event';
+    session.currentEvent = toPublicEvent(getEventById('rest-physio-rookie')!);
+
+    const resolved = applyChoice(session, 'full-rest');
+
+    expect(resolved.session.player.restRounds).toBe(0);
+    expect(resolved.session.player.seasonInjuryRestWeeks).toBe(4);
+  });
+
   it('does not report pressure collapse removal when the tag was not active', () => {
     const session = createSession(player({
       pendingMatch: null,

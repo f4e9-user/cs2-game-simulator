@@ -10,6 +10,7 @@ export interface TournamentGate {
   minParticipations: number;
   champTiers: string[];
   minChampionships: number;
+  minFame?: number;
   /** ID of the promotion narrative event injected when gate conditions are met */
   promotionEventId: string;
 }
@@ -33,6 +34,7 @@ export const TOURNAMENT_GATES: TournamentGate[] = [
     minParticipations: 3,
     champTiers: ['a'],
     minChampionships: 1,
+    minFame: 25,
     promotionEventId: 'promotion-second-to-pro',
   },
   // pro is the terminal competitive stage; star/veteran are tags, not stages.
@@ -90,6 +92,11 @@ export function checkTournamentPromotion(player: Player): PromotionCheck {
   if (championships < gate.minChampionships) {
     reasons.push(
       `夺冠次数不足：需在 ${tierLabel(gate.champTiers)} 夺冠 ≥ ${gate.minChampionships} 次（当前 ${championships} 次）`,
+    );
+  }
+  if (typeof gate.minFame === 'number' && (player.fame ?? 0) < gate.minFame) {
+    reasons.push(
+      `名气不足：晋级需要名气 ≥ ${gate.minFame}（当前 ${player.fame ?? 0}）`,
     );
   }
 
