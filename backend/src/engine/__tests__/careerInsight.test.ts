@@ -91,6 +91,41 @@ function session(overrides: Partial<Player> = {}): GameSession {
 }
 
 describe('buildCareerInsight', () => {
+  it('surfaces current club season goal pressure', () => {
+    const insight = buildCareerInsight(session({
+      team: {
+        clubId: 'club-meteor-prime',
+        name: 'Meteor Prime',
+        tag: 'MTP',
+        region: '欧洲',
+        tier: 'top',
+        monthlySalary: 100,
+        joinedRound: 1,
+        seasonGoal: {
+          id: 'goal-1',
+          type: 'reach-s-event',
+          label: '打进 S 级赛事',
+          season: 1,
+          targetTier: 's-class',
+          status: 'active',
+          progress: 0.25,
+          baseline: {
+            tierParticipations: {},
+            tierChampionships: {},
+            vrsScore: 0,
+            startYear: 1,
+          },
+        },
+        managementPatience: 25,
+        rebuildPressure: 70,
+      },
+    }));
+
+    expect(insight.seasonGoal?.label).toBe('打进 S 级赛事');
+    expect(insight.seasonGoal?.tone).toBe('critical');
+    expect(insight.seasonGoal?.rebuildPressure).toBe(70);
+  });
+
   it('explains the rookie route and first-round onboarding', () => {
     const insight = buildCareerInsight(session({ round: 1 }));
 

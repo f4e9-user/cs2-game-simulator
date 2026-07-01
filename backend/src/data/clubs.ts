@@ -11,6 +11,7 @@ export const CLUBS: Club[] = [
     baseSalary: 10,
     salaryRange: [10, 20],
     originPreference: 'local-core',
+    clubArchetype: 'scrappy-underdog',
   },
   {
     id: 'club-cyber-academy',
@@ -22,6 +23,7 @@ export const CLUBS: Club[] = [
     baseSalary: 10,
     salaryRange: [10, 20],
     originPreference: 'regional-core',
+    clubArchetype: 'development-factory',
   },
   {
     id: 'club-school-team',
@@ -33,6 +35,7 @@ export const CLUBS: Club[] = [
     baseSalary: 10,
     salaryRange: [10, 10],
     originPreference: 'local-core',
+    clubArchetype: 'development-factory',
   },
   {
     id: 'club-regional-youth',
@@ -44,6 +47,7 @@ export const CLUBS: Club[] = [
     baseSalary: 20,
     salaryRange: [10, 20],
     originPreference: 'regional-core',
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-rising-force',
@@ -55,6 +59,7 @@ export const CLUBS: Club[] = [
     baseSalary: 30,
     salaryRange: [20, 40],
     originPreference: 'regional-core',
+    clubArchetype: 'scrappy-underdog',
   },
   {
     id: 'club-iron-wolves',
@@ -66,6 +71,7 @@ export const CLUBS: Club[] = [
     baseSalary: 30,
     salaryRange: [20, 40],
     originPreference: 'regional-core',
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-pacific-storm',
@@ -77,6 +83,7 @@ export const CLUBS: Club[] = [
     baseSalary: 40,
     salaryRange: [30, 50],
     originPreference: 'regional-core',
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-rival-semi',
@@ -90,6 +97,7 @@ export const CLUBS: Club[] = [
     originPreference: 'regional-core',
     isRival: true,
     rivalIndex: 0,
+    clubArchetype: 'scrappy-underdog',
   },
   {
     id: 'club-apex-gaming',
@@ -102,6 +110,7 @@ export const CLUBS: Club[] = [
     baseSalary: 60,
     salaryRange: [40, 80],
     originPreference: 'international-open',
+    clubArchetype: 'legacy-giant',
   },
   {
     id: 'club-phantom-esports',
@@ -114,6 +123,7 @@ export const CLUBS: Club[] = [
     baseSalary: 60,
     salaryRange: [40, 80],
     originPreference: 'international-open',
+    clubArchetype: 'capital-project',
   },
   {
     id: 'club-dragon-corp',
@@ -126,6 +136,7 @@ export const CLUBS: Club[] = [
     baseSalary: 50,
     salaryRange: [40, 70],
     originPreference: 'regional-core',
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-rival-pro',
@@ -140,6 +151,7 @@ export const CLUBS: Club[] = [
     originPreference: 'international-open',
     isRival: true,
     rivalIndex: 1,
+    clubArchetype: 'capital-project',
   },
   {
     id: 'club-titan-corp',
@@ -152,6 +164,8 @@ export const CLUBS: Club[] = [
     baseSalary: 100,
     salaryRange: [80, 140],
     originPreference: 'international-open',
+    clubArchetype: 'capital-project',
+    capital: 92,
   },
   {
     id: 'club-neon-dynasty',
@@ -164,6 +178,8 @@ export const CLUBS: Club[] = [
     baseSalary: 90,
     salaryRange: [70, 120],
     originPreference: 'regional-core',
+    clubArchetype: 'legacy-giant',
+    heritage: 88,
   },
   {
     id: 'club-sovereign',
@@ -176,6 +192,9 @@ export const CLUBS: Club[] = [
     baseSalary: 110,
     salaryRange: [90, 150],
     originPreference: 'international-open',
+    clubArchetype: 'legacy-giant',
+    heritage: 92,
+    capital: 78,
   },
   {
     id: 'club-rival-top',
@@ -190,6 +209,7 @@ export const CLUBS: Club[] = [
     originPreference: 'international-open',
     isRival: true,
     rivalIndex: 2,
+    clubArchetype: 'legacy-giant',
   },
   {
     id: 'club-aurora-academy',
@@ -200,6 +220,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'youth',
     baseSalary: 12,
     salaryRange: [10, 18],
+    clubArchetype: 'development-factory',
   },
   {
     id: 'club-rift-academy',
@@ -210,6 +231,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'youth',
     baseSalary: 12,
     salaryRange: [10, 18],
+    clubArchetype: 'development-factory',
   },
   {
     id: 'club-mongol-academy',
@@ -220,6 +242,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'youth',
     baseSalary: 12,
     salaryRange: [10, 18],
+    clubArchetype: 'development-factory',
   },
   {
     id: 'club-sea-academy',
@@ -230,6 +253,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'youth',
     baseSalary: 12,
     salaryRange: [10, 18],
+    clubArchetype: 'scrappy-underdog',
   },
   {
     id: 'club-summit-force',
@@ -240,6 +264,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 32,
     salaryRange: [24, 42],
+    clubArchetype: 'development-factory',
   },
   {
     id: 'club-boreal-unit',
@@ -250,6 +275,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 32,
     salaryRange: [24, 42],
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-mountain-guard',
@@ -260,6 +286,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 32,
     salaryRange: [24, 42],
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-steppe-brothers',
@@ -270,6 +297,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 34,
     salaryRange: [26, 44],
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-china-lights',
@@ -280,6 +308,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 34,
     salaryRange: [26, 44],
+    clubArchetype: 'development-factory',
   },
   {
     id: 'club-oceanic-core',
@@ -290,6 +319,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 32,
     salaryRange: [24, 42],
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-sea-reach',
@@ -300,6 +330,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 32,
     salaryRange: [24, 42],
+    clubArchetype: 'scrappy-underdog',
   },
   {
     id: 'club-south-surge',
@@ -310,6 +341,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 32,
     salaryRange: [24, 42],
+    clubArchetype: 'scrappy-underdog',
   },
   {
     id: 'club-cis-echo',
@@ -320,6 +352,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 32,
     salaryRange: [24, 42],
+    clubArchetype: 'fallen-legacy',
   },
   {
     id: 'club-desert-squad',
@@ -330,6 +363,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 32,
     salaryRange: [24, 42],
+    clubArchetype: 'scrappy-underdog',
   },
   {
     id: 'club-mars-esports',
@@ -341,6 +375,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 62,
     salaryRange: [48, 82],
+    clubArchetype: 'capital-project',
   },
   {
     id: 'club-northlight',
@@ -352,6 +387,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 62,
     salaryRange: [48, 82],
+    clubArchetype: 'fallen-legacy',
   },
   {
     id: 'club-sandstorm',
@@ -363,6 +399,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 62,
     salaryRange: [48, 82],
+    clubArchetype: 'capital-project',
   },
   {
     id: 'club-ocean-elite',
@@ -374,6 +411,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 60,
     salaryRange: [46, 78],
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-mongol-pride',
@@ -385,6 +423,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 62,
     salaryRange: [48, 82],
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-eastwave',
@@ -396,6 +435,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 60,
     salaryRange: [46, 78],
+    clubArchetype: 'development-factory',
   },
   {
     id: 'club-brazillian-dawn',
@@ -407,6 +447,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 62,
     salaryRange: [48, 82],
+    clubArchetype: 'fallen-legacy',
   },
   {
     id: 'club-cis-tide',
@@ -418,6 +459,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 62,
     salaryRange: [48, 82],
+    clubArchetype: 'fallen-legacy',
   },
   {
     id: 'club-nova-titan',
@@ -429,6 +471,8 @@ export const CLUBS: Club[] = [
     requiredFame: 30,
     baseSalary: 102,
     salaryRange: [82, 142],
+    clubArchetype: 'capital-project',
+    capital: 90,
   },
   {
     id: 'club-zenith-legacy',
@@ -440,6 +484,9 @@ export const CLUBS: Club[] = [
     requiredFame: 30,
     baseSalary: 98,
     salaryRange: [78, 136],
+    clubArchetype: 'legacy-giant',
+    heritage: 90,
+    capital: 74,
   },
   {
     id: 'club-meteor-prime',
@@ -451,6 +498,8 @@ export const CLUBS: Club[] = [
     requiredFame: 30,
     baseSalary: 108,
     salaryRange: [88, 148],
+    clubArchetype: 'capital-project',
+    capital: 91,
   },
   {
     id: 'club-steppe-titan',
@@ -462,6 +511,8 @@ export const CLUBS: Club[] = [
     requiredFame: 30,
     baseSalary: 100,
     salaryRange: [80, 140],
+    clubArchetype: 'fallen-legacy',
+    heritage: 82,
   },
   {
     id: 'club-oasis-guard',
@@ -473,6 +524,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 61,
     salaryRange: [46, 80],
+    clubArchetype: 'regional-pride',
   },
   {
     id: 'club-arctic-surge',
@@ -484,6 +536,8 @@ export const CLUBS: Club[] = [
     requiredFame: 30,
     baseSalary: 106,
     salaryRange: [86, 146],
+    clubArchetype: 'legacy-giant',
+    heritage: 86,
   },
   {
     id: 'club-crown-line',
@@ -494,6 +548,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'second',
     baseSalary: 33,
     salaryRange: [24, 42],
+    clubArchetype: 'fallen-legacy',
   },
   {
     id: 'club-starforge',
@@ -505,6 +560,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 63,
     salaryRange: [48, 82],
+    clubArchetype: 'capital-project',
   },
   {
     id: 'club-morning-fox',
@@ -515,6 +571,7 @@ export const CLUBS: Club[] = [
     requiredStage: 'youth',
     baseSalary: 13,
     salaryRange: [10, 18],
+    clubArchetype: 'scrappy-underdog',
   },
   {
     id: 'club-river-dragon',
@@ -526,6 +583,7 @@ export const CLUBS: Club[] = [
     requiredFame: 15,
     baseSalary: 61,
     salaryRange: [48, 80],
+    clubArchetype: 'regional-pride',
   },
 ];
 

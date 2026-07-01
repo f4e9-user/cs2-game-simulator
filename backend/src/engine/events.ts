@@ -10,7 +10,7 @@ import {
 import { calcSynergyBonus } from './synergy.js';
 import { deriveRolePressure } from './roleTransition.js';
 import type { AiEventPickCandidate } from '../ai/eventCache.js';
-import type { EventDef, EventType, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier, LeaderboardTeam, TeamIdentity, RoundPlan, ThemeGroup } from '../types.js';
+import type { EventDef, EventType, GameSession, Player, Rival, Teammate, TeammateRole, PendingMatch, ClubTier, LeaderboardTeam, TeamIdentity, RoundPlan, ThemeGroup } from '../types.js';
 import { pickTournamentContextEvent } from './tournamentContext.js';
 import { effectiveHousingEventWeightMultiplier, housingEventTags } from './housing.js';
 import { roundPlanFit } from './roundPlan.js';
@@ -26,6 +26,7 @@ export interface EventContext {
   excludedTypes?: EventType[];
   excludedEventIds?: string[];
   roundPlan?: RoundPlan;
+  session?: GameSession;
 }
 
 function playerHasTeamIdentity(player: Player, identity: TeamIdentity): boolean {
@@ -43,7 +44,12 @@ function teammateWithIdentity(player: Player, identity: TeamIdentity): Teammate 
   return (player.roster ?? []).find((tm) => teammateHasTeamIdentity(player, tm, identity));
 }
 
-function dynamicTags(player: Player): string[] {
+function rebuildActiveThreshold(player: Player): number {
+  const club = player.team ? CLUBS.find((candidate) => candidate.id === player.team?.clubId) : undefined;
+  return club?.clubArchetype === 'capital-project' ? 70 : 80;
+}
+
+function dynamicTags(player: Player, session?: GameSession): string[] {
   const out: string[] = [];
   // Stress is now 0-100; 60+ counts as "stressed".
   if (player.stress >= 60) out.push('stressed');
@@ -91,6 +97,16 @@ function dynamicTags(player: Player): string[] {
   // ── 在队生命周期 tag ──────────────────────────────────────────────
   if (player.team) {
     out.push('has-team');
+    const teamRuntime = session?.worldClubs?.runtimeByClubId?.[player.team.clubId];
+    if (teamRuntime?.pendingStoryFlags?.includes('incoming-signing-pending')) {
+      out.push('incoming-signing-competition');
+    }
+    const rebuildPressure = player.team.rebuildPressure ?? 0;
+    if (rebuildPressure >= rebuildActiveThreshold(player) && !player.tags.includes('rebuild-chain-active')) {
+      out.push('rebuild-active');
+    } else if (rebuildPressure >= 60) {
+      out.push('rebuild-watch');
+    }
     const playerIsCaller = playerHasTeamIdentity(player, 'caller');
     const playerIsStar = playerHasTeamIdentity(player, 'star');
     const starTeammate = teammateWithIdentity(player, 'star');
@@ -436,7 +452,7 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   const isExcluded = (event: EventDef) => excludedTypes?.includes(event.type) ?? false;
   const isExcludedId = (event: EventDef) => excludedEventIds?.includes(event.id) ?? false;
   const realTags = new Set(player.tags);
-  const synthTags = new Set([...player.tags, ...dynamicTags(player)]);
+  const synthTags = new Set([...player.tags, ...dynamicTags(player, ctx.session)]);
   const weightedAiCandidates = aiEventCandidates ?? aiEvents?.map((event) => ({ event, weightMultiplier: 1 })) ?? [];
   const candidateAiEvents = weightedAiCandidates.map((candidate) => candidate.event);
   const aiWeightById = new Map(weightedAiCandidates.map((candidate) => [candidate.event.id, candidate.weightMultiplier]));
@@ -468,6 +484,18 @@ export function pickEvent(ctx: EventContext): EventDef | null {
   if (player.forceNextEvent) {
     const forcedEvent = getEventById(player.forceNextEvent);
     if (forcedEvent && !isExcluded(forcedEvent) && !isExcludedId(forcedEvent)) return forcedEvent;
+  }
+
+  if (synthTags.has('incoming-signing-competition')) {
+    const incomingEvent = pool.find(
+      (e) =>
+        e.id === 'chain-incoming-signing-contest' &&
+        e.stages.includes(player.stage) &&
+        !recentEventIds.includes(e.id) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
+    );
+    if (incomingEvent && !isExcluded(incomingEvent) && !isExcludedId(incomingEvent)) return incomingEvent;
   }
 
   if ((player.restRounds ?? 0) > 0) {
@@ -564,6 +592,54 @@ export function pickEvent(ctx: EventContext): EventDef | null {
     );
     const interviewEvent = weightedPick(interviewPool, rng, (e) => (e.requireTags?.length ?? 1) * planWeight(e));
     if (interviewEvent && !isExcluded(interviewEvent) && !isExcludedId(interviewEvent)) return interviewEvent;
+  }
+
+  if (synthTags.has('rebuild-decision-step')) {
+    const decisionEvent = pool.find(
+      (e) =>
+        e.id === 'chain-rebuild-decision' &&
+        e.stages.includes(player.stage) &&
+        !recentEventIds.includes(e.id) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
+    );
+    if (decisionEvent && !isExcluded(decisionEvent) && !isExcludedId(decisionEvent)) return decisionEvent;
+  }
+
+  if (synthTags.has('rebuild-contest-step')) {
+    const contestEvent = pool.find(
+      (e) =>
+        e.id === 'chain-rebuild-contest' &&
+        e.stages.includes(player.stage) &&
+        !recentEventIds.includes(e.id) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
+    );
+    if (contestEvent && !isExcluded(contestEvent) && !isExcludedId(contestEvent)) return contestEvent;
+  }
+
+  if (synthTags.has('rebuild-rumor-step')) {
+    const rumorEvent = pool.find(
+      (e) =>
+        e.id === 'chain-rebuild-rumor' &&
+        e.stages.includes(player.stage) &&
+        !recentEventIds.includes(e.id) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
+    );
+    if (rumorEvent && !isExcluded(rumorEvent) && !isExcludedId(rumorEvent)) return rumorEvent;
+  }
+
+  if (synthTags.has('rebuild-active')) {
+    const pressureEvent = pool.find(
+      (e) =>
+        e.id === 'chain-rebuild-pressure' &&
+        e.stages.includes(player.stage) &&
+        !recentEventIds.includes(e.id) &&
+        !e.requireTags?.some((t) => !synthTags.has(t)) &&
+        !e.forbidTags?.some((t) => synthTags.has(t)),
+    );
+    if (pressureEvent && !isExcluded(pressureEvent) && !isExcludedId(pressureEvent)) return pressureEvent;
   }
 
   if (

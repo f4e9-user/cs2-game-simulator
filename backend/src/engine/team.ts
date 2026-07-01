@@ -1,7 +1,6 @@
 import { generateRoster } from '../data/roster.js';
 import { getClubProfile } from '../data/clubProfiles.js';
 import type {
-  ClubPlayer,
   GameSession,
   PendingDeparture,
   Player,
@@ -15,7 +14,9 @@ import type {
   TeamActionResult,
   TeamIdentity,
   TeamOffer,
+  WorldPlayer,
 } from '../types.js';
+import { applyAgeToStats } from './age.js';
 import { TEAMMATE_GROWTH_CAP } from './constants.js';
 import { makeRng } from './resolver.js';
 import { applyMoneyTransaction } from './money.js';
@@ -196,26 +197,32 @@ const TEAM_TRAINING_FOCUS_LABELS: Record<TeamTrainingFocus, string> = {
   mental: '心态稳定',
 };
 
-function clubPlayerToTeammate(clubPlayer: ClubPlayer, slotIndex: number, fallbackChemistry: number): Teammate {
+function worldPlayerToTeammate(worldPlayer: WorldPlayer, _slotIndex: number, fallbackChemistry: number): Teammate {
+  const stats = applyAgeToStats({ ...worldPlayer.stats, money: 0 }, worldPlayer.age);
   return {
-    id: `slot-${slotIndex + 1}`,
-    name: clubPlayer.name,
-    role: clubPlayer.role,
-    personality: clubPlayer.personality,
-    traits: [...clubPlayer.traits],
-    stats: { ...clubPlayer.stats },
+    id: worldPlayer.id,
+    name: worldPlayer.name,
+    role: worldPlayer.role,
+    personality: worldPlayer.personality,
+    traits: [...worldPlayer.traits],
+    stats: {
+      agility: stats.agility,
+      intelligence: stats.intelligence,
+      mentality: stats.mentality,
+      experience: stats.experience,
+    },
     growthSpent: 0,
-    chemistry: clampTeammateChemistry(clubPlayer.internalChemistry ?? fallbackChemistry),
+    chemistry: clampTeammateChemistry(worldPlayer.internalChemistry ?? fallbackChemistry),
   };
 }
 
 export function rosterFromClubRuntime(session: GameSession, offer: TeamOffer, rng: () => number): Teammate[] {
   const runtime = previewClubRuntime(session, offer.clubId);
   const fallbackChemistry = runtime.internalChemistry;
-  const starters = runtime.fullRoster.filter((clubPlayer) => clubPlayer.status === 'starter');
+  const starters = runtime.fullRoster.filter((worldPlayer) => worldPlayer.status === 'starter');
   const source = (starters.length >= 4 ? starters : runtime.fullRoster).slice(0, 4);
   if (source.length >= 4) {
-    return source.map((clubPlayer, index) => clubPlayerToTeammate(clubPlayer, index, fallbackChemistry));
+    return source.map((worldPlayer, index) => worldPlayerToTeammate(worldPlayer, index, fallbackChemistry));
   }
   return generateRoster(offer.tier, rng);
 }

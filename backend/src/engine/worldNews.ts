@@ -1,5 +1,5 @@
 import { buildYearTournaments, type Tournament } from '../data/tournaments.js';
-import type { GameSession, WeeklyNewsItem } from '../types.js';
+import type { Club, GameSession, TransferRecord, WeeklyNewsItem, WorldPlayer } from '../types.js';
 import { nowIso } from './utils.js';
 import { getClub } from '../data/clubs.js';
 import { resolveClubDisplayInfo } from './worldClubs.js';
@@ -308,11 +308,82 @@ export function buildWorldTournamentNews(session: GameSession): WeeklyNewsItem[]
   return items;
 }
 
+export function buildWorldTransferNewsItem(record: TransferRecord, player: WorldPlayer, toClub: Club, fromClub: Club): WeeklyNewsItem {
+  return {
+    id: `world-transfer:${record.season}:${record.id}`,
+    eventId: `world-transfer:${record.id}`,
+    type: 'broadcast',
+    title: '世界转会动态',
+    narrative: `${toClub.name} 从 ${fromClub.name} 签下 ${player.name}，这笔转会被视为 ${record.summary}。`,
+    source: {
+      kind: 'world-transfer',
+      year: record.season,
+      resultId: record.id,
+      clubId: toClub.id,
+    },
+    createdAt: nowIso(),
+  };
+}
+
+export function buildWorldTransferNews(session: GameSession): WeeklyNewsItem[] {
+  const existingIds = new Set((session.weeklyNews ?? []).map((item) => item.eventId));
+  const items = (session.transferHistory ?? [])
+    .slice(0, 4)
+    .map((record) => {
+      const fromClub = getClub(record.fromClubId);
+      const toClub = getClub(record.toClubId);
+      if (!fromClub || !toClub) return null;
+      const player: WorldPlayer = {
+        id: record.playerId,
+        name: record.playerId.split(':').at(-1) ?? record.playerId,
+        region: toClub.region,
+        age: 24,
+        clubId: toClub.id,
+        role: 'Entry',
+        status: 'starter',
+        archetype: 'role-player',
+        stats: { agility: 50, constitution: 50, intelligence: 50, mentality: 50, experience: 50 },
+        form: 0,
+        reputation: 50,
+        traits: [],
+        personality: 'supportive',
+        joinedRound: 0,
+      };
+      return buildWorldTransferNewsItem(record, player, toClub, fromClub);
+    })
+    .filter((item): item is WeeklyNewsItem => Boolean(item && !existingIds.has(item.eventId)));
+  const seen = new Set([...existingIds, ...items.map((item) => item.eventId)]);
+  for (const rumor of (session.transferRumors ?? []).slice(0, 6)) {
+    if (rumor.resolved || rumor.credibility === 'low') continue;
+    const eventId = `world-transfer-rumor:${rumor.id}`;
+    if (seen.has(eventId)) continue;
+    const fromClub = getClub(rumor.fromClubId);
+    const toClub = getClub(rumor.toClubId);
+    if (!fromClub || !toClub) continue;
+    items.push({
+      id: `${eventId}:${rumor.season}`,
+      eventId,
+      type: 'broadcast',
+      title: '世界转会传闻',
+      narrative: `传闻：${toClub.name} 正在关注 ${fromClub.name} 的 ${rumor.playerId.split(':').at(-1) ?? rumor.playerId}。${rumor.reason}`,
+      source: {
+        kind: 'world-transfer',
+        year: rumor.season,
+        resultId: rumor.id,
+        clubId: toClub.id,
+      },
+      createdAt: nowIso(),
+    });
+    seen.add(eventId);
+  }
+  return items;
+}
+
 export function buildWorldNewsSocialPosts(session: GameSession): Array<{ author: string; authorType: 'media'; handle: string; content: string }> {
   const recent = (session.weeklyNews ?? []).slice(-6).reverse();
   const posts: Array<{ author: string; authorType: 'media'; handle: string; content: string }> = [];
   for (const item of recent) {
-    if (item.source?.kind !== 'world-tournament' && item.source?.kind !== 'world-club-season') continue;
+    if (item.source?.kind !== 'world-tournament' && item.source?.kind !== 'world-club-season' && item.source?.kind !== 'world-transfer') continue;
     const prefix = item.type === 'broadcast' ? '赛事观察' : 'HLTV Brief';
     posts.push({
       author: prefix,

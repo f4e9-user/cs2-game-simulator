@@ -23,4 +23,15 @@ describe('club pool', () => {
     expect(countsByRegion['蒙古'] ?? 0).toBeGreaterThanOrEqual(2);
     expect(countsByRegion['中国'] ?? 0).toBeGreaterThanOrEqual(4);
   });
+
+  it('has the required top-tier archetype distribution', () => {
+    const topClubs = CLUBS.filter((club) => club.tier === 'top' && !club.isRival);
+    const counts = topClubs.reduce<Record<string, number>>((acc, club) => {
+      if (club.clubArchetype) acc[club.clubArchetype] = (acc[club.clubArchetype] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    expect(counts['legacy-giant'] ?? 0).toBeGreaterThanOrEqual(3);
+    expect(counts['capital-project'] ?? 0).toBeGreaterThanOrEqual(2);
+  });
 });

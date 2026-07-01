@@ -30,6 +30,7 @@ import type {
   Stats,
   TeamActionResult,
   Tournament,
+  TournamentInstance,
   AllTournamentsResponse,
   TournamentsResponse,
   Trait,
@@ -155,7 +156,7 @@ export const api = {
       `/api/game/${sessionId}/tournaments/all`,
     ),
   signup: (sessionId: string, tournamentId: string, apiToken?: string) =>
-    request<{ pendingMatch: NonNullable<Player['pendingMatch']>; player: Player }>(
+    request<{ pendingMatch: NonNullable<Player['pendingMatch']>; player: Player; activeTournamentInstance?: TournamentInstance | null }>(
       `/api/game/${sessionId}/signup`,
       { method: 'POST', body: JSON.stringify({ tournamentId }) },
       apiToken,

@@ -36,6 +36,7 @@ export interface InitInput {
   traitIds: string[];
   backgroundId: string;
   originRegion?: string;
+  age?: number;
   stats?: Stats;
 }
 
@@ -210,6 +211,7 @@ export function initPlayer(input: InitInput): Player {
 
   const player: Player = {
     name: input.name.trim() || 'nameless',
+    age: input.age ?? 18,
     stats: clampStats(finalStats),
     volatile: { feel: 0, tilt: 0, fatigue: 0 },
     feelCap: FEEL_CAP_DEFAULT,

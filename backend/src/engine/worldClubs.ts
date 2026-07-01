@@ -1,10 +1,11 @@
 import { CLUBS, getClub } from '../data/clubs.js';
+import { clubArchetype, clubCapital, clubHeritage } from '../data/clubIdentity.js';
 import { getClubProfile } from '../data/clubProfiles.js';
 import { buildYearTournaments, getTournament, type Tournament } from '../data/tournaments.js';
+import { completeTournamentInstance, createTournamentInstance } from './tournamentInstance.js';
 import type {
   Club,
   ClubDisplayInfo,
-  ClubPlayer,
   ClubRuntimeState,
   ClubSeasonSummary,
   ClubTier,
@@ -12,6 +13,8 @@ import type {
   GameSession,
   PendingMatch,
   Player,
+  PlayerArchetype,
+  PlayerSkillProfile,
   PersonalityTag,
   RosterNeed,
   RosterStyle,
@@ -23,12 +26,16 @@ import type {
   WorldTournamentParticipant,
   WorldTournamentSnapshot,
   WorldClubPool,
+  WorldPlayer,
 } from '../types.js';
+import { applyAgeToStats } from './age.js';
 import { makeRng, stageIndex } from './resolver.js';
+import { generateSeasonGoal, settleSeasonGoal } from './seasonGoal.js';
 import { evaluateStagePressure, minimumStageForTeamTier } from './stageProgression.js';
+import { runTransferWindow } from './transferWindow.js';
 import { nowIso } from './utils.js';
 
-const WORLD_CLUBS_VERSION = 1;
+const WORLD_CLUBS_VERSION = 2;
 const ROLES: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
 const PERSONALITIES: PersonalityTag[] = ['strict', 'supportive', 'star', 'grinder', 'drama'];
 const ROLE_TRAITS: Record<TeammateRole, string[]> = {
@@ -120,14 +127,47 @@ function rivalDisplayIdentity(session: GameSession, club: Club): Pick<ClubRuntim
   };
 }
 
-function randomStats(tier: ClubTier, rng: () => number): TeammateStats {
+function randomStats(tier: ClubTier, rng: () => number): PlayerSkillProfile {
   const [min, max] = TIER_STAT_RANGE[tier];
   return {
     agility: rollStat(min, max, rng),
+    constitution: rollStat(min, max, rng),
     intelligence: rollStat(min, max, rng),
     mentality: rollStat(min, max, rng),
     experience: rollStat(min, max, rng),
   };
+}
+
+function randomAge(tier: ClubTier, rng: () => number): number {
+  const ranges: Record<ClubTier, [number, number]> = {
+    youth: [16, 20],
+    'semi-pro': [18, 24],
+    pro: [20, 28],
+    top: [22, 31],
+  };
+  const [min, max] = ranges[tier];
+  return rollStat(min, max, rng);
+}
+
+function playerArchetypeFor(role: TeammateRole, club: Club, rng: () => number): PlayerArchetype {
+  if (club.tier === 'youth' && rng() < 0.55) return 'rookie-prospect';
+  if (role === 'AWPer') return rng() < 0.45 ? 'star-awper' : 'clutch-specialist';
+  if (role === 'Entry') return rng() < 0.55 ? 'entry-fragger' : 'volatile-talent';
+  if (role === 'IGL') return 'system-igl';
+  if (role === 'Support') return rng() < 0.5 ? 'role-player' : 'veteran-anchor';
+  return rng() < 0.35 ? 'clutch-specialist' : 'role-player';
+}
+
+function reputationFor(club: Club, archetype: PlayerArchetype, rng: () => number): number {
+  const baseByTier: Record<ClubTier, [number, number]> = {
+    youth: [8, 28],
+    'semi-pro': [18, 42],
+    pro: [38, 68],
+    top: [58, 88],
+  };
+  const [min, max] = baseByTier[club.tier];
+  const starBonus = archetype === 'superstar' || archetype === 'star-awper' ? 8 : 0;
+  return clamp(rollStat(min, max, rng) + starBonus, 0, 100);
 }
 
 function pickTraits(role: TeammateRole, bias: Record<string, number>, rng: () => number): string[] {
@@ -202,6 +242,48 @@ function styleBaseline(style: RosterStyle): Pick<ClubRuntimeState, 'clubTrust' |
   return { clubTrust: 52, currentForm: 0, rosterStability: 55, internalChemistry: 50 };
 }
 
+function applyIdentityToBaseline(
+  baseline: Pick<ClubRuntimeState, 'clubTrust' | 'currentForm' | 'rosterStability' | 'internalChemistry'>,
+  club: Club,
+): Pick<ClubRuntimeState, 'clubTrust' | 'currentForm' | 'rosterStability' | 'internalChemistry'> {
+  const heritage = clubHeritage(club);
+  const capital = clubCapital(club);
+  const archetype = clubArchetype(club);
+  let clubTrust = baseline.clubTrust;
+  let currentForm = baseline.currentForm;
+  let rosterStability = baseline.rosterStability;
+  let internalChemistry = baseline.internalChemistry;
+
+  if (heritage >= 70) {
+    clubTrust += 6;
+    rosterStability += 4;
+  }
+  if (capital >= 75) {
+    currentForm += 4;
+    rosterStability -= 6;
+  }
+  if (archetype === 'development-factory') internalChemistry += 6;
+  if (archetype === 'fallen-legacy') {
+    currentForm -= 6;
+    rosterStability -= 4;
+  }
+  if (archetype === 'scrappy-underdog') clubTrust += 4;
+
+  return {
+    clubTrust: clamp(clubTrust, 0, 100),
+    currentForm: clamp(currentForm, -100, 100),
+    rosterStability: clamp(rosterStability, 0, 100),
+    internalChemistry: clamp(internalChemistry, 0, 100),
+  };
+}
+
+function heritageVrsBonus(club: Club): number {
+  const heritage = clubHeritage(club);
+  if (heritage >= 70) return 8;
+  if (heritage >= 55) return 4;
+  return 0;
+}
+
 function eligibleTiersForClub(tier: ClubTier): TournamentTier[] {
   if (tier === 'youth') return ['c', 'b'];
   if (tier === 'semi-pro') return ['b', 'a'];
@@ -262,9 +344,10 @@ function salaryForTierChange(currentSalary: number, toTier: ClubTier, direction:
   return clamp(scaled, min, max);
 }
 
-function adjustStatsForTierChange(stats: TeammateStats, direction: ClubTierChange['direction']): TeammateStats {
+function adjustStatsForTierChange<T extends TeammateStats>(stats: T, direction: ClubTierChange['direction']): T {
   const delta = direction === 'promotion' ? 1 : -1;
   return {
+    ...stats,
     agility: clamp(stats.agility + delta, 0, 20),
     intelligence: clamp(stats.intelligence + delta, 0, 20),
     mentality: clamp(stats.mentality + delta, 0, 20),
@@ -357,23 +440,30 @@ function buildStageNewsItem(
   };
 }
 
-function generateFullRoster(session: GameSession, club: Club): ClubPlayer[] {
+function generateFullRoster(session: GameSession, club: Club): WorldPlayer[] {
   const profile = getClubProfile(club.id, club.tier);
   const rng = makeRng(hashString(`${session.id}:club-runtime:${club.id}:${session.player.year ?? 1}`));
   const availableRoles = [...ROLES];
-  const roster: ClubPlayer[] = [];
+  const roster: WorldPlayer[] = [];
   for (let i = 0; i < 5; i++) {
     const role = weightedPick(availableRoles, profile.roleBias, rng);
+    const archetype = playerArchetypeFor(role, club, rng);
     availableRoles.splice(availableRoles.indexOf(role), 1);
     roster.push({
       id: `${club.id}:starter-${i + 1}`,
       name: randomName(club, i, rng),
+      region: club.region,
+      age: randomAge(club.tier, rng),
+      clubId: club.id,
       role,
+      status: 'starter',
+      archetype,
       stats: randomStats(club.tier, rng),
+      form: 0,
+      reputation: reputationFor(club, archetype, rng),
       traits: pickTraits(role, profile.traitBias, rng),
       personality: weightedPick(PERSONALITIES, profile.personalityBias, rng),
       joinedRound: Math.max(0, (session.player.round ?? 0) - Math.floor(rng() * 24)),
-      status: 'starter',
       internalChemistry: 40 + Math.floor(rng() * 25),
     });
   }
@@ -383,15 +473,16 @@ function generateFullRoster(session: GameSession, club: Club): ClubPlayer[] {
 export function createClubRuntimeState(session: GameSession, clubId: string): ClubRuntimeState {
   const club = getClub(clubId);
   if (!club) throw new Error(`未知俱乐部: ${clubId}`);
-  const profile = getClubProfile(club.id, club.tier);
+  const profile = getClubProfile(club.id, club.tier, clubArchetype(club));
   const baseline = styleBaseline(profile.rosterStyle);
+  const identityBaseline = applyIdentityToBaseline(baseline, club);
   return withVrsScore({
     clubId,
     tier: club.tier,
     ...rivalDisplayIdentity(session, club),
-    baselineVrsScore: baselineVrsScore(session, club),
+    baselineVrsScore: baselineVrsScore(session, club) + heritageVrsBonus(club),
     fullRoster: generateFullRoster(session, club),
-    ...baseline,
+    ...identityBaseline,
     seasonPoints: 0,
     vrsScore: 0,
     qualificationState: {
@@ -546,7 +637,7 @@ export function calculateClubPower(club: ClubRuntimeState): number {
   const roster = starters.length > 0 ? starters : club.fullRoster;
   const rosterPower = roster.length > 0
     ? roster.reduce((sum, player) => {
-        const stats = player.stats;
+        const stats = applyAgeToStats({ ...player.stats, money: 0 }, player.age);
         return sum + (stats.agility + stats.intelligence + stats.mentality + stats.experience) / 4;
       }, 0) / roster.length
     : 0;
@@ -702,10 +793,17 @@ function applyWorldTournamentTick(session: GameSession, tickRound: number, tickT
   let runtimeByClubId = { ...pool.runtimeByClubId };
   let processedTickKeysByClubId = { ...pool.processedTickKeysByClubId };
   let tournamentSnapshots = [...(pool.tournamentSnapshots ?? [])];
-  const candidateIds = unique([...pool.activeClubIds, ...pool.relevantClubIds, ...pool.staticClubIds]).slice(0, 48);
+  const candidateIds = unique([...pool.activeClubIds, ...pool.relevantClubIds, ...pool.staticClubIds]);
   const playerClubId = session.player.team?.clubId;
 
   for (const tournament of tournaments) {
+    if (
+      session.activeTournamentInstance &&
+      session.activeTournamentInstance.status !== 'completed' &&
+      session.activeTournamentInstance.tournamentId === tournament.id
+    ) {
+      continue;
+    }
     const tournamentYear = Number(/^y(\d+)-/.exec(tournament.id)?.[1] ?? year);
     const signupWeek = tournamentSignupWeek(tournament);
     const resultDate = tournamentResultDate(tournament, tournamentYear);
@@ -715,37 +813,73 @@ function applyWorldTournamentTick(session: GameSession, tickRound: number, tickT
     const processedTournamentKey = `world-tournament:${snapshotId}`;
     if ((processedTickKeysByClubId.__global ?? []).includes(processedTournamentKey)) continue;
 
-    const eligibleIds = candidateIds
-      .filter((clubId) => clubId !== playerClubId)
+    const targetParticipantCount = tournament.tier === 'major' ? 32 : 12;
+    const tournamentCandidateIds = tournament.tier === 'major'
+      ? unique([...candidateIds, ...CLUBS.filter((club) => !club.isRival).map((club) => club.id)])
+      : candidateIds;
+    const sortedCandidateIds = tournamentCandidateIds
       .filter((clubId) => {
-        const runtime = runtimeByClubId[clubId] ?? createClubRuntimeState(nextSession, clubId);
-        return runtime.qualificationState.eligibleTiers.includes(tournament.tier);
+        const club = getClub(clubId);
+        return Boolean(club && !club.isRival);
       })
+      .filter((clubId) => clubId !== playerClubId)
       .sort((a, b) => {
         const aRuntime = runtimeByClubId[a] ?? createClubRuntimeState(nextSession, a);
         const bRuntime = runtimeByClubId[b] ?? createClubRuntimeState(nextSession, b);
         return computeClubVrsScore(bRuntime) - computeClubVrsScore(aRuntime);
-      })
-      .slice(0, tournament.tier === 'major' ? 16 : 12);
+      });
+    const qualifiedIds = sortedCandidateIds
+      .filter((clubId) => clubId !== playerClubId)
+      .filter((clubId) => {
+        const runtime = runtimeByClubId[clubId] ?? createClubRuntimeState(nextSession, clubId);
+        return runtime.qualificationState.eligibleTiers.includes(tournament.tier);
+      });
+    const eligibleIds = unique([
+      ...qualifiedIds,
+      ...(tournament.tier === 'major' ? sortedCandidateIds : []),
+    ]).slice(0, targetParticipantCount);
     if (eligibleIds.length < 2) continue;
 
-    const participants = eligibleIds.map((clubId, index): WorldTournamentParticipant & { strength: number } => {
-      const runtime = runtimeByClubId[clubId] ?? createClubRuntimeState(nextSession, clubId);
-      const rng = makeRng(hashString(`${session.id}:world-tournament:${tournament.id}:${clubId}:${tickRound}`));
+    const eligibleIdSet = new Set(eligibleIds);
+    const fieldSession: GameSession = {
+      ...nextSession,
+      player: {
+        ...nextSession.player,
+        team: null,
+      },
+      worldClubs: {
+        ...pool,
+        activeClubIds: pool.activeClubIds.filter((clubId) => eligibleIdSet.has(clubId)),
+        relevantClubIds: pool.relevantClubIds.filter((clubId) => eligibleIdSet.has(clubId)),
+        staticClubIds: eligibleIds,
+        runtimeByClubId,
+      },
+    };
+    const completedInstance = completeTournamentInstance(createTournamentInstance(fieldSession, tournament), false);
+    const finalMatch = completedInstance.stages.at(-1)?.matches[0];
+    const instanceChampionClubId = completedInstance.awards?.championClubId ?? finalMatch?.winnerClubId;
+    const instanceRunnerUpClubId = completedInstance.awards?.runnerUpClubId ??
+      (finalMatch ? (finalMatch.winnerClubId === finalMatch.teamAClubId ? finalMatch.teamBClubId : finalMatch.teamAClubId) : undefined);
+    if (!instanceChampionClubId || !instanceRunnerUpClubId || !finalMatch?.score) continue;
+
+    const participants = completedInstance.teams.map((team): WorldTournamentParticipant & { strength: number } => {
+      const runtime = runtimeByClubId[team.clubId] ?? createClubRuntimeState(nextSession, team.clubId);
+      const rng = makeRng(hashString(`${session.id}:world-tournament:${tournament.id}:${team.clubId}:${tickRound}`));
       const vrsScore = computeClubVrsScore(runtime);
       const power = calculateClubPower(runtime);
       return {
-        clubId,
-        seed: index + 1,
+        clubId: team.clubId,
+        seed: team.seed,
         vrsScore,
         power,
         form: runtime.currentForm,
         strength: power + vrsScore / 25 + runtime.currentForm / 25 + rng() * 4,
       };
-    }).sort((a, b) => b.strength - a.strength);
-    const champion = participants[0]!;
-    const runnerUp = participants[1]!;
-    const darkHorse = participants.find((participant) => participant.seed > Math.ceil(participants.length / 2) && participant.clubId === champion.clubId);
+    });
+    const champion = participants.find((participant) => participant.clubId === instanceChampionClubId);
+    const runnerUp = participants.find((participant) => participant.clubId === instanceRunnerUpClubId);
+    if (!champion || !runnerUp) continue;
+    const darkHorse = champion.seed > Math.ceil(participants.length / 2) ? champion : undefined;
     const upset = champion.seed > runnerUp.seed + 4 ? runnerUp : undefined;
 
     for (const participant of participants) {
@@ -779,6 +913,7 @@ function applyWorldTournamentTick(session: GameSession, tickRound: number, tickT
     }
     const snapshot: WorldTournamentSnapshot = {
       id: snapshotId,
+      tournamentInstanceId: `${tournament.id}:world:${tournamentYear}`,
       tournamentId: tournament.id,
       tournamentName: tournament.displayName,
       tier: tournament.tier,
@@ -792,9 +927,9 @@ function applyWorldTournamentTick(session: GameSession, tickRound: number, tickT
       runnerUpClubId: runnerUp.clubId,
       darkHorseClubId: darkHorse?.clubId,
       upsetClubId: upset?.clubId,
-      finalScore: tournament.tier === 'major' || tournament.tier === 's-class'
-        ? (hashString(snapshotId) % 2 === 0 ? '3-1' : '3-2')
-        : (hashString(snapshotId) % 2 === 0 ? '2-0' : '2-1'),
+      finalScore: finalMatch.score,
+      winnerMvp: completedInstance.awards?.winnerMvp,
+      loserMvp: completedInstance.awards?.loserMvp,
       createdAt: new Date(0).toISOString(),
     };
     tournamentSnapshots = [snapshot, ...tournamentSnapshots].slice(0, 48);
@@ -852,7 +987,10 @@ export function assignPendingMatchOpponent(
   const tournament = getTournamentForPending(pendingMatch);
   if (!tournament) return { session, pendingMatch };
   let nextSession = ensureWorldClubPool(session);
-  const opponentClubId = pickOpponentClubId(nextSession, tournament);
+  const instanceOpponent = pendingMatch.tournamentInstanceId === session.activeTournamentInstance?.id
+    ? session.activeTournamentInstance?.playerPath?.find((path) => path.stageIndex === pendingMatch.stageIndex)?.opponentClubId
+    : undefined;
+  const opponentClubId = instanceOpponent ?? pickOpponentClubId(nextSession, tournament);
   if (!opponentClubId) return { session: nextSession, pendingMatch };
   nextSession = activateClubRuntime(nextSession, opponentClubId, 'pending-match-opponent');
   const runtime = nextSession.worldClubs!.runtimeByClubId[opponentClubId]!;
@@ -958,7 +1096,13 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
   const majorNewFaceClubIds: string[] = [];
 
   for (const [clubId, runtime] of Object.entries(pool.runtimeByClubId)) {
-    let next = { ...runtime };
+    let next: ClubRuntimeState = {
+      ...runtime,
+      fullRoster: runtime.fullRoster.map((player) => ({
+        ...player,
+        age: player.age + 1,
+      })),
+    };
     const darkHorse = next.seasonPoints >= 24 && next.currentForm >= 20;
     const promoted = next.seasonPoints >= 36 && next.currentForm >= 25 && next.tier !== 'top';
     const fallen = next.seasonPoints <= 6 && next.currentForm <= -35 && next.tier !== 'youth';
@@ -1026,6 +1170,53 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
 
   const stageBeforeSync = session.player.stage;
   let nextPlayer = syncPlayerTeamTierFromRuntime(session.player, runtimeByClubId);
+  if (nextPlayer.team) {
+    const teamRuntime = runtimeByClubId[nextPlayer.team.clubId];
+    if (teamRuntime) {
+      let nextTeamRuntime = { ...teamRuntime };
+      if (teamRuntime.seasonGoal) {
+        const settlement = settleSeasonGoal(
+          { ...session, player: nextPlayer, worldClubs: { ...pool, runtimeByClubId } },
+          teamRuntime,
+          teamRuntime.seasonGoal,
+        );
+        nextTeamRuntime = {
+          ...nextTeamRuntime,
+          seasonGoal: {
+            ...teamRuntime.seasonGoal,
+            status: settlement.status,
+          },
+          managementPatience: clamp((teamRuntime.managementPatience ?? 60) + settlement.patienceDelta, 0, 100),
+          rebuildPressure: clamp((teamRuntime.rebuildPressure ?? 0) + settlement.rebuildPressureDelta, 0, 100),
+        };
+      }
+      const nextGoal = generateSeasonGoal(
+        { ...session, player: { ...nextPlayer, year: currentSeason }, worldClubs: { ...pool, runtimeByClubId } },
+        nextPlayer.team.clubId,
+        currentSeason,
+      );
+      nextTeamRuntime = {
+        ...nextTeamRuntime,
+        seasonGoal: nextGoal,
+        managementPatience: nextTeamRuntime.managementPatience ?? 60,
+        rebuildPressure: nextTeamRuntime.rebuildPressure ?? 0,
+      };
+      runtimeByClubId = {
+        ...runtimeByClubId,
+        [nextPlayer.team.clubId]: withVrsScore(nextTeamRuntime),
+      };
+      nextPlayer = {
+        ...nextPlayer,
+        team: {
+          ...nextPlayer.team,
+          seasonGoal: nextGoal,
+          managementPatience: nextTeamRuntime.managementPatience,
+          rebuildPressure: nextTeamRuntime.rebuildPressure,
+          coreStatus: nextTeamRuntime.coreStatus,
+        },
+      };
+    }
+  }
   const syncedStage = nextPlayer.stage;
   const newsItems = [...(session.weeklyNews ?? [])];
   const stageSyncNews = syncedStage !== stageBeforeSync && stageIndex(syncedStage) > stageIndex(stageBeforeSync)
@@ -1081,7 +1272,7 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
     newsItems.push(stageSyncNews);
   }
 
-  return {
+  const settledSession: GameSession = {
     ...session,
     player: nextPlayer,
     weeklyNews: newsItems,
@@ -1092,6 +1283,7 @@ function rolloverWorldClubSeason(session: GameSession, tickRound: number): GameS
       seasonSummaries: [summary, ...(pool.seasonSummaries ?? [])].slice(0, 4),
     },
   };
+  return runTransferWindow(settledSession, currentSeason);
 }
 
 export function tickWorldClubRuntimes(

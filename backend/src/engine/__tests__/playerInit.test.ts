@@ -2,6 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { initPlayer, rollRandomTraits } from '../player.js';
 
 describe('player initialization', () => {
+  it('sets a default age and accepts a custom starting age', () => {
+    const defaultAge = initPlayer({
+      name: 'DefaultAge',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    });
+    const customAge = initPlayer({
+      name: 'CustomAge',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+      age: 21,
+    });
+
+    expect(defaultAge.age).toBe(18);
+    expect(customAge.age).toBe(21);
+  });
+
   it('uses 20K as the default opening money', () => {
     const player = initPlayer({
       name: 'DefaultMoney',

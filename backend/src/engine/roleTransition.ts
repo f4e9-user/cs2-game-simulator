@@ -1,4 +1,5 @@
 import type { Player, RoundResult, RoleTransition } from '../types.js';
+import { roleFitScore, ROLE_PROFILES } from '../data/roleProfiles.js';
 
 export function deriveRolePressure(player: Player, history: RoundResult[]): number {
   let pressure = 0;
@@ -10,6 +11,13 @@ export function deriveRolePressure(player: Player, history: RoundResult[]): numb
   }
   if (player.activeRole && player.roster?.some((tm) => tm.role === player.activeRole)) {
     pressure += 25;
+  }
+  if (player.activeRole) {
+    const activeFit = roleFitScore(player, player.activeRole);
+    const bestAlternative = ROLE_PROFILES
+      .filter((profile) => profile.role !== player.activeRole)
+      .reduce((best, profile) => Math.max(best, roleFitScore(player, profile.role)), 0);
+    if (bestAlternative - activeFit >= 15) pressure += 18;
   }
   if (hasPoorRecentMatch(history)) {
     pressure += 15;

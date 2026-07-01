@@ -1,4 +1,9 @@
-import type { ClubProfile, RosterStyle } from '../types.js';
+import { CLUBS } from './clubs.js';
+import type { ClubArchetype, ClubProfile, RosterStyle } from '../types.js';
+
+type ClubProfilePreset = Partial<Omit<ClubProfile, 'clubId' | 'politicsBias'>> & {
+  politicsBias?: Partial<ClubProfile['politicsBias']>;
+};
 
 const DEFAULT_PROFILE: Omit<ClubProfile, 'clubId'> = {
   rosterStyle: 'balanced',
@@ -64,26 +69,66 @@ const PROFILE_OVERRIDES: Record<string, Partial<Omit<ClubProfile, 'clubId'>>> = 
   },
 };
 
+const ARCHETYPE_PROFILE: Record<ClubArchetype, ClubProfilePreset> = {
+  'legacy-giant': {
+    rosterStyle: 'tactical',
+    politicsBias: { callerWeight: 1, starWeight: 1.2, coachControl: 1.2, conflictRisk: 1 },
+  },
+  'capital-project': {
+    rosterStyle: 'firepower',
+    politicsBias: { callerWeight: 1, starWeight: 1.4, coachControl: 0.8, conflictRisk: 1.3 },
+  },
+  'development-factory': {
+    rosterStyle: 'development',
+    managementModifiers: { teamPracticeGrowthMultiplier: 1.1 },
+  },
+  'regional-pride': {
+    rosterStyle: 'balanced',
+  },
+  'fallen-legacy': {
+    rosterStyle: 'tactical',
+    politicsBias: { callerWeight: 1, starWeight: 1, coachControl: 1, conflictRisk: 1.2 },
+  },
+  'scrappy-underdog': {
+    rosterStyle: 'chaotic',
+  },
+};
+
 const STYLE_BY_TIER: Record<string, RosterStyle> = {
   'semi-pro': 'balanced',
   pro: 'tactical',
   top: 'firepower',
 };
 
-export function getClubProfile(clubId: string, tier?: string): ClubProfile {
+export function getClubProfile(clubId: string, tier?: string, archetype?: ClubArchetype): ClubProfile {
+  const resolvedArchetype = archetype ?? CLUBS.find((club) => club.id === clubId)?.clubArchetype;
+  const archetypePreset = resolvedArchetype ? ARCHETYPE_PROFILE[resolvedArchetype] : {};
   const override = PROFILE_OVERRIDES[clubId] ?? {};
+  const rosterStyle = override.rosterStyle
+    ?? archetypePreset.rosterStyle
+    ?? (tier ? STYLE_BY_TIER[tier] : undefined)
+    ?? DEFAULT_PROFILE.rosterStyle;
   return {
     ...DEFAULT_PROFILE,
-    rosterStyle: (override.rosterStyle ?? (tier ? STYLE_BY_TIER[tier] : undefined) ?? DEFAULT_PROFILE.rosterStyle),
+    ...archetypePreset,
     ...override,
+    rosterStyle,
     clubId,
-    roleBias: { ...DEFAULT_PROFILE.roleBias, ...(override.roleBias ?? {}) },
-    traitBias: { ...DEFAULT_PROFILE.traitBias, ...(override.traitBias ?? {}) },
-    personalityBias: { ...DEFAULT_PROFILE.personalityBias, ...(override.personalityBias ?? {}) },
-    identityBias: { ...DEFAULT_PROFILE.identityBias, ...(override.identityBias ?? {}) },
-    fitWeights: { ...DEFAULT_PROFILE.fitWeights, ...(override.fitWeights ?? {}) },
-    preferredTraitTags: override.preferredTraitTags ?? DEFAULT_PROFILE.preferredTraitTags,
-    managementModifiers: { ...DEFAULT_PROFILE.managementModifiers, ...(override.managementModifiers ?? {}) },
-    politicsBias: { ...DEFAULT_PROFILE.politicsBias, ...(override.politicsBias ?? {}) },
+    roleBias: { ...DEFAULT_PROFILE.roleBias, ...(archetypePreset.roleBias ?? {}), ...(override.roleBias ?? {}) },
+    traitBias: { ...DEFAULT_PROFILE.traitBias, ...(archetypePreset.traitBias ?? {}), ...(override.traitBias ?? {}) },
+    personalityBias: {
+      ...DEFAULT_PROFILE.personalityBias,
+      ...(archetypePreset.personalityBias ?? {}),
+      ...(override.personalityBias ?? {}),
+    },
+    identityBias: { ...DEFAULT_PROFILE.identityBias, ...(archetypePreset.identityBias ?? {}), ...(override.identityBias ?? {}) },
+    fitWeights: { ...DEFAULT_PROFILE.fitWeights, ...(archetypePreset.fitWeights ?? {}), ...(override.fitWeights ?? {}) },
+    preferredTraitTags: override.preferredTraitTags ?? archetypePreset.preferredTraitTags ?? DEFAULT_PROFILE.preferredTraitTags,
+    managementModifiers: {
+      ...DEFAULT_PROFILE.managementModifiers,
+      ...(archetypePreset.managementModifiers ?? {}),
+      ...(override.managementModifiers ?? {}),
+    },
+    politicsBias: { ...DEFAULT_PROFILE.politicsBias, ...(archetypePreset.politicsBias ?? {}), ...(override.politicsBias ?? {}) },
   };
 }

@@ -44,6 +44,7 @@ import { canSignUpForTournament, playerTeamMeetsRequirement, resolveTournamentSi
 import { tournamentQualificationStageWaiverApplies } from '../engine/tournamentEligibility.js';
 import { activateClubRuntime, assignPendingMatchOpponent, deriveRosterNeed, previewClubRuntime, resolveClubDisplayInfo } from '../engine/worldClubs.js';
 import { createTournamentContext } from '../engine/tournamentContext.js';
+import { createTournamentInstance, drawTournamentInstance, lockTournamentInstance } from '../engine/tournamentInstance.js';
 import { buildRoleDebug, buildTeamIdentityDebug } from '../engine/debugPayload.js';
 import { finalizeGameSessionCareerSnapshot } from '../engine/careerSnapshot.js';
 import { CLUBS, clubsForStage, getClub } from '../data/clubs.js';
@@ -877,6 +878,8 @@ app.post('/game/:sessionId/signup', async (c) => {
   }
 
   const initialStageIndex = tournamentInitialStageIndex(t, session.player.team?.tier ?? null);
+  const activeTournamentInstance = drawTournamentInstance(lockTournamentInstance(createTournamentInstance(session, t)));
+  session.activeTournamentInstance = activeTournamentInstance;
   const pendingMatch = {
     tournamentId: t.id,
     tier: t.tier,
@@ -891,6 +894,7 @@ app.post('/game/:sessionId/signup', async (c) => {
     resolveWeek,
     stageIndex: initialStageIndex,
     stageLosses: 0,
+    tournamentInstanceId: activeTournamentInstance.id,
   };
   const opponentAssigned = assignPendingMatchOpponent(session, pendingMatch);
   session = opponentAssigned.session;
@@ -901,6 +905,7 @@ app.post('/game/:sessionId/signup', async (c) => {
 
   return c.json({
     pendingMatch: session.player.pendingMatch,
+    activeTournamentInstance: session.activeTournamentInstance,
     player: session.player,
   });
 });
@@ -977,9 +982,10 @@ app.post('/game/:sessionId/withdraw', async (c) => {
 
   session.player.pendingMatch = null;
   session.player.tournamentContext = undefined;
+  session.activeTournamentInstance = null;
   session.updatedAt = new Date().toISOString();
   await saveFinalizedSession(storage, session);
-  return c.json({ player: session.player, penalties });
+  return c.json({ player: session.player, activeTournamentInstance: session.activeTournamentInstance, penalties });
 });
 
 // 日常行动端点

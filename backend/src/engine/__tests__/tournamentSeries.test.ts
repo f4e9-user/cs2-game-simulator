@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { aggregateSeriesMatchResult, applyChoice, createSession, endActionPhase, initPlayer } from '../gameEngine.js';
 import type { TournamentSeriesContext } from '../tournamentSeries.js';
 import type { PendingMatch, Player } from '../../types.js';
+import { getTournament } from '../../data/tournaments.js';
+import { createTournamentInstance, drawTournamentInstance, lockTournamentInstance } from '../tournamentInstance.js';
 
 function player(): Player {
   return {
@@ -192,6 +194,64 @@ describe('tournament series', () => {
     const final = applyChoice(map2.session, 'series-confirm');
 
     expect(final.result.fatigueChange).toBe(0);
+  });
+
+  it('completes the active tournament instance only on series final confirmation', () => {
+    const tournament = getTournament('y1-b-01');
+    if (!tournament) throw new Error('missing tournament');
+    const p = {
+      ...player(),
+      team: {
+        clubId: 'club-cyber-academy',
+        name: '赛博学院',
+        tag: 'CYA',
+        region: '亚太',
+        tier: 'youth' as const,
+        monthlySalary: 10,
+        joinedRound: 1,
+      },
+    };
+    const instance = drawTournamentInstance(lockTournamentInstance(createTournamentInstance(createSession(p, 1), tournament)));
+    const pending = { ...pendingFinal(), tournamentInstanceId: instance.id };
+    const session = {
+      ...createSession({ ...p, pendingMatch: pending }, 1),
+      activeTournamentInstance: instance,
+      worldClubs: {
+        season: 1,
+        activeClubIds: instance.teams.map((team) => team.clubId),
+        relevantClubIds: [],
+        staticClubIds: [],
+        runtimeByClubId: {},
+        processedTickKeysByClubId: {},
+      },
+      worldClubsVersion: 2,
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    expect(map1.session.activeTournamentInstance?.status).toBe('drawn');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    const map2 = applyChoice(break1.session, 'match-play');
+    const final = applyChoice(map2.session, 'series-confirm');
+
+    expect(final.session.activeTournamentInstance).toBeNull();
+    expect(final.session.tournamentHistory?.[0]?.tournamentId).toBe('y1-b-01');
+    expect(final.session.tournamentHistory?.[0]?.championClubId).toBe('club-cyber-academy');
+    const playerRuntime = final.session.worldClubs?.runtimeByClubId['club-cyber-academy'];
+    expect(playerRuntime?.recentResults[0]).toMatchObject({
+      tournamentId: 'y1-b-01',
+      result: 'win',
+    });
+    expect(playerRuntime?.seasonPoints).toBeGreaterThan(0);
+    const runnerUpClubId = final.session.tournamentHistory?.[0]?.runnerUpClubId;
+    if (!runnerUpClubId) throw new Error('missing runner-up');
+    const runnerUpRuntime = final.session.worldClubs?.runtimeByClubId[runnerUpClubId];
+    expect(runnerUpRuntime?.recentResults[0]).toMatchObject({
+      tournamentId: 'y1-b-01',
+      result: 'deep-run',
+    });
+    expect(runnerUpRuntime?.seasonPoints).toBeGreaterThan(0);
   });
 
   it('inserts a halftime break between maps that recovers fatigue without advancing the round', () => {

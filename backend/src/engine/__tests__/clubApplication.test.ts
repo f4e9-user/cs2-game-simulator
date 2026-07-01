@@ -1,9 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { pickEvent } from '../events.js';
 import type { Player } from '../../types.js';
 import { applyChoice, applyClubRequest, createSession, initPlayer } from '../gameEngine.js';
 import { toPublicEvent } from '../events.js';
 import { getEventById } from '../../data/events/index.js';
+import { generateTeamOffer } from '../club.js';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function player(overrides: Partial<Player>): Player {
   return {
@@ -75,6 +80,28 @@ function player(overrides: Partial<Player>): Player {
 }
 
 describe('club application events', () => {
+  it('scales generated offer salary by club capital', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const capitalOffer = generateTeamOffer('club-meteor-prime');
+    const underdogOffer = generateTeamOffer('club-local-wolves');
+
+    expect(capitalOffer.monthlySalary).toBe(110);
+    expect(underdogOffer.monthlySalary).toBe(9);
+  });
+
+  it('includes club identity and season goal preview in generated offers', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const offer = generateTeamOffer('club-meteor-prime');
+
+    expect(offer.clubArchetype).toBe('capital-project');
+    expect(offer.heritage).toBeGreaterThanOrEqual(0);
+    expect(offer.capital).toBeGreaterThanOrEqual(80);
+    expect(offer.seasonGoalPreview).toContain('Major');
+    expect(offer.failureRisk).toContain('重建');
+  });
+
   it('does not surface scored rookie youth replies before the response round', () => {
     const event = pickEvent({
       player: player({

@@ -72,7 +72,7 @@ export function buildMatchResolveResult(
   let growthApplied = 0;
   let growthKey: StatKey | undefined;
   if (careerExperienceRaw > 0) {
-    const res = applyCareerExperienceGrowth(nextStats, careerExperienceRaw);
+    const res = applyCareerExperienceGrowth(nextStats, careerExperienceRaw, player.age);
     nextStats = res.stats;
     growthKey = 'experience';
   }

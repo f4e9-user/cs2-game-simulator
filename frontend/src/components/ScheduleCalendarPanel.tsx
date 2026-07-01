@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
-import type { CareerInsight, Player, TournamentWithResult } from '@/lib/types';
+import type { CareerInsight, Player, TournamentInstance, TournamentWithResult } from '@/lib/types';
 import { PreMatchPreview } from '@/components/MatchPanel';
 
 type CalendarBlock = NonNullable<CareerInsight['calendarBlocks']>[number];
@@ -41,12 +41,16 @@ export function ScheduleCalendarPanel({
   sessionId,
   player,
   insight,
+  activeTournamentInstance,
+  clubNamesById,
   busyTournamentId,
   onSignup,
 }: {
   sessionId: string;
   player: Player;
   insight: CareerInsight | null;
+  activeTournamentInstance?: TournamentInstance | null;
+  clubNamesById?: Record<string, string>;
   busyTournamentId?: string | null;
   onSignup?: (tournamentId: string) => void;
 }) {
@@ -60,6 +64,49 @@ export function ScheduleCalendarPanel({
   const blocks = insight?.calendarBlocks ?? [];
   const qualifications = qualificationLabels(player);
   const currentStage = player.stage;
+  const currentInstanceStage = activeTournamentInstance?.stages.find((stage) =>
+    stage.matches.some((match) => match.playerMatch && !match.completed),
+  ) ?? activeTournamentInstance?.stages.find((stage) => stage.matches.some((match) => !match.completed));
+  const completedInstanceMatches = activeTournamentInstance?.stages
+    .flatMap((stage) => stage.matches.map((match) => ({ ...match, stageName: stage.name })))
+    .filter((match) => match.completed)
+    ?? [];
+  const clubLabel = (clubId: string): string => clubNamesById?.[clubId] ?? clubId;
+  const currentPlayerMatch = currentInstanceStage?.matches.find((match) => match.playerMatch && !match.completed);
+  const nextOpponentClubId = currentPlayerMatch && activeTournamentInstance?.playerTeamClubId
+    ? currentPlayerMatch.teamAClubId === activeTournamentInstance.playerTeamClubId
+      ? currentPlayerMatch.teamBClubId
+      : currentPlayerMatch.teamAClubId
+    : activeTournamentInstance?.playerPath?.find((path) => path.stageIndex === player.pendingMatch?.stageIndex)?.opponentClubId;
+  const nextOpponentEntry = nextOpponentClubId
+    ? activeTournamentInstance?.teams.find((team) => team.clubId === nextOpponentClubId)
+    : undefined;
+  const nextOpponentRoster = nextOpponentClubId
+    ? activeTournamentInstance?.teamRosters?.[nextOpponentClubId] ?? []
+    : [];
+  const nextOpponentCore = [...nextOpponentRoster]
+    .sort((a, b) => b.reputation - a.reputation || b.form - a.form || a.name.localeCompare(b.name))
+    .slice(0, 3);
+  const hasScoutedIntel = player.buffs?.some((buff) => buff.id === 'pre-match-intel') ||
+    player.tags?.some((tag) => tag.includes('scout') || tag.includes('intel'));
+  const publicOpponentIntel = nextOpponentClubId ? [
+    `种子 #${nextOpponentEntry?.seed ?? '-'}`,
+    `来源 ${nextOpponentEntry?.source ?? '未知'}`,
+    player.pendingMatch?.opponent?.clubId === nextOpponentClubId ? `VRS ${player.pendingMatch.opponent.vrsScore}` : null,
+    player.pendingMatch?.opponent?.clubId === nextOpponentClubId ? `地区 ${player.pendingMatch.opponent.region}` : null,
+  ].filter((item): item is string => Boolean(item)) : [];
+  const estimatedOpponentIntel = nextOpponentCore.length > 0
+    ? [
+        `核心 ${nextOpponentCore.map((player) => `${player.name}/${player.role}`).join('、')}`,
+        `状态 ${nextOpponentCore[0]!.form >= 8 ? '火热' : nextOpponentCore[0]!.form <= -4 ? '低迷' : '稳定'}`,
+      ]
+    : [];
+  const scoutedOpponentIntel = hasScoutedIntel && nextOpponentRoster.length > 0
+    ? [
+        `角色分布 ${nextOpponentRoster.map((player) => player.role).join(' / ')}`,
+        `平均年龄 ${Math.round(nextOpponentRoster.reduce((sum, player) => sum + player.age, 0) / nextOpponentRoster.length)}`,
+      ]
+    : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -170,6 +217,98 @@ export function ScheduleCalendarPanel({
             </span>
           </div>
           <PreMatchPreview player={player} pendingMatch={player.pendingMatch} title="赛前状态反馈" />
+        </div>
+      )}
+
+      {activeTournamentInstance && (
+        <div className="schedule-pre-match">
+          <div className="schedule-pre-match-head">
+            <div>
+              <div className="schedule-pre-match-title">赛事中心 · {activeTournamentInstance.tournamentId}</div>
+              <div className="schedule-pre-match-meta">
+                {activeTournamentInstance.teams.length} 队 · {activeTournamentInstance.status} · 当前 {currentInstanceStage?.name ?? '已结束'}
+              </div>
+            </div>
+            <span className="schedule-pre-match-status">
+              {activeTournamentInstance.awards ? '奖项已出' : '路线已生成'}
+            </span>
+          </div>
+          <div className="schedule-qualifiers" style={{ marginTop: 10 }}>
+            {activeTournamentInstance.teams.map((team) => (
+              <span key={team.clubId} className={`schedule-qualifier${team.clubId === activeTournamentInstance.playerTeamClubId ? '' : ' muted'}`}>
+                #{team.seed} {clubLabel(team.clubId)}
+                {team.groupId ? ` · ${team.groupId}` : ''}
+                {team.finalPlacement ? ` · 第${team.finalPlacement}` : ''}
+              </span>
+            ))}
+          </div>
+          <div className="schedule-list" style={{ marginTop: 10 }}>
+            {nextOpponentClubId && (
+              <div className="schedule-list-row open">
+                <div>
+                  <div className="schedule-list-title">下一场对手 · {clubLabel(nextOpponentClubId)}</div>
+                  <div className="schedule-list-meta">
+                    公开信息 · {publicOpponentIntel.join(' · ')}
+                    {estimatedOpponentIntel.length > 0 && `｜推测分析 · ${estimatedOpponentIntel.join(' · ')}`}
+                    {scoutedOpponentIntel.length > 0 && `｜已确认情报 · ${scoutedOpponentIntel.join(' · ')}`}
+                  </div>
+                </div>
+                <span className="schedule-list-status allowed">对手情报</span>
+              </div>
+            )}
+            {(activeTournamentInstance.playerPath ?? []).map((path) => (
+              <div key={path.stageIndex} className="schedule-list-row">
+                <div>
+                  <div className="schedule-list-title">阶段 {path.stageIndex + 1}</div>
+                  <div className="schedule-list-meta">对手 {clubLabel(path.opponentClubId)}</div>
+                </div>
+                <span className="schedule-list-status allowed">玩家路线</span>
+              </div>
+            ))}
+            {activeTournamentInstance.stages.map((stage) => (
+              <div key={stage.id} className="schedule-list-row">
+                <div className="schedule-list-main">
+                  <div className="schedule-list-title">{stage.name}</div>
+                  <div className="schedule-list-meta">
+                    {stage.type} · {stage.seriesType ?? 'bo1'} · {stage.matches.length} 场
+                  </div>
+                  <div className="schedule-qualifiers" style={{ marginTop: 8 }}>
+                    {stage.matches.map((match) => (
+                      <span key={match.id} className={`schedule-qualifier${match.playerMatch ? '' : ' muted'}`}>
+                        {clubLabel(match.teamAClubId)} vs {clubLabel(match.teamBClubId)}
+                        {match.score ? ` · ${match.score}` : ' · 待赛'}
+                        {match.winnerClubId ? ` · 胜 ${clubLabel(match.winnerClubId)}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <span className={`schedule-list-status ${stage.matches.every((match) => match.completed) ? 'ended' : 'allowed'}`}>
+                  {stage.matches.every((match) => match.completed) ? '已完成' : '赛程'}
+                </span>
+              </div>
+            ))}
+          </div>
+          {completedInstanceMatches.length > 0 && (
+            <div className="schedule-qualifiers" style={{ marginTop: 10 }}>
+              {completedInstanceMatches.map((match) => (
+                <span key={match.id} className="schedule-qualifier muted">
+                  {match.stageName} · {clubLabel(match.teamAClubId)} {match.score ?? ''} {clubLabel(match.teamBClubId)}
+                </span>
+              ))}
+            </div>
+          )}
+          {activeTournamentInstance.awards && (
+            <div className="schedule-qualifiers" style={{ marginTop: 10 }}>
+              <span className="schedule-qualifier">冠军 {clubLabel(activeTournamentInstance.awards.championClubId)}</span>
+              <span className="schedule-qualifier">胜方 MVP {activeTournamentInstance.awards.winnerMvp.playerName}</span>
+              <span className="schedule-qualifier muted">败方 MVP {activeTournamentInstance.awards.loserMvp.playerName}</span>
+              {activeTournamentInstance.awards.bestPlayers.map((award) => (
+                <span key={`${award.award}-${award.playerId}`} className="schedule-qualifier muted">
+                  {award.award} {award.playerName} {award.rating.toFixed(2)}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

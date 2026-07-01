@@ -11,6 +11,9 @@ import type {
   RoundResult,
   SessionStatus,
   TeamOffer,
+  ChoiceResponse,
+  TournamentInstance,
+  TournamentInstanceSummary,
   WeeklyNewsItem,
 } from '@/lib/types';
 
@@ -30,6 +33,8 @@ interface GameState {
   promotion: PromotionCheck | null;
   careerInsight: CareerInsight | null;
   leaderboard: LeaderboardTeam[];
+  activeTournamentInstance: TournamentInstance | null;
+  tournamentHistory: TournamentInstanceSummary[];
 
   actionsPhase: boolean;
   pendingOffer: TeamOffer | null;
@@ -50,20 +55,7 @@ interface GameState {
     roundPlan?: RoundPlan;
     careerInsight?: CareerInsight;
   }) => void;
-  applyChoiceResponse: (args: {
-    result: RoundResult;
-    player: Player;
-    currentEvent: GameEvent | null;
-    queuedEvents?: GameEvent[];
-    weeklyNews?: WeeklyNewsItem[];
-    roundPlan?: RoundPlan;
-    activeEventSequence?: EventSequence;
-    status: SessionStatus;
-    ending?: string;
-    promotion?: PromotionCheck;
-    careerInsight?: CareerInsight;
-    leaderboard?: LeaderboardTeam[];
-  }) => void;
+  applyChoiceResponse: (args: ChoiceResponse) => void;
   setPlayer: (player: Player) => void;
   setCareerInsight: (careerInsight: CareerInsight | null) => void;
   setCurrentEvent: (currentEvent: GameEvent | null) => void;
@@ -77,6 +69,7 @@ interface GameState {
     leaderboard?: LeaderboardTeam[];
   }) => void;
   setLeaderboard: (leaderboard: LeaderboardTeam[]) => void;
+  setActiveTournamentInstance: (activeTournamentInstance: TournamentInstance | null) => void;
   setActionsPhase: (v: boolean) => void;
   clearLastResult: () => void;
   clearOffer: () => void;
@@ -102,6 +95,8 @@ export const useGameStore = create<GameState>((set) => ({
   promotion: null,
   careerInsight: null,
   leaderboard: [],
+  activeTournamentInstance: null,
+  tournamentHistory: [],
   actionsPhase: false,
   pendingOffer: null,
   aiActive: false,
@@ -126,6 +121,8 @@ export const useGameStore = create<GameState>((set) => ({
       promotion: session.promotion ?? null,
       careerInsight: session.careerInsight ?? null,
       leaderboard: session.leaderboard ?? [],
+      activeTournamentInstance: session.activeTournamentInstance ?? null,
+      tournamentHistory: session.tournamentHistory ?? [],
       pendingOffer: session.player.pendingOffer ?? null,
       actionsPhase: session.phase === 'action',
       error: null,
@@ -146,6 +143,8 @@ export const useGameStore = create<GameState>((set) => ({
       lastResult: null,
       promotion: null,
       careerInsight: careerInsight ?? null,
+      activeTournamentInstance: null,
+      tournamentHistory: [],
       error: null,
     }),
 
@@ -162,6 +161,8 @@ export const useGameStore = create<GameState>((set) => ({
     promotion,
     careerInsight,
     leaderboard,
+    activeTournamentInstance,
+    tournamentHistory,
   }) =>
     set((state) => ({
       player,
@@ -177,6 +178,10 @@ export const useGameStore = create<GameState>((set) => ({
       promotion: promotion ?? state.promotion,
       careerInsight: careerInsight ?? state.careerInsight,
       leaderboard: leaderboard ?? state.leaderboard,
+      activeTournamentInstance: activeTournamentInstance === undefined
+        ? state.activeTournamentInstance
+        : activeTournamentInstance,
+      tournamentHistory: tournamentHistory ?? state.tournamentHistory,
       actionsPhase: false,
       pendingOffer: player.pendingOffer ?? null,
       error: null,
@@ -198,6 +203,7 @@ export const useGameStore = create<GameState>((set) => ({
       pendingOffer: player.pendingOffer ?? null,
     })),
   setLeaderboard: (leaderboard) => set({ leaderboard }),
+  setActiveTournamentInstance: (activeTournamentInstance) => set({ activeTournamentInstance }),
   setActionsPhase: (v) => set({ actionsPhase: v }),
   clearLastResult: () => set({ lastResult: null }),
   clearOffer: () => set({ pendingOffer: null }),
@@ -219,6 +225,8 @@ export const useGameStore = create<GameState>((set) => ({
       lastResult: null,
       promotion: null,
       careerInsight: null,
+      activeTournamentInstance: null,
+      tournamentHistory: [],
       actionsPhase: false,
       loading: false,
       error: null,

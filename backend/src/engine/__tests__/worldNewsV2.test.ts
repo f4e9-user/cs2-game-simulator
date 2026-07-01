@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildLeaderboard } from '../../data/leaderboard.js';
 import { getTournament } from '../../data/tournaments.js';
 import { createSession, endActionPhase, initPlayer } from '../gameEngine.js';
+import { completeTournamentInstance, createTournamentInstance } from '../tournamentInstance.js';
 import { tickWorldClubRuntimes } from '../worldClubs.js';
 import type { GameSession } from '../../types.js';
 
@@ -40,17 +41,108 @@ describe('world news V2 consistency', () => {
 
     const resultRound = signupWeek + major.bracket.length;
     const resultWeek = resultRound;
-    const resultSession = tickWorldClubRuntimes(sessionAt(1, resultWeek, resultRound), resultRound, 'round');
+    const baseSession = sessionAt(1, resultWeek, resultRound);
+    const expectedDraw = createTournamentInstance(baseSession, major);
+    expect(expectedDraw.teams).toHaveLength(32);
+    const expectedInstance = completeTournamentInstance(expectedDraw, false);
+    const expectedFinal = expectedInstance.stages.at(-1)?.matches[0];
+    if (!expectedFinal?.score) throw new Error('missing expected instance final');
+    const expectedRunnerUp = expectedFinal.winnerClubId === expectedFinal.teamAClubId
+      ? expectedFinal.teamBClubId
+      : expectedFinal.teamAClubId;
+    const resultSession = tickWorldClubRuntimes(baseSession, resultRound, 'round');
     const snapshots = resultSession.worldClubs?.tournamentSnapshots?.filter((snapshot) => snapshot.tournamentId === major.id) ?? [];
 
     expect(snapshots).toHaveLength(1);
     const snapshot = snapshots[0]!;
+    expect(snapshot.tournamentInstanceId).toBe(`${major.id}:world:1`);
     expect(snapshot.resultYear).toBe(1);
     expect(snapshot.resultWeek).toBe(resultWeek);
     expect(snapshot.championClubId).toBeTruthy();
     expect(snapshot.runnerUpClubId).toBeTruthy();
     expect(snapshot.championClubId).not.toBe(snapshot.runnerUpClubId);
+    expect(snapshot.championClubId).toBe(expectedFinal.winnerClubId);
+    expect(snapshot.runnerUpClubId).toBe(expectedRunnerUp);
+    expect(snapshot.finalScore).toBe(expectedFinal.score);
+    expect(snapshot.participants).toHaveLength(32);
     expect(snapshot.participants.map((participant) => participant.clubId)).toContain(snapshot.championClubId);
+    expect(snapshot.winnerMvp).toMatchObject({
+      clubId: snapshot.championClubId,
+      award: '胜方 MVP',
+    });
+    expect(snapshot.loserMvp).toMatchObject({
+      clubId: snapshot.runnerUpClubId,
+      award: '败方 MVP',
+    });
+  });
+
+  it('does not generate a background result snapshot for the player active tournament instance', () => {
+    const major = getTournament('y1-major-01');
+    if (!major) throw new Error('missing Major fixture');
+    const signupWeek = major.signupWeeks === 'always' ? 1 : major.signupWeeks[0]!;
+    const resultRound = signupWeek + major.bracket.length;
+    const activeSession = sessionAt(1, resultRound, resultRound);
+    activeSession.player = {
+      ...activeSession.player,
+      team: {
+        clubId: 'club-meteor-prime',
+        name: '流星主队',
+        tag: 'MTP',
+        region: '北美',
+        tier: 'top',
+        monthlySalary: 100,
+        joinedRound: 1,
+      },
+    };
+    const activeTournamentInstance = createTournamentInstance(activeSession, major);
+
+    const ticked = tickWorldClubRuntimes({
+      ...activeSession,
+      activeTournamentInstance,
+      player: {
+        ...activeSession.player,
+        pendingMatch: {
+          tournamentId: major.id,
+          tier: major.tier,
+          name: major.displayName,
+          resolveYear: 1,
+          resolveWeek: resultRound,
+          stageIndex: 0,
+          tournamentInstanceId: activeTournamentInstance.id,
+        },
+      },
+    }, resultRound, 'round');
+
+    expect(ticked.worldClubs?.tournamentSnapshots?.some((snapshot) => snapshot.tournamentId === major.id)).toBe(false);
+  });
+
+  it('does not inject the player club into skipped background tournaments', () => {
+    const major = getTournament('y1-major-01');
+    if (!major) throw new Error('missing Major fixture');
+    const signupWeek = major.signupWeeks === 'always' ? 1 : major.signupWeeks[0]!;
+    const resultRound = signupWeek + major.bracket.length;
+    const playerClubId = 'club-meteor-prime';
+    const baseSession = {
+      ...sessionAt(1, resultRound, resultRound),
+      player: {
+        ...sessionAt(1, resultRound, resultRound).player,
+        team: {
+          clubId: playerClubId,
+          name: '流星主队',
+          tag: 'MTP',
+          region: '北美',
+          tier: 'top' as const,
+          monthlySalary: 100,
+          joinedRound: 1,
+        },
+      },
+    };
+
+    const ticked = tickWorldClubRuntimes(baseSession, resultRound, 'round');
+    const snapshot = ticked.worldClubs?.tournamentSnapshots?.find((item) => item.tournamentId === major.id);
+
+    expect(snapshot).toBeDefined();
+    expect(snapshot?.participants.map((participant) => participant.clubId)).not.toContain(playerClubId);
   });
 
   it('uses only VRS-visible world clubs in tournament result news', () => {
@@ -92,5 +184,54 @@ describe('world news V2 consistency', () => {
     const resultRound = signupWeek + major.bracket.length;
     const result = endActionPhase(sessionAt(1, resultRound, resultRound)).session.weeklyNews ?? [];
     expect(result.some((item) => item.source?.tournamentId === major.id && item.title.includes('落幕'))).toBe(true);
+  });
+
+  it('summarizes existing world transfer history into weekly news when no immediate transfer item exists', () => {
+    const session = {
+      ...sessionAt(2, 7, 55),
+      transferHistory: [{
+        id: 'archer-to-meteor',
+        season: 2,
+        playerId: 'club-starforge:archer',
+        fromClubId: 'club-starforge',
+        toClubId: 'club-meteor-prime',
+        type: 'star-signing' as const,
+        summary: '资本项目补强明星狙击手',
+      }],
+      weeklyNews: [],
+    };
+
+    const eventPhase = endActionPhase(session);
+    const transferNews = eventPhase.session.weeklyNews?.find((item) => item.source?.kind === 'world-transfer');
+
+    expect(transferNews?.eventId).toBe('world-transfer:archer-to-meteor');
+    expect(transferNews?.narrative).toContain('流星主队');
+    expect(transferNews?.narrative).toContain('星锻战队');
+  });
+
+  it('summarizes high credibility unresolved transfer rumors into weekly news', () => {
+    const session = {
+      ...sessionAt(2, 8, 56),
+      transferRumors: [{
+        id: 'rumor-archer-to-meteor',
+        season: 2,
+        playerId: 'club-starforge:archer',
+        fromClubId: 'club-starforge',
+        toClubId: 'club-meteor-prime',
+        type: 'star-signing' as const,
+        credibility: 'high' as const,
+        reason: '流星主队正在认真评估星锻战队的明星狙击手',
+        resolved: false,
+      }],
+      weeklyNews: [],
+    };
+
+    const eventPhase = endActionPhase(session);
+    const rumorNews = eventPhase.session.weeklyNews?.find((item) => item.eventId === 'world-transfer-rumor:rumor-archer-to-meteor');
+
+    expect(rumorNews?.source?.kind).toBe('world-transfer');
+    expect(rumorNews?.narrative).toContain('传闻');
+    expect(rumorNews?.narrative).toContain('流星主队');
+    expect(rumorNews?.narrative).toContain('星锻战队');
   });
 });

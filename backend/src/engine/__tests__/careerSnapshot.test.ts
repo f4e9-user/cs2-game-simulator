@@ -5,6 +5,7 @@ import type { GameSession, Player } from '../../types.js';
 function player(overrides: Partial<Player> = {}): Player {
   return {
     name: 'Tester',
+    age: 18,
     stats: {
       intelligence: 10,
       agility: 10,

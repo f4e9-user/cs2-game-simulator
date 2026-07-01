@@ -16,6 +16,15 @@ const PRIZE_SPLIT: Record<string, number> = {
   top: 50,
 };
 
+const ARCHETYPE_LABELS: Record<string, string> = {
+  'legacy-giant': '老牌豪门',
+  'capital-project': '资本项目',
+  'development-factory': '青训工厂',
+  'regional-pride': '地区代表',
+  'fallen-legacy': '没落豪门',
+  'scrappy-underdog': '草根黑马',
+};
+
 interface Props {
   offer: TeamOffer;
   onAccept: () => void;
@@ -96,6 +105,39 @@ export function TeamOfferModal({ offer, onAccept, onDecline, loading }: Props) {
             </div>
           </div>
         </div>
+
+        {(offer.clubArchetype || offer.seasonGoalPreview || offer.failureRisk) && (
+          <div style={{
+            background: 'var(--bg-2)',
+            borderRadius: 8,
+            padding: '10px 12px',
+            marginBottom: 16,
+          }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+              {offer.clubArchetype && (
+                <span className="badge" style={{ fontSize: 12 }}>
+                  {ARCHETYPE_LABELS[offer.clubArchetype] ?? offer.clubArchetype}
+                </span>
+              )}
+              {typeof offer.heritage === 'number' && (
+                <span className="badge" style={{ fontSize: 12 }}>底蕴 {offer.heritage}</span>
+              )}
+              {typeof offer.capital === 'number' && (
+                <span className="badge" style={{ fontSize: 12 }}>资本 {offer.capital}</span>
+              )}
+            </div>
+            {offer.seasonGoalPreview && (
+              <div style={{ fontSize: 13, color: 'var(--fg)', fontWeight: 500, marginBottom: 4 }}>
+                {offer.seasonGoalPreview}
+              </div>
+            )}
+            {offer.failureRisk && (
+              <div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.45 }}>
+                {offer.failureRisk}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8 }}>

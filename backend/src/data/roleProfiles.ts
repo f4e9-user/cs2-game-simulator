@@ -1,4 +1,5 @@
 import type { CoreStatKey, Player, RoleProfile, TeammateRole } from '../types.js';
+import { applyAgeToStats } from '../engine/age.js';
 
 const ROLE_ORDER: TeammateRole[] = ['IGL', 'AWPer', 'Entry', 'Support', 'Lurker'];
 
@@ -117,7 +118,8 @@ export function roleFitScore(player: Player, role: TeammateRole): number {
 
 function averageStats(player: Player, stats: CoreStatKey[]): number {
   if (stats.length === 0) return 0;
-  const total = stats.reduce((sum, stat) => sum + (player.stats[stat] ?? 0), 0);
+  const effectiveStats = applyAgeToStats(player.stats, player.age);
+  const total = stats.reduce((sum, stat) => sum + (effectiveStats[stat] ?? 0), 0);
   return total / stats.length;
 }
 

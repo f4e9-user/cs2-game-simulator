@@ -2647,6 +2647,37 @@ export const CHAIN_EVENTS: EventDef[] = [
     ],
   },
 
+  // ── 新援竞争 ──────────────────────────────────────────────
+  {
+    id: 'chain-incoming-signing-contest',
+    type: 'team',
+    title: '新援竞争传闻',
+    narrative:
+      '管理层没有直接宣布签人，但训练室里已经开始讨论一个同位置新援的名字。教练把话说得很轻："这只是竞争，不是判决。"',
+    stages: ['youth', 'second', 'pro'],
+    difficulty: 2,
+    weight: 6,
+    requireTags: ['incoming-signing-competition'],
+    choices: [
+      {
+        id: 'prove-role-value',
+        label: '证明自己的位置价值',
+        description: '把注意力放回训练和比赛，说明这个位置不需要替代品。',
+        check: { primary: 'mentality', secondary: 'experience', dc: 7 },
+        success: {
+          narrative: '你没有被传闻带偏。复盘会上，教练开始把你的职责重新摆在体系中心。',
+          stateDelta: { stress: -4, feel: 1 },
+          tags: { add: ['role-transition-eligible'] },
+        },
+        failure: {
+          narrative: '你越想证明自己，越容易在细节上用力过猛。位置竞争没有结束，反而更明确了。',
+          stateDelta: { stress: 8, tilt: 4 },
+          tags: { add: ['role-transition-eligible', 'locker-tension'] },
+        },
+      },
+    ],
+  },
+
   // ── 角色主动转型 ──────────────────────────────────────────────
   {
     id: 'chain-role-transition-start',
@@ -2873,6 +2904,122 @@ export const CHAIN_EVENTS: EventDef[] = [
           tags: {
             cooldowns: { 'old-friend-cd': 12 },
           },
+        },
+      },
+    ],
+  },
+
+  // ── 管理层重建链 ───────────────────────────────────────────────
+  {
+    id: 'chain-rebuild-pressure',
+    type: 'chains',
+    title: '管理层重建会议',
+    narrative: '赛季目标失手后，管理层把核心成员叫进会议室。话说得很委婉，但意思很清楚：这套阵容不会原样继续。',
+    stages: ['youth', 'second', 'pro'],
+    difficulty: 2,
+    weight: 8,
+    requireTags: ['rebuild-active'],
+    forbidTags: ['rebuild-chain-active'],
+    choices: [
+      {
+        id: 'accept-pressure',
+        label: '接受压力，准备证明自己',
+        description: '承认现状不够好，把下一阶段当成核心位置的证明期。',
+        check: { primary: 'mentality', secondary: 'experience', dc: 6 },
+        success: {
+          narrative: '你没有回避问题。教练组至少认可你的态度，重建讨论暂时围绕"如何补强"而不是"换掉谁"展开。',
+          stateDelta: { stress: 5 },
+          tags: { add: ['rebuild-chain-active', 'rebuild-rumor-step'] },
+        },
+        failure: {
+          narrative: '你的回应显得有些僵硬。会议结束后，队内关于位置竞争的讨论变得更直接。',
+          stateDelta: { stress: 12 },
+          tags: { add: ['rebuild-chain-active', 'rebuild-rumor-step'] },
+        },
+      },
+    ],
+  },
+  {
+    id: 'chain-rebuild-rumor',
+    type: 'chains',
+    title: '明星引援传闻',
+    narrative: '媒体开始把你们队和几位成名选手联系在一起。俱乐部没有否认，只说"所有位置都会评估"，这让训练室里的气氛变得微妙。',
+    stages: ['youth', 'second', 'pro'],
+    difficulty: 2,
+    weight: 9,
+    requireTags: ['rebuild-rumor-step'],
+    choices: [
+      {
+        id: 'study-rumor-fit',
+        label: '研究传闻中的位置重叠',
+        description: '判断传闻是否真的威胁到自己的角色，并准备下一场证明点。',
+        check: { primary: 'intelligence', secondary: 'mentality', dc: 6 },
+        success: {
+          narrative: '你很快看出传闻更像是管理层施压。你把注意力放回自己的角色价值，而不是被名字吓住。',
+          stateDelta: { stress: -3, feel: 1 },
+          tags: { remove: ['rebuild-rumor-step'], add: ['rebuild-contest-step'] },
+        },
+        failure: {
+          narrative: '传闻越看越像是在影射你的首发位置。你没有失控，但训练里的每个失误都显得更刺眼。',
+          stateDelta: { stress: 8, tilt: 4 },
+          tags: { remove: ['rebuild-rumor-step'], add: ['rebuild-contest-step'] },
+        },
+      },
+    ],
+  },
+  {
+    id: 'chain-rebuild-contest',
+    type: 'chains',
+    title: '内部竞争周',
+    narrative: '教练组把训练赛安排得更直接：同位置职责、关键回合沟通和残局处理都被单独记录。你能感觉到，这不是普通复盘。',
+    stages: ['youth', 'second', 'pro'],
+    difficulty: 2,
+    weight: 9,
+    requireTags: ['rebuild-contest-step'],
+    choices: [
+      {
+        id: 'take-contest-directly',
+        label: '正面接受竞争',
+        description: '把训练赛当成正式考核，证明自己仍然是这个位置的答案。',
+        check: { primary: 'agility', secondary: 'mentality', dc: 7 },
+        success: {
+          narrative: '你在训练赛里打出几个清楚的回合。教练没有公开表态，但复盘里开始重新强调你的不可替代性。',
+          stateDelta: { stress: -4, feel: 1 },
+          tags: { remove: ['rebuild-contest-step'], add: ['rebuild-decision-step'] },
+        },
+        failure: {
+          narrative: '你没有被打垮，但也没能把疑问彻底压下去。最终决定被推到了管理层会议。',
+          stateDelta: { stress: 8, fatigue: 4 },
+          tags: { remove: ['rebuild-contest-step'], add: ['rebuild-decision-step'] },
+        },
+      },
+    ],
+  },
+  {
+    id: 'chain-rebuild-decision',
+    type: 'chains',
+    severity: 'critical',
+    title: '重建决定',
+    narrative: '管理层给出了休赛期重建方向。现在的问题不是是否调整，而是谁会成为新阵容的基准点。',
+    stages: ['youth', 'second', 'pro'],
+    difficulty: 2,
+    weight: 10,
+    requireTags: ['rebuild-decision-step'],
+    choices: [
+      {
+        id: 'prove-core',
+        label: '要求围绕自己重建',
+        description: '用表现和队内影响力争取核心地位。',
+        check: { primary: 'mentality', secondary: 'experience', dc: 7 },
+        success: {
+          narrative: '你把自己的理由说得很清楚。管理层决定先围绕你补强，而不是引入同位置替代者。',
+          stateDelta: { stress: -8, feel: 1 },
+          tags: { remove: ['rebuild-chain-active', 'rebuild-decision-step'] },
+        },
+        failure: {
+          narrative: '你没能完全说服管理层。你的首发位置还在，但新援竞争已经摆上台面。',
+          stateDelta: { stress: 10 },
+          tags: { remove: ['rebuild-chain-active', 'rebuild-decision-step'] },
         },
       },
     ],

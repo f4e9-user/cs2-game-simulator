@@ -5,6 +5,7 @@ import type { Player } from '../../types.js';
 function mockPlayer(): Player {
   return {
     name: 'TestPlayer',
+    age: 18,
     stage: 'rookie',
     stress: 50,
     fame: 1,

@@ -8,6 +8,7 @@ import { getEventById } from '../../data/events/index.js';
 function player(overrides: Partial<Player>): Player {
   return {
     name: 'tester',
+    age: 18,
     stress: 0,
     fame: 0,
     restRounds: 0,
@@ -87,6 +88,25 @@ describe('simulateMatch', () => {
     stageIndex: 1,
     effectiveDifficulty: 3,
   };
+
+  it('uses age-adjusted stats for match output without mutating base stats', () => {
+    const baseStats = {
+      agility: 16,
+      intelligence: 8,
+      experience: 0,
+      money: 0,
+      mentality: 8,
+      constitution: 10,
+    };
+    const rolls = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+    const young = simulateMatch(player({ age: 22, stats: baseStats }), 2, rng(rolls));
+    const oldPlayer = player({ age: 32, stats: { ...baseStats } });
+    const old = simulateMatch(oldPlayer, 2, rng(rolls));
+
+    expect(young.kills).toBeGreaterThanOrEqual(old.kills);
+    expect(oldPlayer.stats.agility).toBe(16);
+    expect(oldPlayer.stats.experience).toBe(0);
+  });
 
   it('rates low-output short samples by per-round contribution instead of K/D alone', () => {
     const result = simulateMatch(

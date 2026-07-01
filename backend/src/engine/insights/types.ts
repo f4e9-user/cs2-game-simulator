@@ -1,10 +1,11 @@
-import type { Stage } from '../../types.js';
+import type { ClubSeasonGoalStatus, ClubSeasonGoalType, Stage } from '../../types.js';
 
 export interface CareerInsight {
   generatedAtRound: number;
   stage: StageInsight;
   promotion: PromotionInsight;
   stagePressure?: StagePressureInsight;
+  seasonGoal?: SeasonGoalInsight;
   headline: string;
   onboarding?: OnboardingInsight;
   priorities: PriorityInsight[];
@@ -16,6 +17,19 @@ export interface CareerInsight {
   blockers: BlockerInsight[];
   explanations: ExplanationInsight[];
   compatibility: CareerInsightCompatibility;
+}
+
+export interface SeasonGoalInsight {
+  clubId: string;
+  type: ClubSeasonGoalType;
+  label: string;
+  status: ClubSeasonGoalStatus;
+  progress: number;
+  weeksLeftInSeason: number;
+  managementPatience: number;
+  rebuildPressure: number;
+  headline: string;
+  tone: 'neutral' | 'encouraging' | 'warning' | 'critical';
 }
 
 export interface StageInsight {

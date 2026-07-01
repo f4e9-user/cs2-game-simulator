@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -129,6 +129,7 @@ export default function GamePage() {
     promotion,
     careerInsight,
     leaderboard,
+    activeTournamentInstance,
     pendingOffer,
     aiActive,
     loading,
@@ -145,6 +146,7 @@ export default function GamePage() {
     setTransitioning,
     clearOffer,
     setLeaderboard,
+    setActiveTournamentInstance,
     setQueuedEvents,
     setWeeklyNews,
     setRoundPlan,
@@ -185,6 +187,15 @@ export default function GamePage() {
   const [preloadedIntro, setPreloadedIntro] = useState<string | null>(null);
   const [introLoading, setIntroLoading] = useState(!welcomeDismissed);
   const apiTokenStorageKey = `api-token-${sessionId}`;
+  const clubNamesById = useMemo(() => {
+    const entries = leaderboard
+      .filter((team) => team.clubId)
+      .map((team) => [team.clubId!, `${team.name} (${team.tag})`] as const);
+    if (player?.team?.clubId) {
+      entries.push([player.team.clubId, `${player.team.name} (${player.team.tag})`]);
+    }
+    return Object.fromEntries(entries);
+  }, [leaderboard, player?.team]);
 
   const dismissWelcome = () => {
     sessionStorage.setItem(storageKey, '1');
@@ -365,6 +376,7 @@ export default function GamePage() {
     try {
       const res = await api.signup(sessionId, tournamentId, apiToken ?? undefined);
       setPlayer(res.player);
+      setActiveTournamentInstance(res.activeTournamentInstance ?? null);
       await refreshSessionSnapshot();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -753,6 +765,8 @@ export default function GamePage() {
                     sessionId={sessionId}
                     player={player}
                     insight={careerInsight}
+                    activeTournamentInstance={activeTournamentInstance}
+                    clubNamesById={clubNamesById}
                     busyTournamentId={signupBusyId}
                     onSignup={handleScheduleSignup}
                   />

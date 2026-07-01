@@ -1,4 +1,5 @@
 import { CLUBS, getClub } from '../data/clubs.js';
+import { capitalSalaryMultiplier, clubArchetype, clubCapital, clubHeritage } from '../data/clubIdentity.js';
 import type {
   Club,
   ClubOriginFit,
@@ -26,7 +27,8 @@ import {
 } from './team.js';
 import { refreshVisibleTeamIdentities } from './teamIdentity.js';
 import { clampTeamTrust, dedupe, hashString } from './utils.js';
-import { deriveRosterNeed, previewClubRuntime } from './worldClubs.js';
+import { activateClubRuntime, deriveRosterNeed, previewClubRuntime } from './worldClubs.js';
+import { generateSeasonGoal } from './seasonGoal.js';
 
 type YouthApplicationResult = 'pass' | 'tryout' | 'reject';
 
@@ -320,7 +322,19 @@ export function joinTeamFromOffer(
   const nextStage = stageIndex(minStage) > stageIndex(player.stage) ? minStage : player.stage;
 
   const rosterRng = makeRng(hashString(session.id) ^ (player.round * 7919));
+  Object.assign(session, activateClubRuntime(session, offer.clubId, 'season-goal-on-join'));
   const runtime = previewClubRuntime(session, offer.clubId);
+  const goal = runtime.seasonGoal ?? generateSeasonGoal(session, offer.clubId, player.year ?? 1);
+  const managementPatience = runtime.managementPatience ?? 60;
+  const rebuildPressure = runtime.rebuildPressure ?? 0;
+  if (session.worldClubs?.runtimeByClubId[offer.clubId]) {
+    session.worldClubs.runtimeByClubId[offer.clubId] = {
+      ...session.worldClubs.runtimeByClubId[offer.clubId]!,
+      seasonGoal: goal,
+      managementPatience,
+      rebuildPressure,
+    };
+  }
   const need = deriveRosterNeed(runtime);
   const roster = rosterFromClubRuntime(session, offer, rosterRng);
   const initialStatus = offer.teamStatus
@@ -340,6 +354,9 @@ export function joinTeamFromOffer(
     tier: offer.tier,
     monthlySalary: offer.monthlySalary,
     joinedRound: player.round,
+    seasonGoal: goal,
+    managementPatience,
+    rebuildPressure,
     ...initialStatus,
     joinMode: mode,
     joinReason: joinReason(need, fillsNeed, overlaps, mode),
@@ -384,12 +401,33 @@ export function pickPromotionClub(tier: ClubTier, sessionId: string, round: numb
   return candidates[idx]!;
 }
 
+function offerGoalPreview(club: Club): string {
+  const archetype = clubArchetype(club);
+  if (archetype === 'capital-project') return club.tier === 'top' ? '赛季目标：冲击 Major 席位' : '赛季目标：快速打进 S 级赛事';
+  if (archetype === 'legacy-giant') return '赛季目标：S 级深轮或 Major 淘汰赛';
+  if (archetype === 'development-factory') return '赛季目标：培养新人并冲击 A 级主赛';
+  if (archetype === 'fallen-legacy') return '赛季目标：重返 S 级路径';
+  if (archetype === 'scrappy-underdog') return '赛季目标：保级并打出曝光';
+  return '赛季目标：区域突破并进入国际赛视野';
+}
+
+function offerFailureRisk(club: Club): string {
+  const archetype = clubArchetype(club);
+  if (archetype === 'capital-project') return '失败风险：管理层可能快速重建并引入同位置新援';
+  if (archetype === 'legacy-giant') return '失败风险：粉丝压力和核心地位质疑会上升';
+  if (archetype === 'fallen-legacy') return '失败风险：复兴计划受挫，重建压力升高';
+  if (archetype === 'development-factory') return '失败风险：惩罚较轻，但核心成员可能被更大队伍关注';
+  if (archetype === 'scrappy-underdog') return '失败风险：资源更紧，阵容可能被挖角';
+  return '失败风险：区域目标失手会影响管理层耐心';
+}
+
 export function generateTeamOffer(clubId: string): TeamOffer {
   const club = getClub(clubId);
   if (!club) throw new Error('未知俱乐部');
 
   const [min, max] = club.salaryRange;
-  const salary = min + Math.floor(Math.random() * (max - min + 1));
+  const baseSalary = min + Math.floor(Math.random() * (max - min + 1));
+  const salary = Math.round(baseSalary * capitalSalaryMultiplier(club));
 
   return {
     clubId: club.id,
@@ -398,5 +436,10 @@ export function generateTeamOffer(clubId: string): TeamOffer {
     tier: club.tier,
     region: club.region,
     monthlySalary: salary,
+    clubArchetype: clubArchetype(club),
+    heritage: clubHeritage(club),
+    capital: clubCapital(club),
+    seasonGoalPreview: offerGoalPreview(club),
+    failureRisk: offerFailureRisk(club),
   };
 }

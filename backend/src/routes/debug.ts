@@ -23,10 +23,10 @@ import type {
   ForcedMatchResult,
   PendingMatch,
   Stage,
-  ClubPlayer,
   ClubRuntimeState,
   PlayerTeam,
   Teammate,
+  WorldPlayer,
 } from '../types.js';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -68,13 +68,20 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isClubPlayer(value: unknown): value is ClubPlayer {
+function isWorldPlayer(value: unknown): value is WorldPlayer {
   if (!isObject(value)) return false;
   return typeof value.id === 'string'
     && typeof value.name === 'string'
+    && typeof value.region === 'string'
+    && Number.isFinite(value.age)
+    && typeof value.clubId === 'string'
     && typeof value.role === 'string'
     && isObject(value.stats)
     && DEBUG_PLAYER_STAT_KEYS.every((key) => Number.isFinite((value.stats as Record<string, unknown>)[key]))
+    && Number.isFinite((value.stats as Record<string, unknown>).constitution)
+    && typeof value.archetype === 'string'
+    && Number.isFinite(value.form)
+    && Number.isFinite(value.reputation)
     && Array.isArray(value.traits)
     && value.traits.every((trait) => typeof trait === 'string')
     && typeof value.personality === 'string'
@@ -82,23 +89,29 @@ function isClubPlayer(value: unknown): value is ClubPlayer {
     && typeof value.status === 'string';
 }
 
-function normalizeClubPlayerPatch(player: ClubPlayer, patch: unknown): ClubPlayer {
+function normalizeWorldPlayerPatch(player: WorldPlayer, patch: unknown): WorldPlayer {
   if (!isObject(patch)) return player;
-  const next: ClubPlayer = {
+  const next: WorldPlayer = {
     ...player,
     ...('id' in patch && typeof patch.id === 'string' ? { id: patch.id } : {}),
     ...('name' in patch && typeof patch.name === 'string' ? { name: patch.name } : {}),
-    ...('role' in patch && typeof patch.role === 'string' ? { role: patch.role as ClubPlayer['role'] } : {}),
-    ...('personality' in patch && typeof patch.personality === 'string' ? { personality: patch.personality as ClubPlayer['personality'] } : {}),
+    ...('region' in patch && typeof patch.region === 'string' ? { region: patch.region } : {}),
+    ...('age' in patch && Number.isFinite(patch.age) ? { age: Math.round(Number(patch.age)) } : {}),
+    ...('clubId' in patch && typeof patch.clubId === 'string' ? { clubId: patch.clubId } : {}),
+    ...('role' in patch && typeof patch.role === 'string' ? { role: patch.role as WorldPlayer['role'] } : {}),
+    ...('personality' in patch && typeof patch.personality === 'string' ? { personality: patch.personality as WorldPlayer['personality'] } : {}),
     ...('joinedRound' in patch && Number.isFinite(patch.joinedRound) ? { joinedRound: Math.round(Number(patch.joinedRound)) } : {}),
-    ...('status' in patch && typeof patch.status === 'string' ? { status: patch.status as ClubPlayer['status'] } : {}),
+    ...('status' in patch && typeof patch.status === 'string' ? { status: patch.status as WorldPlayer['status'] } : {}),
+    ...('archetype' in patch && typeof patch.archetype === 'string' ? { archetype: patch.archetype as WorldPlayer['archetype'] } : {}),
+    ...('form' in patch && Number.isFinite(patch.form) ? { form: Number(patch.form) } : {}),
+    ...('reputation' in patch && Number.isFinite(patch.reputation) ? { reputation: Number(patch.reputation) } : {}),
     ...('internalChemistry' in patch && patch.internalChemistry !== undefined ? { internalChemistry: Number(patch.internalChemistry) } : {}),
   };
   if (isObject(patch.stats)) {
     next.stats = {
       ...player.stats,
       ...Object.fromEntries(
-        DEBUG_PLAYER_STAT_KEYS
+        [...DEBUG_PLAYER_STAT_KEYS, 'constitution' as const]
           .filter((key) => patch.stats && Number.isFinite((patch.stats as Record<string, unknown>)[key]))
           .map((key) => [key, Number((patch.stats as Record<string, unknown>)[key])]),
       ),
@@ -212,12 +225,12 @@ function applyClubRuntimePatch(runtime: ClubRuntimeState, patch: unknown): ClubR
     const roster = (patch as { fullRoster: unknown[] }).fullRoster;
     next.fullRoster = roster
       .map((item, index) => {
-        if (isClubPlayer(item)) return item;
+        if (isWorldPlayer(item)) return item;
         if (!isObject(item)) return null;
         const base = runtime.fullRoster[index];
-        return base ? normalizeClubPlayerPatch(base, item) : null;
+        return base ? normalizeWorldPlayerPatch(base, item) : null;
       })
-      .filter((item): item is ClubPlayer => Boolean(item));
+      .filter((item): item is WorldPlayer => Boolean(item));
   }
   return next;
 }

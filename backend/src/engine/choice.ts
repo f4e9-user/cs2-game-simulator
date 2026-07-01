@@ -5,6 +5,7 @@ import {
   synthesizeMatchEvent,
   tournamentStageEliminationLosses,
 } from '../data/tournaments.js';
+import { getClub } from '../data/clubs.js';
 import { generateSingleTeammate } from '../data/roster.js';
 import { addPlayerPoints, buildLeaderboard } from '../data/leaderboard.js';
 import { getEventById } from '../data/events/index.js';
@@ -56,6 +57,11 @@ import {
   championshipTierKeys,
 } from './tournamentProgress.js';
 import {
+  completeTournamentInstance,
+  recordPlayerMatchInInstance,
+  summarizeTournamentInstance,
+} from './tournamentInstance.js';
+import {
   buildSequencePromptEvent,
   createAiSequenceFromEvent,
   createNarrativeSequence,
@@ -76,6 +82,8 @@ import {
 import type {
   Buff,
   ChoiceDef,
+  ClubCoreStatus,
+  ClubRuntimeState,
   EventDef,
   GameEventPublic,
   GameSession,
@@ -85,7 +93,10 @@ import type {
   RoundResult,
   Stats,
   TeammateRole,
+  TournamentInstance,
+  TransferRecord,
   WeeklyNewsItem,
+  WorldPlayer,
 } from '../types.js';
 import {
   BROKE_MENTALITY_DRAIN,
@@ -167,11 +178,16 @@ import {
 import {
   assignPendingMatchOpponent,
   activateClubRuntime,
+  createClubRuntimeState,
   recordWorldTournamentResult,
   resolveClubDisplayInfo,
   tickWorldClubRuntimes,
 } from './worldClubs.js';
-import { buildWorldTournamentNews } from './worldNews.js';
+import {
+  normalizeTransferRoster,
+  TRANSFER_HISTORY_LIMIT,
+} from './transferWindow.js';
+import { buildWorldTournamentNews, buildWorldTransferNews, buildWorldTransferNewsItem } from './worldNews.js';
 
 const PROMOTION_DECLINE_COOLDOWN_ROUNDS = 4;
 const CLUB_INTERVIEW_IDS = new Set([
@@ -272,11 +288,291 @@ function buildWorldNewsForRound(session: GameSession): WeeklyNewsItem[] {
     if (existingIds.has(item.eventId) || items.some((entry) => entry.eventId === item.eventId)) continue;
     items.push(item);
   }
+  const transferNews = buildWorldTransferNews(session);
+  for (const item of transferNews) {
+    if (existingIds.has(item.eventId) || items.some((entry) => entry.eventId === item.eventId)) continue;
+    items.push(item);
+  }
   return items;
 }
 
 function pendingQueuedEvents(session: GameSession): GameEventPublic[] {
   return session.queuedEvents ?? [];
+}
+
+function pointsForInstanceResult(tier: Tournament['tier'], result: 'win' | 'deep-run' | 'early-exit'): number {
+  const base = tier === 'major' ? 30 :
+    tier === 's-class' || tier === 's-open' || tier === 's-closed' ? 24 :
+      tier === 'a' ? 18 :
+        tier === 'b' ? 12 :
+          8;
+  if (result === 'win') return base;
+  if (result === 'deep-run') return Math.round(base * 0.55);
+  return 0;
+}
+
+function applyTournamentInstanceResultsToWorldClubs(
+  session: GameSession,
+  instance: TournamentInstance,
+  tournament: Tournament | undefined,
+): GameSession {
+  if (!tournament || !session.worldClubs || !instance.awards) return session;
+  const round = session.player.round ?? 0;
+  const runtimeByClubId = { ...session.worldClubs.runtimeByClubId };
+  for (const team of instance.teams) {
+    const result: 'win' | 'deep-run' | 'early-exit' =
+      team.clubId === instance.awards.championClubId ? 'win' :
+        team.clubId === instance.awards.runnerUpClubId || (team.finalPlacement ?? 99) <= 4 ? 'deep-run' :
+          'early-exit';
+    const existing = runtimeByClubId[team.clubId] ?? createClubRuntimeState(session, team.clubId);
+    const positive = result !== 'early-exit';
+    runtimeByClubId[team.clubId] = {
+      ...existing,
+      seasonPoints: Math.max(0, existing.seasonPoints + pointsForInstanceResult(tournament.tier, result)),
+      currentForm: Math.max(-100, Math.min(100, existing.currentForm + (positive ? 5 : -4))),
+      recentResults: [
+        {
+          round,
+          tournamentId: tournament.id,
+          tier: tournament.tier,
+          result,
+          note: `${tournament.displayName} 赛事实例结果`,
+        },
+        ...existing.recentResults.filter((entry) => entry.tournamentId !== tournament.id),
+      ].slice(0, 6),
+      updatedRound: round,
+    };
+  }
+  return {
+    ...session,
+    worldClubs: {
+      ...session.worldClubs,
+      runtimeByClubId,
+    },
+  };
+}
+
+function clearPlayerTeamPendingStoryFlag(session: GameSession, player: Player, flag: string): GameSession {
+  const clubId = player.team?.clubId;
+  const pool = session.worldClubs;
+  if (!clubId || !pool?.runtimeByClubId[clubId]?.pendingStoryFlags?.includes(flag)) return session;
+  const runtime = pool.runtimeByClubId[clubId]!;
+  return {
+    ...session,
+    worldClubs: {
+      ...pool,
+      runtimeByClubId: {
+        ...pool.runtimeByClubId,
+        [clubId]: {
+          ...runtime,
+          pendingStoryFlags: runtime.pendingStoryFlags.filter((item) => item !== flag),
+        },
+      },
+    },
+  };
+}
+
+function finalizePendingIncomingSigning(session: GameSession, player: Player): GameSession {
+  const clubId = player.team?.clubId;
+  const pool = session.worldClubs;
+  if (!clubId || !pool) return session;
+  const rumor = (session.transferRumors ?? []).find((item) =>
+    item.toClubId === clubId &&
+    !item.resolved &&
+    item.reason.includes('新援')
+  );
+  if (!rumor) return session;
+
+  const fromRuntime = pool.runtimeByClubId[rumor.fromClubId];
+  const toRuntime = pool.runtimeByClubId[clubId];
+  const incomingPlayer = fromRuntime?.fullRoster.find((candidate) => candidate.id === rumor.playerId);
+  if (!fromRuntime || !toRuntime || !incomingPlayer) return session;
+
+  const season = player.year ?? pool.season;
+  const transferredPlayer: WorldPlayer = {
+    ...incomingPlayer,
+    clubId,
+    status: 'starter',
+    joinedRound: player.round ?? incomingPlayer.joinedRound,
+  };
+  const record: TransferRecord = {
+    id: `${season}-${incomingPlayer.id}-incoming-to-player-team`,
+    season,
+    playerId: incomingPlayer.id,
+    fromClubId: rumor.fromClubId,
+    toClubId: clubId,
+    type: rumor.type,
+    summary: `${transferredPlayer.name} 在竞争传闻后加盟 ${player.team?.name ?? clubId}`,
+  };
+  const toRosterBase = toRuntime.fullRoster.length >= 5
+    ? toRuntime.fullRoster.slice(0, 4)
+    : toRuntime.fullRoster;
+  const nextRuntimeByClubId = {
+    ...pool.runtimeByClubId,
+    [rumor.fromClubId]: normalizeTransferRoster({
+      ...fromRuntime,
+      fullRoster: fromRuntime.fullRoster.filter((candidate) => candidate.id !== incomingPlayer.id),
+    }, season),
+    [clubId]: normalizeTransferRoster({
+      ...toRuntime,
+      fullRoster: [transferredPlayer, ...toRosterBase.filter((candidate) => candidate.id !== incomingPlayer.id)],
+    }, season),
+  };
+  const fromClub = getClub(rumor.fromClubId);
+  const toClub = getClub(clubId);
+  const newsItems = fromClub && toClub
+    ? [buildWorldTransferNewsItem(record, transferredPlayer, toClub, fromClub)]
+    : [];
+
+  return {
+    ...session,
+    transferHistory: [record, ...(session.transferHistory ?? [])].slice(0, TRANSFER_HISTORY_LIMIT),
+    transferRumors: (session.transferRumors ?? []).map((item) => item.id === rumor.id ? { ...item, resolved: true } : item),
+    weeklyNews: [...(session.weeklyNews ?? []), ...newsItems],
+    worldClubs: {
+      ...pool,
+      runtimeByClubId: nextRuntimeByClubId,
+    },
+  };
+}
+
+function applyRebuildDecisionOutcome(
+  session: GameSession,
+  player: Player,
+  eventId: string,
+  choiceId: string,
+  success: boolean,
+): { player: Player; session: GameSession } {
+  if (eventId !== 'chain-rebuild-decision' || !player.team) {
+    return { player, session };
+  }
+
+  let coreStatus: ClubCoreStatus = 'contested';
+  let rebuildPressure = Math.max(40, player.team.rebuildPressure ?? 0);
+  let teamTrust = player.teamTrust ?? 50;
+
+  if (choiceId === 'prove-core' && success) {
+    coreStatus = 'player-core';
+    rebuildPressure = 0;
+    teamTrust = clampTeamTrust(teamTrust + 12);
+  } else if (choiceId === 'prove-core') {
+    coreStatus = 'rotation-risk';
+    rebuildPressure = Math.min(100, Math.max(rebuildPressure, 70));
+    teamTrust = clampTeamTrust(teamTrust - 8);
+  }
+
+  const baseTeam = {
+    ...player.team,
+    coreStatus,
+    rebuildPressure,
+  };
+  const team = coreStatus === 'rotation-risk'
+    ? {
+        ...baseTeam,
+        monthlySalary: Math.max(1, Math.floor(baseTeam.monthlySalary * 0.8)),
+        teamStatus: 'rotation' as const,
+        teamStatusUntilRound: player.round + 12,
+      }
+    : baseTeam;
+  const nextPlayer = {
+    ...player,
+    team,
+    teamTrust,
+    activeRoleRounds: coreStatus === 'rotation-risk' && player.activeRole
+      ? Math.min(player.activeRoleRounds ?? 0, 18)
+      : player.activeRoleRounds,
+  };
+
+  const clubId = team.clubId;
+  const runtime = session.worldClubs?.runtimeByClubId?.[clubId];
+  if (!runtime || !session.worldClubs) {
+    return { player: nextPlayer, session };
+  }
+
+  return {
+    player: nextPlayer,
+    session: {
+      ...session,
+      worldClubs: {
+        ...session.worldClubs,
+        runtimeByClubId: {
+          ...session.worldClubs.runtimeByClubId,
+          [clubId]: {
+            ...runtime,
+            coreStatus,
+            rebuildPressure,
+            rebuildCorePlayerId: coreStatus === 'player-core' ? 'player' : runtime.rebuildCorePlayerId,
+          },
+        },
+      },
+    },
+  };
+}
+
+function syncCompletedTeammateDeparture(
+  session: GameSession,
+  clubId: string,
+  destClubId: string | undefined,
+  destTeamName: string,
+  departingId: string,
+  season: number,
+): GameSession {
+  const pool = session.worldClubs;
+  const fromRuntime = pool?.runtimeByClubId[clubId];
+  const departingPlayer = fromRuntime?.fullRoster.find((player) => player.id === departingId);
+  if (!pool || !fromRuntime || !departingPlayer) return session;
+
+  const resolvedDestClubId = destClubId && pool.runtimeByClubId[destClubId] ? destClubId : undefined;
+  const record: TransferRecord = {
+    id: `${season}-${departingId}-from-player-team`,
+    season,
+    playerId: departingId,
+    fromClubId: clubId,
+    toClubId: resolvedDestClubId ?? destTeamName,
+    type: 'poach',
+    summary: `${departingPlayer.name} 转会至 ${destTeamName}`,
+  };
+
+  let runtimeByClubId: Record<string, ClubRuntimeState> = {
+    ...pool.runtimeByClubId,
+    [clubId]: normalizeTransferRoster({
+      ...fromRuntime,
+      fullRoster: fromRuntime.fullRoster.filter((player) => player.id !== departingId),
+    }, season),
+  };
+
+  let newsItems: WeeklyNewsItem[] = [];
+  if (resolvedDestClubId) {
+    const toRuntime = runtimeByClubId[resolvedDestClubId]!;
+    const transferredPlayer: WorldPlayer = {
+      ...departingPlayer,
+      clubId: resolvedDestClubId,
+      status: 'starter',
+      joinedRound: session.player.round ?? departingPlayer.joinedRound,
+    };
+    runtimeByClubId = {
+      ...runtimeByClubId,
+      [resolvedDestClubId]: normalizeTransferRoster({
+        ...toRuntime,
+        fullRoster: [transferredPlayer, ...toRuntime.fullRoster.filter((player) => player.id !== departingId)].slice(0, 5),
+      }, season),
+    };
+    const fromClub = getClub(clubId);
+    const toClub = getClub(resolvedDestClubId);
+    if (fromClub && toClub) {
+      newsItems = [buildWorldTransferNewsItem(record, transferredPlayer, toClub, fromClub)];
+    }
+  }
+
+  return {
+    ...session,
+    transferHistory: [record, ...(session.transferHistory ?? [])].slice(0, TRANSFER_HISTORY_LIMIT),
+    weeklyNews: [...(session.weeklyNews ?? []), ...newsItems],
+    worldClubs: {
+      ...pool,
+      runtimeByClubId,
+    },
+  };
 }
 
 function buildLegacyAiFallbackEvent(event: GameEventPublic): EventDef {
@@ -331,6 +627,7 @@ function buildWeeklyEventSeed(
       aiEventCandidates: buildAiPickCandidates(aiEventCache, session.player, session.history),
       excludedEventIds: [...excludedEventIds],
       recentThemeGroups,
+      session,
     });
     if (!candidate) break;
     excludedEventIds.add(candidate.id);
@@ -989,7 +1286,7 @@ export function applyChoice(
   const nextRound = session.player.round + (shouldAdvanceRound ? 1 : 0);
   let careerExperienceGrowth = 0;
   if (shouldAdvanceRound) {
-    const careerGrowth = applyCareerExperienceGrowth(statsAfterGrowth, CAREER_TIME_EXPERIENCE_RAW);
+    const careerGrowth = applyCareerExperienceGrowth(statsAfterGrowth, CAREER_TIME_EXPERIENCE_RAW, session.player.age);
     statsAfterGrowth = careerGrowth.stats;
     careerExperienceGrowth = careerGrowth.grown;
     if (careerExperienceGrowth > 0) passiveEffects.push('career-time-experience');
@@ -1117,6 +1414,7 @@ export function applyChoice(
     stressMaxRounds,
     year: nextYear,
     week: nextWeek,
+    age: nextYear > (session.player.year ?? nextYear) ? session.player.age + 1 : session.player.age,
     actionPoints: nextActionPoints,
     roundCombos: shouldAdvanceRound ? [] : session.player.roundCombos,
     shopCooldowns: nextShopCooldowns,
@@ -1550,6 +1848,8 @@ export function applyChoice(
   let leaderboard = buildLeaderboard(session);
   let worldTournamentResult: { tournament: Tournament; playerWon: boolean; isFinalStage: boolean; opponentClubId?: string } | null = null;
   let worldStateSession: GameSession = session;
+  let completedTournamentInstance: TournamentInstance | null = null;
+  let completedTournamentDef: Tournament | undefined;
   const resolvesPendingTournament =
     nextPlayer.pendingMatch &&
     (
@@ -1653,6 +1953,38 @@ export function applyChoice(
     const stageLossesAfter = outcome.success ? 0 : stageLossesBefore + 1;
     const eliminationLosses = t ? tournamentStageEliminationLosses(t, idx) : 1;
     const eliminated = !outcome.success && stageLossesAfter >= eliminationLosses;
+    let activeTournamentInstance = session.activeTournamentInstance;
+    if (
+      activeTournamentInstance &&
+      nextPlayer.pendingMatch.tournamentInstanceId === activeTournamentInstance.id
+    ) {
+      activeTournamentInstance = recordPlayerMatchInInstance(
+        activeTournamentInstance,
+        idx,
+        outcome.success,
+        result.matchStats,
+        nextPlayer.name,
+      );
+      if (!t || eliminated || isFinal) {
+        const completed = completeTournamentInstance(activeTournamentInstance, outcome.success && isFinal);
+        completedTournamentInstance = completed;
+        completedTournamentDef = t;
+        activeTournamentInstance = null;
+        worldStateSession = {
+          ...worldStateSession,
+          activeTournamentInstance,
+          tournamentHistory: [
+            summarizeTournamentInstance(completed),
+            ...(worldStateSession.tournamentHistory ?? []),
+          ].slice(0, 20),
+        };
+      } else {
+        worldStateSession = {
+          ...worldStateSession,
+          activeTournamentInstance,
+        };
+      }
+    }
 
     if (!t || eliminated || isFinal) {
       if (t) {
@@ -1677,7 +2009,7 @@ export function applyChoice(
         opponent: undefined,
       };
       const opponentAssigned = assignPendingMatchOpponent(
-        { ...session, player: nextPlayer },
+        { ...worldStateSession, player: nextPlayer },
         nextPendingMatch,
       );
       worldStateSession = opponentAssigned.session;
@@ -1745,7 +2077,15 @@ export function applyChoice(
       shouldTriggerPendingDeparture(nextPlayer, nextPlayer.pendingDeparture);
 
     if (shouldDepart) {
-      const { slotId, earlyRecruit, destTeamName } = nextPlayer.pendingDeparture;
+      const { slotId, earlyRecruit, destTeamName, destClubId } = nextPlayer.pendingDeparture;
+      worldStateSession = syncCompletedTeammateDeparture(
+        { ...worldStateSession, player: nextPlayer },
+        nextPlayer.team.clubId,
+        destClubId,
+        destTeamName,
+        slotId,
+        nextPlayer.year ?? 1,
+      );
       const departingIdx = nextPlayer.roster.findIndex((tm) => tm.id === slotId);
       if (departingIdx !== -1) {
         const departingTm = nextPlayer.roster[departingIdx]!;
@@ -1765,6 +2105,16 @@ export function applyChoice(
           `${departingTm.name} 正式转会至 ${destTeamName}，` +
           `${earlyRecruit ? '提前招募的新秀' : '临时从青训提拔的'} ${newTm.name} 补位（默契 ${trustDrop}）`,
         );
+        if ((nextPlayer.activeRole || nextPlayer.preferredRole) && !nextPlayer.roleTransition && !nextPlayer.forceNextEvent) {
+          if (!nextPlayer.tags.includes('role-transition-eligible')) {
+            nextPlayer = {
+              ...nextPlayer,
+              tags: [...nextPlayer.tags, 'role-transition-eligible'],
+            };
+          }
+          nextPlayer.forceNextEvent = 'chain-role-transition-start';
+          passiveEffects.push('队友转会后，教练组准备重新讨论你的角色定位');
+        }
       }
       const nextRoster = nextPlayer.roster ?? [];
       if (nextRoster.length > 0) {
@@ -1960,7 +2310,23 @@ export function applyChoice(
     }
   }
 
-  let worldSession = { ...worldStateSession, player: nextPlayer };
+  const storyFlagSession = eventDef.id === 'chain-incoming-signing-contest'
+    ? finalizePendingIncomingSigning(
+        clearPlayerTeamPendingStoryFlag(worldStateSession, nextPlayer, 'incoming-signing-pending'),
+        nextPlayer,
+      )
+    : worldStateSession;
+
+  const rebuildDecision = applyRebuildDecisionOutcome(
+    storyFlagSession,
+    nextPlayer,
+    eventDef.id,
+    choiceDef.id,
+    outcome.success,
+  );
+  nextPlayer = rebuildDecision.player;
+
+  let worldSession = { ...rebuildDecision.session, player: nextPlayer };
   if (nextPlayer.team) {
     worldSession = activateClubRuntime(worldSession, nextPlayer.team.clubId, 'player-team-active');
   }
@@ -1979,6 +2345,9 @@ export function applyChoice(
     nextPlayer = worldSession.player;
   }
   worldSession = tickWorldClubRuntimes(worldSession, nextPlayer.round, 'round');
+  if (completedTournamentInstance && completedTournamentDef) {
+    worldSession = applyTournamentInstanceResultsToWorldClubs(worldSession, completedTournamentInstance, completedTournamentDef);
+  }
   nextPlayer = worldSession.player;
   leaderboard = buildLeaderboard(worldSession, leaderboard);
 

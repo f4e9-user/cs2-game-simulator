@@ -6,6 +6,7 @@ import type {
 } from '../data/tournaments.js';
 import { calcSynergyBonus, calcTeamChemistryModifier, deriveTeamChemistry } from './synergy.js';
 import { roleFitScore } from '../data/roleProfiles.js';
+import { applyAgeToStats } from './age.js';
 
 export interface MatchStats {
   kills: number;
@@ -165,7 +166,8 @@ export function simulateMatch(
   rng: () => number,
 ): MatchSimResult {
   const context = normalizeMatchContext(contextOrDifficulty);
-  const { stats, volatile } = player;
+  const { volatile } = player;
+  const stats = applyAgeToStats(player.stats, player.age);
   const { feel, tilt, fatigue } = volatile;
   const activeMatchBuffs = matchBuffs(player);
 

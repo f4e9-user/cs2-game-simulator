@@ -561,7 +561,7 @@ describe('game routes', () => {
         week: 11,
         fame: 40,
         team: {
-          clubId: 'dragon-raiders',
+          clubId: 'club-dragon-corp',
           name: '龙腾电竞',
           tag: 'DRG',
           region: 'CN',
@@ -588,11 +588,17 @@ describe('game routes', () => {
       },
       body: JSON.stringify({ tournamentId: 'y1-a-01' }),
     }, env);
-    const body = await res.json() as { player?: GameSession['player']; error?: string };
+    const body = await res.json() as {
+      player?: GameSession['player'];
+      activeTournamentInstance?: GameSession['activeTournamentInstance'];
+      error?: string;
+    };
 
     expect(res.status).toBe(200);
     expect(body.error).toBeUndefined();
     expect(body.player?.pendingMatch?.tournamentId).toBe('y1-a-01');
+    expect(body.player?.pendingMatch?.tournamentInstanceId).toBe('y1-a-01:1');
+    expect(body.activeTournamentInstance?.playerTeamClubId).toBe('club-dragon-corp');
     expect(body.player?.pendingMatch?.qualificationSlotUsed).toBeUndefined();
   });
 

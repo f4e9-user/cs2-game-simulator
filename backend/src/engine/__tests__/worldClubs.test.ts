@@ -13,6 +13,7 @@ import {
   recordWorldTournamentResult,
   tickWorldClubRuntimes,
 } from '../worldClubs.js';
+import { createTournamentInstance } from '../tournamentInstance.js';
 import type { PendingMatch } from '../../types.js';
 import { toPublicEvent } from '../events.js';
 
@@ -35,7 +36,7 @@ describe('world club runtime', () => {
   it('initializes a session-scoped world club pool without runtimes', () => {
     const initialized = ensureWorldClubPool(session());
 
-    expect(initialized.worldClubsVersion).toBe(1);
+    expect(initialized.worldClubsVersion).toBe(2);
     expect(initialized.worldClubs?.activeClubIds).toContain('club-rival-semi');
     expect(initialized.worldClubs?.relevantClubIds).toContain('club-local-wolves');
     expect(initialized.worldClubs?.runtimeByClubId).toEqual({});
@@ -52,12 +53,83 @@ describe('world club runtime', () => {
     expect(pool.runtimeByClubId['club-cyber-academy']?.qualificationState.eligibleTiers).toEqual(['c', 'b']);
   });
 
+  it('generates world player starters with age and unified stat axes', () => {
+    const runtime = previewClubRuntime(session(), 'club-cyber-academy');
+    const starter = runtime.fullRoster[0]!;
+
+    expect(starter.clubId).toBe('club-cyber-academy');
+    expect(starter.region).toBe('亚太');
+    expect(starter.age).toBeGreaterThanOrEqual(16);
+    expect(starter.age).toBeLessThanOrEqual(24);
+    expect(starter.stats.constitution).toBeTypeOf('number');
+    expect(starter.form).toBe(0);
+    expect(starter.reputation).toBeGreaterThanOrEqual(0);
+    expect(starter.archetype).toBeDefined();
+  });
+
   it('previews a runtime without mutating the session', () => {
     const base = ensureWorldClubPool(session());
     const preview = previewClubRuntime(base, 'club-local-wolves');
 
     expect(preview.fullRoster).toHaveLength(5);
     expect(base.worldClubs?.runtimeByClubId['club-local-wolves']).toBeUndefined();
+  });
+
+  it('assigns pending match opponents from an active tournament instance path', () => {
+    const tournament = getTournament('y1-a-01');
+    if (!tournament) throw new Error('missing fixture tournament');
+    const base = {
+      ...session(),
+      player: {
+        ...session().player,
+        team: {
+          clubId: 'club-cyber-academy',
+          name: '赛博学院',
+          tag: 'CYA',
+          region: '亚太',
+          tier: 'youth' as const,
+          monthlySalary: 10,
+          joinedRound: 1,
+        },
+      },
+    };
+    const instance = createTournamentInstance(base, tournament);
+    const pendingMatch: PendingMatch = {
+      tournamentId: tournament.id,
+      tier: tournament.tier,
+      name: tournament.name,
+      resolveYear: 1,
+      resolveWeek: 21,
+      stageIndex: 0,
+      tournamentInstanceId: instance.id,
+    };
+
+    const assigned = assignPendingMatchOpponent({ ...base, activeTournamentInstance: instance }, pendingMatch);
+
+    expect(assigned.pendingMatch.opponent?.clubId).toBe(instance.playerPath?.[0]?.opponentClubId);
+  });
+
+  it('applies club identity to initial runtime state', () => {
+    const s = session();
+    const legacy = previewClubRuntime(s, 'club-zenith-legacy');
+    const capital = previewClubRuntime(s, 'club-meteor-prime');
+    const fallen = previewClubRuntime(s, 'club-steppe-titan');
+
+    expect(legacy.clubTrust).toBeGreaterThanOrEqual(64);
+    expect(legacy.rosterStability).toBeGreaterThanOrEqual(66);
+    expect(legacy.baselineVrsScore).toBeGreaterThanOrEqual(128);
+    expect(capital.rosterStability).toBeLessThanOrEqual(46);
+    expect(capital.currentForm).toBeGreaterThanOrEqual(12);
+    expect(fallen.currentForm).toBeLessThanOrEqual(-6);
+    expect(fallen.rosterStability).toBeLessThanOrEqual(62);
+    for (const runtime of [legacy, capital, fallen]) {
+      expect(runtime.clubTrust).toBeGreaterThanOrEqual(0);
+      expect(runtime.clubTrust).toBeLessThanOrEqual(100);
+      expect(runtime.rosterStability).toBeGreaterThanOrEqual(0);
+      expect(runtime.rosterStability).toBeLessThanOrEqual(100);
+      expect(runtime.internalChemistry).toBeGreaterThanOrEqual(0);
+      expect(runtime.internalChemistry).toBeLessThanOrEqual(100);
+    }
   });
 
   it('derives roster needs from club runtime instead of the player', () => {
@@ -151,12 +223,38 @@ describe('world club runtime', () => {
     }, true);
 
     expect(joined.roster?.map((tm) => tm.name)).toEqual(runtime.fullRoster.slice(0, 4).map((tm) => tm.name));
-    expect(joined.roster?.every((tm) => tm.id.startsWith('slot-'))).toBe(true);
+    expect(joined.roster?.map((tm) => tm.id)).toEqual(runtime.fullRoster.slice(0, 4).map((tm) => tm.id));
     expect(joined.team?.teamStatus).toBe('trial');
     expect(joined.team?.teamStatusUntilRound).toBe(joined.round + 8);
     expect(joined.team?.joinMode).toBe('trial-sixth');
     expect(joined.team?.joinReason).toContain('试训');
     expect(joined.team?.roleOverlap).toBeDefined();
+  });
+
+  it('creates a season goal in club runtime and player team snapshot when joining', () => {
+    const activated = activateClubRuntime(session(), 'club-cyber-academy', 'test');
+    const offer = {
+      clubId: 'club-cyber-academy',
+      clubName: '赛博学院',
+      tag: 'CYA',
+      tier: 'youth' as const,
+      region: '亚太',
+      monthlySalary: 10,
+    };
+    const offerSession = {
+      ...activated,
+      player: {
+        ...activated.player,
+        pendingOffer: offer,
+      },
+    };
+    const joined = respondTeamOffer(offerSession, true);
+    const runtimeGoal = offerSession.worldClubs?.runtimeByClubId['club-cyber-academy']?.seasonGoal;
+
+    expect(runtimeGoal?.season).toBe(joined.year);
+    expect(joined.team?.seasonGoal?.id).toBe(runtimeGoal?.id);
+    expect(joined.team?.managementPatience).toBeGreaterThan(0);
+    expect(joined.team?.rebuildPressure).toBe(0);
   });
 
   it('rolls world clubs into a new season with a season summary', () => {
@@ -192,6 +290,71 @@ describe('world club runtime', () => {
     expect(rolledRuntime?.seasonPoints).toBe(0);
   });
 
+  it('settles current team season goal and creates the next one at season rollover', () => {
+    const baseSession = session();
+    const activated = activateClubRuntime({
+      ...baseSession,
+      player: {
+        ...baseSession.player,
+        team: {
+          clubId: 'club-meteor-prime',
+          name: 'Meteor Prime',
+          tag: 'MTP',
+          region: '欧洲',
+          tier: 'top' as const,
+          monthlySalary: 100,
+          joinedRound: 1,
+          seasonGoal: undefined,
+        },
+      },
+    }, 'club-meteor-prime', 'test');
+    const runtime = activated.worldClubs!.runtimeByClubId['club-meteor-prime']!;
+    const previousSeason = activated.worldClubs!.season;
+    const goal = {
+      id: 'club-meteor-prime:1:reach-s-event',
+      type: 'reach-s-event' as const,
+      label: '打进 S 级赛事',
+      season: previousSeason,
+      targetTier: 's-class' as const,
+      status: 'active' as const,
+      progress: 0,
+      baseline: {
+        tierParticipations: {},
+        tierChampionships: {},
+        vrsScore: 0,
+        startYear: previousSeason,
+      },
+    };
+
+    const nextSeason = tickWorldClubRuntimes({
+      ...activated,
+      player: {
+        ...activated.player,
+        year: previousSeason + 1,
+        round: 49,
+      },
+      worldClubs: {
+        ...activated.worldClubs!,
+        runtimeByClubId: {
+          ...activated.worldClubs!.runtimeByClubId,
+          'club-meteor-prime': {
+            ...runtime,
+            seasonGoal: goal,
+            managementPatience: 60,
+            rebuildPressure: 0,
+          },
+        },
+      },
+    }, 49, 'round');
+
+    const rolledRuntime = nextSeason.worldClubs?.runtimeByClubId['club-meteor-prime'];
+    expect(rolledRuntime?.seasonGoal?.season).toBe(previousSeason + 1);
+    expect(rolledRuntime?.rebuildPressure).toBeGreaterThan(0);
+    expect(rolledRuntime?.managementPatience).toBeLessThan(60);
+    expect(nextSeason.player.team?.seasonGoal?.id).toBe(rolledRuntime?.seasonGoal?.id);
+    expect(nextSeason.player.team?.rebuildPressure).toBe(rolledRuntime?.rebuildPressure);
+  });
+
   it('syncs player team tier and stage when their club is promoted at season rollover', () => {
     const baseSession = session();
     const activated = activateClubRuntime({
@@ -223,7 +386,7 @@ describe('world club runtime', () => {
       },
     }, 'club-cyber-academy', 'test');
     const runtime = activated.worldClubs!.runtimeByClubId['club-cyber-academy']!;
-    const rosterBefore = runtime.fullRoster.map((tm) => ({ id: tm.id, name: tm.name, agility: tm.stats.agility }));
+    const rosterBefore = runtime.fullRoster.map((tm) => ({ id: tm.id, name: tm.name, agility: tm.stats.agility, age: tm.age }));
     const previousSeason = activated.worldClubs!.season;
 
     const nextSeason = tickWorldClubRuntimes({
@@ -263,6 +426,7 @@ describe('world club runtime', () => {
     const rosterAfter = nextSeason.worldClubs?.runtimeByClubId['club-cyber-academy']?.fullRoster ?? [];
     expect(rosterAfter.map((tm) => tm.id)).toEqual(rosterBefore.map((tm) => tm.id));
     expect(rosterAfter[0]?.name).toBe(rosterBefore[0]?.name);
+    expect(rosterAfter[0]?.age).toBe(rosterBefore[0]!.age + 1);
     expect(rosterAfter[0]?.stats.agility).toBeGreaterThanOrEqual(rosterBefore[0]!.agility);
   });
 

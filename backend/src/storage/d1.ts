@@ -25,6 +25,7 @@ function migrateSession(session: GameSession): GameSession {
 
   // Ensure new fields have safe defaults when loading old sessions
   if (!('feelCap' in p)) p['feelCap'] = 3;
+  if (!('age' in p)) p['age'] = 18 + Math.max(0, ((p['year'] as number | undefined) ?? 1) - 1);
   if (!('peripheralTier' in p)) p['peripheralTier'] = 0;
   if (!('qualificationSlots' in p)) p['qualificationSlots'] = {};
   if (!('teamQualificationSlots' in p)) p['teamQualificationSlots'] = {};
@@ -56,6 +57,11 @@ function migrateSession(session: GameSession): GameSession {
   // Ensure apiToken exists (sessions created before apiToken was added)
   if (!session.apiToken) {
     (session as unknown as Record<string, unknown>)['apiToken'] = `legacy-${session.id}`;
+  }
+
+  if ((session.worldClubsVersion ?? 0) < 2) {
+    session.worldClubs = undefined;
+    session.worldClubsVersion = undefined;
   }
 
   return session;

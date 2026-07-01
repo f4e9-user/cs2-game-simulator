@@ -38,6 +38,7 @@ import {
   TILT_MIN,
   growthFactor,
 } from './constants.js';
+import { scaleGrowthByAge } from './age.js';
 import { applyMoneyDeltaToStats } from './money.js';
 
 export function outcomeCoreGrowth(outcome: Outcome): CoreStatDelta | undefined {
@@ -148,11 +149,13 @@ export function applyGrowth(
   growthSpent: number,
   buffs: Buff[],
   actionTag: string,
+  age?: number,
 ): { stats: Stats; grown: number } {
   const remainingCap = Math.max(0, GROWTH_CAP - growthSpent);
   if (remainingCap <= 0 || !CORE_STAT_KEYS.includes(growthKey)) {
     return { stats, grown: 0 };
   }
+  const coreGrowthKey = growthKey as Exclude<StatKey, 'money'>;
 
   // 应用 buff 倍率
   const multiplier = buffs
@@ -161,7 +164,8 @@ export function applyGrowth(
 
   const current = stats[growthKey];
   const factor = growthFactor(current);
-  const applied = Math.min(rawAmount * factor * multiplier, remainingCap, STAT_MAX - current);
+  const ageScaledRawAmount = typeof age === 'number' ? scaleGrowthByAge(coreGrowthKey, rawAmount, age) : rawAmount;
+  const applied = Math.min(ageScaledRawAmount * factor * multiplier, remainingCap, STAT_MAX - current);
   if (applied <= 0) return { stats, grown: 0 };
 
   const newStats = { ...stats };
@@ -172,8 +176,10 @@ export function applyGrowth(
 export function applyCareerExperienceGrowth(
   stats: Stats,
   rawAmount: number,
+  age?: number,
 ): { stats: Stats; grown: number } {
   if (rawAmount <= 0) return { stats, grown: 0 };
+  const ageScaledRawAmount = typeof age === 'number' ? scaleGrowthByAge('experience', rawAmount, age) : rawAmount;
   const current = stats.experience ?? 0;
   const factor =
     current < 5 ? 1 :
@@ -181,7 +187,7 @@ export function applyCareerExperienceGrowth(
     current < 15 ? 0.45 :
     current < EXPERIENCE_SOFT_CAP ? 0.25 :
     0.1;
-  const applied = Math.min(rawAmount * factor, STAT_MAX - current);
+  const applied = Math.min(ageScaledRawAmount * factor, STAT_MAX - current);
   if (applied <= 0) return { stats, grown: 0 };
   const next = {
     ...stats,
@@ -417,6 +423,7 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
       player.growthSpent,
       player.buffs,
       event.type,
+      player.age,
     );
     nextStats = result.stats;
     growthApplied = result.grown;

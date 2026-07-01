@@ -5,7 +5,7 @@ import { buildBlockerInsights, buildEventExplanations } from './eventReason.js';
 import { buildOnboardingInsight } from './onboardingInsight.js';
 import { buildProgressionMilestones, buildProgressionOpportunities, buildPromotionInsight, buildStageInsight, buildStagePressureInsight } from './progressionInsight.js';
 import { buildRiskInsights } from './riskInsight.js';
-import type { CareerInsight, PriorityInsight } from './types.js';
+import type { CareerInsight, PriorityInsight, SeasonGoalInsight } from './types.js';
 
 type DebugOnlyResponseFields = 'debugTeamIdentity' | 'debugRole';
 type PayloadControlFields = 'includeDebugFields';
@@ -49,11 +49,43 @@ function buildPriorities(insight: Pick<CareerInsight, 'milestones' | 'risks'>): 
   return priorities.slice(0, 3);
 }
 
+function buildSeasonGoalInsight(session: GameSession): SeasonGoalInsight | undefined {
+  const team = session.player.team;
+  const goal = team?.seasonGoal;
+  if (!team || !goal) return undefined;
+  const managementPatience = team.managementPatience ?? 60;
+  const rebuildPressure = team.rebuildPressure ?? 0;
+  const weeksLeftInSeason = Math.max(0, 48 - (session.player.week ?? 1));
+  const tone: SeasonGoalInsight['tone'] =
+    managementPatience < 30 || rebuildPressure >= 70
+      ? 'critical'
+      : weeksLeftInSeason <= 4 && goal.progress < 1
+        ? 'warning'
+        : goal.progress >= 1
+          ? 'encouraging'
+          : 'neutral';
+  return {
+    clubId: team.clubId,
+    type: goal.type,
+    label: goal.label,
+    status: goal.status,
+    progress: goal.progress,
+    weeksLeftInSeason,
+    managementPatience,
+    rebuildPressure,
+    headline: tone === 'critical'
+      ? `管理层压力升高：${goal.label}`
+      : goal.label,
+    tone,
+  };
+}
+
 export function buildCareerInsight(session: GameSession, playerPoints = 0): CareerInsight {
   const stage = buildStageInsight(session.player);
   const milestones = buildProgressionMilestones(session.player, playerPoints);
   const promotion = buildPromotionInsight(session.player, milestones, playerPoints);
   const stagePressure = buildStagePressureInsight(session.player);
+  const seasonGoal = buildSeasonGoalInsight(session);
   const opportunities = buildProgressionOpportunities(session.player, playerPoints);
   const calendarBlocks = buildCalendarBlocks(session, opportunities, playerPoints);
   const risks = buildRiskInsights(session.player);
@@ -67,6 +99,7 @@ export function buildCareerInsight(session: GameSession, playerPoints = 0): Care
     stage,
     promotion,
     stagePressure,
+    seasonGoal,
     headline: `${stage.label}｜${stage.mainObjective}`,
     onboarding: buildOnboardingInsight(session.player),
     priorities: buildPriorities(partial),

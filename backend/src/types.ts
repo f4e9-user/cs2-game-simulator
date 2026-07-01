@@ -112,6 +112,7 @@ export interface PendingMatch {
   resolveWeek: number;
   stageIndex: number;
   stageLosses?: number;
+  tournamentInstanceId?: string;
   opponent?: PendingMatchOpponent;
 }
 
@@ -203,6 +204,47 @@ export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
 export type TournamentTier = 'c' | 'b' | 'a' | 's-open' | 's-closed' | 's-class' | 'major';
 export type ClubOriginPreference = 'local-core' | 'regional-core' | 'international-open';
 export type ClubOriginFit = 'match' | 'regional' | 'mismatch' | 'open';
+export type ClubArchetype =
+  | 'legacy-giant'
+  | 'capital-project'
+  | 'development-factory'
+  | 'regional-pride'
+  | 'fallen-legacy'
+  | 'scrappy-underdog';
+
+export interface PlayerSkillProfile {
+  agility: number;
+  constitution: number;
+  intelligence: number;
+  mentality: number;
+  experience: number;
+}
+
+export type PlayerArchetype =
+  | 'superstar'
+  | 'star-awper'
+  | 'entry-fragger'
+  | 'system-igl'
+  | 'veteran-anchor'
+  | 'rookie-prospect'
+  | 'clutch-specialist'
+  | 'role-player'
+  | 'volatile-talent';
+
+export type AgeBand = 'rising-talent' | 'ascending' | 'prime' | 'veteran' | 'twilight';
+
+export interface AgeStatModifier {
+  agilityDelta: number;
+  constitutionDelta: number;
+  intelligenceDelta: number;
+  mentalityDelta: number;
+  experienceDelta: number;
+  agilityGrowthMultiplier: number;
+  constitutionGrowthMultiplier: number;
+  intelligenceGrowthMultiplier: number;
+  mentalityGrowthMultiplier: number;
+  experienceGrowthMultiplier: number;
+}
 
 export type RosterStyle =
   | 'balanced'
@@ -295,15 +337,21 @@ export type ClubStoryline =
   | 'promoted-after-breakout-season'
   | 'fallen-giant';
 
-export interface ClubPlayer {
+export interface WorldPlayer {
   id: string;
   name: string;
+  region: string;
+  age: number;
+  clubId: string;
   role: TeammateRole;
-  stats: TeammateStats;
+  status: 'starter' | 'bench' | 'trial' | 'prospect' | 'free-agent';
+  archetype: PlayerArchetype;
+  stats: PlayerSkillProfile;
+  form: number;
+  reputation: number;
   traits: string[];
   personality: PersonalityTag;
   joinedRound: number;
-  status: 'starter' | 'bench' | 'trial';
   internalChemistry?: number;
 }
 
@@ -331,6 +379,77 @@ export interface ClubTierChange {
   summary: string;
 }
 
+export type ClubSeasonGoalStatus = 'active' | 'exceeded' | 'completed' | 'partial' | 'failed';
+
+export type ClubSeasonGoalType =
+  | 'survive-tier'
+  | 'reach-a-main'
+  | 'reach-s-event'
+  | 'major-qualification'
+  | 'major-playoffs'
+  | 'develop-rookie'
+  | 'rebuild-core';
+
+export interface ClubSeasonGoalBaseline {
+  tierParticipations: Record<string, number>;
+  tierChampionships: Record<string, number>;
+  vrsScore: number;
+  startYear: number;
+}
+
+export interface ClubSeasonGoal {
+  id: string;
+  type: ClubSeasonGoalType;
+  label: string;
+  season: number;
+  targetTier?: TournamentTier;
+  targetStageIndex?: number;
+  minVrsScore?: number;
+  minPlayerRating?: number;
+  status: ClubSeasonGoalStatus;
+  progress: number;
+  baseline: ClubSeasonGoalBaseline;
+}
+
+export type ClubCoreStatus =
+  | 'player-core'
+  | 'teammate-core'
+  | 'contested'
+  | 'rotation-risk'
+  | 'transfer-listed'
+  | 'benched';
+
+export type TransferType =
+  | 'star-signing'
+  | 'prospect-promotion'
+  | 'veteran-pickup'
+  | 'role-fix'
+  | 'benching'
+  | 'poach'
+  | 'rebuild-swap';
+
+export interface TransferRumor {
+  id: string;
+  season: number;
+  playerId: string;
+  fromClubId: string;
+  toClubId: string;
+  type: TransferType;
+  credibility: 'low' | 'medium' | 'high';
+  reason: string;
+  resolved?: boolean;
+}
+
+export interface TransferRecord {
+  id: string;
+  season: number;
+  playerId: string;
+  fromClubId: string;
+  toClubId: string;
+  type: TransferType;
+  summary: string;
+}
+
 export interface ClubRuntimeState {
   clubId: string;
   tier: ClubTier;
@@ -338,7 +457,8 @@ export interface ClubRuntimeState {
   displayTag?: string;
   displayRegion?: string;
   baselineVrsScore?: number;
-  fullRoster: ClubPlayer[];
+  fullRoster: WorldPlayer[];
+  playerIds?: string[];
   clubTrust: number;
   currentForm: number;
   rosterStability: number;
@@ -350,6 +470,11 @@ export interface ClubRuntimeState {
   recentResults: ClubRecentResult[];
   pendingStoryFlags: string[];
   lastTierChange?: ClubTierChange;
+  seasonGoal?: ClubSeasonGoal;
+  managementPatience?: number;
+  rebuildPressure?: number;
+  coreStatus?: ClubCoreStatus;
+  rebuildCorePlayerId?: string;
   updatedRound: number;
 }
 
@@ -380,6 +505,7 @@ export interface WorldTournamentParticipant {
 
 export interface WorldTournamentSnapshot {
   id: string;
+  tournamentInstanceId?: string;
   tournamentId: string;
   tournamentName: string;
   tier: TournamentTier;
@@ -394,8 +520,96 @@ export interface WorldTournamentSnapshot {
   darkHorseClubId?: string;
   upsetClubId?: string;
   finalScore: string;
+  winnerMvp?: TournamentPlayerAward;
+  loserMvp?: TournamentPlayerAward;
   createdAt: string;
   newsPublished?: boolean;
+}
+
+export type TournamentInstanceStatus = 'registered' | 'locked' | 'drawn' | 'in-progress' | 'completed';
+
+export interface TournamentPlayerPerformance {
+  playerId: string;
+  playerName?: string;
+  clubId: string;
+  tournamentInstanceId: string;
+  rating: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  impact: number;
+  clutchScore?: number;
+}
+
+export interface TournamentTeamEntry {
+  clubId: string;
+  seed: number;
+  source: 'player' | 'vrs' | 'qualifier' | 'invite' | 'wildcard' | 'local' | 'regional';
+  groupId?: string;
+  eliminated?: boolean;
+  finalPlacement?: number;
+}
+
+export interface TournamentInstanceMatch {
+  id: string;
+  roundId: string;
+  teamAClubId: string;
+  teamBClubId: string;
+  winnerClubId?: string;
+  score?: string;
+  seriesType: 'bo1' | 'bo3' | 'bo5';
+  playerMatch?: boolean;
+  completed: boolean;
+  standoutPlayerIds?: string[];
+}
+
+export interface TournamentInstanceStage {
+  id: string;
+  name: string;
+  type: 'group' | 'swiss' | 'play-in' | 'quarterfinal' | 'semifinal' | 'final';
+  seriesType?: 'bo1' | 'bo3' | 'bo5';
+  matches: TournamentInstanceMatch[];
+}
+
+export interface TournamentPlayerAward {
+  clubId: string;
+  playerId: string;
+  playerName: string;
+  award: string;
+  rating: number;
+}
+
+export interface TournamentAwards {
+  championClubId: string;
+  runnerUpClubId: string;
+  winnerMvp: TournamentPlayerAward;
+  loserMvp: TournamentPlayerAward;
+  bestPlayers: TournamentPlayerAward[];
+}
+
+export interface TournamentInstance {
+  id: string;
+  tournamentId: string;
+  season: number;
+  status: TournamentInstanceStatus;
+  teams: TournamentTeamEntry[];
+  stages: TournamentInstanceStage[];
+  playerTeamClubId?: string;
+  playerPath?: { stageIndex: number; opponentClubId: string }[];
+  teamRosters?: Record<string, WorldPlayer[]>;
+  performances?: TournamentPlayerPerformance[];
+  awards?: TournamentAwards;
+}
+
+export interface TournamentInstanceSummary {
+  id: string;
+  tournamentId: string;
+  season: number;
+  championClubId?: string;
+  runnerUpClubId?: string;
+  playerTeamClubId?: string;
+  playerFinalPlacement?: number;
+  awards?: TournamentAwards;
 }
 
 export interface WorldClubPool {
@@ -489,6 +703,9 @@ export interface Club {
   salaryRange: [number, number];
   originPreference?: ClubOriginPreference;
   preferredOriginRegions?: string[];
+  heritage?: number;
+  capital?: number;
+  clubArchetype?: ClubArchetype;
   isRival?: boolean;
   rivalIndex?: number;
 }
@@ -526,6 +743,10 @@ export interface PlayerTeam {
   monthlySalary: number;
   joinedRound: number;
   lastTierChange?: ClubTierChange;
+  seasonGoal?: ClubSeasonGoal;
+  managementPatience?: number;
+  rebuildPressure?: number;
+  coreStatus?: ClubCoreStatus;
   teamStatus?: 'starter' | 'trial' | 'rotation';
   teamStatusUntilRound?: number;
   joinMode?: PlayerJoinMode;
@@ -582,6 +803,11 @@ export interface TeamOffer {
   tier: ClubTier;
   region: string;
   monthlySalary: number;
+  clubArchetype?: ClubArchetype;
+  heritage?: number;
+  capital?: number;
+  seasonGoalPreview?: string;
+  failureRisk?: string;
   teamStatus?: 'starter' | 'trial' | 'rotation';
   teamStatusUntilRound?: number;
   joinMode?: PlayerJoinMode;
@@ -593,6 +819,7 @@ export interface PendingDeparture {
   rumorShown: boolean;      // 匿名预警事件（-7 回合）已触发
   revealed: boolean;        // 具名预警事件（-4 回合）已触发
   destTeamName: string;     // 目标俱乐部名称（来自 rivals）
+  destClubId?: string;
   earlyRecruit: boolean;    // 玩家提前行动，新人质量更好
   baseWindowStartRound?: number;
   pressure?: number;
@@ -753,6 +980,7 @@ export interface TeamActionResult {
 
 export interface Player extends DynamicState {
   name: string;
+  age: number;
   stats: Stats;
   // ── 状态系统 ──
   volatile: VolatileState;
@@ -842,7 +1070,7 @@ export interface WeeklyNewsReport {
 }
 
 export interface WeeklyNewsSource {
-  kind: 'world-tournament' | 'world-club-season' | 'broadcast';
+  kind: 'world-tournament' | 'world-club-season' | 'world-transfer' | 'broadcast';
   year?: number;
   week?: number;
   tournamentId?: string;
@@ -1030,6 +1258,10 @@ export interface GameSession {
   leaderboard: LeaderboardTeam[];
   worldClubs?: WorldClubPool;
   worldClubsVersion?: number;
+  activeTournamentInstance?: TournamentInstance | null;
+  tournamentHistory?: TournamentInstanceSummary[];
+  transferRumors?: TransferRumor[];
+  transferHistory?: TransferRecord[];
   debugTeamIdentity?: TeamIdentityDebug;
   debugRole?: RoleDebug;
 }

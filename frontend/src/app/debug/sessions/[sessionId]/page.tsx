@@ -6,7 +6,6 @@ import { useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatTag } from '@/lib/format';
 import type {
-  ClubPlayer,
   ClubRuntimeState,
   ClubTier,
   GameSession,
@@ -17,6 +16,7 @@ import type {
   StatKey,
   Teammate,
   VisiblePlayerTeamIdentity,
+  WorldPlayer,
 } from '@/lib/types';
 
 type DebugAiStatus = {
@@ -83,9 +83,9 @@ type PlayerRosterForm = {
 type ClubPlayerForm = {
   id: string;
   name: string;
-  role: ClubPlayer['role'];
-  personality: ClubPlayer['personality'];
-  status: ClubPlayer['status'];
+  role: WorldPlayer['role'];
+  personality: WorldPlayer['personality'];
+  status: WorldPlayer['status'];
   joinedRound: string;
   internalChemistry: string;
   agility: string;
@@ -166,7 +166,7 @@ function initClubRuntimeForm(runtime: ClubRuntimeState): ClubRuntimeForm {
   };
 }
 
-function initClubPlayerForm(player: ClubPlayer): ClubPlayerForm {
+function initClubPlayerForm(player: WorldPlayer): ClubPlayerForm {
   return {
     id: player.id,
     name: player.name,
@@ -1195,11 +1195,11 @@ export default function DebugSessionPage() {
                                   </label>
                                   <label style={labelStyle}>
                                     <span>role</span>
-                                    <input value={playerForm.role} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, role: e.target.value as ClubPlayer['role'] } }))} style={inputStyle} />
+                                    <input value={playerForm.role} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, role: e.target.value as WorldPlayer['role'] } }))} style={inputStyle} />
                                   </label>
                                   <label style={labelStyle}>
                                     <span>personality</span>
-                                    <input value={playerForm.personality} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, personality: e.target.value as ClubPlayer['personality'] } }))} style={inputStyle} />
+                                    <input value={playerForm.personality} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, personality: e.target.value as WorldPlayer['personality'] } }))} style={inputStyle} />
                                   </label>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 8 }}>
@@ -1218,7 +1218,7 @@ export default function DebugSessionPage() {
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
                                   <label style={labelStyle}>
                                     <span>status</span>
-                                    <input value={playerForm.status} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, status: e.target.value as ClubPlayer['status'] } }))} style={inputStyle} />
+                                    <input value={playerForm.status} onChange={(e) => setClubRosterForms((prev) => ({ ...prev, [player.id]: { ...playerForm, status: e.target.value as WorldPlayer['status'] } }))} style={inputStyle} />
                                   </label>
                                   <label style={labelStyle}>
                                     <span>joinedRound</span>

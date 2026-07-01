@@ -105,7 +105,7 @@ describe('multi event queue', () => {
         majorNewFaceClubIds: [],
       }],
     };
-    session.worldClubsVersion = 1;
+    session.worldClubsVersion = 2;
 
     const eventPhase = endActionPhase(session);
     const newsIds = eventPhase.session.weeklyNews?.map((item) => item.eventId) ?? [];
