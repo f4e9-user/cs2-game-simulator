@@ -15,6 +15,9 @@ const AUTHOR_TYPE_LABEL: Record<SocialPost['authorType'], string> = {
   club: '俱乐部',
   rival: '对手',
   media: '媒体',
+  star: '明星选手',
+  industry: '圈内人士',
+  fan: '粉丝',
 };
 
 const AUTHOR_TYPE_COLOR: Record<SocialPost['authorType'], string> = {
@@ -22,6 +25,9 @@ const AUTHOR_TYPE_COLOR: Record<SocialPost['authorType'], string> = {
   club: '#60a5fa',
   rival: 'var(--danger)',
   media: 'var(--fg-3)',
+  star: '#f59e0b',      // amber/gold
+  industry: '#8b5cf6',   // violet
+  fan: '#ec4899',        // pink
 };
 
 interface Props {

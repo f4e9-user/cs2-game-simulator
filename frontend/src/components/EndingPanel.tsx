@@ -1,37 +1,33 @@
 import Link from 'next/link';
-import type { Player, Trait } from '@/lib/types';
-import { ENDING_LABELS, STAGE_LABELS, STAT_LABELS } from '@/lib/format';
+import type { Player, RoundResult, Trait } from '@/lib/types';
+import { formatEnding, STAGE_LABELS, STAT_LABELS, formatTag } from '@/lib/format';
+import { buildCareerReview } from '@/lib/careerReview';
 
 const TIER_LABELS: Record<string, string> = {
+  c: 'C 级赛事',
   b: 'B 级赛事',
   a: 'A 级赛事',
+  s: 'S 级赛事',
   's-qualifier': 'S 级预选',
   's-main': 'S 级正赛',
-  netcafe: '网吧杯',
-  city: '城市赛',
-  platform: '平台赛',
-  'secondary-league': '二级联赛',
-  'development-league': '发展联赛',
-  tier2: 'Tier 2',
-  tier1: 'Tier 1',
   's-class': 'S 级联赛',
   major: 'Major',
 };
 
-const TIER_ORDER = [
-  'major',
-  's-main',
-  'a',
+const CHAMPIONSHIP_TIER_ORDER = [
+  'c',
   'b',
-  's-class',
-  'tier1',
-  'tier2',
-  'development-league',
-  'secondary-league',
-  'platform',
-  'city',
-  'netcafe',
+  'a',
+  's',
 ];
+
+const S_SERIES_LABELS: Record<string, string> = {
+  pgl: 'PGL',
+  blast: 'BLAST',
+  major: 'Major',
+};
+
+const S_SERIES_ORDER = ['pgl', 'blast', 'major'];
 
 const CORE_STATS = [
   'intelligence',
@@ -45,18 +41,16 @@ interface Props {
   player: Player;
   traits: Trait[];
   ending?: string;
+  history?: RoundResult[];
+  showAllHistory?: boolean;
 }
 
-export function EndingPanel({ player, traits, ending }: Props) {
+export function EndingPanel({ player, traits, ending, history, showAllHistory = false }: Props) {
   const playerTraits = player.traits
     .map((id) => traits.find((t) => t.id === id))
     .filter((t): t is Trait => Boolean(t));
 
   const visibleTags = player.tags.filter((tag) => !tag.endsWith('-cd'));
-
-  const champTiers = TIER_ORDER.filter(
-    (tier) => (player.tierChampionships?.[tier] ?? 0) > 0,
-  );
 
   const totalRounds = player.round;
   const years = player.year ?? 1;
@@ -64,6 +58,8 @@ export function EndingPanel({ player, traits, ending }: Props) {
 
   const isLegend = ending === 'legend';
   const isChampion = ending === 'champion' || ending === 'retired_on_top';
+  const careerReview = buildCareerReview(player, ending);
+  const recentHistory = (showAllHistory ? [...(history ?? [])] : (history ?? []).slice(-8)).reverse();
 
   return (
     <div className="ending-panel-rich">
@@ -71,7 +67,24 @@ export function EndingPanel({ player, traits, ending }: Props) {
       <div className="ending-rich-header">
         <div className="ending-rich-label">生涯结束</div>
         <div className={`ending-rich-result${isLegend ? ' legend' : isChampion ? ' champion' : ''}`}>
-          {ending ? (ENDING_LABELS[ending] ?? ending) : '未知结局'}
+          {formatEnding(ending)}
+        </div>
+      </div>
+
+      <div className="ending-section">
+        <div className="ending-section-title">职业履历评价</div>
+        <div className="ending-rich-result" style={{ fontSize: 16, marginTop: 8 }}>
+          {careerReview.title}
+        </div>
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+          {careerReview.summary}
+        </div>
+        <div className="ending-tags-list" style={{ marginTop: 10 }}>
+          {careerReview.chips.map((chip) => (
+            <span key={chip.label} className={`ending-tag-chip ${chip.tone}`}>
+              {chip.label}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -90,11 +103,32 @@ export function EndingPanel({ player, traits, ending }: Props) {
           </div>
           <div className="ending-timeline-sep" />
           <div className="ending-timeline-cell">
-            <div className="ending-tl-val">{STAGE_LABELS[player.stage]}</div>
-            <div className="ending-tl-label">最终阶段</div>
+            <div className="ending-tl-val">{STAGE_LABELS[player.careerPeaks?.highestStage ?? player.stage]}</div>
+            <div className="ending-tl-label">最高阶段</div>
           </div>
         </div>
       </div>
+
+      {recentHistory.length > 0 && (
+        <div className="ending-section">
+          <div className="ending-section-title">事件历史</div>
+          <div className="timeline-list">
+            {recentHistory.map((r) => (
+              <div key={`${r.round}-${r.eventId}`} className="timeline-row">
+                <div className="timeline-top">
+                  <span className="timeline-round">R{r.round}</span>
+                  <span className={`timeline-result ${r.success ? 'up' : 'down'}`}>
+                    {r.eventType === 'match' ? (r.success ? '胜' : '负') : (r.success ? '成功' : '失败')}
+                  </span>
+                  <span className="timeline-title">{r.eventTitle}</span>
+                </div>
+                <div className="timeline-desc">→ {r.choiceLabel}</div>
+                <div className="timeline-narrative">{r.narrative}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Resources */}
       <div className="ending-section">
@@ -164,6 +198,11 @@ export function EndingPanel({ player, traits, ending }: Props) {
                 <span>加入于第 {player.team.joinedRound} 回合</span>
                 <span>效力 {player.round - player.team.joinedRound} 回合</span>
               </div>
+              {player.teamCareer && (
+                <div style={{ fontSize: 11, color: 'var(--fg-2)' }}>
+                  最长效力 {player.teamCareer.longestTeamRounds} 回合
+                </div>
+              )}
               {(player.contractRenewals ?? 0) > 0 && (
                 <div style={{ fontSize: 11, color: 'var(--fg-2)', marginTop: 2 }}>
                   续约 {player.contractRenewals} 次
@@ -200,15 +239,20 @@ export function EndingPanel({ player, traits, ending }: Props) {
             夺冠 <strong>{player.tournamentChampionships ?? 0}</strong> 次
           </span>
         </div>
-        {champTiers.length > 0 && (
-          <div className="ending-champ-list">
-            {champTiers.map((tier) => (
-              <span key={tier} className="ending-champ-chip">
-                {TIER_LABELS[tier] ?? tier} ×{player.tierChampionships[tier]}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="ending-champ-list">
+          {CHAMPIONSHIP_TIER_ORDER.map((tier) => (
+            <span key={tier} className="ending-champ-chip">
+              {TIER_LABELS[tier]} ×{player.tierChampionships?.[tier] ?? 0}
+            </span>
+          ))}
+        </div>
+        <div className="ending-champ-list">
+          {S_SERIES_ORDER.map((series) => (
+            <span key={series} className="ending-champ-chip">
+              {S_SERIES_LABELS[series]} ×{player.championshipSeries?.[series] ?? 0}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Traits */}
@@ -232,7 +276,7 @@ export function EndingPanel({ player, traits, ending }: Props) {
           <div className="ending-section-title">生涯标签</div>
           <div className="ending-tags-list">
             {visibleTags.map((tag) => (
-              <span key={tag} className="ending-tag-chip">#{tag}</span>
+              <span key={tag} className="ending-tag-chip" title={tag}>#{formatTag(tag)}</span>
             ))}
           </div>
         </div>

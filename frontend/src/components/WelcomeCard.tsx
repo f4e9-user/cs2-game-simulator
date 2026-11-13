@@ -37,7 +37,13 @@ export function WelcomeCard({ player, traits, intro, introLoading, onDismiss }: 
 
       <div className="welcome-intro">
         {introLoading ? (
-          <span className="welcome-loading">故事开篇生成中…</span>
+          <div className="welcome-loading-state">
+            <svg className="welcome-loading-spinner" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="14" />
+            </svg>
+            <div className="welcome-loading-text">正在生成你的生涯开篇…</div>
+            <div className="welcome-loading-sub">根据你的特质与出身背景定制叙事中</div>
+          </div>
         ) : (
           displayIntro
         )}

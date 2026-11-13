@@ -14,6 +14,25 @@ export const REST_EVENTS: EventDef[] = [
     stages: ['rookie', 'youth'],
     difficulty: 1,
     weight: 1,
+    forbidTags: ['has-team'],
+    narrativeMeta: {
+      eventId: 'rest-physio-rookie',
+      emotionTone: '被迫暂停的焦躁与无力',
+      traitReactions: {
+        scapegoat: {
+          emphasis: ['觉得休息是在拖累团队进度', '康复期间也在想训练'],
+          avoid: ['不要写成享受休息', '不要写成理所当然'],
+        },
+        hothead: {
+          emphasis: ['对伤病或休息安排感到愤怒', '想提前结束休养'],
+          avoid: ['不要写成攻击医疗人员', '不要写成破坏康复计划'],
+        },
+        grinder: {
+          emphasis: ['休息时也想着训练计划', '身体在休息脑子在跑图'],
+          avoid: ['不要写成完全放松'],
+        },
+      },
+    },
     choices: [
       {
         id: 'full-rest',
@@ -27,15 +46,19 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '一周后你感觉手腕轻盈，脑子也清爽了不少。',
-          feelDelta: 1,
-          fatigueDelta: -12,
-          stressDelta: -3,
+          stateDelta: {
+            feel: 1,
+            fatigue: -12,
+            stress: -15,
+          },
         },
         failure: {
           narrative: '你半夜偷偷摸过键盘，恢复打了折扣。',
-          feelDelta: 0.5,
-          fatigueDelta: -4,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            fatigue: -4,
+            stress: -5,
+          },
         },
       },
       {
@@ -49,14 +72,18 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '克制地练了几组反应训练，身体也跟着缓过来了。',
-          feelDelta: 0.6,
-          fatigueDelta: -8,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.6,
+            fatigue: -8,
+            stress: -5,
+          },
         },
         failure: {
           narrative: '不小心练狠了，疼了两天，康复效果一般。',
-          fatigueDelta: -4,
-          stressDelta: 0,
+          stateDelta: {
+            fatigue: -4,
+            stress: 0,
+          },
         },
       },
       {
@@ -71,14 +98,20 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '观众不多，但礼物够你下周点几顿外卖。',
-          moneyDelta: 20,
-          fatigueDelta: -4,
-          stressDelta: 1,
+          stateDelta: {
+            fatigue: -4,
+            stress: 5,
+          },
+          resourceDelta: {
+            money: 20,
+          },
         },
         failure: {
           narrative: '撑不住，开播一个半小时就下播。什么都没收获。',
-          feelDelta: -0.5,
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
         },
       },
     ],
@@ -86,14 +119,108 @@ export const REST_EVENTS: EventDef[] = [
 
   // ── 二线及以上：俱乐部有队医资源 ─────────────────────────────────
   {
+    id: 'rest-private-clinic',
+    type: 'rest',
+    title: '私人诊所的休养建议',
+    narrative:
+      '你自己约了运动康复诊所。医生看完检查结果，把训练计划推回给你：「这周先别碰高强度对抗，不然恢复期只会更长。」',
+    stages: ['second', 'pro'],
+    difficulty: 1,
+    weight: 1,
+    forbidTags: ['has-team'],
+    choices: [
+      {
+        id: 'full-rest',
+        label: '按医嘱完整休息',
+        description: '完全休养，恢复体质和心态。',
+        check: {
+          primary: 'mentality',
+          dc: 5,
+          traitBonuses: { steady: 2 },
+          traitPenalties: { grinder: 2, obsessed: 2 },
+        },
+        success: {
+          narrative: '你把提醒设好，真的停了一周。疼痛退下去之后，手感也没你想象中掉得那么厉害。',
+          stateDelta: {
+            feel: 1,
+            fatigue: -12,
+            stress: -15,
+          },
+        },
+        failure: {
+          narrative: '你忍不住做了几组轻练，疼痛没有恶化，但恢复也没那么彻底。',
+          stateDelta: {
+            feel: 0.5,
+            fatigue: -4,
+            stress: -5,
+          },
+        },
+      },
+      {
+        id: 'light-drill',
+        label: '只做低强度恢复训练',
+        description: '折中：稍微恢复，但保留状态。',
+        check: {
+          primary: 'intelligence',
+          dc: 8,
+          traitBonuses: { steady: 1, tactical: 1 },
+        },
+        success: {
+          narrative: '你把训练降到医生允许的强度，身体缓了过来，脑子也没完全离开比赛。',
+          stateDelta: {
+            feel: 0.6,
+            fatigue: -8,
+            stress: -5,
+          },
+        },
+        failure: {
+          narrative: '你还是多练了一点，康复效果被打了折扣。',
+          stateDelta: {
+            fatigue: -4,
+            stress: 0,
+          },
+        },
+      },
+      {
+        id: 'sneak-stream',
+        label: '偷偷开播两小时',
+        description: '赚一点钱，休养被打断。',
+        check: {
+          primary: 'money',
+          dc: 6,
+          traitBonuses: { streamer: 2 },
+          traitPenalties: { steady: 2 },
+        },
+        success: {
+          narrative: '观众不多，但礼物够你下周点几顿外卖。',
+          stateDelta: {
+            fatigue: -4,
+            stress: 5,
+          },
+          resourceDelta: {
+            money: 20,
+          },
+        },
+        failure: {
+          narrative: '你撑不住，开播一个半小时就下播。什么都没收获。',
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
+        },
+      },
+    ],
+  },
+  {
     id: 'rest-physio',
     type: 'rest',
     title: '被队医按在床上',
     narrative:
       '俱乐部队医看了 MRI 单子，把键盘从你手里抽走：「你这周就躺着。」',
-    stages: ['second', 'pro'],
+    stages: ['youth', 'second', 'pro'],
     difficulty: 1,
     weight: 1,
+    requireTags: ['has-team'],
     choices: [
       {
         id: 'full-rest',
@@ -107,15 +234,19 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '一周后你感觉手腕轻盈，脑子也清爽了不少。',
-          feelDelta: 1,
-          fatigueDelta: -12,
-          stressDelta: -3,
+          stateDelta: {
+            feel: 1,
+            fatigue: -12,
+            stress: -15,
+          },
         },
         failure: {
           narrative: '你半夜偷偷摸过键盘，恢复打了折扣。',
-          feelDelta: 0.5,
-          fatigueDelta: -4,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.5,
+            fatigue: -4,
+            stress: -5,
+          },
         },
       },
       {
@@ -129,14 +260,18 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '轻量枪感训练加上康复，你既没退步也养好了身板。',
-          feelDelta: 0.6,
-          fatigueDelta: -8,
-          stressDelta: -1,
+          stateDelta: {
+            feel: 0.6,
+            fatigue: -8,
+            stress: -5,
+          },
         },
         failure: {
           narrative: '你不慎练狠了，康复效果一般。',
-          fatigueDelta: -4,
-          stressDelta: 0,
+          stateDelta: {
+            fatigue: -4,
+            stress: 0,
+          },
         },
       },
       {
@@ -151,14 +286,20 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '观众不多，但礼物够你下周点几顿外卖。',
-          moneyDelta: 20,
-          fatigueDelta: -4,
-          stressDelta: 1,
+          stateDelta: {
+            fatigue: -4,
+            stress: 5,
+          },
+          resourceDelta: {
+            money: 20,
+          },
         },
         failure: {
           narrative: '你撑不住，开播一个半小时就下播。什么都没收获。',
-          feelDelta: -0.5,
-          stressDelta: 2,
+          stateDelta: {
+            feel: -0.5,
+            stress: 10,
+          },
         },
       },
     ],
@@ -185,14 +326,18 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你睡了三天好觉。回程路上你甚至开始期待下一场。',
-          feelDelta: 1,
-          fatigueDelta: -8,
-          stressDelta: -4,
+          stateDelta: {
+            feel: 1,
+            fatigue: -8,
+            stress: -20,
+          },
         },
         failure: {
           narrative: '你睡得不安稳，总梦到自己站起来一枪就是 miss。',
-          fatigueDelta: -4,
-          stressDelta: -1,
+          stateDelta: {
+            fatigue: -4,
+            stress: -5,
+          },
         },
       },
       {
@@ -208,17 +353,25 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你们第一次完整地聊这件事，最后妈妈帮你熬了一锅汤。',
-          feelDelta: 1.5,
-          fatigueDelta: -8,
-          moneyDelta: 10,
-          stressDelta: -4,
-          tagAdds: ['family-support'],
+          stateDelta: {
+            feel: 1.5,
+            fatigue: -8,
+            stress: -20,
+          },
+          resourceDelta: {
+            money: 10,
+          },
+          tags: {
+            add: ['family-support'],
+          },
         },
         failure: {
           narrative: '话题绕来绕去，最后又绕回熟悉的争执。',
-          feelDelta: -0.5,
-          fatigueDelta: -4,
-          stressDelta: -1,
+          stateDelta: {
+            feel: -0.5,
+            fatigue: -4,
+            stress: -5,
+          },
         },
       },
       {
@@ -232,14 +385,18 @@ export const REST_EVENTS: EventDef[] = [
         },
         success: {
           narrative: '你把下阶段的训练量、复盘节奏都写成表格，贴在书桌上。',
-          feelDelta: 0.4,
-          fatigueDelta: -4,
-          stressDelta: -2,
+          stateDelta: {
+            feel: 0.4,
+            fatigue: -4,
+            stress: -10,
+          },
         },
         failure: {
           narrative: '写到一半你又开始焦虑输赢，计划没写完。',
-          fatigueDelta: -4,
-          stressDelta: 0,
+          stateDelta: {
+            fatigue: -4,
+            stress: 0,
+          },
         },
       },
     ],

@@ -1,9 +1,10 @@
-import type { GameSession } from '../types.js';
+import type { GameSession, SessionSummary } from '../types.js';
+import { ensurePlayerTournamentEntry } from '../engine/tournamentInstance.js';
 
 // Migrate legacy session data after loading from storage.
 // Handles schema changes that would otherwise silently produce undefined/NaN.
 function migrateSession(session: GameSession): GameSession {
-  const p = session.player as Record<string, unknown>;
+  const p = session.player as unknown as Record<string, unknown>;
 
   // weeklySalary → monthlySalary (renamed; multiply by 4 to approximate monthly)
   const team = p['team'] as Record<string, unknown> | null;
@@ -25,6 +26,7 @@ function migrateSession(session: GameSession): GameSession {
 
   // Ensure new fields have safe defaults when loading old sessions
   if (!('feelCap' in p)) p['feelCap'] = 3;
+  if (!('age' in p)) p['age'] = 18 + Math.max(0, ((p['year'] as number | undefined) ?? 1) - 1);
   if (!('peripheralTier' in p)) p['peripheralTier'] = 0;
   if (!('qualificationSlots' in p)) p['qualificationSlots'] = {};
   if (!('teamQualificationSlots' in p)) p['teamQualificationSlots'] = {};
@@ -37,17 +39,60 @@ function migrateSession(session: GameSession): GameSession {
   if (!('forceNextEvent' in p)) p['forceNextEvent'] = null;
   if (!('forceMatchResult' in p)) p['forceMatchResult'] = null;
   if (!('salaryTracker' in p)) p['salaryTracker'] = null;
+  if (!('creditScore' in p)) p['creditScore'] = 100;
+  if (!('familyBailoutCount' in p)) p['familyBailoutCount'] = 0;
+
+  // Validate pendingFamilyCrisis to prevent a tampered session payload from
+  // giving free money (negative amountNeeded) or triggering an instant game-over
+  const crisis = p['pendingFamilyCrisis'] as Record<string, unknown> | null | undefined;
+  if (crisis != null) {
+    const { amountNeeded, deadlineRound } = crisis;
+    if (
+      typeof amountNeeded !== 'number' || amountNeeded <= 0 ||
+      typeof deadlineRound !== 'number' || deadlineRound <= 0 || !Number.isInteger(deadlineRound)
+    ) {
+      p['pendingFamilyCrisis'] = undefined;
+    }
+  }
 
   // Ensure apiToken exists (sessions created before apiToken was added)
   if (!session.apiToken) {
-    (session as Record<string, unknown>)['apiToken'] = `legacy-${session.id}`;
+    (session as unknown as Record<string, unknown>)['apiToken'] = `legacy-${session.id}`;
   }
 
-  return session;
+  if ((session.worldClubsVersion ?? 0) < 2) {
+    session.worldClubs = undefined;
+    session.worldClubsVersion = undefined;
+  }
+
+  return ensurePlayerTournamentEntry(session);
 }
 
 export class SessionRepo {
   constructor(private db: D1Database) {}
+
+  async list(limit = 100): Promise<SessionSummary[]> {
+    const rows = await this.db
+      .prepare(
+        `SELECT id, name, stage, round, status, ending, created_at, updated_at
+         FROM sessions
+         ORDER BY updated_at DESC
+         LIMIT ?`,
+      )
+      .bind(limit)
+      .all<SessionSummary & { created_at: string; updated_at: string }>();
+
+    return (rows.results ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      stage: row.stage,
+      round: row.round,
+      status: row.status,
+      ending: row.ending ?? null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
 
   async save(session: GameSession): Promise<void> {
     const data = JSON.stringify(session);

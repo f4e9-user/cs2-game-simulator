@@ -13,6 +13,7 @@ export interface ShopEffect {
   buffAdd?: Buff;
   buffRemoveId?: string;
   tagRemove?: string;
+  tagRemoveAny?: string[];
   tagAdd?: string;
 }
 
@@ -28,7 +29,7 @@ export interface ShopItem {
   description: string;
   category: ShopCategory;
   priceMoney: number;      // cost in money (1 = 1K)
-  cooldownRounds: number;  // 0 = no cooldown
+  cooldownRounds: number;  // legacy cooldown for equipment/social long-cycle gates
   effect: ShopEffect;
   requireFame?: number;
   requireStage?: Stage[];
@@ -36,7 +37,7 @@ export interface ShopItem {
 }
 
 export const SHOP_ITEMS: ShopItem[] = [
-  // ── 消耗品（无冷却）─────────────────────────────────────────────
+  // ── 消耗品（每周每种限购 2 次，由购买入口统一限制）──────────────
   {
     id: 'energy-drink',
     name: '能量饮料',
@@ -44,73 +45,151 @@ export const SHOP_ITEMS: ShopItem[] = [
     category: 'consumable',
     priceMoney: 3, // 3K
     cooldownRounds: 0,
-    effect: { fatigueDelta: -20 },
+    effect: { fatigueDelta: -14 },
+    negativeEvents: [
+      {
+        chance: 0.2,
+        effect: {
+          buffAdd: {
+            id: 'caffeine-rebound',
+            label: '体感反弹',
+            actionTag: 'all',
+            stressGainMultiplier: 1.2,
+            remainingUses: 1,
+            consumeOn: 'stress',
+          },
+        },
+        narrative: '咖啡因把疲劳压下去了，但身体还在兴奋边缘，下一次压力上升会更明显。',
+      },
+      {
+        chance: 0.15,
+        effect: {
+          buffAdd: {
+            id: 'sleep-disrupted',
+            label: '睡眠紊乱',
+            actionTag: 'all',
+            fatigueGainMultiplier: 1.15,
+            remainingUses: 1,
+            consumeOn: 'fatigue',
+          },
+        },
+        narrative: '这罐饮料来得太晚，短期顶住了困意，但接下来一次疲劳累积会更重。',
+      },
+    ],
   },
   {
     id: 'meal-kit',
     name: '外卖套餐',
-    description: '好好吃一顿，心情和体力都回来了一点。',
+    description: '好好吃一顿，心情和体力都回来一些。',
     category: 'consumable',
     priceMoney: 3, // 3K
     cooldownRounds: 0,
-    effect: { fatigueDelta: -8, mentalityDelta: 0 }, // mentality not directly changeable, just fatigue
+    effect: { fatigueDelta: -10, stressDelta: -4 },
+    negativeEvents: [
+      {
+        chance: 0.15,
+        effect: { moneyDelta: -2 },
+        narrative: '这一单最后又加了配送费和小食，便宜恢复变成了一笔额外开销。',
+      },
+      {
+        chance: 0.15,
+        effect: {
+          buffAdd: {
+            id: 'stomach-load',
+            label: '胃口负担',
+            actionTag: 'all',
+            fatigueGainMultiplier: 1.1,
+            remainingUses: 1,
+            consumeOn: 'fatigue',
+          },
+        },
+        narrative: '吃得有点顶，恢复是恢复了，但下一次身体负荷会更容易累上来。',
+      },
+    ],
   },
   {
     id: 'painkiller',
     name: '止痛药',
     description: '暂时压制身体不适，让手腕撑过今天。',
     category: 'consumable',
-    priceMoney: 5, // 5K
+    priceMoney: 6, // 6K
     cooldownRounds: 0,
-    effect: { fatigueDelta: -15, constitutionDelta: 1 },
+    effect: {
+      fatigueDelta: -22,
+      buffAdd: {
+        id: 'painkiller-cover',
+        label: '止痛维持',
+        actionTag: 'all',
+        fatigueGainMultiplier: 0.75,
+        remainingUses: 1,
+        consumeOn: 'fatigue',
+      },
+    },
+    negativeEvents: [
+      {
+        chance: 0.25,
+        effect: {
+          buffAdd: {
+            id: 'painkiller-overdraw',
+            label: '手感透支',
+            actionTag: 'all',
+            growthMultiplier: 0.85,
+            remainingUses: 1,
+            consumeOn: 'growth',
+          },
+        },
+        narrative: '药效压住了不适，但你对身体反馈的判断变钝了，下一次成长收益会被透支。',
+      },
+      {
+        chance: 0.15,
+        effect: { tagAdd: 'painkiller-dependence-risk' },
+        narrative: '你开始觉得不吃药就没法安心训练，这种依赖感短期内会留在脑子里。',
+      },
+    ],
   },
 
-  // ── 服务类（冷却 5 回合）─────────────────────────────────────────
+  // ── 服务类（每周每种限购 1 次；深度恢复服务另有 4-8 回合冷却）───────
   {
     id: 'psych-session',
     name: '心理咨询',
     description: '和运动心理师谈一小时，把压力拆成能处理的碎片。',
     category: 'service',
     priceMoney: 15, // 15K
-    cooldownRounds: 5,
+    cooldownRounds: 6,
     effect: {
       stressDelta: -100,
       buffAdd: {
         id: 'psych-calm',
         label: '心理稳定',
         actionTag: 'all',
-        multiplier: 1.15,
+        growthMultiplier: 1.05,
+        stressGainMultiplier: 0.85,
         remainingUses: 3,
+        consumeOn: 'any',
       },
     },
   },
   {
     id: 'aim-coach',
     name: '枪法私教',
-    description: '请教练盯着你把拉枪和定位一点点抠顺，短期涨得快，但练狠了也容易把手感练乱。',
+    description: '请教练盯着你把拉枪和定位一点点抠顺，短期训练收益更高，但练法不合拍也可能把手感练乱。',
     category: 'service',
     priceMoney: 30,
-    cooldownRounds: 4,
+    cooldownRounds: 0,
     effect: {
-      fatigueDelta: -6,
-      stressDelta: -8,
       buffAdd: {
         id: 'aim-coached',
         label: '枪法私教',
         actionTag: 'ranked',
         growthKey: 'agility',
-        multiplier: 1.18,
+        growthMultiplier: 1.18,
         remainingUses: 4,
+        consumeOn: 'growth',
       },
     },
     negativeEvents: [
       {
-        chance: 0.25,
-        effect: { fatigueDelta: 12, stressDelta: 6 },
-        narrative: '私教把训练强度拉得太满，动作是纠了，但手臂和手腕也跟着酸了一整天。',
-      },
-      {
-        chance: 0.15,
+        chance: 0.2,
         effect: { feelReset: true, stressDelta: 8 },
         narrative: '你试着硬改发力习惯，结果原本的节奏被打散了，今天的手感一下子冷了下来。',
       },
@@ -122,7 +201,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: '拉上分析师和队友把 demo 过一遍，理清思路后训练效率更高。',
     category: 'service',
     priceMoney: 25,
-    cooldownRounds: 4,
+    cooldownRounds: 0,
     effect: {
       stressDelta: -12,
       buffAdd: {
@@ -130,8 +209,9 @@ export const SHOP_ITEMS: ShopItem[] = [
         label: '战术复盘',
         actionTag: 'training',
         growthKey: 'intelligence',
-        multiplier: 1.15,
+        growthMultiplier: 1.15,
         remainingUses: 4,
+        consumeOn: 'growth',
       },
     },
     negativeEvents: [
@@ -148,7 +228,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: '离开城市两三天，彻底切断与比赛的联系。',
     category: 'service',
     priceMoney: 30, // 30K
-    cooldownRounds: 5,
+    cooldownRounds: 8,
     effect: {
       stressDelta: -35,
       fatigueDelta: -30,
@@ -161,7 +241,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     description: '让理疗师把肩颈和前臂彻底放松下来，恢复很扎实，但按得太重也可能适得其反。',
     category: 'service',
     priceMoney: 35,
-    cooldownRounds: 6,
+    cooldownRounds: 4,
     effect: {
       fatigueDelta: -20,
       stressDelta: -15,
@@ -173,6 +253,24 @@ export const SHOP_ITEMS: ShopItem[] = [
         narrative: '这次手法有点重，刚按完是松了，但过一会儿反而有种隐隐发酸的迟滞感。',
       },
     ],
+  },
+  {
+    id: 'foundation-rehab',
+    name: '基础矫正计划',
+    description: '花一段时间请教练、理疗师和心理师重建入门短板，提前移除开局负面溢出带来的恢复标签。',
+    category: 'service',
+    priceMoney: 18,
+    cooldownRounds: 0,
+    effect: {
+      stressDelta: -8,
+      fatigueDelta: -8,
+      tagRemoveAny: [
+        'opening-mental-scar',
+        'opening-physical-debt',
+        'opening-tactical-gap',
+        'opening-mechanical-gap',
+      ],
+    },
   },
 
   // ── 装备类（外设升级，特殊分支，price 由 peripheralTier 动态决定）──────
@@ -198,8 +296,9 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'ergo-recovery',
         label: '人体工学',
         actionTag: 'all',
-        multiplier: 0.85, // fatigue gains reduced in resolver by buff (not directly, just a Buff tag)
+        fatigueGainMultiplier: 0.85,
         remainingUses: 15,
+        consumeOn: 'fatigue',
       },
     },
   },
@@ -217,8 +316,9 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'wrist-support',
         label: '腕部支撑',
         actionTag: 'all',
-        multiplier: 1.1,
+        fatigueGainMultiplier: 0.9,
         remainingUses: 5,
+        consumeOn: 'fatigue',
       },
     },
     negativeEvents: [
@@ -320,8 +420,9 @@ export const SHOP_ITEMS: ShopItem[] = [
         id: 'agent-support',
         label: '经纪团队',
         actionTag: 'all',
-        multiplier: 1.12,
+        growthMultiplier: 1.12,
         remainingUses: 9999,
+        consumeOn: 'growth',
       },
     },
   },

@@ -9,6 +9,8 @@ dist/
 .vercel
 coverage/
 
+wrangler.toml
+
 # Planning / orchestration artifacts
 .sisyphus/
 

@@ -1,20 +1,40 @@
 import type {
   ActionResult,
   Background,
+  CareerInsight,
   ChoiceResponse,
   Club,
+  ClubApplicationSummary,
+  GameEvent,
   GameSession,
+  EventSequence,
+  HomeAssetActionId,
+  HomeFacilityDefinition,
+  HomeFacilityId,
+  HousingCityProfile,
+  HousingTier,
+  HousingTierId,
   LeaderboardTeam,
   Loan,
   MatchStats,
   Player,
+  RoleProfile,
+  RoundPlan,
+  RoundPhase,
+  RulesMeta,
+  SessionSummary,
   RollTraitsResponse,
   ShopItem,
   SocialPost,
   StartGameResponse,
   Stats,
+  TeamActionResult,
+  Tournament,
+  TournamentInstance,
+  AllTournamentsResponse,
   TournamentsResponse,
   Trait,
+  WeeklyNewsItem,
 } from './types';
 
 // API base resolution priority (checked in order):
@@ -93,14 +113,37 @@ export const api = {
     name: string;
     traitIds: string[];
     backgroundId: string;
+    originRegion?: string;
     stats?: Stats;
   }) =>
     request<StartGameResponse>('/api/game/start', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  getSession: (sessionId: string) =>
-    request<GameSession>(`/api/game/${sessionId}`),
+  getSession: (sessionId: string, apiToken?: string) =>
+    request<GameSession>(`/api/game/${sessionId}`, {}, apiToken),
+  getDebugSession: (sessionId: string) =>
+    request<GameSession>(`/api/debug/sessions/${sessionId}`),
+  getRulesMeta: () =>
+    request<RulesMeta>('/api/game/meta/rules'),
+  listDebugSessions: (limit = 200) =>
+    request<{ sessions: SessionSummary[]; total: number }>(`/api/debug/sessions?limit=${limit}`),
+  getDebugAiStatus: () =>
+    request<{ provider: string; model: string | null; active: boolean; kvBound: boolean }>('/api/debug/ai-status'),
+  getDebugAiEvents: (sessionId: string) =>
+    request<{ events: unknown[]; message?: string; validCount?: number; invalidCount?: number }>(`/api/debug/ai-events/${sessionId}`),
+  updateDebugSession: (sessionId: string, body: Record<string, unknown>) =>
+    request<{ player: Player }>(`/api/debug/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateDebugWorldClubs: (sessionId: string, body: Record<string, unknown>) =>
+    request<{ player: Player; leaderboard?: LeaderboardTeam[] }>(`/api/debug/${sessionId}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  writeDebugTestLog: () =>
+    request<{ ok: boolean; message: string }>('/api/debug/llm-logs/test', { method: 'POST' }),
   submitChoice: (sessionId: string, choiceId: string, customAction?: string, apiToken?: string) =>
     request<ChoiceResponse>(`/api/game/${sessionId}/choice`, {
       method: 'POST',
@@ -108,21 +151,64 @@ export const api = {
     }, apiToken),
   listTournaments: (sessionId: string) =>
     request<TournamentsResponse>(`/api/game/${sessionId}/tournaments`),
-  signup: (sessionId: string, tournamentId: string) =>
-    request<{ pendingMatch: NonNullable<Player['pendingMatch']>; player: Player }>(
+  listAllTournaments: (sessionId: string) =>
+    request<AllTournamentsResponse>(
+      `/api/game/${sessionId}/tournaments/all`,
+    ),
+  signup: (sessionId: string, tournamentId: string, apiToken?: string) =>
+    request<{ pendingMatch: NonNullable<Player['pendingMatch']>; player: Player; activeTournamentInstance?: TournamentInstance | null }>(
       `/api/game/${sessionId}/signup`,
       { method: 'POST', body: JSON.stringify({ tournamentId }) },
+      apiToken,
     ),
-  withdraw: (sessionId: string) =>
+  withdraw: (sessionId: string, apiToken?: string) =>
     request<{ player: Player; penalties: string[] }>(`/api/game/${sessionId}/withdraw`, {
       method: 'POST',
-    }),
-  submitAction: (sessionId: string, actionId: string) =>
-    request<{ actionResult: ActionResult; player: Player }>(
+    }, apiToken),
+  submitAction: (sessionId: string, actionId: string, apiToken?: string) =>
+    request<{ actionResult: ActionResult; player: Player; phase: 'action' | 'event'; currentEvent: GameEvent | null; careerInsight?: CareerInsight }>(
       `/api/game/${sessionId}/action`,
       { method: 'POST', body: JSON.stringify({ actionId }) },
+      apiToken,
     ),
-  buyShopItem: (sessionId: string, itemId: string) =>
+  replayLastWeekActions: (sessionId: string, apiToken?: string) =>
+    request<{
+      replayResults: ActionResult[];
+      replayTeamResults?: TeamActionResult[];
+      replayStopped?: { index: number; actionId: string; reason: string } | null;
+      player: Player;
+      phase: 'action' | 'event';
+      currentEvent: GameEvent | null;
+      careerInsight?: CareerInsight;
+    }>(
+      `/api/game/${sessionId}/replay-last-week-actions`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  endActionPhase: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; phase: 'event'; currentEvent: GameEvent | null; queuedEvents?: GameEvent[]; weeklyNews?: WeeklyNewsItem[]; roundPlan?: RoundPlan; activeEventSequence?: EventSequence | null; careerInsight?: CareerInsight }>(
+      `/api/game/${sessionId}/end-action-phase`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  endCareer: (sessionId: string, apiToken?: string) =>
+    request<{
+      status: 'ended';
+      ending?: string;
+      player: Player;
+      phase: 'action';
+      currentEvent: GameEvent | null;
+      queuedEvents?: GameEvent[];
+      weeklyNews?: WeeklyNewsItem[];
+      roundPlan?: RoundPlan;
+      activeEventSequence?: EventSequence | null;
+      careerInsight?: CareerInsight;
+    }>(
+      `/api/game/${sessionId}/end-career`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  buyShopItem: (sessionId: string, itemId: string, apiToken?: string) =>
     request<{
       player: Player;
       itemName: string;
@@ -135,27 +221,98 @@ export const api = {
     }>(
       `/api/game/${sessionId}/shop`,
       { method: 'POST', body: JSON.stringify({ itemId }) },
+      apiToken,
+    ),
+  narrateShop: (
+    sessionId: string,
+    body: { itemName: string; baseNarrative: string; positive?: boolean },
+    apiToken?: string,
+  ) =>
+    request<{ narrative: string }>(
+      `/api/game/${sessionId}/narrate-shop`,
+      { method: 'POST', body: JSON.stringify(body) },
+      apiToken,
     ),
   listShopItems: () =>
     request<{ items: ShopItem[] }>('/api/game/meta/shop'),
+  listHousingTiers: () =>
+    request<{ tiers: HousingTier[]; homeFacilities: HomeFacilityDefinition[]; cityProfiles: HousingCityProfile[]; weeklyLivingExpense: number }>('/api/game/meta/housing'),
+  changeHousing: (sessionId: string, tierId: HousingTierId, apiToken?: string) =>
+    request<{ player: Player; message: string }>(
+      `/api/game/${sessionId}/housing`,
+      { method: 'POST', body: JSON.stringify({ tierId }) },
+      apiToken,
+    ),
+  upgradeHomeFacility: (sessionId: string, facilityId: HomeFacilityId, apiToken?: string) =>
+    request<{ player: Player; message: string }>(
+      `/api/game/${sessionId}/home-facility`,
+      { method: 'POST', body: JSON.stringify({ facilityId }) },
+      apiToken,
+    ),
+  runHomeAssetAction: (sessionId: string, actionId: HomeAssetActionId, apiToken?: string) =>
+    request<{ player: Player; message: string }>(
+      `/api/game/${sessionId}/home-asset`,
+      { method: 'POST', body: JSON.stringify({ actionId }) },
+      apiToken,
+    ),
   listClubs: () =>
     request<{ clubs: Club[] }>('/api/game/meta/clubs'),
-  applyClub: (sessionId: string, clubId: string) =>
+  getRoleProfiles: () =>
+    request<{ roleProfiles: RoleProfile[] }>('/api/game/meta/role-profiles'),
+  listSessionClubs: (sessionId: string) =>
+    request<{ clubs: ClubApplicationSummary[] }>(`/api/game/${sessionId}/clubs`),
+  applyClub: (sessionId: string, clubId: string, apiToken?: string) =>
     request<{ player: Player }>(
       `/api/game/${sessionId}/apply-club`,
       { method: 'POST', body: JSON.stringify({ clubId }) },
+      apiToken,
     ),
-  respondOffer: (sessionId: string, accept: boolean) =>
-    request<{ player: Player; leaderboard?: LeaderboardTeam[] }>(
+  respondOffer: (sessionId: string, accept: boolean, apiToken?: string) =>
+    request<{
+      player: Player;
+      phase?: RoundPhase;
+      currentEvent?: GameEvent | null;
+      queuedEvents?: GameEvent[];
+      weeklyNews?: WeeklyNewsItem[];
+      roundPlan?: RoundPlan;
+      activeEventSequence?: EventSequence | null;
+      leaderboard?: LeaderboardTeam[];
+      careerInsight?: CareerInsight;
+    }>(
       `/api/game/${sessionId}/team-response`,
       { method: 'POST', body: JSON.stringify({ accept }) },
+      apiToken,
     ),
-  leaveTeam: (sessionId: string) =>
-    request<{ player: Player }>(`/api/game/${sessionId}/leave-team`, { method: 'POST' }),
-  personalizeEvent: (sessionId: string, apiToken?: string) =>
-    request<{ personalized: { narrative: string; choices: Array<{ id: string; description: string }> } | null }>(
-      `/api/game/${sessionId}/personalize-event`,
-      {},
+  leaveTeam: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player }>(`/api/game/${sessionId}/leave-team`, { method: 'POST' }, apiToken),
+  teamPractice: (sessionId: string, teammateId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/team-practice`,
+      { method: 'POST', body: JSON.stringify({ teammateId }) },
+      apiToken,
+    ),
+  teamMeeting: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/team-meeting`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  lockerRoomTalk: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/locker-room-talk`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  retainCoreTeammate: (sessionId: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/retain-core-teammate`,
+      { method: 'POST' },
+      apiToken,
+    ),
+  teamTrainingFocus: (sessionId: string, focus: string, apiToken?: string) =>
+    request<{ player: Player; result: TeamActionResult }>(
+      `/api/game/${sessionId}/team-training-focus`,
+      { method: 'POST', body: JSON.stringify({ focus }) },
       apiToken,
     ),
   getIntro: (sessionId: string, apiToken?: string) =>
@@ -164,17 +321,24 @@ export const api = {
     request<{ summary: string; ending?: string }>(`/api/game/${sessionId}/summary`, {}, apiToken),
   getSocialFeed: (sessionId: string, apiToken?: string) =>
     request<{ posts: SocialPost[] }>(`/api/game/${sessionId}/social-feed`, {}, apiToken),
-  takeLoan: (sessionId: string, amount: number) =>
+  takeLoan: (sessionId: string, amount: number, durationRounds?: number, apiToken?: string) =>
     request<{ player: Player; loan: Loan }>(
       `/api/game/${sessionId}/loan`,
-      { method: 'POST', body: JSON.stringify({ amount }) },
+      { method: 'POST', body: JSON.stringify({ amount, durationRounds }) },
+      apiToken,
     ),
-  pawnItem: (sessionId: string, itemId: string) =>
+  takeFriendLoan: (sessionId: string, amount: number, apiToken?: string) =>
+    request<{ player: Player; loan: Loan }>(
+      `/api/game/${sessionId}/friend-loan`,
+      { method: 'POST', body: JSON.stringify({ amount }) },
+      apiToken,
+    ),
+  pawnItem: (sessionId: string, itemId: string, apiToken?: string) =>
     request<{ player: Player; pawnValue: number }>(
       `/api/game/${sessionId}/pawn`,
       { method: 'POST', body: JSON.stringify({ itemId }) },
+      apiToken,
     ),
-
   narrateStream: async (
     sessionId: string,
     body: {

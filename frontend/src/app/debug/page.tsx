@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface LlmLogEntry {
@@ -27,7 +28,6 @@ const METHOD_COLORS: Record<string, string> = {
   narrateStream: '#ff8a5c',
   summarize: '#3fb950',
   intro: '#58a6ff',
-  personalizeEvent: '#d2a8ff',
   judgeCustomAction: '#ffa657',
   validateJudgment: '#f0883e',
   simulateSocialFeed: '#79c0ff',
@@ -253,10 +253,15 @@ export default function LlmDebugPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 20, color: '#e6edf3' }}>LLM Debug</h1>
+          <h1 style={{ margin: 0, fontSize: 20, color: '#e6edf3' }}>Debug Dashboard</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: '#8b949e' }}>
-            查看最近 100 条 LLM 调用的 prompt / response
+            调整 session 属性、强制事件，查看最近 100 条 LLM 调用的 prompt / response
           </p>
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Link href="/debug/sessions" className="primary-button" style={{ display: 'inline-flex' }}>
+              会话列表
+            </Link>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <label style={{ fontSize: 13, color: '#8b949e', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>

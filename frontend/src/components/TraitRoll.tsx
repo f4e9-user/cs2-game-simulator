@@ -1,5 +1,5 @@
 import type { StatKey, Trait } from '@/lib/types';
-import { STAT_LABELS, formatDelta } from '@/lib/format';
+import { STAT_LABELS, formatDelta, formatMoney, formatTag } from '@/lib/format';
 
 interface Props {
   traits: Trait[];
@@ -63,10 +63,15 @@ export function TraitRoll({ traits, rerollsLeft, onReroll, rolling }: Props) {
                   ))}
                 </div>
               )}
+              {typeof t.openingMoney === 'number' && (
+                <div style={{ marginTop: 8 }}>
+                  <span className="delta-chip up">开局资金 {formatMoney(t.openingMoney)}</span>
+                </div>
+              )}
               <div style={{ marginTop: 6 }}>
                 {t.tags.map((tag) => (
-                  <span key={tag} className="trait-chip">
-                    #{tag}
+                  <span key={tag} className="trait-chip" title={tag}>
+                    #{formatTag(tag)}
                   </span>
                 ))}
               </div>

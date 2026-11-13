@@ -18,35 +18,75 @@ import { BAILOUT_EVENTS } from './bailout.js';
 import { CHAIN_EVENTS } from './chains.js';
 import { SKIN_EVENTS } from './skins.js';
 import { AGENT_EVENTS } from './agent.js';
-
-export const EVENT_POOL: EventDef[] = [
-  ...TRAINING_EVENTS,
-  ...RANKED_EVENTS,
-  ...TEAM_EVENTS,
-  ...TRYOUT_EVENTS,
-  ...MATCH_EVENTS,
-  ...MEDIA_EVENTS,
-  ...LIFE_EVENTS,
-  ...BETTING_EVENTS,
-  ...CHEAT_EVENTS,
-  ...REST_EVENTS,
-  ...STRESS_EVENTS,
-  ...RIVAL_EVENTS,
-  ...BROADCAST_EVENTS,
-  ...DAILY_EVENTS,
-  ...BAILOUT_EVENTS,
-  ...CHAIN_EVENTS,
-  ...SKIN_EVENTS,
-  ...AGENT_EVENTS,
-];
+import { HOUSING_EVENTS } from './housing.js';
+import { TOURNAMENT_CONTEXT_EVENTS } from './tournamentContext.js';
 
 export { PROMOTION_EVENTS };
+
+export class EventRegistry {
+  private pools = new Map<string, EventDef[]>();
+
+  register(type: string, events: EventDef[]) {
+    const existing = this.pools.get(type) ?? [];
+    this.pools.set(type, [...existing, ...events]);
+  }
+
+  unregister(type: string, predicate: (e: EventDef) => boolean) {
+    const existing = this.pools.get(type);
+    if (!existing) return;
+    this.pools.set(type, existing.filter((e) => !predicate(e)));
+  }
+
+  getByType(type: string): EventDef[] {
+    return this.pools.get(type) ?? [];
+  }
+
+  getAll(): EventDef[] {
+    return Array.from(this.pools.values()).flat();
+  }
+
+  getTypes(): string[] {
+    return Array.from(this.pools.keys());
+  }
+
+  clearType(type: string) {
+    this.pools.delete(type);
+  }
+
+  clearAll() {
+    this.pools.clear();
+  }
+}
+
+const registry = new EventRegistry();
+registry.register('training', TRAINING_EVENTS);
+registry.register('ranked', RANKED_EVENTS);
+registry.register('team', TEAM_EVENTS);
+registry.register('tryout', TRYOUT_EVENTS);
+registry.register('match', MATCH_EVENTS);
+registry.register('media', MEDIA_EVENTS);
+registry.register('life', LIFE_EVENTS);
+registry.register('betting', BETTING_EVENTS);
+registry.register('cheat', CHEAT_EVENTS);
+registry.register('rest', REST_EVENTS);
+registry.register('stress', STRESS_EVENTS);
+registry.register('rival', RIVAL_EVENTS);
+registry.register('broadcast', BROADCAST_EVENTS);
+registry.register('daily', DAILY_EVENTS);
+registry.register('bailout', BAILOUT_EVENTS);
+registry.register('chains', CHAIN_EVENTS);
+registry.register('skins', SKIN_EVENTS);
+registry.register('agent', AGENT_EVENTS);
+registry.register('life', HOUSING_EVENTS);
+registry.register('tournament-context', TOURNAMENT_CONTEXT_EVENTS);
+
+export const EVENT_POOL: EventDef[] = registry.getAll();
 
 export function getEventById(id: string): EventDef | undefined {
   if (id.startsWith('promotion-')) {
     return PROMOTION_EVENTS.find((e) => e.id === id);
   }
-  if (id.startsWith('tournament-')) {
+  if (id.startsWith('tournament-') && !id.startsWith('tournament-context-')) {
     const rest = id.slice('tournament-'.length);
     const sep = rest.lastIndexOf('--');
     if (sep < 0) return undefined;
@@ -56,9 +96,13 @@ export function getEventById(id: string): EventDef | undefined {
     if (!t || !Number.isInteger(stageIndex)) return undefined;
     return synthesizeMatchEvent(t, stageIndex);
   }
-  return EVENT_POOL.find((e) => e.id === id);
+  return registry.getAll().find((e) => e.id === id);
 }
 
 export function eventsByType(type: EventType): EventDef[] {
-  return EVENT_POOL.filter((e) => e.type === type);
+  return registry.getAll().filter((e) => e.type === type);
+}
+
+export function getEventRegistry(): EventRegistry {
+  return registry;
 }

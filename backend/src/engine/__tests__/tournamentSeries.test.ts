@@ -1,0 +1,424 @@
+import { describe, expect, it } from 'vitest';
+import { aggregateSeriesMatchResult, applyChoice, createSession, endActionPhase, initPlayer } from '../gameEngine.js';
+import type { TournamentSeriesContext } from '../tournamentSeries.js';
+import type { PendingMatch, Player } from '../../types.js';
+import { getTournament } from '../../data/tournaments.js';
+import { createTournamentInstance, drawTournamentInstance, lockTournamentInstance } from '../tournamentInstance.js';
+
+function player(): Player {
+  return {
+    ...initPlayer({
+      name: 'SeriesTester',
+      traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+      backgroundId: '',
+    }),
+    stats: {
+      agility: 24,
+      intelligence: 18,
+      mentality: 18,
+      experience: 18,
+      constitution: 18,
+      money: 20,
+    },
+    volatile: { feel: 2, tilt: 0, fatigue: 10 },
+    round: 20,
+    year: 1,
+    week: 20,
+    actionPoints: 0,
+    stage: 'youth',
+    forceMatchResult: 'win',
+  };
+}
+
+function unforcedPlayer(): Player {
+  return {
+    ...player(),
+    forceMatchResult: null,
+  };
+}
+
+function pendingFinal(): PendingMatch {
+  return {
+    tournamentId: 'y1-b-01',
+    tier: 'b',
+    name: 'Academy League',
+    displayName: 'Academy League Season 1',
+    progressionTier: 'b',
+    entryType: 'direct_signup',
+    resolveYear: 1,
+    resolveWeek: 20,
+    stageIndex: 1,
+  };
+}
+
+function pendingPglMajorFinal(): PendingMatch {
+  return {
+    tournamentId: 'y1-major-02',
+    tier: 'major',
+    name: 'PGL Major',
+    displayName: 'PGL Major',
+    progressionTier: 'major',
+    entryType: 'invite',
+    resolveYear: 1,
+    resolveWeek: 20,
+    stageIndex: 5,
+  };
+}
+
+function pendingSClassGroup(): PendingMatch {
+  return {
+    tournamentId: 'y1-s-main-01',
+    tier: 's-class',
+    name: 'IEM',
+    displayName: 'IEM Test',
+    progressionTier: 's-main',
+    entryType: 'invite',
+    resolveYear: 1,
+    resolveWeek: 20,
+    stageIndex: 1,
+  };
+}
+
+function resolveForcedGroupLoss(stageLosses = 0) {
+  const p = {
+    ...player(),
+    forceMatchResult: 'loss' as const,
+    pendingMatch: {
+      ...pendingSClassGroup(),
+      stageLosses,
+    },
+  };
+  const session = {
+    ...createSession(p, 1),
+    phase: 'action' as const,
+  };
+
+  const eventPhase = endActionPhase(session).session;
+  const map1 = applyChoice(eventPhase, 'match-play');
+  const break1 = applyChoice(map1.session, 'break-recover');
+  const map2 = applyChoice(break1.session, 'match-play');
+  return applyChoice(map2.session, 'series-confirm');
+}
+
+describe('tournament series', () => {
+  it('runs a bo3 in one round and pays rewards only on final step', () => {
+    const p = {
+      ...player(),
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    expect(eventPhase.activeEventSequence?.type).toBe('tournament-series');
+    expect(eventPhase.currentEvent?.id).toContain('map-1');
+
+    const map1 = applyChoice(eventPhase, 'match-play');
+    expect(map1.session.player.round).toBe(20);
+    expect(map1.session.player.stats.money).toBe(20);
+    // 第一张图后进入图间休息，而不是直接到第二张图
+    expect(map1.session.currentEvent?.id).toContain('-break-1');
+
+    const break1 = applyChoice(map1.session, 'break-recover');
+    expect(break1.session.player.round).toBe(20);
+    expect(break1.session.currentEvent?.id).toContain('map-2');
+
+    const map2 = applyChoice(break1.session, 'match-play');
+    expect(map2.session.player.round).toBe(20);
+    expect(map2.session.player.stats.money).toBe(20);
+    // 2-0 已分胜负，剩余的中场与第三张图一起跳过，直奔结算
+    expect(map2.session.currentEvent?.id).toBe('tournament-y1-b-01--1');
+    expect(map2.session.activeEventSequence?.currentIndex).toBe(5);
+
+    const final = applyChoice(map2.session, 'series-confirm');
+    expect(final.session.phase).toBe('action');
+    expect(final.session.player.round).toBe(21);
+    expect(final.session.player.pendingMatch).toBeNull();
+    expect(final.session.player.stats.money).toBeGreaterThan(20);
+    expect(final.session.player.tournamentChampionships).toBeGreaterThan(0);
+    expect(final.result.sequenceFinal).toBe(true);
+    expect(final.result.matchStats?.kills).toBeGreaterThan(0);
+    expect(final.result.seriesScore).toEqual({ player: 2, opponent: 0 });
+    expect(final.result.matchStats?.teamScore).toBeGreaterThan(20);
+  });
+
+  it('keeps map numbering, break score context, and final map breakdown separate', () => {
+    const p = {
+      ...player(),
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    expect((map1.result as any).seriesStepKind).toBe('map');
+    expect((map1.result as any).seriesMapIndex).toBe(1);
+    expect((map1.result as any).seriesMapCount).toBe(3);
+
+    const break1 = applyChoice(map1.session, 'break-recover');
+    expect((break1.result as any).seriesStepKind).toBe('break');
+    expect((break1.result as any).seriesMapIndex).toBe(1);
+    expect((break1.result as any).seriesScore).toEqual({ player: 1, opponent: 0 });
+
+    const map2 = applyChoice(break1.session, 'match-play');
+    const final = applyChoice(map2.session, 'series-confirm');
+    expect((final.result as any).seriesStepKind).toBe('final');
+    expect((final.result as any).seriesScore).toEqual({ player: 2, opponent: 0 });
+    expect((final.result as any).seriesMaps).toHaveLength(2);
+    expect((final.result as any).seriesMaps[0]).toMatchObject({
+      mapName: expect.any(String),
+      teamScore: expect.any(Number),
+      enemyScore: expect.any(Number),
+    });
+  });
+
+  it('does not add extra fatigue on series confirmation after completed maps', () => {
+    const p = {
+      ...player(),
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    const map2 = applyChoice(break1.session, 'match-play');
+    const final = applyChoice(map2.session, 'series-confirm');
+
+    expect(final.result.fatigueChange).toBe(0);
+  });
+
+  it('completes the active tournament instance only on series final confirmation', () => {
+    const tournament = getTournament('y1-b-01');
+    if (!tournament) throw new Error('missing tournament');
+    const p = {
+      ...player(),
+      team: {
+        clubId: 'club-cyber-academy',
+        name: '赛博学院',
+        tag: 'CYA',
+        region: '亚太',
+        tier: 'youth' as const,
+        monthlySalary: 10,
+        joinedRound: 1,
+      },
+    };
+    const instance = drawTournamentInstance(lockTournamentInstance(createTournamentInstance(createSession(p, 1), tournament)));
+    const pending = { ...pendingFinal(), tournamentInstanceId: instance.id };
+    const session = {
+      ...createSession({ ...p, pendingMatch: pending }, 1),
+      activeTournamentInstance: instance,
+      worldClubs: {
+        season: 1,
+        activeClubIds: instance.teams.map((team) => team.clubId),
+        relevantClubIds: [],
+        staticClubIds: [],
+        runtimeByClubId: {},
+        processedTickKeysByClubId: {},
+      },
+      worldClubsVersion: 2,
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    expect(map1.session.activeTournamentInstance?.status).toBe('drawn');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    const map2 = applyChoice(break1.session, 'match-play');
+    const final = applyChoice(map2.session, 'series-confirm');
+
+    expect(final.session.activeTournamentInstance).toBeNull();
+    expect(final.session.tournamentHistory?.[0]?.tournamentId).toBe('y1-b-01');
+    expect(final.session.tournamentHistory?.[0]?.championClubId).toBe('club-cyber-academy');
+    const playerRuntime = final.session.worldClubs?.runtimeByClubId['club-cyber-academy'];
+    expect(playerRuntime?.recentResults[0]).toMatchObject({
+      tournamentId: 'y1-b-01',
+      result: 'win',
+    });
+    expect(playerRuntime?.seasonPoints).toBeGreaterThan(0);
+    const runnerUpClubId = final.session.tournamentHistory?.[0]?.runnerUpClubId;
+    if (!runnerUpClubId) throw new Error('missing runner-up');
+    const runnerUpRuntime = final.session.worldClubs?.runtimeByClubId[runnerUpClubId];
+    expect(runnerUpRuntime?.recentResults[0]).toMatchObject({
+      tournamentId: 'y1-b-01',
+      result: 'deep-run',
+    });
+    expect(runnerUpRuntime?.seasonPoints).toBeGreaterThan(0);
+  });
+
+  it('inserts a halftime break between maps that recovers fatigue without advancing the round', () => {
+    const p = {
+      ...player(),
+      volatile: { feel: 0, tilt: 0, fatigue: 50 },
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    expect(map1.session.currentEvent?.id).toContain('-break-1');
+    const fatigueAfterMap = map1.session.player.volatile.fatigue;
+
+    const brk = applyChoice(map1.session, 'break-recover');
+    expect(brk.session.currentEvent?.id).toContain('map-2');
+    expect(brk.session.player.round).toBe(20);
+    expect(brk.session.player.volatile.fatigue).toBeLessThan(fatigueAfterMap);
+  });
+
+  it('uses a different simulation stream for each map in the same bo3 round', () => {
+    const p = {
+      ...unforcedPlayer(),
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    const map2 = applyChoice(break1.session, 'match-play');
+
+    expect(map1.session.player.round).toBe(map2.session.player.round);
+    expect(map1.result.matchStats).toBeDefined();
+    expect(map2.result.matchStats).toBeDefined();
+    expect(map2.result.matchStats).not.toEqual(map1.result.matchStats);
+  });
+
+  it('does not repeat map simulation when a bo3 step is restored in the same round', () => {
+    const p = {
+      ...unforcedPlayer(),
+      pendingMatch: pendingFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    // 在第二张图丢掉序列，强制从 currentEvent 还原（覆盖 map/break 交错后的索引还原）
+    const restoredMap2Session = {
+      ...break1.session,
+      activeEventSequence: undefined,
+    };
+    const map2 = applyChoice(restoredMap2Session, 'match-play');
+
+    expect(map2.result.eventId).toContain('map-2');
+    expect(map2.result.matchStats).not.toEqual(map1.result.matchStats);
+  });
+
+  it('records championship counts by tier and S-tier series', () => {
+    const p = {
+      ...player(),
+      stage: 'pro' as const,
+      pendingMatch: pendingPglMajorFinal(),
+    };
+    const session = {
+      ...createSession(p, 1),
+      phase: 'action' as const,
+    };
+
+    const eventPhase = endActionPhase(session).session;
+    const map1 = applyChoice(eventPhase, 'match-play');
+    const break1 = applyChoice(map1.session, 'break-recover');
+    const map2 = applyChoice(break1.session, 'match-play');
+    const break2 = applyChoice(map2.session, 'break-recover');
+    const map3 = applyChoice(break2.session, 'match-play');
+    const final = applyChoice(map3.session, 'series-confirm');
+
+    expect(final.session.player.tierChampionships.major).toBe(1);
+    expect(final.session.player.tierChampionships.s).toBe(1);
+    expect(final.session.player.championshipSeries?.pgl).toBe(1);
+    expect(final.session.player.championshipSeries?.major).toBe(1);
+  });
+
+  it('keeps a player alive after one group-stage loss and eliminates on the second', () => {
+    const firstLoss = resolveForcedGroupLoss(0);
+
+    expect(firstLoss.result.success).toBe(false);
+    expect(firstLoss.session.player.pendingMatch?.stageIndex).toBe(1);
+    expect(firstLoss.session.player.pendingMatch?.stageLosses).toBe(1);
+
+    const secondLoss = resolveForcedGroupLoss(1);
+
+    expect(secondLoss.result.success).toBe(false);
+    expect(secondLoss.session.player.pendingMatch).toBeNull();
+  });
+
+  it('requires PGL, BLAST, and Major championships for the legend ending', () => {
+    const base = {
+      ...player(),
+      stage: 'pro' as const,
+      round: 575,
+      fame: 100,
+      pendingMatch: null,
+    };
+    const event = {
+      id: 'test-final-week',
+      type: 'life' as const,
+      title: '最后一周',
+      narrative: '赛季结束前，你做最后一次复盘。',
+      stages: ['pro' as const],
+      difficulty: 1,
+      choices: [{
+        id: 'finish',
+        label: '结束',
+        description: '结束生涯。',
+        check: { primary: 'mentality' as const, dc: 1 },
+        success: { narrative: '你完成了最后一周。' },
+        failure: { narrative: '你完成了最后一周。' },
+      }],
+    };
+
+    const missingBlast = applyChoice({
+      ...createSession({
+        ...base,
+        championshipSeries: { pgl: 1, major: 1 },
+      }, 1),
+      currentEvent: event,
+      phase: 'event' as const,
+    }, 'finish', 20, [event]);
+    const grandSlam = applyChoice({
+      ...createSession({
+        ...base,
+        championshipSeries: { pgl: 1, blast: 1, major: 1 },
+      }, 1),
+      currentEvent: event,
+      phase: 'event' as const,
+    }, 'finish', 20, [event]);
+
+    expect(missingBlast.session.ending).not.toBe('legend');
+    expect(grandSlam.session.ending).toBe('legend');
+  });
+
+  it('rejects a tied series because overtime should prevent that state', () => {
+    const context: TournamentSeriesContext = {
+      tournamentId: 'y1-b-01',
+      stageIndex: 1,
+      seriesType: 'bo3',
+      mapPool: ['Mirage', 'Inferno', 'Nuke'],
+      maps: [
+        { mapNumber: 1, mapName: 'Mirage', won: true, teamScore: 13, enemyScore: 10, kills: 20, deaths: 15, assists: 5, headshotRate: 0.45, rating: 1.12 },
+        { mapNumber: 2, mapName: 'Inferno', won: false, teamScore: 10, enemyScore: 13, kills: 16, deaths: 18, assists: 6, headshotRate: 0.39, rating: 0.98 },
+      ],
+      playerMapWins: 1,
+      opponentMapWins: 1,
+    };
+
+    expect(() => aggregateSeriesMatchResult(player(), context)).toThrow(/tied map wins/);
+  });
+});

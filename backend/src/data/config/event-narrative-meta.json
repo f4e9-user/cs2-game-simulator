@@ -1,0 +1,230 @@
+{
+  "bailout": {
+    "eventType": "bailout",
+    "emotionTone": "被救济的自尊冲突",
+    "playerStance": "被动接受关怀",
+    "conflictType": "经济-自尊",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["被关怀时感到刺痛", "觉得欠了人情"], "avoid": ["不要写成心安理得", "不要写成抱怨施助者"] },
+      "hothead": { "emphasis": ["愤怒于自己的无能", "想把红包扔回去"], "avoid": ["不要写成对家人发火"] },
+      "tactical-mind": { "emphasis": ["在脑子里计算这笔钱的影响"], "avoid": ["不要写成冷漠计算"] }
+    },
+    "narrativeConstraints": ["禁止写成被施舍的愤怒", "禁止写成毫不在意", "禁止写成理所当然"]
+  },
+  "life": {
+    "eventType": "life",
+    "emotionTone": "日常与梦想的撕裂",
+    "playerStance": "被动承受",
+    "conflictType": "时间-健康",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["觉得家人的担心是自己造成的"], "avoid": ["禁止写成完全不在乎家人"] },
+      "hothead": { "emphasis": ["想辩解但知道辩解没用"], "avoid": ["禁止写成对家人大吼大叫"] },
+      "tactical-mind": { "emphasis": ["试图用规划说服家人"], "avoid": ["不要写成书呆子式的说教"] }
+    },
+    "narrativeConstraints": ["禁止写成完全不在乎家人", "禁止写成家人的关心是负担", "禁止写成轻松化解"]
+  },
+  "stress": {
+    "eventType": "stress",
+    "emotionTone": "高压下的自我怀疑或对外爆发",
+    "playerStance": "被情绪淹没",
+    "conflictType": "心理-现实",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["把所有压力揽到自己身上", "沉默地承受"], "avoid": ["不要写成向外发泄"] },
+      "hothead": { "emphasis": ["愤怒爆发", "砸东西或吼叫"], "avoid": ["不要写成无缘无故的发火"] },
+      "tactical-mind": { "emphasis": ["试图用分析拆解压力源"], "avoid": ["不要写成完全理性不受影响"] }
+    },
+    "narrativeConstraints": ["禁止写成轻松化解", "禁止写成毫不在意", "禁止写成睡一觉就好"]
+  },
+  "training": {
+    "eventType": "training",
+    "emotionTone": "枯燥中的执念",
+    "playerStance": "主动选择",
+    "conflictType": "身体-野心",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["练得比别人多，觉得还不够"], "avoid": ["不要写成抱怨训练量"] },
+      "hothead": { "emphasis": ["对着 bot 发泄怒火"], "avoid": ["不要写成砸设备"] },
+      "tactical-mind": { "emphasis": ["训练也有计划性和目标感"], "avoid": ["不要写成机械执行"] }
+    },
+    "narrativeConstraints": ["禁止写成毫不费力", "禁止写成轻松愉快", "禁止写成敷衍了事"]
+  },
+  "ranked": {
+    "eventType": "ranked",
+    "emotionTone": "个人能力的证明",
+    "playerStance": "主动挑战",
+    "conflictType": "个人-系统",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["输了觉得是自己带不动"], "avoid": ["不要写成甩锅给队友"] },
+      "hothead": { "emphasis": ["对路人队友的失误零容忍"], "avoid": ["不要写成开局就骂"] },
+      "tactical-mind": { "emphasis": ["分析对手习惯和地图控制"], "avoid": ["不要写成只会指挥不会打"] }
+    },
+    "narrativeConstraints": ["禁止写成队友全责", "禁止写成系统针对", "禁止写成毫无波动"]
+  },
+  "team": {
+    "eventType": "team",
+    "emotionTone": "集体中的自我位置",
+    "playerStance": "被动卷入",
+    "conflictType": "人际-角色",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["默默承担团队失误"], "avoid": ["不要写成完全独立"] },
+      "hothead": { "emphasis": ["对团队决策不满时会爆发"], "avoid": ["不要写成破坏团队氛围"] },
+      "tactical-mind": { "emphasis": ["分析团队动态和角色分配"], "avoid": ["不要写成指手画脚"] }
+    },
+    "narrativeConstraints": ["禁止写成完全独立", "禁止写成毫无牵挂", "禁止写成独行侠"]
+  },
+  "tryout": {
+    "eventType": "tryout",
+    "emotionTone": "机会的恐惧与渴望",
+    "playerStance": "被审视者",
+    "conflictType": "能力-认可",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["担心表现不好拖累机会"], "avoid": ["不要写成不在乎"] },
+      "hothead": { "emphasis": ["紧张时会更加激进"], "avoid": ["不要写成失控"] },
+      "tactical-mind": { "emphasis": ["提前研究试训队和对手"], "avoid": ["不要写成过度准备"] }
+    },
+    "narrativeConstraints": ["禁止写成轻松通过", "禁止写成毫不在意", "禁止写成理所当然"]
+  },
+  "match": {
+    "eventType": "match",
+    "emotionTone": "聚光灯下的存亡",
+    "playerStance": "表演者",
+    "conflictType": "荣誉-失败",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["每一个失误都觉得是自己的锅"], "avoid": ["不要写成甩锅"] },
+      "hothead": { "emphasis": ["关键时刻肾上腺素飙升"], "avoid": ["不要写成无脑冲锋"] },
+      "tactical-mind": { "emphasis": ["比赛中不断调整策略"], "avoid": ["不要写成犹豫不决"] }
+    },
+    "narrativeConstraints": ["禁止写成毫无压力", "禁止写成轻松取胜", "禁止写成不在乎输赢"]
+  },
+  "media": {
+    "eventType": "media",
+    "emotionTone": "被观看的焦虑",
+    "playerStance": "被展示者",
+    "conflictType": "真实-形象",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["担心媒体放大自己的失误"], "avoid": ["不要写成享受曝光"] },
+      "hothead": { "emphasis": ["对记者的尖锐问题反应激烈"], "avoid": ["不要写成对记者动手"] },
+      "tactical-mind": { "emphasis": ["谨慎措辞，每一句话都过脑子"], "avoid": ["不要写成官方套话"] }
+    },
+    "narrativeConstraints": ["禁止写成享受曝光", "禁止写成毫不在意舆论", "禁止写成完全透明"]
+  },
+  "betting": {
+    "eventType": "betting",
+    "emotionTone": "欲望的失控边缘",
+    "playerStance": "主动下注",
+    "conflictType": "理性-贪婪",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["输了觉得连运气都在惩罚自己"], "avoid": ["不要写成冷静止损"] },
+      "hothead": { "emphasis": ["上头后加注更猛"], "avoid": ["不要写成有策略的加注"] },
+      "gambler": { "emphasis": ["这就是生活方式，不是选择"], "avoid": ["不要写成理性分析"] }
+    },
+    "narrativeConstraints": ["禁止写成理性计算", "禁止写成轻松收手", "禁止写成不受影响"]
+  },
+  "cheat": {
+    "eventType": "cheat",
+    "emotionTone": "捷径与代价",
+    "playerStance": "选择者",
+    "conflictType": "道德-胜利",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["即使作弊也觉得会被抓到的是自己"], "avoid": ["不要写成心安理得"] },
+      "hothead": { "emphasis": ["愤怒于规则的不公才选择捷径"], "avoid": ["不要写成天生坏人"] },
+      "tactical-mind": { "emphasis": ["计算作弊的风险收益比"], "avoid": ["不要写成精密犯罪"] }
+    },
+    "narrativeConstraints": ["禁止写成毫无愧疚", "禁止写成轻松逃脱", "禁止写成正义化身"]
+  },
+  "rest": {
+    "eventType": "rest",
+    "emotionTone": "被迫暂停的焦躁与无力",
+    "playerStance": "被动休养",
+    "conflictType": "身体-野心",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["觉得休息是在拖累团队进度"], "avoid": ["不要写成享受休息"] },
+      "hothead": { "emphasis": ["对伤病或休息安排感到愤怒"], "avoid": ["不要写成攻击医疗人员"] },
+      "grinder": { "emphasis": ["休息时也想着训练"], "avoid": ["不要写成完全放松"] }
+    },
+    "narrativeConstraints": ["禁止写成享受休息", "禁止写成完全恢复", "禁止写成毫无焦虑"]
+  },
+  "rival": {
+    "eventType": "rival",
+    "emotionTone": "被比较的自我",
+    "playerStance": "竞争者",
+    "conflictType": "自我-他人",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["输给对手后加倍自责"], "avoid": ["不要写成嫉妒对手"] },
+      "hothead": { "emphasis": ["把对手的存在视为挑衅"], "avoid": ["不要写成场外冲突"] },
+      "arrogant": { "emphasis": ["觉得对手不配和自己比"], "avoid": ["不要写成尊重对手"] }
+    },
+    "narrativeConstraints": ["禁止写成惺惺相惜", "禁止写成毫不在意", "禁止写成完全碾压"]
+  },
+  "broadcast": {
+    "eventType": "broadcast",
+    "emotionTone": "生涯的高光或低谷",
+    "playerStance": "被讲述者",
+    "conflictType": "过去-未来",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["担心解说只提自己的失误"], "avoid": ["不要写成享受解说"] },
+      "hothead": { "emphasis": ["对解说的批评当场反击"], "avoid": ["不要写成攻击解说"] },
+      "streamer-charm": { "emphasis": ["镜头前反而更放松"], "avoid": ["不要写成紧张"] }
+    },
+    "narrativeConstraints": ["禁止写成毫无波澜", "禁止写成完全掌控", "禁止写成不在乎镜头"]
+  },
+  "daily": {
+    "eventType": "daily",
+    "emotionTone": "重复中的微小选择",
+    "playerStance": "主动规划",
+    "conflictType": "短期-长期",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["每一个选择都担心影响团队"], "avoid": ["不要写成只考虑自己"] },
+      "hothead": { "emphasis": ["对日复一日的单调感到焦躁"], "avoid": ["不要写成破坏日常安排"] },
+      "procrastinator": { "emphasis": ["知道该做什么但迟迟不动"], "avoid": ["不要写成高效执行"] }
+    },
+    "narrativeConstraints": ["禁止写成毫无目标", "禁止写成机械重复", "禁止写成轻松度日"]
+  },
+  "routine": {
+    "eventType": "routine",
+    "emotionTone": "重复中的微小选择",
+    "playerStance": "主动规划",
+    "conflictType": "短期-长期",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["每一个选择都担心影响团队"], "avoid": ["不要写成只考虑自己"] },
+      "hothead": { "emphasis": ["对日复一日的单调感到焦躁"], "avoid": ["不要写成破坏日常安排"] },
+      "procrastinator": { "emphasis": ["知道该做什么但迟迟不动"], "avoid": ["不要写成高效执行"] }
+    },
+    "narrativeConstraints": ["禁止写成毫无目标", "禁止写成机械重复", "禁止写成轻松度日"]
+  },
+  "chains": {
+    "eventType": "chains",
+    "emotionTone": "命运的连锁反应",
+    "playerStance": "被动卷入",
+    "conflictType": "选择-后果",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["觉得连锁反应都是自己的错"], "avoid": ["不要写成事不关己"] },
+      "hothead": { "emphasis": ["愤怒于命运的不公"], "avoid": ["不要写成怨天尤人"] },
+      "tactical-mind": { "emphasis": ["试图找到连锁反应的源头"], "avoid": ["不要写成过度分析"] }
+    },
+    "narrativeConstraints": ["禁止写成毫无关联", "禁止写成轻松逆转", "禁止写成命中注定"]
+  },
+  "skins": {
+    "eventType": "skins",
+    "emotionTone": "物质与虚荣的边界",
+    "playerStance": "消费者",
+    "conflictType": "实用-炫耀",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["买了皮肤却觉得不配用"], "avoid": ["不要写成炫耀"] },
+      "hothead": { "emphasis": ["冲动消费后后悔"], "avoid": ["不要写成冷静购买"] },
+      "streamer-charm": { "emphasis": ["皮肤是镜头语言的一部分"], "avoid": ["不要写成不在乎外表"] }
+    },
+    "narrativeConstraints": ["禁止写成毫不在意", "禁止写成纯粹投资", "禁止写成身份象征"]
+  },
+  "agent": {
+    "eventType": "agent",
+    "emotionTone": "商业对纯粹的侵蚀",
+    "playerStance": "被代理者",
+    "conflictType": "艺术-商业",
+    "traitReactions": {
+      "scapegoat": { "emphasis": ["担心商业决策影响团队关系"], "avoid": ["不要写成享受商业谈判"] },
+      "hothead": { "emphasis": ["对经纪人的安排感到愤怒"], "avoid": ["不要写成攻击经纪人"] },
+      "introvert": { "emphasis": ["把社交交给经纪人是一种解脱"], "avoid": ["不要写成完全依赖"] }
+    },
+    "narrativeConstraints": ["禁止写成完全信任", "禁止写成毫无芥蒂", "禁止写成商业天才"]
+  }
+}

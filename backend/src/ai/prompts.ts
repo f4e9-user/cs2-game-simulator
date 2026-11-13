@@ -1,9 +1,12 @@
 import type { Background, GameEventPublic, LeaderboardTeam, MatchStats, Player, RoundResult, Rival, Trait } from '../types.js';
 import { STAGE_LABELS } from '../engine/constants.js';
+import type { TraitNarrativeRule } from './narrativeConfig.js';
+import { formatEnding } from '../../../shared/endings.js';
+import { careerSummaryFacts } from './summary.js';
 
 // ── Social Feed ─────────────────────────────────────────────────────────────
 
-export type SocialPostAuthorType = 'teammate' | 'club' | 'rival' | 'media';
+export type SocialPostAuthorType = 'teammate' | 'club' | 'rival' | 'media' | 'star' | 'industry' | 'fan';
 
 export interface SocialFeedPost {
   author: string;
@@ -16,64 +19,162 @@ export function buildSocialFeedPrompt(
   player: Player,
   recentHistory: RoundResult[],
   leaderboard: LeaderboardTeam[],
+  traitRules?: TraitNarrativeRule[],
 ): string {
   const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
   const fameLabel = player.fame >= 80 ? '顶流' : player.fame >= 50 ? '知名选手' : player.fame >= 20 ? '有一定知名度' : '新人';
+  const w = player.week ?? player.round;
 
-  // 玩家自身信息
+  const seasonPhase = (() => {
+    if (w <= 12) return '赛季初期，各队磨合新阵容，IEM 卡托维兹刚打完，社区还在回味';
+    if (w <= 24) return '赛季中段，积分争夺白热化，Major 预选赛开打';
+    if (w <= 36) return '季后赛资格争夺关键期，BLAST 春季决赛临近';
+    return '休赛期临近，转会流言满天飞，阵容重组暗流涌动';
+  })();
+
   const playerTeamLine = player.team
-    ? `所属俱乐部：${player.team.name}（${player.team.tag}）`
-    : '当前无俱乐部（独立选手/练习生）';
+    ? `主角：${player.name}，${player.team.name}（${player.team.tag}）${stageLabel}阶段，${fameLabel}`
+    : `主角：${player.name}，自由选手/练习生，${stageLabel}阶段，${fameLabel}`;
 
   const teammateLine = player.roster && player.roster.length > 0
-    ? `队友：${player.roster.slice(0, 3).map((tm) => `${tm.name}（${tm.role}）`).join('、')}`
-    : '暂无正式队友';
+    ? `队友：${player.roster.map((tm) => `${tm.name}（${tm.role}）`).join('、')}`
+    : '';
 
-  // 近期战绩
-  const recentSummary = recentHistory.slice(-4).map((r) => {
-    const outcome = r.success ? '✓' : '✗';
-    const preview = r.narrative.length > 40 ? r.narrative.slice(0, 40) + '…' : r.narrative;
-    return `${outcome} 【${r.eventTitle}】${preview}`;
-  }).join('\n') || '（尚无战绩记录）';
+  const recentSummary = recentHistory.slice(-3).map((r) => {
+    const outcome = r.success ? '赢' : '输';
+    const preview = r.narrative.length > 30 ? r.narrative.slice(0, 30) + '…' : r.narrative;
+    return `[${outcome}] ${r.eventTitle} — ${preview}`;
+  }).join('\n') || '暂无近期战绩';
 
-  // 世界场景：排行榜顶队 + 对手（无论玩家有没有队伍，世界都在运转）
-  const topTeams = leaderboard
-    .filter((t) => !t.isPlayer)
-    .slice(0, 4)
-    .map((t) => `${t.name}（${t.tag}，${t.region}）`)
+  // 检测最近一场赛事结果
+  const lastMatch = [...recentHistory].reverse().find((r) => r.eventId.startsWith('tournament-'));
+  let matchReport = '';
+  let matchHeat = 0; // 0=无赛事, 1=B级一般报道, 2=A/S级知名媒体报道, 3=Major全网报道
+  if (lastMatch) {
+    const title = lastMatch.eventTitle;
+    const isMajor = title.includes('Major') || title.includes('major');
+    const isTopTier = title.includes('S级') || title.includes('IEM') || title.includes('BLAST') || title.includes('S-');
+    matchHeat = isMajor ? 3 : isTopTier ? 2 : 1;
+    const ms = lastMatch.matchStats;
+    const teamName = lastMatch.teamSnapshot?.name ?? player.team?.name ?? player.name;
+    const result = lastMatch.success ? '夺冠/晋级' : '出局/落败';
+    const perf = ms
+      ? `个人数据 ${ms.kills}/${ms.deaths}/${ms.assists} KDA，Rating ${ms.rating.toFixed(2)}，爆头率 ${Math.round(ms.headshotRate * 100)}%`
+      : '';
+    matchReport = `${teamName} 在「${title}」${result}${perf ? ' — ' + perf : ''}`;
+  }
+
+  const worldTeamsRaw = leaderboard.filter((t) => !t.isPlayer);
+  const worldTeamNames = worldTeamsRaw
+    .slice(0, 6)
+    .map((t) => `${t.name}(${t.tag})`)
     .join('、');
 
   const rivals = (player.rivals ?? [])
     .slice(0, 3)
-    .map((r: Rival) => `${r.name}（${r.tag}，${r.region}）`)
+    .map((r: Rival) => `${r.name}(${r.tag})`)
     .join('、');
 
-  const worldTeams = [topTeams, rivals].filter(Boolean).join('；另有对手：');
+  const topTeamA = worldTeamsRaw[0]?.name ?? 'NovaX';
+  const topTeamB = worldTeamsRaw[1]?.name ?? 'PixelForce';
+  const topTeamC = worldTeamsRaw[2]?.name ?? 'ZenithDynasty';
+  const playerTeamName = player.team?.name ?? (player.name || '主角战队');
+  const playerTeamTag = player.team?.tag ?? 'PLY';
+  const hasTeam = !!player.team;
+  const hasRecentMatch = !!lastMatch;
+
+  const rolePoolLines: string[] = [];
+
+  if (hasTeam) {
+    rolePoolLines.push(
+      '1) teammate（队友）—— 第一人称，像兄弟聊天',
+      `  例："跟 ${player.name} 练了一晚上 AK 急停，他进步肉眼可见 💪"`,
+      '',
+      '2) club（俱乐部官方号）—— "我们"、官宣口吻，但不死板',
+      `  例："我们${playerTeamName}拿下了本周训练赛全胜，下周 Major 预选见真章 🏆 #${playerTeamTag}"`,
+    );
+  }
+
+  rolePoolLines.push(
+    '3) rival（对手战队官方号）—— 第三方视角，可带挑衅',
+    hasTeam
+      ? `  例："下周的对手名单里有 ${playerTeamName}，已经研究过他们的 demos 了 🔍"`
+      : `  例："${topTeamA} vs ${topTeamB} 下周见，demo 已经看了三遍了 😤"`,
+    '',
+    '4) star（行业明星选手）—— 第一人称，大佬日常',
+    '  可用：s1mple(@s1mple_legacy)、ZywOo(@zywoo_beast)、m0NESY(@m0nesy_ace)、ropz(@ropz_clutch)、NiKo(@niko_rifle)、device(@device_awp)、karrigan(@karrigan_igl)、sh1ro(@sh1ro_sniper)',
+    `  例："刚看完 ${topTeamA} vs ${topTeamB} 的录像，B 点回防那个烟雾太漂亮了 🧠"`,
+    '',
+    '5) media（媒体号）—— 报道/爆料口吻，可带悬念',
+    `  例："HLTV 本周排名更新，${topTeamA} 重回前三，${topTeamB} 跌出前五 📊"`,
+    '',
+    '6) industry（解说/分析师/圈内人士）—— 专业但轻松',
+    `  例："昨晚那场 ${topTeamA} vs ${topTeamB} 的 Inferno B 点回防，我愿称之为本赛季最佳战术配合 🧠"`,
+  );
+
+  if (hasTeam && hasRecentMatch) {
+    rolePoolLines.push(
+      '',
+      '7) fan（粉丝/社区号）—— 热情、八卦、偶尔毒奶',
+      `  例："${player.name} 今天手感太好了，预言他下周 Major 预选 1.3 rating 起步 🔮"`,
+    );
+  }
+
+  const contentFocusInstruction =
+    !hasTeam && hasRecentMatch
+      ? '主角是无名新人但最近参加了赛事。最多 1 条 media/industry/star 以第三方观察口吻提到主角赛事表现（如"某新秀在XX赛发挥亮眼"），其余必须聊其他内容。禁止出现粉丝、队友、俱乐部视角。'
+      : hasTeam && hasRecentMatch
+        ? '最近有赛事结果，可以围绕主角和赛事发帖，但最多 2 条提到主角，其余必须聊其他内容'
+        : hasTeam
+          ? '最近没有赛事，禁止围绕主角发帖。内容必须是：其他战队的动态、行业八卦、地图/武器讨论、赛事预告、日常吐槽等'
+          : '主角是无名新人，禁止围绕主角发帖。内容必须是：顶级战队动态、行业八卦、地图/武器讨论、赛事预告、日常吐槽等。粉丝和俱乐部此时不可能讨论一个无名练习生';
 
   return [
-    '你是 CS2 职业电竞世界的社交媒体模拟引擎。',
-    '这是一个完整的电竞生态——无论玩家是否有战队，世界上的其他战队和选手都在持续活动。',
-    '请生成 4 条不同角色发布的中文短帖子，模拟 X（推特）上真实电竞人的日常推文。',
+    '你是社交媒体模拟引擎，一个极度活跃的 CS2 职业电竞 Twitter/X 用户。你不是在写新闻稿，你是在刷社媒——每条帖子要像真实的人随手发的日常动态。',
     '',
-    `【主角】${player.name}，${stageLabel}阶段，${fameLabel}`,
+    '【当前世界状态】',
+    `赛季：第${w}周 — ${seasonPhase}`,
+    `活跃战队：${worldTeamNames || '(多个职业战队)'}`
+      + (rivals ? `；主角对手：${rivals}` : ''),
+    '',
     playerTeamLine,
     teammateLine,
     '',
-    `【当前活跃的其他战队】${worldTeams || '（生成世界战队）'}`,
-    '',
-    '【主角近期战绩】',
+    '【主角最近干了什么】',
     recentSummary,
+    ...(matchReport ? [
+      '',
+      '【最近赛事结果 —— 必须基于以下真实数据发帖，不得编造】',
+      matchReport,
+      '赛事归属以这条赛事结果里的队伍为准；如果主角后来转队/升队，禁止用当前战队改写旧赛事。',
+      matchHeat === 3
+        ? '【赛事热度：Major 级别 —— 所有媒体都在报道，几乎所有角色都会提到这场赛事】'
+        : matchHeat === 2
+          ? '【赛事热度：A/S 级 —— 知名媒体和圈内人士会报道，一般粉丝也会讨论】'
+          : '【赛事热度：B/C 级 —— 一般媒体报道，圈内人士偶尔提及】',
+    ] : []),
     '',
-    '【发帖要求】',
-    '- 4 条帖子来自不同角色，覆盖尽量多的 authorType（teammate / club / rival / media）',
-    '- 若主角暂无队友/俱乐部，改为让排行榜战队、对手、媒体发帖——世界不会因为一个新人的缺席而沉默',
-    '- 内容贴合近期战绩或 CS2 赛季氛围，口语化，可加 emoji，每条 20-55 字',
-    '- 对手/媒体的帖子可以与主角无关，只反映 CS 世界的日常（赛事、训练营、转会期、排位等）',
-    '- handle 格式：@英文小写昵称（不超过 15 字符）',
-    '- 禁止出现数值、属性名、游戏机制词汇',
+    '【角色池 —— 每次挑 5-6 个不同的人发帖】',
+    '',
+    ...rolePoolLines,
+    '',
+    '【规则】',
+    '- 生成 5-6 条，每条来自不同 handle',
+    '- authorType 尽量多样，至少 1 条 star + 1 条 media/industry',
+    '- 口语化，带 emoji，20-55 字',
+    '- 可用 CS2 元素：地图(Inferno/Mirage/Nuke/Ancient/Anubis)、武器(AK/M4/AWP/沙鹰)、赛事(Major/IEM/BLAST)、梗(eco/clutch/手枪局/1vX)',
+    '- 俱乐部用第三人称/官宣口吻，选手用第一人称',
+    '- 禁止出现属性名、数值、游戏机制词（"成长"/"压力值"/"疲劳"）',
+    '- **绝对禁止** "A队""B队""某队""对手"等代称。战队名必须用【当前世界状态】中的具体名字（如 ' + topTeamA + '、' + topTeamB + '）。不知道就不提，只聊赛事/地图/个人感受。',
+    '',
+    '【发帖方向限制 —— 必须遵守】',
+    contentFocusInstruction,
+    '',
+    '【主角特质映射】',
+    `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}。社媒中只能间接体现；他人视角可能这样聊：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? '无特殊特质'}`,
     '',
     '严格输出 JSON 数组，不加任何其他内容：',
-    '[{"author":"...","authorType":"rival","handle":"@...","content":"..."}]',
+    '[{"author":"...","authorType":"star","handle":"@...","content":"..."}]',
   ].join('\n');
 }
 
@@ -149,7 +250,42 @@ export interface NarrativePromptInput {
   matchStats?: MatchStats; // present for tournament-* events, triggers match narrative mode
 }
 
-export function buildNarrativePrompt(input: NarrativePromptInput): string {
+export interface ShopNarrativeInput {
+  player: Player;
+  itemName: string;
+  baseNarrative: string;
+  positive?: boolean;
+}
+
+export function buildShopNarrativePrompt(
+  input: ShopNarrativeInput,
+  traitRules?: TraitNarrativeRule[],
+): string {
+  const { player, itemName, baseNarrative, positive } = input;
+  const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
+
+  return [
+    '你是 CS2 电竞小说的叙事引擎。请根据以下信息，为选手的商店购买行为写一段 1-2 句的中文叙事。',
+    '全程使用第二人称"你"，禁止出现"他""她"或选手姓名作主语。',
+    '',
+    `选手：${player.name}，阶段：${stageLabel}`,
+    `商品：${itemName}`,
+    `购买结果：${positive ? '顺利获得' : '遇到意外'}`,
+    `原始描述：${baseNarrative}`,
+    '',
+    '【人物特质上下文】',
+    `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}`).join('\n') ?? '无'}`,
+    '',
+    '要求：让叙事贴合选手的特质和当前情境，有画面感，冷静写实。',
+    '禁止出现数值、属性名或游戏机制词汇。',
+    '只输出叙事正文，不要解释，不要引号。',
+  ].join('\n');
+}
+
+export function buildNarrativePrompt(
+  input: NarrativePromptInput,
+  traitRules?: TraitNarrativeRule[],
+): string {
   const { player, baseNarrative, eventTitle, choiceLabel, success, customAction, matchStats } = input;
   const stageLabel = STAGE_LABELS[player.stage] ?? player.stage;
   const outcomeLabel = success ? '胜利' : '失败';
@@ -181,8 +317,11 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
       '- 不要照搬"赛前状态参考"原文，只借鉴情绪基调',
       '- 禁止出现"手感""tilt""心态"等游戏机制词汇，改用自然语言描写',
       '- 禁止出现具体数值（分数、KDA、Rating）——数字已在数据卡展示，叙事只写氛围和感受',
+      '【人物特质上下文】',
+      `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}`).join('\n') ?? '无'}`,
+      '要求：让主角的反应贴合其特质内核，但不要写成心理分析报告。',
       '只输出叙事正文，不要解释，不要引号。',
-    ].join('\n');
+  ].join('\n');
   }
 
   // ── 自定义行动：完全重写叙事 ────────────────────────────────────
@@ -202,8 +341,11 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
       '- 结果方向不可更改：成功就是成功，失败就是失败',
       '- 输出 1-3 句中文叙事，口吻冷静写实，有画面感',
       '- 禁止出现属性名、数值、游戏机制词汇',
+      '【人物特质上下文】',
+      `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}`).join('\n') ?? '无'}`,
+      '要求：让主角的反应贴合其特质内核，但不要写成心理分析报告。',
       '只输出叙事正文，不要解释，不要引号。',
-    ].join('\n');
+  ].join('\n');
   }
 
   // ── 普通事件：风格润色 ───────────────────────────────────────────
@@ -216,6 +358,9 @@ export function buildNarrativePrompt(input: NarrativePromptInput): string {
     `选择：${choiceLabel}`,
     `结果：${outcomeLabel}`,
     `原始描述：${baseNarrative}`,
+    '【人物特质上下文】',
+    `${traitRules?.map(rule => `- ${rule.traitId}：${rule.emotionalCore}`).join('\n') ?? '无'}`,
+    '要求：让主角的反应贴合其特质内核，但不要写成心理分析报告。',
   ].join('\n');
 }
 
@@ -223,9 +368,10 @@ export function buildIntroPrompt(
   player: Player,
   traits: Trait[],
   background: Background,
+  traitRules?: TraitNarrativeRule[],
 ): string {
   const traitDescs = traits
-    .map((t) => `${t.name}（${t.description}）`)
+    .map((t) => t.name)
     .join('、');
   return [
     `为以下 CS2 新人选手写一段 80-120 字的中文故事开头，有画面感、有情绪。`,
@@ -235,62 +381,18 @@ export function buildIntroPrompt(
     `选手名：${player.name}`,
     `出身背景：${background.name} —— ${background.description}`,
     `天赋特质：${traitDescs}`,
-    `只输出故事正文，不要标题，不要引号。`,
+    '【特质叙事指令】',
+    `${traitRules?.map(rule => `- ${rule.traitId}（${rule.emotionalCore}）：开局故事中让主角的第一次亮相就带有这种特质的影子。例如行为模式：${rule.behaviorPatterns.slice(0, 2).join('、')}`).join('\n') ?? ''}`,
+    `只输出故事正文，不要标题，不要引号。控制在80-120字之间，确保句子完整。`,
   ].join('\n');
 }
-
-export interface PersonalizedEvent {
-  narrative: string;
-  choices: Array<{ id: string; description: string }>;
-}
-
-export function buildPersonalizePrompt(
-  player: Player,
-  traits: Trait[],
-  event: GameEventPublic,
-): string {
-  const traitNames = traits.map((t) => t.name).join('、');
-  const feel = player.volatile?.feel ?? 0;
-  const feelLabel = feel >= 2 ? '手感火热' : feel <= -2 ? '手感冰冷' : '手感正常';
-  const stressLabel = player.stress >= 80 ? '压力极大' : player.stress >= 50 ? '压力偏高' : '压力正常';
-
-  const choicesJson = JSON.stringify(
-    event.choices.map((c) => ({ id: c.id, label: c.label, description: c.description })),
-    null,
-    2,
-  );
-
-  return [
-    '根据选手当前状态，把下面事件的 narrative 和每个选项的 description 改得更有个人色彩。',
-    '规则：全程使用第二人称"你"，禁止出现"我""他""她"或选手姓名作主语。禁止改变选项数量、选项 id、选项 label、事件类型或任何游戏机制含义。只改措辞和细节。',
-    `选手：${player.name}，阶段：${STAGE_LABELS[player.stage] ?? player.stage}`,
-    `特质：${traitNames || '无'}`,
-    `当前状态：${stressLabel}，名气 ${player.fame}，${feelLabel}`,
-    `事件 narrative：${JSON.stringify(event.narrative)}`,
-    `选项：\n${choicesJson}`,
-    '严格输出 JSON，格式：{"narrative":"...","choices":[{"id":"...","description":"..."}]}',
-  ].join('\n');
-}
-
-const ENDING_LABELS: Record<string, string> = {
-  legend: '传奇退役',
-  champion: '冠军荣耀',
-  retired_on_top: '巅峰退役',
-  quiet_exit: '悄然离场',
-  stress_breakdown: '心态崩溃，被迫退出',
-  injury_ended_career: '伤病终结生涯',
-  career_ended: '生涯提前结束',
-  'free-agent-legend': '自由人传奇',
-  'loyal-veteran': '忠诚老将',
-};
 
 export function buildSummaryPrompt(
   player: Player,
   history: RoundResult[],
   ending?: string,
 ): string {
-  const wins = history.filter((r) => r.success).length;
-  const endingLabel = ending ? (ENDING_LABELS[ending] ?? ending) : '未知';
+  const facts = careerSummaryFacts(player, history);
   const highlights = history
     .filter((r) => r.success && (r.fameChange > 0 || r.eventType === 'match'))
     .slice(-3)
@@ -299,11 +401,17 @@ export function buildSummaryPrompt(
   return [
     `为 CS2 职业选手 ${player.name} 写一段 80 字以内的生涯结语，语气像体育解说员盖棺定论。`,
     `生涯阶段：${STAGE_LABELS[player.stage] ?? player.stage}`,
-    `总回合数：${history.length}，胜利：${wins}，失败：${history.length - wins}`,
+    `总回合数：${facts.rounds}`,
+    facts.eventCount
+      ? `非比赛事件：成功 ${facts.eventSuccesses} / ${facts.eventCount}，事件成功率：${facts.eventSuccessRate}%`
+      : '尚无事件记录',
+    facts.matchCount
+      ? `比赛（完整场次/系列赛）：${facts.matchWins} 胜 ${facts.matchLosses} 负，胜率 ${facts.matchWinRate}%`
+      : '暂无已完成的比赛，不得描述比赛胜率',
     `名气：${player.fame}，压力峰值经历：${player.stressMaxRounds > 0 ? '有过崩溃边缘' : '心态稳定'}`,
-    `结局：${endingLabel}`,
+    `结局：${formatEnding(ending)}`,
     highlights.length > 0 ? `代表性高光：\n${highlights.join('\n')}` : '',
-    '只输出结语正文，不要标题，不要引号，禁止编造未提及的事件。',
+    '只输出结语正文，不要标题，不要引号，禁止编造未提及的事件；事件成功率不是比赛胜率，不能混用。',
   ]
     .filter(Boolean)
     .join('\n');

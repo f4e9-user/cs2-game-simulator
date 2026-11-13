@@ -15,6 +15,8 @@ export type Stage =
   | 'pro'
   | 'retired';
 
+export type CareerCompetitiveStage = Exclude<Stage, 'retired'>;
+
 export type EventType =
   | 'training'
   | 'ranked'
@@ -27,7 +29,21 @@ export type EventType =
   | 'betting'
   | 'cheat'
   | 'rest'
+  | 'stress'
+  | 'rival'
+  | 'broadcast'
+  | 'daily'
+  | 'chains'
+  | 'skins'
+  | 'agent'
   | 'routine';
+
+export interface RoundCombo {
+  id: string;
+  label: string;
+  sourceActionId: string;
+  remainingUses: number;
+}
 
 export interface Trait {
   id: string;
@@ -43,11 +59,14 @@ export interface Background {
   description: string;
   startStage: Stage;
   statBias: Partial<Stats>;
+  originRegion?: string;
   tags: string[];
 }
 
 // ── 战队/经济相关类型 ──────────────────────────────────────────
 export type ClubTier = 'youth' | 'semi-pro' | 'pro' | 'top';
+export type ClubOriginPreference = 'local-core' | 'regional-core' | 'international-open';
+export type ClubOriginFit = 'match' | 'regional' | 'mismatch' | 'open';
 
 export interface PlayerTeam {
   clubId: string;
@@ -57,6 +76,23 @@ export interface PlayerTeam {
   tier: ClubTier;
   monthlySalary: number;
   joinedRound: number;
+  teamStatus?: 'starter' | 'trial' | 'rotation';
+  teamStatusUntilRound?: number;
+  joinMode?: PlayerJoinMode;
+  joinReason?: string;
+  roleOverlap?: RoleOverlap[];
+}
+
+export type RoundTeamSnapshot = Pick<PlayerTeam, 'clubId' | 'name' | 'tag' | 'region' | 'tier'>;
+
+export type PlayerJoinMode = 'replace-starter' | 'fill-vacancy' | 'trial-sixth' | 'rotation';
+
+export interface RoleOverlap {
+  kind: 'identity' | 'role';
+  value: TeamIdentity | TeammateRole;
+  teammateId?: string;
+  teammateName?: string;
+  severity: 'low' | 'medium' | 'high';
 }
 
 export interface PendingApplication {
@@ -64,6 +100,12 @@ export interface PendingApplication {
   clubName: string;
   appliedRound: number;
   responseRound: number;
+  originRegion?: string;
+  originPreference?: ClubOriginPreference;
+  originFit?: ClubOriginFit;
+  originFitBonus?: number;
+  exceptionBonus?: number;
+  exceptionReasons?: string[];
 }
 
 export interface TeamOffer {
@@ -79,6 +121,7 @@ export type ForcedMatchResult = 'win' | 'loss';
 
 export interface Loan {
   id: string;
+  source?: 'bank' | 'friend';
   principal: number;
   interestRate: number;
   remainingPrincipal: number;
@@ -88,12 +131,31 @@ export interface Loan {
   defaulted: boolean;
 }
 
+export interface PendingFamilyCrisis {
+  amountNeeded: number;
+  deadlineRound: number;
+}
+
 export interface SalaryTracker {
   lastPayRound: number;
   joinedRound: number;
   payCycle: number;
   originalMonthlySalary?: number;
   salaryRestoreRound?: number;
+}
+
+export interface CareerPeaks {
+  highestStage: CareerCompetitiveStage;
+  peakFame: number;
+  peakStress: number;
+  lowestConstitution: number;
+}
+
+export interface TeamCareer {
+  longestTeamName?: string;
+  longestTeamTag?: string;
+  longestTeamTier?: ClubTier;
+  longestTeamRounds: number;
 }
 
 // Dynamic state that is NOT part of the 6-stat allocation.
@@ -120,6 +182,12 @@ export interface DynamicState {
   bailoutCooldown: number;
   teamBailoutCooldown: number;
   consecutiveBrokeRounds: number;
+  creditScore: number;
+  familyBailoutCount: number;
+  pendingFamilyCrisis?: PendingFamilyCrisis;
+  roundCombos: RoundCombo[];
+  careerPeaks?: CareerPeaks;
+  teamCareer?: TeamCareer;
 }
 
 // A tournament the player has signed up for. Resolves when (year, month) match.
@@ -136,6 +204,19 @@ export interface PendingMatch {
   resolveWeek: number;
   // For multi-stage tournaments: the current stage index within Tournament.stages.
   stageIndex: number;
+  stageLosses?: number;
+  opponent?: PendingMatchOpponent;
+}
+
+export interface PendingMatchOpponent {
+  clubId: string;
+  name: string;
+  tag: string;
+  region: string;
+  tier: ClubTier;
+  vrsScore: number;
+  power: number;
+  form: number;
 }
 
 // Rival teams generated at session creation. Used in event narratives.
@@ -146,6 +227,48 @@ export interface Rival {
 }
 
 export type TeammateRole = 'IGL' | 'AWPer' | 'Entry' | 'Support' | 'Lurker';
+
+export type TeamIdentity =
+  | 'caller'
+  | 'star'
+  | 'veteran'
+  | 'rookie'
+  | 'glue'
+  | 'problem';
+
+export type VisiblePlayerTeamIdentity = TeamIdentity | 'star-caller';
+
+export interface TeamIdentityTarget {
+  type: 'player' | 'teammate';
+  id: string;
+  label: string;
+  score: number;
+  reasons: string[];
+  identities: TeamIdentity[];
+}
+
+export interface TeamIdentityScoreDebug {
+  identity: TeamIdentity;
+  score: number;
+  reasons: string[];
+}
+
+export interface TeamIdentityDebug {
+  player: {
+    visibleIdentity?: VisiblePlayerTeamIdentity;
+    sinceRound?: number;
+    scores: TeamIdentityScoreDebug[];
+  };
+  teammates: Array<{
+    id: string;
+    name: string;
+    visibleIdentity?: TeamIdentity;
+    sinceRound?: number;
+    scores: TeamIdentityScoreDebug[];
+  }>;
+  caller: TeamIdentityTarget | null;
+  star: TeamIdentityTarget | null;
+}
 
 export type PersonalityTag =
   | 'strict'
@@ -175,17 +298,22 @@ export interface Teammate {
   traits: string[];
   stats: TeammateStats;
   growthSpent: number;
+  chemistry?: number;
+  visibleIdentity?: TeamIdentity;
+  identitySinceRound?: number;
   injuryRisk: number;
   retired: boolean;
 }
 
 // Leaderboard entry for the global ranking. Player's team has isPlayer=true.
 export interface LeaderboardTeam {
+  clubId?: string;
   name: string;
   tag: string;
   region: string;
   points: number;
   isPlayer: boolean;
+  kind?: 'club' | 'rival' | 'free-agent';
 }
 
 export interface Player extends DynamicState {
@@ -193,6 +321,7 @@ export interface Player extends DynamicState {
   stats: Stats;
   traits: string[];
   backgroundId: string;
+  originRegion: string;
   stage: Stage;
   round: number;
   tags: string[];
@@ -217,13 +346,14 @@ export interface GameEvent {
   choices: Choice[];
 }
 
-export type StatDelta = Partial<Stats>;
+export type StatDelta = Partial<Omit<Stats, 'money'>>;
 
 export interface RoundResult {
   round: number;
   eventId: string;
   eventType: EventType;
   eventTitle: string;
+  teamSnapshot?: RoundTeamSnapshot;
   choiceId: string;
   choiceLabel: string;
   success: boolean;
@@ -244,6 +374,161 @@ export interface RoundResult {
 }
 
 export type SessionStatus = 'active' | 'ended';
+export type RoundPhase = 'action' | 'event';
+
+export interface WeeklyNewsItem {
+  id: string;
+  eventId: string;
+  type: EventType;
+  title: string;
+  narrative: string;
+  report?: Record<string, unknown>;
+  source?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export type EventSequenceType =
+  | 'test-sequence'
+  | 'tournament-series'
+  | 'club-interview'
+  | 'team-onboarding'
+  | 'family-crisis'
+  | 'team-conflict'
+  | 'tournament-context'
+  | 'custom';
+
+export interface EventSequenceStep {
+  id: string;
+  eventId?: string;
+  dynamicEventKind?: string;
+  generatedEvent?: Record<string, unknown>;
+  completeSequenceAfter?: boolean;
+  optional?: boolean;
+  skipIf?: Record<string, unknown>;
+}
+
+export interface EventSequence {
+  id: string;
+  type: EventSequenceType;
+  currentIndex: number;
+  steps: EventSequenceStep[];
+  startedRound: number;
+  mustCompleteInCurrentRound: boolean;
+  status: 'active' | 'completed' | 'cancelled';
+  context: Record<string, unknown>;
+  cancelReason?: string;
+}
+
+export interface RoundTheme {
+  type: EventType;
+  group: string;
+  tags: string[];
+}
+
+export interface RoundPlan {
+  archetype: string;
+  theme?: RoundTheme;
+  tone?: string;
+  targetCount: number;
+  servedCount: number;
+  servedEventIds: string[];
+  hardDecisionCap: number;
+  servedHardDecisions: number;
+}
+
+export type TournamentInstanceStatus = 'registered' | 'locked' | 'drawn' | 'in-progress' | 'completed';
+
+export interface TournamentPlayerPerformance {
+  playerId: string;
+  playerName?: string;
+  clubId: string;
+  tournamentInstanceId: string;
+  rating: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  impact: number;
+  clutchScore?: number;
+}
+
+export interface TournamentTeamEntry {
+  clubId: string;
+  seed: number;
+  source: string;
+  groupId?: string;
+  eliminated?: boolean;
+  finalPlacement?: number;
+}
+
+export interface TournamentInstanceMatch {
+  id: string;
+  roundId: string;
+  teamAClubId: string;
+  teamBClubId: string;
+  winnerClubId?: string;
+  score?: string;
+  seriesType: 'bo1' | 'bo3' | 'bo5';
+  playerMatch?: boolean;
+  completed: boolean;
+  standoutPlayerIds?: string[];
+}
+
+export interface TournamentInstanceStage {
+  id: string;
+  name: string;
+  type: 'group' | 'swiss' | 'play-in' | 'quarterfinal' | 'semifinal' | 'final';
+  seriesType?: 'bo1' | 'bo3' | 'bo5';
+  matches: TournamentInstanceMatch[];
+}
+
+export interface TournamentPlayerAward {
+  clubId: string;
+  playerId: string;
+  playerName: string;
+  award: string;
+  rating: number;
+}
+
+export interface TournamentAwards {
+  championClubId: string;
+  runnerUpClubId: string;
+  winnerMvp: TournamentPlayerAward;
+  loserMvp: TournamentPlayerAward;
+  bestPlayers: TournamentPlayerAward[];
+}
+
+export interface TournamentInstance {
+  id: string;
+  tournamentId: string;
+  season: number;
+  status: TournamentInstanceStatus;
+  teams: TournamentTeamEntry[];
+  stages: TournamentInstanceStage[];
+  playerTeamClubId?: string;
+  playerPath?: { stageIndex: number; opponentClubId: string }[];
+  teamRosters?: Record<string, Array<Record<string, unknown>>>;
+  performances?: TournamentPlayerPerformance[];
+  awards?: TournamentAwards;
+}
+
+export interface TournamentInstanceSummary {
+  id: string;
+  tournamentId: string;
+  season: number;
+  championClubId?: string;
+  runnerUpClubId?: string;
+  playerTeamClubId?: string;
+  playerFinalPlacement?: number;
+  awards?: TournamentAwards;
+}
+
+export interface CareerInsight {
+  snapshot?: Record<string, unknown>;
+  milestones?: Array<Record<string, unknown>>;
+  warnings?: Array<Record<string, unknown>>;
+  recommendations?: Array<Record<string, unknown>>;
+  seasonGoal?: Record<string, unknown>;
+}
 
 export interface PromotionCheck {
   canPromote: boolean;
@@ -254,7 +539,12 @@ export interface PromotionCheck {
 export interface GameSession {
   id: string;
   player: Player;
+  phase?: RoundPhase;
   currentEvent: GameEvent | null;
+  queuedEvents?: GameEvent[];
+  weeklyNews?: WeeklyNewsItem[];
+  roundPlan?: RoundPlan;
+  activeEventSequence?: EventSequence;
   history: RoundResult[];
   status: SessionStatus;
   ending?: string;
@@ -262,6 +552,9 @@ export interface GameSession {
   updatedAt: string;
   promotion?: PromotionCheck;
   leaderboard: LeaderboardTeam[];
+  activeTournamentInstance?: TournamentInstance | null;
+  tournamentHistory?: TournamentInstanceSummary[];
+  debugTeamIdentity?: TeamIdentityDebug;
 }
 
 export interface StartGameRequest {
@@ -274,8 +567,16 @@ export interface StartGameRequest {
 export interface StartGameResponse {
   sessionId: string;
   player: Player;
+  phase?: RoundPhase;
   currentEvent: GameEvent | null;
+  queuedEvents?: GameEvent[];
+  weeklyNews?: WeeklyNewsItem[];
+  roundPlan?: RoundPlan;
+  activeEventSequence?: EventSequence;
+  careerInsight?: CareerInsight;
   leaderboard: LeaderboardTeam[];
+  activeTournamentInstance?: TournamentInstance | null;
+  tournamentHistory?: TournamentInstanceSummary[];
 }
 
 export interface RollTraitsResponse {
@@ -289,9 +590,17 @@ export interface ChoiceRequest {
 export interface ChoiceResponse {
   result: RoundResult;
   player: Player;
+  phase: RoundPhase;
   currentEvent: GameEvent | null;
+  queuedEvents?: GameEvent[];
+  weeklyNews?: WeeklyNewsItem[];
+  roundPlan?: RoundPlan;
+  activeEventSequence?: EventSequence;
   status: SessionStatus;
   ending?: string;
   promotion?: PromotionCheck;
+  careerInsight?: CareerInsight;
   leaderboard?: LeaderboardTeam[];
+  activeTournamentInstance?: TournamentInstance | null;
+  tournamentHistory?: TournamentInstanceSummary[];
 }

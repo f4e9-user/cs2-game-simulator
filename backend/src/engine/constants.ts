@@ -9,14 +9,15 @@ export const STAT_KEYS: StatKey[] = [
   'constitution',
 ];
 
-// 核心属性 key（money 单独处理，不计入成长系统）
+// 核心成长属性 key（experience 是履历属性，money 单独处理）
 export const CORE_STAT_KEYS: StatKey[] = [
   'intelligence',
   'agility',
-  'experience',
   'mentality',
   'constitution',
 ];
+
+export const ALLOCATABLE_STAT_KEYS: StatKey[] = CORE_STAT_KEYS;
 
 export const STAT_LABELS: Record<StatKey, string> = {
   intelligence: '智力',
@@ -38,8 +39,8 @@ export const STAGE_ORDER: Stage[] = [
 export const STAGE_LABELS: Record<Stage, string> = {
   rookie: '路人新人',
   youth: '青训',
-  second: '二线队',
-  pro: '职业队',
+  second: '二线',
+  pro: '职业',
   retired: '退役',
 };
 
@@ -49,21 +50,69 @@ export const BASE_STATS: Stats = {
   experience: 0,
   money: 0,
   mentality: 0,
-  constitution: 3, // 基础体能底线：所有人都有基本的身体素质，不花属性点
+  constitution: 0, // 基础体能底线：所有人都有基本的身体素质，不花属性点
 };
 
-export const POINT_POOL = 12;
+export const POINT_POOL = 10;
+export const OPENING_STAT_INVEST_MAX = 8;
 export const PER_STAT_MAX = 12;
 export const STAT_MIN = 0;
 export const STAT_MAX = 20;
 export const MONEY_MAX = 999;
+export const ACTION_POINT_MAX = 100;
 
 // ── 成长系统 ──────────────────────────────────────────────────
-// 生涯总成长上限（money 不计入）
+// 生涯总成长上限（money 和 experience 不计入）
 export const GROWTH_CAP = 30;
+export const EXPERIENCE_SOFT_CAP = 20;
+export const CAREER_TIME_EXPERIENCE_RAW = 0.08;
 
 // 队友成长上限（低于玩家的 30，队友成长空间略小）
 export const TEAMMATE_GROWTH_CAP = 20;
+
+export const INSIGHT_RISK_THRESHOLDS = {
+  highStress: 85,
+  mediumStress: 65,
+  fatigueWarning: 70,
+  fatigueDanger: 90,
+  lowMoney: 5,
+  lowTeamTrust: 25,
+  lossStreak: 2,
+  lowActionPoints: 30,
+} as const;
+
+export const INJURY_RISK_THRESHOLDS = {
+  clearFatigue: 45,
+  fatigueWarning: 70,
+  fatigueHigh: 82,
+  constitutionLow: 4,
+  constitutionWarning: 6,
+  matchLoadBonus: 10,
+  mediumStrain: 84,
+  highStrain: 96,
+  constitutionBias: [
+    { max: 2, bias: 20 },
+    { max: 4, bias: 15 },
+    { max: 6, bias: 10 },
+    { max: 8, bias: 5 },
+  ],
+} as const;
+
+export const RULES_META = {
+  pointPool: POINT_POOL,
+  openingStatInvestMax: OPENING_STAT_INVEST_MAX,
+  perStatMax: PER_STAT_MAX,
+  statMax: STAT_MAX,
+  actionPointMax: ACTION_POINT_MAX,
+  growthCap: GROWTH_CAP,
+  teammateGrowthCap: TEAMMATE_GROWTH_CAP,
+  coreGrowthStats: CORE_STAT_KEYS,
+  insightRisk: INSIGHT_RISK_THRESHOLDS,
+  injuryRisk: {
+    forcedRestFatigueThreshold: INJURY_RISK_THRESHOLDS.fatigueHigh,
+    lowConstitutionThreshold: INJURY_RISK_THRESHOLDS.constitutionLow,
+  },
+} as const;
 
 // 成长曲线：属性越高，成长越慢
 export function growthFactor(level: number): number {
@@ -121,11 +170,8 @@ export function passiveStressFromMentality(mentality: number): number {
 export const FATIGUE_STRESS_THRESHOLD = 70;
 export const FATIGUE_STRESS_MULTIPLIER = 1.4;
 
-// 失败时没有显式 stressDelta 的默认压力增量（提高至 12）
+// 失败时没有显式压力变化的默认压力增量。
 export const IMPLICIT_FAILURE_STRESS = 12;
-
-// 旧版事件 stressDelta 的倍率（旧版基于 0-20 scale，×5 映射到 0-100）
-export const STRESS_SCALE = 5;
 
 // 破产时心态减损
 export const BROKE_MENTALITY_DRAIN = 1;
@@ -141,6 +187,15 @@ export function fatigueMult(constitution: number): number {
 // 正向疲劳增量下限
 export const FATIGUE_DELTA_FLOOR_ROUTINE = 5; // 日常行动
 export const FATIGUE_DELTA_FLOOR_EVENT   = 2; // 随机事件
+export const FATIGUE_DELTA_FLOOR_MATCH   = 8; // 正式比赛
+
+// 系列赛（Bo3/Bo5）逐图疲劳折扣：单图不是一场独立比赛的消耗，
+// 配合中场休息的回血，避免一个系列赛直接把疲劳焊死在 100。
+export const SERIES_MAP_FATIGUE_SCALE = 0.6;
+
+// 强制休养期间每回合保底疲劳恢复：无论是否触发休养事件，
+// 强制休养都必须是净恢复，避免「休养却不掉疲劳」的空转。
+export const FORCED_REST_RECOVERY = 18;
 
 // 心态对压力增量的梯度乘数（仅作用于正值）
 export function stressMult(mentality: number): number {

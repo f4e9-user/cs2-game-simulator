@@ -4,6 +4,12 @@ import type {
   ClubTier,
   EventDef,
   Outcome,
+  CoreStatDelta,
+  EffectDelta,
+  ProgressionDelta,
+  ResourceDelta,
+  StateDelta,
+  TagDelta,
   Player,
   Stage,
   StatDelta,
@@ -17,6 +23,7 @@ import {
   DAILY_GROWTH_MAX,
   DAILY_GROWTH_MIN,
   EVENT_EXP_GROWTH_PER_DELTA,
+  EXPERIENCE_SOFT_CAP,
   FEEL_MAX,
   FEEL_MIN,
   FATIGUE_MAX,
@@ -31,6 +38,62 @@ import {
   TILT_MIN,
   growthFactor,
 } from './constants.js';
+import { scaleGrowthByAge } from './age.js';
+import { applyMoneyDeltaToStats } from './money.js';
+
+export function outcomeCoreGrowth(outcome: Outcome): CoreStatDelta | undefined {
+  return outcome.coreGrowth;
+}
+
+export function outcomeStateDelta(outcome: Outcome): Required<StateDelta> {
+  return {
+    feel: outcome.stateDelta?.feel ?? 0,
+    tilt: outcome.stateDelta?.tilt ?? 0,
+    fatigue: outcome.stateDelta?.fatigue ?? 0,
+    stress: outcome.stateDelta?.stress ?? 0,
+  };
+}
+
+export function outcomeResourceDelta(outcome: Outcome): Required<ResourceDelta> {
+  return {
+    money: outcome.resourceDelta?.money ?? 0,
+    fame: outcome.resourceDelta?.fame ?? 0,
+    points: outcome.resourceDelta?.points ?? 0,
+    actionPoints: outcome.resourceDelta?.actionPoints ?? 0,
+  };
+}
+
+export function outcomeProgression(outcome: Outcome): ProgressionDelta {
+  return {
+    stageSet: outcome.progression?.stageSet,
+    stageDelta: outcome.progression?.stageDelta,
+    teamTierSet: outcome.progression?.teamTierSet,
+    injuryRestRounds: outcome.progression?.injuryRestRounds,
+    endRun: outcome.progression?.endRun,
+    endReason: outcome.progression?.endReason,
+  };
+}
+
+export function outcomeTags(outcome: Outcome): Required<TagDelta> {
+  return {
+    add: outcome.tags?.add ?? [],
+    remove: outcome.tags?.remove ?? [],
+    cooldowns: outcome.tags?.cooldowns ?? {},
+  };
+}
+
+export function outcomeEffects(outcome: Outcome): EffectDelta {
+  return {
+    buffAdd: outcome.effects?.buffAdd,
+    buffRemoveId: outcome.effects?.buffRemoveId,
+    teamTrustDelta: outcome.effects?.teamTrustDelta,
+    teamChemistryDelta: outcome.effects?.teamChemistryDelta,
+    targetTeammateChemistryDelta: outcome.effects?.targetTeammateChemistryDelta,
+    targetIdentity: outcome.effects?.targetIdentity,
+    opposingTargetTeammateChemistryDelta: outcome.effects?.opposingTargetTeammateChemistryDelta,
+    opposingTargetIdentity: outcome.effects?.opposingTargetIdentity,
+  };
+}
 
 export function clampStats(stats: Stats): Stats {
   const out = { ...stats };
@@ -45,6 +108,7 @@ export function clampStats(stats: Stats): Stats {
 export function applyDelta(stats: Stats, delta: StatDelta): Stats {
   const out = { ...stats };
   for (const k of STAT_KEYS) {
+    if (k === 'money') continue;
     const v = delta[k];
     if (typeof v === 'number') out[k] += v;
   }
@@ -85,25 +149,51 @@ export function applyGrowth(
   growthSpent: number,
   buffs: Buff[],
   actionTag: string,
+  age?: number,
 ): { stats: Stats; grown: number } {
   const remainingCap = Math.max(0, GROWTH_CAP - growthSpent);
   if (remainingCap <= 0 || !CORE_STAT_KEYS.includes(growthKey)) {
     return { stats, grown: 0 };
   }
+  const coreGrowthKey = growthKey as Exclude<StatKey, 'money'>;
 
   // 应用 buff 倍率
   const multiplier = buffs
     .filter((b) => (b.actionTag === 'all' || b.actionTag === actionTag) && (!b.growthKey || b.growthKey === growthKey))
-    .reduce((acc, b) => acc * b.multiplier, 1);
+    .reduce((acc, b) => acc * (b.growthMultiplier ?? b.multiplier ?? 1), 1);
 
   const current = stats[growthKey];
   const factor = growthFactor(current);
-  const applied = Math.min(rawAmount * factor * multiplier, remainingCap, STAT_MAX - current);
+  const ageScaledRawAmount = typeof age === 'number' ? scaleGrowthByAge(coreGrowthKey, rawAmount, age) : rawAmount;
+  const applied = Math.min(ageScaledRawAmount * factor * multiplier, remainingCap, STAT_MAX - current);
   if (applied <= 0) return { stats, grown: 0 };
 
   const newStats = { ...stats };
   newStats[growthKey] = Math.round((current + applied) * 1000) / 1000; // preserve fraction
   return { stats: clampStats(newStats), grown: applied };
+}
+
+export function applyCareerExperienceGrowth(
+  stats: Stats,
+  rawAmount: number,
+  age?: number,
+): { stats: Stats; grown: number } {
+  if (rawAmount <= 0) return { stats, grown: 0 };
+  const ageScaledRawAmount = typeof age === 'number' ? scaleGrowthByAge('experience', rawAmount, age) : rawAmount;
+  const current = stats.experience ?? 0;
+  const factor =
+    current < 5 ? 1 :
+    current < 10 ? 0.75 :
+    current < 15 ? 0.45 :
+    current < EXPERIENCE_SOFT_CAP ? 0.25 :
+    0.1;
+  const applied = Math.min(ageScaledRawAmount * factor, STAT_MAX - current);
+  if (applied <= 0) return { stats, grown: 0 };
+  const next = {
+    ...stats,
+    experience: Math.round((current + applied) * 1000) / 1000,
+  };
+  return { stats: clampStats(next), grown: applied };
 }
 
 // ── 旧版 statDelta → 状态效果转译 ────────────────────────────
@@ -114,7 +204,6 @@ export interface TranslatedDelta {
   feelDelta: number;
   tiltDelta: number;
   fatigueDelta: number;
-  moneyDelta: number;
   expGrowth: number; // 极小的 experience 核心成长（需再过成长因子+上限）
 }
 
@@ -122,7 +211,6 @@ export function translateStatDelta(delta: StatDelta): TranslatedDelta {
   let feelDelta = 0;
   let tiltDelta = 0;
   let fatigueDelta = 0;
-  let moneyDelta = 0;
   let expGrowth = 0;
 
   for (const [k, v] of Object.entries(delta) as [StatKey, number][]) {
@@ -150,13 +238,10 @@ export function translateStatDelta(delta: StatDelta): TranslatedDelta {
         // 体能负向 → 疲劳增加；正向 → 疲劳轻微恢复
         fatigueDelta += v < 0 ? Math.abs(v) * 8 : -(v * 4);
         break;
-      case 'money':
-        moneyDelta += v;
-        break;
     }
   }
 
-  return { feelDelta, tiltDelta, fatigueDelta, moneyDelta, expGrowth };
+  return { feelDelta, tiltDelta, fatigueDelta, expGrowth };
 }
 
 // ── Trait modifier 计算 ───────────────────────────────────────
@@ -304,15 +389,26 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
   const chosenOutcome = success ? choice.success : choice.failure;
 
   // ── 状态变化 ──
-  let feelDelta = chosenOutcome.feelDelta ?? 0;
-  let tiltDelta = chosenOutcome.tiltDelta ?? 0;
-  let fatigueDelta = chosenOutcome.fatigueDelta ?? 0;
-  let moneyDelta = chosenOutcome.moneyDelta ?? 0;
+  const stateDelta = outcomeStateDelta(chosenOutcome);
+  let feelDelta = stateDelta.feel;
+  let tiltDelta = stateDelta.tilt;
+  let fatigueDelta = stateDelta.fatigue;
+  const coreGrowth = outcomeCoreGrowth(chosenOutcome);
+  const translatedStatChanges = coreGrowth
+    ? translateStatDelta(coreGrowth)
+    : null;
+  if (translatedStatChanges) {
+    feelDelta += translatedStatChanges.feelDelta;
+    tiltDelta += translatedStatChanges.tiltDelta;
+    fatigueDelta += translatedStatChanges.fatigueDelta;
+  }
+  const resourceDelta = outcomeResourceDelta(chosenOutcome);
+  let moneyDelta = resourceDelta.money;
 
   // ── 核心成长 ──
   let nextStats = { ...player.stats };
-  // money 变化直接写入 stats.money（保持兼容）
-  nextStats.money = Math.max(0, Math.min(MONEY_MAX, nextStats.money + moneyDelta));
+  // money 变化直接写入 stats.money
+  nextStats = applyMoneyDeltaToStats(nextStats, moneyDelta);
 
   let growthApplied = 0;
   let growthKey: StatKey | undefined;
@@ -327,6 +423,7 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
       player.growthSpent,
       player.buffs,
       event.type,
+      player.age,
     );
     nextStats = result.stats;
     growthApplied = result.grown;
@@ -336,15 +433,17 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
   nextStats = clampStats(nextStats);
 
   // ── Stage 变化 ──
+  const progression = outcomeProgression(chosenOutcome);
   let stageAfter = player.stage;
-  if (chosenOutcome.stageSet) {
-    stageAfter = chosenOutcome.stageSet;
-  } else if (chosenOutcome.stageDelta) {
-    stageAfter = stageFromIndex(stageIndex(player.stage) + chosenOutcome.stageDelta);
+  if (progression.stageSet) {
+    stageAfter = progression.stageSet;
+  } else if (progression.stageDelta) {
+    stageAfter = stageFromIndex(stageIndex(player.stage) + progression.stageDelta);
   }
 
-  const tagsAdded = chosenOutcome.tagAdds ?? [];
-  const tagsRemoved = chosenOutcome.tagRemoves ?? [];
+  const tagDelta = outcomeTags(chosenOutcome);
+  const tagsAdded = tagDelta.add;
+  const tagsRemoved = tagDelta.remove;
 
   return {
     success,
@@ -355,11 +454,11 @@ export function resolveChoice(input: ResolveInput): ResolveResult {
     chosenOutcome,
     nextStats,
     stageAfter,
-    teamTierSet: chosenOutcome.teamTierSet,
+    teamTierSet: progression.teamTierSet,
     tagsAdded,
     tagsRemoved,
-    endRun: Boolean(chosenOutcome.endRun),
-    endReason: chosenOutcome.endReason,
+    endRun: Boolean(progression.endRun),
+    endReason: progression.endReason,
     feelDelta,
     tiltDelta,
     fatigueDelta,
