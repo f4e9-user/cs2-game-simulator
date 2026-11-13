@@ -1,4 +1,5 @@
 import type { GameSession, SessionSummary } from '../types.js';
+import { ensurePlayerTournamentEntry } from '../engine/tournamentInstance.js';
 
 // Migrate legacy session data after loading from storage.
 // Handles schema changes that would otherwise silently produce undefined/NaN.
@@ -64,7 +65,7 @@ function migrateSession(session: GameSession): GameSession {
     session.worldClubsVersion = undefined;
   }
 
-  return session;
+  return ensurePlayerTournamentEntry(session);
 }
 
 export class SessionRepo {

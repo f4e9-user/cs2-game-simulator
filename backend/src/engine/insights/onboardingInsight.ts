@@ -29,7 +29,7 @@ export function buildOnboardingInsight(player: Player): OnboardingInsight | unde
     return {
       mode: 'early_game',
       title: '第三周：开始看赛事窗口',
-      message: '新人进入青训通常需要 C/B 级赛事经历和冠军记录。赛事窗口决定你什么时候能证明自己。',
+      message: '新人可直接申请青训。参加 C/B 级赛事和夺冠能提高申请评分，也能积累成长经验；留意赛事窗口，选择合适的机会。',
       checklist: ['查看未来赛事', '关注 B 级赛事', '为报名和比赛保留状态'],
       dismissible: true,
     };
@@ -48,8 +48,8 @@ export function buildOnboardingInsight(player: Player): OnboardingInsight | unde
   return {
     mode: 'stage_intro',
     title: '第五周：准备职业路径选择',
-    message: '当你打出足够赛事表现后，就可以把目标转向青训申请和长期战队路线。',
-    checklist: ['检查青训申请资格', '补足赛事冠军或 B 级参赛', '关注战队申请机会'],
+    message: '你可以直接向青训战队投递简历。俱乐部会综合赛事履历、特质和名气等因素评分，给出录取、试训或拒绝结果。',
+    checklist: ['查看目标青训队的名气要求', '保留 25 AP 投递简历', '投递后关注申请回应'],
     dismissible: true,
   };
 }

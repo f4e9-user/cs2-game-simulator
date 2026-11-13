@@ -9,6 +9,7 @@ import {
   getHousingTier,
 } from '../data/housing.js';
 import type { HomeAssetState, HomeAssetActionId, HomeFacilityId, HousingCityId, HousingTierId, Player } from '../types.js';
+import { housingMoveCost, housingWeeklyCost } from '../../../shared/housingPricing.js';
 import { applyMoneyTransaction } from './money.js';
 import { awayTournamentTravelContext, tournamentTravelEventTags, type TournamentTravelContext } from './travel.js';
 import { clampFatigue, clampStress } from './utils.js';
@@ -101,14 +102,14 @@ export function effectiveHousingCost(tierId: HousingTierId, cityId?: HousingCity
   const tier = getHousingTier(tierId);
   if (!tier) throw new Error(`unknown housing tier: ${tierId}`);
   const city = getHousingCityProfile(cityId);
-  return Math.max(0, Math.round(tier.weeklyCost * city.costMultiplier));
+  return housingWeeklyCost(tier, city);
 }
 
 export function effectiveMoveCost(tierId: HousingTierId, cityId?: HousingCityId): number {
   const tier = getHousingTier(tierId);
   if (!tier) throw new Error(`unknown housing tier: ${tierId}`);
   const city = getHousingCityProfile(cityId);
-  return Math.max(0, Math.round(tier.moveCost * city.costMultiplier));
+  return housingMoveCost(tier, city);
 }
 
 export function effectiveHousingEventWeightMultiplier(player: Player): number {
@@ -210,10 +211,17 @@ export function processLivingEconomy(
     } else if (travel && assets.rentalActive) {
       effects?.push('异地赛事：房产出租收入暂停');
     }
-    const mortgagePayment = assets.mortgagePrincipal ? Math.min(assets.mortgagePrincipal, 4) : 0;
+    const mortgagePrincipal = Math.max(0, assets.mortgagePrincipal ?? 0);
+    const mortgagePayment = Math.min(mortgagePrincipal, 4);
     if (mortgagePayment > 0) {
-      applyMoneyTransaction(player, -mortgagePayment);
-      effects?.push(`房产抵押还款 -${mortgagePayment}K`);
+      const paid = -applyMoneyTransaction(player, -mortgagePayment);
+      assets.mortgagePrincipal = Math.max(0, mortgagePrincipal - paid);
+      if (paid > 0) effects?.push(`房产抵押还款 -${paid}K`);
+      if (paid < mortgagePayment) {
+        effects?.push(`资金不足，房产抵押本周少还 ${mortgagePayment - paid}K，剩余本金 ${assets.mortgagePrincipal}K`);
+      } else if (assets.mortgagePrincipal === 0) {
+        effects?.push('房产抵押已还清');
+      }
     }
     const totalUpkeep = facilityUpkeep + renovationUpkeep;
     if (totalUpkeep > 0) {
@@ -274,6 +282,7 @@ export function applyHomeAssetAction(player: Player, actionId: HomeAssetActionId
   const assets = ensureHousingAssets(player) ?? defaultHomeAssets();
   const city = resolveCityProfile(player);
   const tierName = getHousingTier('owned-home')?.name ?? '自有房产';
+  const propertyValue = effectiveMoveCost('owned-home', resolveHousingCity(player));
 
   if (actionId === 'rent-out') {
     if (assets.rentalActive) return { success: false, message: '房产已经处于出租状态' };
@@ -291,7 +300,7 @@ export function applyHomeAssetAction(player: Player, actionId: HomeAssetActionId
 
   if (actionId === 'mortgage') {
     if ((assets.mortgagePrincipal ?? 0) > 0) return { success: false, message: '房产已经抵押' };
-    const mortgageValue = Math.max(30, Math.round(120 * city.propertyValueMultiplier * 0.5));
+    const mortgageValue = Math.max(30, Math.round(propertyValue * 0.5));
     assets.mortgagePrincipal = mortgageValue;
     applyMoneyTransaction(player, mortgageValue);
     player.housing = { ...player.housing, assets };
@@ -308,14 +317,25 @@ export function applyHomeAssetAction(player: Player, actionId: HomeAssetActionId
   }
 
   if (actionId === 'sell') {
-    const saleValue = Math.max(40, Math.round(120 * city.propertyValueMultiplier * 0.75) + (assets.renovationLevel * 8) + (assets.rentalActive ? 6 : 0));
-    applyMoneyTransaction(player, saleValue);
+    const saleValue = Math.max(40, Math.round(propertyValue * 0.75) + (assets.renovationLevel * 8) + (assets.rentalActive ? 6 : 0));
+    const mortgagePrincipal = Math.max(0, assets.mortgagePrincipal ?? 0);
+    const netProceeds = saleValue - mortgagePrincipal;
+    if (player.stats.money + netProceeds < 0) {
+      return { success: false, message: `资金不足，出售房产需补足 ${-netProceeds}K 以清偿抵押` };
+    }
+    // Settle the debt before applying the balance cap to the remaining proceeds.
+    const credited = applyMoneyTransaction(player, netProceeds);
     player.housing = {
       tier: 'basic-rental',
       movedAtRound: player.round ?? 0,
       cityId: player.housing.cityId ?? DEFAULT_HOUSING_CITY_ID,
     };
-    return { success: true, message: `已出售${tierName}，到账 +${saleValue}K`, player };
+    const balanceLimitNotice = credited < netProceeds ? '（受资金上限影响）' : '';
+    return {
+      success: true,
+      message: `已出售${tierName}，售价 ${saleValue}K，清偿抵押 ${mortgagePrincipal}K，净入账 ${credited >= 0 ? '+' : ''}${credited}K${balanceLimitNotice}`,
+      player,
+    };
   }
 
   return { success: false, message: '未知长期资产操作' };
@@ -362,11 +382,15 @@ export function applyHousingChange(player: Player, targetTierId: HousingTierId):
   if (!target) {
     return { success: false, message: '未知住宿档位' };
   }
-  if (player.stats.money < target.moveCost) {
-    return { success: false, message: `资金不足，搬家需要 ${target.moveCost}K` };
+  if (currentHousing.tier === 'owned-home' && (currentHousing.assets?.mortgagePrincipal ?? 0) > 0) {
+    return { success: false, message: '房产仍有未偿抵押，请先出售房产并清偿抵押后再搬家' };
+  }
+  const moveCost = effectiveMoveCost(targetTierId, currentHousing.cityId);
+  if (player.stats.money < moveCost) {
+    return { success: false, message: `资金不足，搬家需要 ${moveCost}K` };
   }
 
-  applyMoneyTransaction(player, -target.moveCost);
+  applyMoneyTransaction(player, -moveCost);
   player.housing = {
     tier: target.id,
     movedAtRound: player.round ?? 0,
@@ -376,7 +400,7 @@ export function applyHousingChange(player: Player, targetTierId: HousingTierId):
 
   return {
     success: true,
-    message: `已搬入${target.name}，搬家成本 -${target.moveCost}K`,
+    message: `已搬入${target.name}，搬家成本 -${moveCost}K`,
     player,
   };
 }

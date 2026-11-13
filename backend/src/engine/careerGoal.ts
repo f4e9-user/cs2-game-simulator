@@ -136,22 +136,14 @@ export function buildCareerGoal(player: Player, playerPoints = 0): CareerGoal {
   }
 
   if (player.stage === 'rookie') {
-    const rookieParticipations = sumTiers(player.tierParticipations ?? {}, ['c', 'b']);
-    const bParticipations = sumTiers(player.tierParticipations ?? {}, ['b']);
-    const rookieChampionships = sumTiers(player.tierChampionships ?? {}, ['c', 'b']);
-    const readyForYouthApplication = true;
-
     return {
       stage: player.stage,
       stageLabel: STAGE_LABELS[player.stage],
-      summary: '证明自己，申请青训战队。',
+      summary: '可直接申请青训战队，赛事履历和特质会影响申请评分。',
       teamHint: hint,
       nextStageLabel: STAGE_LABELS.youth,
       goals: [
-        progress('rookie-participations', 'C/B 级赛事参赛', rookieParticipations, 3),
-        progress('b-participations', 'B 级赛事参赛', bParticipations, 1),
-        progress('rookie-championships', 'C/B 级赛事冠军', rookieChampionships, 1),
-        progress('youth-application', '青训申请资格', readyForYouthApplication ? 1 : 0, 1),
+        progress('youth-application', '青训申请资格', 1, 1),
       ],
       opportunities: upcomingOpportunities(
         player,

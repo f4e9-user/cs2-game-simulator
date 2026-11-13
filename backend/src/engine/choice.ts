@@ -58,6 +58,7 @@ import {
 } from './tournamentProgress.js';
 import {
   completeTournamentInstance,
+  ensurePlayerTournamentEntry,
   recordPlayerMatchInInstance,
   summarizeTournamentInstance,
 } from './tournamentInstance.js';
@@ -320,6 +321,8 @@ function applyTournamentInstanceResultsToWorldClubs(
   const round = session.player.round ?? 0;
   const runtimeByClubId = { ...session.worldClubs.runtimeByClubId };
   for (const team of instance.teams) {
+    // A free-agent entry is a player registration, not a persistent world club.
+    if (!getClub(team.clubId)) continue;
     const result: 'win' | 'deep-run' | 'early-exit' =
       team.clubId === instance.awards.championClubId ? 'win' :
         team.clubId === instance.awards.runnerUpClubId || (team.finalPlacement ?? 99) <= 4 ? 'deep-run' :
@@ -900,6 +903,7 @@ export function applyChoice(
   aiEventCache?: AiEventCacheEnvelope,
 ): ApplyChoiceResult {
   if (session.status !== 'active') throw new Error('session is not active');
+  session = ensurePlayerTournamentEntry(session);
   const sessionPhase = session.currentEvent ? 'event' : (session.phase ?? 'action');
   if (sessionPhase !== 'event') throw new Error('not in event phase');
   if (!session.currentEvent) throw new Error('no pending event on this session');
@@ -1833,6 +1837,7 @@ export function applyChoice(
     result.seriesMapName = lastMap?.mapName;
   } else if (seriesContext && activeSequenceStep?.dynamicEventKind === 'tournament-series-decider') {
     result.seriesStepKind = 'final';
+    result.seriesScore = { player: seriesContext.playerMapWins, opponent: seriesContext.opponentMapWins };
     result.seriesMapCount = seriesContext.mapPool.length;
     result.seriesMaps = seriesContext.maps.map((map) => ({
       mapNumber: map.mapNumber,
@@ -1878,13 +1883,18 @@ export function applyChoice(
         leaderboard = addPlayerPoints(leaderboard, totalPoints);
       }
 
-      if (idx === 0) {
+      const resultPrefix = `tournament-${t.id}--`;
+      const participationRecorded = nextPlayer.pendingMatch.participationRecorded ?? session.history.some((past) =>
+        past.eventId.startsWith(resultPrefix) && /^\d+$/.test(past.eventId.slice(resultPrefix.length)));
+      if (!participationRecorded) {
         const tierPart = { ...(nextPlayer.tierParticipations ?? {}) };
-        tierPart[t.tier] = (tierPart[t.tier] ?? 0) + 1;
-        tierPart[t.progressionTier] = (tierPart[t.progressionTier] ?? 0) + 1;
+        for (const tier of dedupe([t.tier, t.progressionTier])) {
+          tierPart[tier] = (tierPart[tier] ?? 0) + 1;
+        }
         nextPlayer.tierParticipations = tierPart;
         nextPlayer.tournamentParticipations = (nextPlayer.tournamentParticipations ?? 0) + 1;
       }
+      nextPlayer.pendingMatch = { ...nextPlayer.pendingMatch, participationRecorded: true };
       if (outcome.success && t.qualificationMilestones?.length) {
         const matchedMilestones = t.qualificationMilestones.filter(
           (milestone) => milestone.stageIndex === idx && (milestone.requireWin ?? true),
@@ -1964,6 +1974,7 @@ export function applyChoice(
         outcome.success,
         result.matchStats,
         nextPlayer.name,
+        result.seriesScore,
       );
       if (!t || eliminated || isFinal) {
         const completed = completeTournamentInstance(activeTournamentInstance, outcome.success && isFinal);

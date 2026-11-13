@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { EndingPanel } from '@/components/EndingPanel';
 import { api } from '@/lib/api';
-import { ENDING_LABELS } from '@/lib/format';
+import { formatEnding } from '@/lib/format';
 import type { GameSession, Trait } from '@/lib/types';
 
 export default function GameSummaryPage() {
@@ -111,7 +111,7 @@ export default function GameSummaryPage() {
             <div style={{ fontSize: 12, color: 'var(--fg-3)', marginBottom: 6 }}>游戏结算</div>
             <h1 style={{ margin: 0, fontSize: 26, lineHeight: 1.2 }}>{session.player.name} 的生涯总结</h1>
             <div style={{ marginTop: 8, color: 'var(--fg-2)', fontSize: 13 }}>
-              {ENDING_LABELS[ending ?? ''] ?? ending ?? '结局未知'}
+              {formatEnding(ending)}
             </div>
           </div>
           <Link href="/" className="ghost-button">
@@ -121,7 +121,7 @@ export default function GameSummaryPage() {
 
         <section className="panel-shell">
           <div className="panel-shell-head">
-            <span className="panel-shell-title">LLM 结算</span>
+            <span className="panel-shell-title">生涯小结</span>
             <span className="panel-shell-subtitle">
               {summaryLoading ? '生成中…' : summary ? '已生成' : '未生成'}
             </span>
@@ -139,7 +139,7 @@ export default function GameSummaryPage() {
           {session.history.length > 8 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
               <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>
-                {showAllHistory ? `当前展示全部 ${totalCount} 回合` : `当前展示最近 ${visibleCount} / ${totalCount} 回合`}
+                {showAllHistory ? `当前展示全部 ${totalCount} 个事件` : `当前展示最近 ${visibleCount} / ${totalCount} 个事件`}
               </div>
               <button
                 type="button"
@@ -150,7 +150,7 @@ export default function GameSummaryPage() {
               </button>
             </div>
           )}
-          <EndingPanel player={session.player} traits={traits} ending={ending ?? undefined} history={visibleHistory} />
+          <EndingPanel player={session.player} traits={traits} ending={ending ?? undefined} history={visibleHistory} showAllHistory={showAllHistory} />
         </section>
       </div>
     </div>

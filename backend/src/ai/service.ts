@@ -1,4 +1,6 @@
 import type { Background, Env, EventDef, GameEventPublic, LeaderboardTeam, Player, RoundResult, Trait, WeeklyNewsItem } from '../types.js';
+import { formatEnding } from '../../../shared/endings.js';
+import { careerSummaryFacts } from './summary.js';
 import { LlmLogger } from './logger.js';
 import { fetchWithRetry } from './fetchWithRetry.js';
 import {
@@ -333,9 +335,14 @@ class TemplateNarrator implements AiService {
   }
 
   async summarize(player: Player, history: RoundResult[], ending?: string): Promise<string> {
-    const wins = history.filter((r) => r.success).length;
-    const total = history.length;
-    return `${player.name} 完成了 ${total} 轮生涯，胜率 ${total > 0 ? Math.round((wins / total) * 100) : 0}%。结局：${ending ?? '退役'}。`;
+    const facts = careerSummaryFacts(player, history);
+    const events = facts.eventCount
+      ? `事件成功率 ${facts.eventSuccessRate}%（${facts.eventSuccesses}/${facts.eventCount}）`
+      : '尚无事件记录';
+    const matches = facts.matchCount
+      ? `比赛 ${facts.matchWins} 胜 ${facts.matchLosses} 负，胜率 ${facts.matchWinRate}%（按完整场次/系列赛统计）`
+      : '暂无已完成的比赛';
+    return `${player.name} 完成了 ${facts.rounds} 回合生涯。${events}。${matches}。结局：${formatEnding(ending)}。`;
   }
 
   async intro(player: Player, _traits: Trait[], background: Background): Promise<string> {

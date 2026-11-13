@@ -11,7 +11,7 @@ const STAGE_LABELS: Record<Stage, string> = {
 };
 
 const STAGE_SUMMARIES: Record<Stage, string> = {
-  rookie: '你还没有进入俱乐部体系，当前重点是通过 C/B 级赛事证明自己。',
+  rookie: '你还没有进入俱乐部体系，可以直接向青训战队投递简历。',
   youth: '你已经进入青训体系，当前重点是用 B 级赛事表现争取二线机会。',
   second: '你已经进入二线阶段，当前重点是通过 A 级赛事证明职业价值。',
   pro: '你已经进入职业阶段，当前重点是冲击 S 级赛事、Major 和传奇评价。',
@@ -19,7 +19,7 @@ const STAGE_SUMMARIES: Record<Stage, string> = {
 };
 
 const STAGE_OBJECTIVES: Record<Stage, string> = {
-  rookie: '积累 C/B 级赛事经历并争取冠军，为申请青训战队做准备。',
+  rookie: '申请青训战队；赛事履历和特质能提高申请评分，但不是投递门槛。',
   youth: '积累 B 级赛事参赛和冠军记录，推动晋级二线。',
   second: '积累 A 级赛事参赛和冠军记录，推动晋级职业。',
   pro: '冲击 S 级赛事、Major、名气和高评价结局。',
@@ -104,11 +104,13 @@ export function buildProgressionMilestones(player: Player, playerPoints = 0): Mi
       ? goal.goals.map((item) => `${item.label} ${Math.min(item.current, item.target)}/${item.target}`).join('，')
       : goal.summary,
     missing,
-    nextStep: completed
-      ? '条件已满足，关注晋级、申请或荣誉结算事件。'
-      : goal.opportunities.length > 0
-        ? '优先查看未来 12 周的相关赛事窗口。'
-        : '先通过训练、天梯或战队行动补足当前短板。',
+    nextStep: goal.stage === 'rookie'
+      ? '在行动阶段前往战队市场，确认目标青训队的名气要求并保留 25 AP 投递简历。'
+      : completed
+        ? '条件已满足，关注晋级、申请或荣誉结算事件。'
+        : goal.opportunities.length > 0
+          ? '优先查看未来 12 周的相关赛事窗口。'
+          : '先通过训练、天梯或战队行动补足当前短板。',
   }];
 }
 

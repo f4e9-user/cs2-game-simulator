@@ -828,8 +828,8 @@ export default function GamePage() {
         </button>
       </nav>
 
-      {/* Team offer modal */}
-      {pendingOffer && (
+      {/* Wait until the server allows a response so the modal cannot block recovery. */}
+      {pendingOffer && isActionPhase && !isResting && !ended && (
         <TeamOfferModal
           offer={pendingOffer}
           onAccept={async () => {
@@ -879,6 +879,7 @@ export default function GamePage() {
 
       <LoanModal
         open={showLoan}
+        enabled={isActionPhase && !ended}
         onClose={() => setShowLoan(false)}
         sessionId={sessionId}
         player={player}

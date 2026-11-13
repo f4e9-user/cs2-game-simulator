@@ -1,6 +1,8 @@
 import type { Background, GameEventPublic, LeaderboardTeam, MatchStats, Player, RoundResult, Rival, Trait } from '../types.js';
 import { STAGE_LABELS } from '../engine/constants.js';
 import type { TraitNarrativeRule } from './narrativeConfig.js';
+import { formatEnding } from '../../../shared/endings.js';
+import { careerSummaryFacts } from './summary.js';
 
 // ── Social Feed ─────────────────────────────────────────────────────────────
 
@@ -385,25 +387,12 @@ export function buildIntroPrompt(
   ].join('\n');
 }
 
-const ENDING_LABELS: Record<string, string> = {
-  legend: '传奇退役',
-  champion: '冠军荣耀',
-  retired_on_top: '巅峰退役',
-  quiet_exit: '悄然离场',
-  stress_breakdown: '心态崩溃，被迫退出',
-  injury_ended_career: '伤病终结生涯',
-  career_ended: '生涯提前结束',
-  'free-agent-legend': '自由人传奇',
-  'loyal-veteran': '忠诚老将',
-};
-
 export function buildSummaryPrompt(
   player: Player,
   history: RoundResult[],
   ending?: string,
 ): string {
-  const wins = history.filter((r) => r.success).length;
-  const endingLabel = ending ? (ENDING_LABELS[ending] ?? ending) : '未知';
+  const facts = careerSummaryFacts(player, history);
   const highlights = history
     .filter((r) => r.success && (r.fameChange > 0 || r.eventType === 'match'))
     .slice(-3)
@@ -412,11 +401,17 @@ export function buildSummaryPrompt(
   return [
     `为 CS2 职业选手 ${player.name} 写一段 80 字以内的生涯结语，语气像体育解说员盖棺定论。`,
     `生涯阶段：${STAGE_LABELS[player.stage] ?? player.stage}`,
-    `总回合数：${history.length}，胜利：${wins}，失败：${history.length - wins}`,
+    `总回合数：${facts.rounds}`,
+    facts.eventCount
+      ? `非比赛事件：成功 ${facts.eventSuccesses} / ${facts.eventCount}，事件成功率：${facts.eventSuccessRate}%`
+      : '尚无事件记录',
+    facts.matchCount
+      ? `比赛（完整场次/系列赛）：${facts.matchWins} 胜 ${facts.matchLosses} 负，胜率 ${facts.matchWinRate}%`
+      : '暂无已完成的比赛，不得描述比赛胜率',
     `名气：${player.fame}，压力峰值经历：${player.stressMaxRounds > 0 ? '有过崩溃边缘' : '心态稳定'}`,
-    `结局：${endingLabel}`,
+    `结局：${formatEnding(ending)}`,
     highlights.length > 0 ? `代表性高光：\n${highlights.join('\n')}` : '',
-    '只输出结语正文，不要标题，不要引号，禁止编造未提及的事件。',
+    '只输出结语正文，不要标题，不要引号，禁止编造未提及的事件；事件成功率不是比赛胜率，不能混用。',
   ]
     .filter(Boolean)
     .join('\n');

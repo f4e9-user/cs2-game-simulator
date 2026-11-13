@@ -151,7 +151,7 @@ async function endCareerSession(storage: ReturnType<typeof makeStorage>, session
     weeklyNews: [],
     activeEventSequence: undefined,
     status: 'ended',
-    ending: checkEnding(finalized.player, true, 'career_ended'),
+    ending: checkEnding(finalized.player, true, 'voluntary_retirement'),
     updatedAt: nowIso(),
   };
 
@@ -878,7 +878,7 @@ app.post('/game/:sessionId/signup', async (c) => {
   }
 
   const initialStageIndex = tournamentInitialStageIndex(t, session.player.team?.tier ?? null);
-  const activeTournamentInstance = drawTournamentInstance(lockTournamentInstance(createTournamentInstance(session, t)));
+  const activeTournamentInstance = drawTournamentInstance(lockTournamentInstance(createTournamentInstance(session, t, { playerEntry: true })));
   session.activeTournamentInstance = activeTournamentInstance;
   const pendingMatch = {
     tournamentId: t.id,
@@ -894,6 +894,7 @@ app.post('/game/:sessionId/signup', async (c) => {
     resolveWeek,
     stageIndex: initialStageIndex,
     stageLosses: 0,
+    participationRecorded: false,
     tournamentInstanceId: activeTournamentInstance.id,
   };
   const opponentAssigned = assignPendingMatchOpponent(session, pendingMatch);

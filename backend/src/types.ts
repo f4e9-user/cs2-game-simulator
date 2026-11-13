@@ -112,6 +112,7 @@ export interface PendingMatch {
   resolveWeek: number;
   stageIndex: number;
   stageLosses?: number;
+  participationRecorded?: boolean;
   tournamentInstanceId?: string;
   opponent?: PendingMatchOpponent;
 }
@@ -543,6 +544,7 @@ export interface TournamentPlayerPerformance {
 
 export interface TournamentTeamEntry {
   clubId: string;
+  displayName?: string;
   seed: number;
   source: 'player' | 'vrs' | 'qualifier' | 'invite' | 'wildcard' | 'local' | 'regional';
   groupId?: string;
@@ -608,7 +610,9 @@ export interface TournamentInstanceSummary {
   championClubId?: string;
   runnerUpClubId?: string;
   playerTeamClubId?: string;
+  playerTeamName?: string;
   playerFinalPlacement?: number;
+  playerMatches?: TournamentInstanceMatch[];
   awards?: TournamentAwards;
 }
 

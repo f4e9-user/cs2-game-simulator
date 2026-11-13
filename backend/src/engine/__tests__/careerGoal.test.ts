@@ -73,7 +73,7 @@ function player(overrides: Partial<Player>): Player {
 }
 
 describe('buildCareerGoal', () => {
-  it('shows rookie proof goals and upcoming open events', () => {
+  it('offers rookie youth applications without requiring match history and keeps upcoming open events', () => {
     const goal = buildCareerGoal(player({
       stage: 'rookie',
       week: 6,
@@ -83,11 +83,10 @@ describe('buildCareerGoal', () => {
 
     expect(goal.stageLabel).toBe('路人新人');
     expect(goal.nextStageLabel).toBe('青训');
-    expect(goal.goals).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'rookie-participations', current: 1, target: 3, completed: false }),
-      expect.objectContaining({ id: 'b-participations', current: 1, target: 1, completed: true }),
-      expect.objectContaining({ id: 'rookie-championships', current: 0, target: 1, completed: false }),
-    ]));
+    expect(goal.goals).toEqual([
+      expect.objectContaining({ id: 'youth-application', current: 1, target: 1, completed: true }),
+    ]);
+    expect(goal.summary).toContain('赛事履历和特质会影响申请评分');
     expect(goal.opportunities[0]?.week).toBeGreaterThanOrEqual(6);
   });
 
@@ -99,9 +98,9 @@ describe('buildCareerGoal', () => {
       traits: [],
     }));
 
-    expect(goal.goals).toEqual(expect.arrayContaining([
+    expect(goal.goals).toEqual([
       expect.objectContaining({ id: 'youth-application', completed: true }),
-    ]));
+    ]);
   });
 
   it('uses tournament gates for youth and second stages', () => {

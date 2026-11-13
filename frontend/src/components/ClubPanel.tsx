@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
+import { clubCanApply } from '@/lib/clubApplication';
 import { useGameStore } from '@/store/gameStore';
 import type { ClubApplicationSummary, ClubTier, Player, Teammate } from '@/lib/types';
 
@@ -71,29 +72,6 @@ const STORYLINE_LABELS: Record<string, { label: string; detail: string }> = {
     detail: '队伍靠上一阶段的惊艳表现拿到更高舞台机会，后续验证压力会很大。',
   },
 };
-
-function rookieEligibility(player: Player): { eligible: boolean; path: 'open-match' | 'talent' | null; hint: string } {
-  const tp = player.tierParticipations ?? {};
-  const tc = player.tierChampionships ?? {};
-  const rookieParticipations = (tp['c'] ?? 0) + (tp['b'] ?? 0);
-  const bParticipations = tp['b'] ?? 0;
-  const rookieChampionships = (tc['c'] ?? 0) + (tc['b'] ?? 0);
-  const hasOpenMatch = rookieParticipations >= 3 && bParticipations >= 1 && rookieChampionships >= 1;
-  const hasTalentTrait = player.traits.some((id) => id === 'aim-god');
-
-  if (hasOpenMatch) return { eligible: true, path: 'open-match', hint: '✓ 赛事经历达标' };
-  if (hasTalentTrait) return { eligible: true, path: 'talent', hint: '✓ 枪法天才特质达标' };
-
-  const parts: string[] = [];
-  if (rookieParticipations < 3) parts.push(`C/B 级赛事参赛 ${rookieParticipations}/3 场`);
-  if (bParticipations < 1) parts.push(`B 级赛事参赛 ${bParticipations}/1 场`);
-  if (rookieChampionships < 1) parts.push(`C/B 级赛事冠军 ${rookieChampionships}/1 次`);
-  return {
-    eligible: false,
-    path: null,
-    hint: `未达标：${parts.join('，')}（或持有枪法天才特质）`,
-  };
-}
 
 function trustLabel(trust: number): { text: string; tone: 'good' | 'mid' | 'warn' | 'danger' } {
   if (trust >= 65) return { text: '高度信任', tone: 'good' };
@@ -181,21 +159,6 @@ function clubRecommendationScore(player: Player, club: ClubApplicationSummary): 
   return score;
 }
 
-function clubCanApply(player: Player, club: ClubApplicationSummary): { eligible: boolean; reason: string | null } {
-  const requiredIdx = ['rookie', 'youth', 'second', 'pro', 'retired'].indexOf(player.stage);
-  const clubRequiredIdx = ['rookie', 'youth', 'second', 'pro', 'retired'].indexOf(club.requiredStage as Player['stage']);
-  const rookieCanApplyToYouth =
-    player.stage === 'rookie' && club.requiredStage === 'youth' && rookieEligibility(player).eligible === true;
-
-  if (!rookieCanApplyToYouth && requiredIdx < clubRequiredIdx) {
-    return { eligible: false, reason: '阶段未达标' };
-  }
-  if (club.requiredFame !== undefined && (player.fame ?? 0) < club.requiredFame) {
-    return { eligible: false, reason: `名气需达到 ${club.requiredFame}` };
-  }
-  return { eligible: true, reason: null };
-}
-
 function marketSortKey(player: Player, club: ClubApplicationSummary, sort: MarketSort): number {
   switch (sort) {
     case 'salary-desc':
@@ -267,7 +230,6 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
       .catch(() => api.listClubs().then((res) => setClubs(res.clubs)).catch(() => {}));
   }, [sessionId]);
 
-  const rookieCheck = player.stage === 'rookie' ? rookieEligibility(player) : null;
   const ap = player.actionPoints ?? 0;
   const isResting = (player.restRounds ?? 0) > 0;
   const hasPendingMatch = player.pendingMatch !== null && player.pendingMatch !== undefined;
@@ -591,9 +553,9 @@ export function ClubPanel({ sessionId, player, enabled, onPlayerUpdate }: Props)
         ))}
       </div>
 
-      {rookieCheck && (
-        <div className={`market-hint ${rookieCheck.eligible ? 'good' : 'warn'}`}>
-          {rookieCheck.eligible ? `${rookieCheck.hint} — 可以投简历` : `入队门槛：${rookieCheck.hint}`}
+      {player.stage === 'rookie' && (
+        <div className="market-hint good">
+          新人可直接申请青训战队。赛事履历和特质影响申请评分，不是投递门槛；请留意各队名气要求并保留 25 AP。
         </div>
       )}
 

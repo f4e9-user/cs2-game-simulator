@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { useGameStore } from '@/store/gameStore';
 import type { HomeAssetActionId, HomeFacilityDefinition, HousingCityProfile, HousingTier, Player, ShopItem } from '@/lib/types';
 import { formatMoney } from '@/lib/format';
+import { housingMoveCost, housingWeeklyCost } from '../../../shared/housingPricing';
 import { ShopConfirmModal } from './ShopConfirmModal';
 import { ShopResultModal } from './ShopResultModal';
 import { PawnConfirmModal } from './PawnConfirmModal';
@@ -324,7 +325,8 @@ export function ShopPanel({
   });
   const currentHousingTierId = player.housing?.tier ?? 'shared-housing';
   const ownedHomeAssets = player.housing?.tier === 'owned-home' ? player.housing.assets : undefined;
-  const currentCity = cityProfiles.find((city) => city.id === (player.housing?.cityId ?? 'local-city'));
+  const currentCity = cityProfiles.find((city) => city.id === (player.housing?.cityId ?? 'local-city'))
+    ?? cityProfiles.find((city) => city.id === 'local-city');
   const facilityLevel = (facility: HomeFacilityDefinition): number => {
     if (!ownedHomeAssets) return 0;
     if (facility.id === 'training-room') return ownedHomeAssets.facilities.trainingRoom;
@@ -432,15 +434,17 @@ export function ShopPanel({
               <span> · 基础生活费 {formatMoney(weeklyLivingExpense)}/周{currentCity ? ` · ${currentCity.name}` : ''}</span>
             </div>
             {housingTiers.map((tier) => {
+              const moveCost = housingMoveCost(tier, currentCity);
+              const weeklyCost = housingWeeklyCost(tier, currentCity);
               const active = tier.id === currentHousingTierId;
-              const affordable = player.stats.money >= tier.moveCost;
+              const affordable = player.stats.money >= moveCost;
               const disabled = active || !enabled || busyId !== null || !affordable;
               const reason = active
                 ? '当前居住档位'
                 : !enabled
                 ? (disabledReason ?? '结算中，暂不可搬家')
                 : !affordable
-                ? `资金不足（搬家需 ${tier.moveCost}K）`
+                ? `资金不足（搬家需 ${moveCost}K）`
                 : undefined;
               return (
                 <div key={tier.id} className={`shop-item ${disabled ? 'disabled' : ''}`}>
@@ -448,7 +452,7 @@ export function ShopPanel({
                     <div className="shop-item-name">{tier.name}</div>
                     <div className="shop-item-desc">{tier.description}</div>
                     <div className="shop-item-desc">
-                      周支出 {formatMoney(tier.weeklyCost)} · 疲劳 -{tier.fatigueRecovery} · 压力 -{tier.stressRecovery}
+                      周支出 {formatMoney(weeklyCost)} · 疲劳 -{tier.fatigueRecovery} · 压力 -{tier.stressRecovery}
                     </div>
                     {reason && (
                       <div className="shop-item-reason">{reason}</div>
@@ -456,7 +460,7 @@ export function ShopPanel({
                   </div>
                   <div className="shop-item-right">
                     <div className="shop-item-price">
-                      {active ? '居住中' : `搬家 ${tier.moveCost}K`}
+                      {active ? '居住中' : `搬家 ${moveCost}K`}
                     </div>
                     <button
                       type="button"

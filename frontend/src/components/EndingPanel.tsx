@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Player, RoundResult, Trait } from '@/lib/types';
-import { ENDING_LABELS, STAGE_LABELS, STAT_LABELS, formatTag } from '@/lib/format';
+import { formatEnding, STAGE_LABELS, STAT_LABELS, formatTag } from '@/lib/format';
 import { buildCareerReview } from '@/lib/careerReview';
 
 const TIER_LABELS: Record<string, string> = {
@@ -42,9 +42,10 @@ interface Props {
   traits: Trait[];
   ending?: string;
   history?: RoundResult[];
+  showAllHistory?: boolean;
 }
 
-export function EndingPanel({ player, traits, ending, history }: Props) {
+export function EndingPanel({ player, traits, ending, history, showAllHistory = false }: Props) {
   const playerTraits = player.traits
     .map((id) => traits.find((t) => t.id === id))
     .filter((t): t is Trait => Boolean(t));
@@ -58,7 +59,7 @@ export function EndingPanel({ player, traits, ending, history }: Props) {
   const isLegend = ending === 'legend';
   const isChampion = ending === 'champion' || ending === 'retired_on_top';
   const careerReview = buildCareerReview(player, ending);
-  const recentHistory = (history ?? []).slice(-8).reverse();
+  const recentHistory = (showAllHistory ? [...(history ?? [])] : (history ?? []).slice(-8)).reverse();
 
   return (
     <div className="ending-panel-rich">
@@ -66,7 +67,7 @@ export function EndingPanel({ player, traits, ending, history }: Props) {
       <div className="ending-rich-header">
         <div className="ending-rich-label">生涯结束</div>
         <div className={`ending-rich-result${isLegend ? ' legend' : isChampion ? ' champion' : ''}`}>
-          {ending ? (ENDING_LABELS[ending] ?? ending) : '未知结局'}
+          {formatEnding(ending)}
         </div>
       </div>
 
@@ -110,13 +111,15 @@ export function EndingPanel({ player, traits, ending, history }: Props) {
 
       {recentHistory.length > 0 && (
         <div className="ending-section">
-          <div className="ending-section-title">回合历史</div>
+          <div className="ending-section-title">事件历史</div>
           <div className="timeline-list">
             {recentHistory.map((r) => (
               <div key={`${r.round}-${r.eventId}`} className="timeline-row">
                 <div className="timeline-top">
                   <span className="timeline-round">R{r.round}</span>
-                  <span className={`timeline-result ${r.success ? 'up' : 'down'}`}>{r.success ? '胜' : '负'}</span>
+                  <span className={`timeline-result ${r.success ? 'up' : 'down'}`}>
+                    {r.eventType === 'match' ? (r.success ? '胜' : '负') : (r.success ? '成功' : '失败')}
+                  </span>
                   <span className="timeline-title">{r.eventTitle}</span>
                 </div>
                 <div className="timeline-desc">→ {r.choiceLabel}</div>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getEventById } from '../../data/events/index.js';
 import { initPlayer } from '../player.js';
+import { MONEY_MAX } from '../constants.js';
 import {
   applyHomeFacilityUpgrade,
   applyHomeAssetAction,
@@ -11,6 +12,26 @@ import {
   processLivingEconomy,
 } from '../housing.js';
 import { processRecoverySystems } from '../recovery.js';
+
+function createHomeOwner(money: number, mortgagePrincipal?: number) {
+  const player = initPlayer({
+    name: 'HomeSaleTester',
+    traitIds: ['aim-god', 'tactical-mind', 'ice-cold'],
+    backgroundId: '',
+  });
+  player.stats.money = money;
+  player.housing = {
+    tier: 'owned-home',
+    movedAtRound: 0,
+    cityId: 'local-city',
+    assets: {
+      facilities: { trainingRoom: 0, reviewRoom: 0, restRoom: 0 },
+      renovationLevel: 0,
+      mortgagePrincipal,
+    },
+  };
+  return player;
+}
 
 describe('housing economy', () => {
   it('initializes rookies in shared housing', () => {
@@ -226,6 +247,65 @@ describe('housing economy', () => {
     expect(effects).toContain('住宿支出：标准公寓 -9K（核心城市）');
   });
 
+  const cityPrices = [
+    { cityId: 'local-city', purchase: 120, mortgage: 60, sale: 90, rentalMove: 6 },
+    { cityId: 'regional-hub', purchase: 144, mortgage: 72, sale: 108, rentalMove: 7 },
+    { cityId: 'major-hub', purchase: 180, mortgage: 90, sale: 135, rentalMove: 9 },
+    { cityId: 'low-cost-city', purchase: 102, mortgage: 51, sale: 77, rentalMove: 5 },
+  ] as const;
+
+  describe.each(cityPrices)('housing prices in $cityId', ({ cityId, purchase, mortgage, sale, rentalMove }) => {
+    it.each([false, true])('uses the city purchase price for two sale cycles (mortgaged: %s)', (mortgaged) => {
+      const player = createHomeOwner(600);
+      player.housing = { tier: 'basic-rental', movedAtRound: 0, cityId };
+      expect(effectiveMoveCost('owned-home', cityId)).toBe(purchase);
+
+      for (let cycle = 1; cycle <= 2; cycle += 1) {
+        const balanceBefore = player.stats.money;
+        const bought = applyHousingChange(player, 'owned-home');
+        expect(bought.success).toBe(true);
+        expect(player.stats.money).toBe(balanceBefore - purchase);
+        expect(bought.message).toContain(`搬家成本 -${purchase}K`);
+        if (mortgaged) {
+          expect(applyHomeAssetAction(player, 'mortgage').success).toBe(true);
+          expect(player.housing?.assets?.mortgagePrincipal).toBe(mortgage);
+          expect(player.stats.money).toBe(balanceBefore - purchase + mortgage);
+        }
+        const sold = applyHomeAssetAction(player, 'sell');
+        expect(sold.success).toBe(true);
+        expect(sold.message).toContain(`售价 ${sale}K`);
+        expect(player.stats.money).toBe(600 - cycle * (purchase - sale));
+        expect(player.housing?.assets).toBeUndefined();
+      }
+    });
+
+    it('checks affordability against the same city purchase price that it charges', () => {
+      const player = createHomeOwner(purchase - 1);
+      player.housing = { tier: 'basic-rental', movedAtRound: 0, cityId };
+      const before = structuredClone(player);
+
+      const rejected = applyHousingChange(player, 'owned-home');
+
+      expect(rejected.success).toBe(false);
+      expect(rejected.message).toContain(`${purchase}K`);
+      expect(player).toEqual(before);
+      player.stats.money = purchase;
+      expect(applyHousingChange(player, 'owned-home').success).toBe(true);
+      expect(player.stats.money).toBe(0);
+    });
+
+    it('charges city-adjusted moving costs for rental housing', () => {
+      const player = createHomeOwner(20);
+      player.housing = { tier: 'shared-housing', movedAtRound: 0, cityId };
+
+      const result = applyHousingChange(player, 'basic-rental');
+
+      expect(result.success).toBe(true);
+      expect(player.stats.money).toBe(20 - rentalMove);
+      expect(result.message).toContain(`搬家成本 -${rentalMove}K`);
+    });
+  });
+
   it('supports owned-home rental, mortgage, sale, and renovation actions', () => {
     const player = initPlayer({
       name: 'AssetOps',
@@ -262,7 +342,120 @@ describe('housing economy', () => {
     expect(player.housing?.tier).toBe('basic-rental');
     expect(player.housing?.cityId).toBe('regional-hub');
     expect(player.housing?.assets).toBeUndefined();
-    expect(player.stats.money).toBeGreaterThan(150);
+    expect(player.stats.money).toBe(152);
+    expect(sell.message).toContain('售价 122K');
+    expect(sell.message).toContain('清偿抵押 72K');
+    expect(sell.message).toContain('净入账 +50K');
+  });
+
+  it('credits the full sale price when there is no mortgage', () => {
+    const player = createHomeOwner(10);
+
+    const result = applyHomeAssetAction(player, 'sell');
+
+    expect(result.success).toBe(true);
+    expect(player.stats.money).toBe(100);
+    expect(result.message).toContain('售价 90K');
+    expect(result.message).toContain('清偿抵押 0K');
+    expect(result.message).toContain('净入账 +90K');
+  });
+
+  it('settles the outstanding mortgage before crediting sale proceeds', () => {
+    const player = createHomeOwner(100, 60);
+    player.round = 7;
+
+    const result = applyHomeAssetAction(player, 'sell');
+
+    expect(result.success).toBe(true);
+    expect(player.stats.money).toBe(130);
+    expect(player.housing).toEqual({ tier: 'basic-rental', movedAtRound: 7, cityId: 'local-city' });
+    expect(result.message).toContain('售价 90K');
+    expect(result.message).toContain('清偿抵押 60K');
+    expect(result.message).toContain('净入账 +30K');
+  });
+
+  it.each([
+    [MONEY_MAX - 50, MONEY_MAX - 20, 30],
+    [MONEY_MAX - 10, MONEY_MAX, 10],
+  ])('settles a sale against the balance limit from %iK', (balance, expectedBalance, credited) => {
+    const player = createHomeOwner(balance, 60);
+
+    const result = applyHomeAssetAction(player, 'sell');
+
+    expect(result.success).toBe(true);
+    expect(player.stats.money).toBe(expectedBalance);
+    expect(result.message).toContain('清偿抵押 60K');
+    expect(result.message).toContain(`净入账 +${credited}K`);
+    if (credited < 30) expect(result.message).toContain('资金上限');
+  });
+
+  it('preserves money, property, and debt when sale proceeds cannot cover the mortgage', () => {
+    const player = createHomeOwner(10, 140);
+    player.housing!.assets!.facilities = { trainingRoom: 2, reviewRoom: 1, restRoom: 1 };
+    player.housing!.assets!.renovationLevel = 1;
+    player.housing!.assets!.rentalActive = true;
+    const before = structuredClone(player);
+
+    const result = applyHomeAssetAction(player, 'sell');
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('资金不足');
+    expect(result.message).toContain('36K');
+    expect(player).toEqual(before);
+  });
+
+  it('uses available cash to fully settle mortgage debt above the sale price', () => {
+    const player = createHomeOwner(30, 120);
+
+    const result = applyHomeAssetAction(player, 'sell');
+
+    expect(result.success).toBe(true);
+    expect(player.stats.money).toBe(0);
+    expect(player.housing?.tier).toBe('basic-rental');
+    expect(player.housing?.assets).toBeUndefined();
+    expect(result.message).toContain('清偿抵押 120K');
+    expect(result.message).toContain('净入账 -30K');
+  });
+
+  it('does not create money across repeated buy, mortgage, and sale cycles', () => {
+    const player = createHomeOwner(240);
+    player.housing = { tier: 'basic-rental', movedAtRound: 0, cityId: 'local-city' };
+
+    for (const expectedBalance of [210, 180]) {
+      expect(applyHousingChange(player, 'owned-home').success).toBe(true);
+      expect(applyHomeAssetAction(player, 'mortgage').success).toBe(true);
+      expect(player.housing?.assets?.mortgagePrincipal).toBe(60);
+      expect(applyHomeAssetAction(player, 'sell').success).toBe(true);
+      expect(player.stats.money).toBe(expectedBalance);
+      expect(player.housing?.assets).toBeUndefined();
+    }
+  });
+
+  it.each(['shared-housing', 'basic-rental', 'standard-apartment', 'high-end-apartment'] as const)(
+    'prevents discarding a mortgaged property by moving to %s',
+    (targetTier) => {
+      const player = createHomeOwner(200, 60);
+      player.housing!.assets!.facilities.trainingRoom = 1;
+      player.housing!.assets!.rentalActive = true;
+      const before = structuredClone(player);
+
+      const result = applyHousingChange(player, targetTier);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('抵押');
+      expect(result.message).toContain('出售');
+      expect(player).toEqual(before);
+    },
+  );
+
+  it('still allows moving away from an unencumbered property', () => {
+    const player = createHomeOwner(20);
+
+    const result = applyHousingChange(player, 'basic-rental');
+
+    expect(result.success).toBe(true);
+    expect(player.stats.money).toBe(14);
+    expect(player.housing?.tier).toBe('basic-rental');
   });
 
   it('settles owned-home rental income and mortgage payment each week', () => {
@@ -290,7 +483,63 @@ describe('housing economy', () => {
     expect(player.stats.money).toBe(25);
     expect(effects).toContain('房产出租收入 +3K');
     expect(effects).toContain('房产抵押还款 -4K');
+    expect(player.housing?.assets?.mortgagePrincipal).toBe(56);
     expect(housingEventTags(player)).toEqual(expect.arrayContaining(['housing-city-low-cost-city', 'housing-rented-out', 'housing-mortgaged']));
+  });
+
+  it('reduces mortgage principal across weeks and stops charging after full repayment', () => {
+    const player = createHomeOwner(50, 6);
+    const firstWeek: string[] = [];
+    const secondWeek: string[] = [];
+    const thirdWeek: string[] = [];
+
+    processLivingEconomy(player, firstWeek, { rng: () => 0.99 });
+    expect(player.stats.money).toBe(43);
+    expect(player.housing?.assets?.mortgagePrincipal).toBe(2);
+    expect(firstWeek).toContain('房产抵押还款 -4K');
+
+    processLivingEconomy(player, secondWeek, { rng: () => 0.99 });
+    expect(player.stats.money).toBe(38);
+    expect(player.housing?.assets?.mortgagePrincipal).toBe(0);
+    expect(secondWeek).toContain('房产抵押还款 -2K');
+    expect(secondWeek).toContain('房产抵押已还清');
+    expect(housingEventTags(player)).not.toContain('housing-mortgaged');
+
+    processLivingEconomy(player, thirdWeek, { rng: () => 0.99 });
+    expect(player.stats.money).toBe(35);
+    expect(player.housing?.assets?.mortgagePrincipal).toBe(0);
+    expect(thirdWeek.some((effect) => effect.includes('房产抵押'))).toBe(false);
+  });
+
+  it.each([
+    { balance: 5, paid: 2, principal: 58 },
+    { balance: 3, paid: 0, principal: 60 },
+    { balance: 0, paid: 0, principal: 60 },
+  ])('reduces principal only by the actual payment with $balance K available', ({ balance, paid, principal }) => {
+    const player = createHomeOwner(balance, 60);
+    const effects: string[] = [];
+
+    processLivingEconomy(player, effects, { rng: () => 0.99 });
+
+    expect(player.stats.money).toBe(0);
+    expect(player.housing?.assets?.mortgagePrincipal).toBe(principal);
+    expect(effects).not.toContain('房产抵押还款 -4K');
+    if (paid > 0) expect(effects).toContain(`房产抵押还款 -${paid}K`);
+    else expect(effects.some((effect) => effect.startsWith('房产抵押还款 -'))).toBe(false);
+    expect(effects).toContain(`资金不足，房产抵押本周少还 ${4 - paid}K，剩余本金 ${principal}K`);
+  });
+
+  it('clears only the remaining principal when selling after a weekly repayment', () => {
+    const player = createHomeOwner(50, 60);
+    processLivingEconomy(player, [], { rng: () => 0.99 });
+
+    const result = applyHomeAssetAction(player, 'sell');
+
+    expect(result.success).toBe(true);
+    expect(player.stats.money).toBe(77);
+    expect(result.message).toContain('清偿抵押 56K');
+    expect(result.message).toContain('净入账 +34K');
+    expect(player.housing?.assets).toBeUndefined();
   });
 
   it('replaces normal housing rent with temporary venue costs during away tournament weeks', () => {

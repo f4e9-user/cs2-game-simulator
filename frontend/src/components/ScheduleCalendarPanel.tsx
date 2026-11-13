@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import type { CareerInsight, Player, TournamentInstance, TournamentWithResult } from '@/lib/types';
 import { PreMatchPreview } from '@/components/MatchPanel';
+import { useGameStore } from '@/store/gameStore';
 
 type CalendarBlock = NonNullable<CareerInsight['calendarBlocks']>[number];
 
@@ -59,6 +60,7 @@ export function ScheduleCalendarPanel({
   const [yearTournaments, setYearTournaments] = useState<TournamentWithResult[]>([]);
   const [openTournamentIds, setOpenTournamentIds] = useState<Set<string>>(new Set());
   const [tournamentLoading, setTournamentLoading] = useState(false);
+  const tournamentHistory = useGameStore((state) => state.tournamentHistory);
   const year = player.year ?? 1;
   const week = player.week ?? 1;
   const blocks = insight?.calendarBlocks ?? [];
@@ -71,7 +73,9 @@ export function ScheduleCalendarPanel({
     .flatMap((stage) => stage.matches.map((match) => ({ ...match, stageName: stage.name })))
     .filter((match) => match.completed)
     ?? [];
-  const clubLabel = (clubId: string): string => clubNamesById?.[clubId] ?? clubId;
+  const clubLabel = (clubId: string): string => activeTournamentInstance?.teams.find((team) => team.clubId === clubId)?.displayName
+    ?? tournamentHistory.find((summary) => summary.playerTeamClubId === clubId)?.playerTeamName
+    ?? clubNamesById?.[clubId] ?? clubId;
   const currentPlayerMatch = currentInstanceStage?.matches.find((match) => match.playerMatch && !match.completed);
   const nextOpponentClubId = currentPlayerMatch && activeTournamentInstance?.playerTeamClubId
     ? currentPlayerMatch.teamAClubId === activeTournamentInstance.playerTeamClubId
@@ -311,6 +315,27 @@ export function ScheduleCalendarPanel({
           )}
         </div>
       )}
+
+      {tournamentHistory.slice(0, 3).map((summary) => (
+        <div className="schedule-pre-match" key={summary.id}>
+          <div className="schedule-pre-match-title">
+            赛事结果 · {yearTournaments.find((tournament) => tournament.id === summary.tournamentId)?.displayName ?? summary.tournamentId}
+          </div>
+          <div className="schedule-qualifiers" style={{ marginTop: 10 }}>
+            {summary.playerFinalPlacement !== undefined && (
+              <span className="schedule-qualifier">你的名次 · 第 {summary.playerFinalPlacement} 名</span>
+            )}
+            {summary.championClubId && <span className="schedule-qualifier">冠军 {clubLabel(summary.championClubId)}</span>}
+            {summary.runnerUpClubId && <span className="schedule-qualifier muted">亚军 {clubLabel(summary.runnerUpClubId)}</span>}
+          </div>
+          {(summary.playerMatches ?? []).map((match) => (
+            <div className="schedule-list-meta" key={match.id} style={{ marginTop: 8 }}>
+              {clubLabel(match.teamAClubId)} vs {clubLabel(match.teamBClubId)} · {match.score}
+              {match.winnerClubId && ` · 胜 ${clubLabel(match.winnerClubId)}`}
+            </div>
+          ))}
+        </div>
+      ))}
 
       {view === 'calendar' ? (
         <div className="schedule-grid">

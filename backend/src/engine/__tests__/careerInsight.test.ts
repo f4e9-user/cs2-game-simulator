@@ -130,19 +130,28 @@ describe('buildCareerInsight', () => {
     const insight = buildCareerInsight(session({ round: 1 }));
 
     expect(insight.stage.stage).toBe('rookie');
+    expect(insight.stage.summary).toContain('直接向青训战队投递简历');
+    expect(insight.stage.mainObjective).toContain('不是投递门槛');
     expect(insight.milestones).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'rookie-to-youth', status: 'in_progress' }),
+      expect.objectContaining({ id: 'rookie-to-youth', status: 'ready', missing: [] }),
     ]));
-    expect(insight.milestones[0]?.missing).toEqual(expect.arrayContaining([
-      expect.stringContaining('C/B 级赛事'),
-      expect.stringContaining('B 级赛事'),
-      expect.stringContaining('冠军'),
-    ]));
+    expect(insight.milestones[0]?.progressText).toBe('青训申请资格 1/1');
+    expect(insight.milestones[0]?.nextStep).toContain('战队市场');
+    expect(insight.milestones[0]?.nextStep).toContain('25 AP');
     expect(insight.onboarding?.mode).toBe('first_round');
     expect(insight.opportunities[0]?.week).toBeGreaterThanOrEqual(1);
   });
 
-  it('marks promotion milestone ready when requirements are met', () => {
+  it.each([3, 5])('guides a rookie with no match history toward a scored application in week %s', (round) => {
+    const insight = buildCareerInsight(session({ round }));
+
+    expect(insight.onboarding?.message).toContain('直接');
+    expect(insight.onboarding?.message).toContain('评分');
+    expect(insight.onboarding?.checklist).not.toContain('补足赛事冠军或 B 级参赛');
+    expect(insight.promotion).toMatchObject({ ready: true, missing: [] });
+  });
+
+  it('keeps youth applications ready when a rookie has tournament history', () => {
     const insight = buildCareerInsight(session({
       tierParticipations: { c: 2, b: 1 },
       tierChampionships: { b: 1 },

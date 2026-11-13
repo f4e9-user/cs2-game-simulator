@@ -461,7 +461,7 @@ describe('game routes', () => {
     expect(endRes.status).toBe(200);
     expect(endBody.error).toBeUndefined();
     expect(endBody.status).toBe('ended');
-    expect(endBody.ending).toBe('career_ended');
+    expect(endBody.ending).toBe('voluntary_retirement');
     expect(endBody.player.stage).toBe('retired');
     expect(endBody.currentEvent).toBeNull();
     expect(endBody.queuedEvents ?? []).toHaveLength(0);
@@ -472,7 +472,7 @@ describe('game routes', () => {
     const saved = await app.request(`https://localhost/api/game/${started.sessionId}`, {}, env);
     const savedBody = await saved.json() as GameSession;
     expect(savedBody.status).toBe('ended');
-    expect(savedBody.ending).toBe('career_ended');
+    expect(savedBody.ending).toBe('voluntary_retirement');
     expect(savedBody.player.stage).toBe('retired');
 
     const summaryRes = await app.request(`https://localhost/api/game/${started.sessionId}/summary`, {
@@ -484,9 +484,15 @@ describe('game routes', () => {
 
     expect(summaryRes.status).toBe(200);
     expect(summaryBody.error).toBeUndefined();
-    expect(summaryBody.ending).toBe('career_ended');
-    expect(summaryBody.summary).toContain('完成了 2 轮生涯');
-    expect(summaryBody.summary).toContain('career_ended');
+    expect(summaryBody.ending).toBe('voluntary_retirement');
+    expect(summaryBody.summary).toContain('完成了 22 回合生涯');
+    expect(summaryBody.summary).toContain('主动结束职业生涯');
+    expect(summaryBody.summary).not.toContain('voluntary_retirement');
+
+    const refreshedSummary = await app.request(`https://localhost/api/game/${started.sessionId}/summary`, {
+      headers: { authorization: `Bearer ${started.apiToken}` },
+    }, env);
+    expect(await refreshedSummary.json()).toEqual(summaryBody);
   });
 
   it('creates bank loans with the requested repayment duration', async () => {

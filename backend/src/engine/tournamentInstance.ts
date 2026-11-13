@@ -108,13 +108,24 @@ function pairTeams(
 
 function rostersForTeams(session: GameSession, teams: TournamentTeamEntry[]): Record<string, WorldPlayer[]> {
   return Object.fromEntries(
-    teams.map((team) => [team.clubId, previewClubRuntime(session, team.clubId).fullRoster]),
+    teams.map((team) => [team.clubId, CLUBS.some((club) => club.id === team.clubId)
+      ? previewClubRuntime(session, team.clubId).fullRoster
+      : []]),
   );
 }
 
-export function createTournamentInstance(session: GameSession, tournament: Tournament): TournamentInstance {
+function freeAgentEntry(session: GameSession): TournamentTeamEntry {
+  return { clubId: `player-entry:${session.id}`, displayName: `${session.player.name}（自由人）`, seed: 1, source: 'player' };
+}
+
+export function createTournamentInstance(
+  session: GameSession,
+  tournament: Tournament,
+  options: { playerEntry?: boolean } = {},
+): TournamentInstance {
   const season = session.player.year ?? 1;
-  const playerTeamClubId = session.player.team?.clubId;
+  const soloEntry = options.playerEntry && !session.player.team ? freeAgentEntry(session) : undefined;
+  const playerTeamClubId = session.player.team?.clubId ?? soloEntry?.clubId;
   const selected: Club[] = [];
   const seen = new Set<string>();
 
@@ -127,17 +138,17 @@ export function createTournamentInstance(session: GameSession, tournament: Tourn
   }
 
   for (const club of seededClubs(session, tournament)) {
-    if (selected.length >= fieldSizeFor(tournament)) break;
+    if (selected.length >= fieldSizeFor(tournament) - (soloEntry ? 1 : 0)) break;
     if (seen.has(club.id)) continue;
     selected.push(club);
     seen.add(club.id);
   }
 
-  const teams: TournamentTeamEntry[] = selected.map((club, index) => ({
+  const teams: TournamentTeamEntry[] = [...(soloEntry ? [soloEntry] : []), ...selected.map((club, index) => ({
     clubId: club.id,
-    seed: index + 1,
+    seed: index + 1 + (soloEntry ? 1 : 0),
     source: club.id === playerTeamClubId ? 'player' : sourceForClub(club, tournament),
-  }));
+  } as TournamentTeamEntry))];
 
   const playerSeed = Math.max(0, teams.findIndex((team) => team.clubId === playerTeamClubId));
   const opponents = teams
@@ -180,6 +191,72 @@ export function createTournamentInstance(session: GameSession, tournament: Tourn
     playerTeamClubId,
     playerPath,
     teamRosters: rostersForTeams(session, teams),
+  };
+}
+
+// Old registered free-agent saves have a route but no participant in the field.
+// Only repair an active player registration, never a world-only tournament or history.
+export function ensurePlayerTournamentEntry(session: GameSession): GameSession {
+  const instance = session.activeTournamentInstance;
+  const pending = session.player.pendingMatch;
+  if (!instance || !pending || instance.status === 'completed' || instance.playerTeamClubId ||
+    instance.tournamentId !== pending.tournamentId ||
+    (pending.tournamentInstanceId && pending.tournamentInstanceId !== instance.id)) return session;
+
+  const entry = freeAgentEntry(session);
+  const playerPath = (instance.playerPath ?? []).map((path) => path.stageIndex === pending.stageIndex && pending.opponent
+    ? { ...path, opponentClubId: pending.opponent.clubId }
+    : path);
+  if (!playerPath.some((path) => path.stageIndex === pending.stageIndex) && pending.opponent) {
+    playerPath.push({ stageIndex: pending.stageIndex, opponentClubId: pending.opponent.clubId });
+  }
+  const pathIds = new Set(playerPath.map((path) => path.opponentClubId));
+  const missingOpponents: TournamentTeamEntry[] = [...pathIds]
+    .filter((clubId) => !instance.teams.some((team) => team.clubId === clubId))
+    .map((clubId) => ({ clubId, seed: 0, source: 'qualifier' }));
+  const repairedField = [...instance.teams, ...missingOpponents];
+  while (repairedField.length >= instance.teams.length) {
+    const replaceable = [...repairedField].reverse().find((team) => !pathIds.has(team.clubId));
+    if (!replaceable) break;
+    repairedField.splice(repairedField.indexOf(replaceable), 1);
+  }
+  const teams = [entry, ...repairedField]
+    .map((team, index) => ({ ...team, seed: index + 1 }));
+  const stages = instance.stages.map((stage, stageIndex) => {
+    const opponent = playerPath.find((path) => path.stageIndex === stageIndex)?.opponentClubId;
+    const priorResult = stageIndex < pending.stageIndex
+      ? session.history.filter((result) => result.eventId === `tournament-${instance.tournamentId}--${stageIndex}`).at(-1)
+      : undefined;
+    const pairings = pairTeams(roundParticipants(teams, stageIndex), entry.clubId, opponent);
+    return {
+      ...stage,
+      matches: pairings.map((pairing, index) => {
+        const existing = !pairing.playerMatch ? stage.matches.find((match) =>
+          match.teamAClubId === pairing.teamAClubId && match.teamBClubId === pairing.teamBClubId) : undefined;
+        if (existing) return existing;
+        return {
+          ...pairing,
+          id: pairing.playerMatch ? `${stage.id}:player` : `${stage.id}:match-${index}`,
+          roundId: stage.id,
+          seriesType: stage.seriesType ?? 'bo1' as const,
+          completed: pairing.playerMatch && Boolean(priorResult),
+          ...(pairing.playerMatch && priorResult ? {
+            winnerClubId: priorResult.success ? entry.clubId : opponent,
+            score: priorResult.seriesScore
+              ? `${priorResult.seriesScore.player}-${priorResult.seriesScore.opponent}`
+              : scoreForSeries(stage.seriesType ?? 'bo1', priorResult.success),
+          } : {}),
+        };
+      }),
+    };
+  });
+  return {
+    ...session,
+    player: { ...session.player, pendingMatch: { ...pending, tournamentInstanceId: instance.id } },
+    activeTournamentInstance: {
+      ...instance, teams, stages, playerTeamClubId: entry.clubId, playerPath,
+      teamRosters: { ...instance.teamRosters, ...rostersForTeams(session, missingOpponents) },
+    },
   };
 }
 
@@ -315,18 +392,20 @@ function rebuildNextStageFromWinners(
 }
 
 function fastForwardInstance(instance: TournamentInstance): TournamentInstance {
+  const lastPlayerMatch = instance.stages.flatMap((stage) => stage.matches)
+    .filter((match) => match.playerMatch && match.completed).at(-1);
+  const playerEliminated = lastPlayerMatch && lastPlayerMatch.winnerClubId !== instance.playerTeamClubId;
   let advancing = instance.teams.map((team) => team.clubId);
   const stages = instance.stages.map((stage, stageIndex) => {
     const completedMatches = stage.matches.filter((match) => match.completed);
     const existingWinners = completedMatches
       .map((match) => match.winnerClubId)
       .filter((clubId): clubId is string => Boolean(clubId));
-    const playerParticipants = new Set(
+    const completedParticipants = new Set(
       completedMatches
-        .filter((match) => match.playerMatch)
         .flatMap((match) => [match.teamAClubId, match.teamBClubId]),
     );
-    const remaining = advancing.filter((clubId) => !playerParticipants.has(clubId));
+    const remaining = advancing.filter((clubId) => !completedParticipants.has(clubId));
     const simulatedMatches: TournamentInstanceStage['matches'] = [];
     for (let i = 0; i + 1 < remaining.length; i += 2) {
       simulatedMatches.push(simulateMatchForTeams(
@@ -349,7 +428,9 @@ function fastForwardInstance(instance: TournamentInstance): TournamentInstance {
     if (advancing.length <= 1 && stageIndex < instance.stages.length - 1) {
       advancing = [
         advancing[0] ?? instance.teams[0]?.clubId ?? '',
-        ...instance.teams.map((team) => team.clubId).filter((clubId) => clubId !== advancing[0]).slice(0, 1),
+        ...instance.teams.map((team) => team.clubId)
+          .filter((clubId) => clubId !== advancing[0] && !(playerEliminated && clubId === instance.playerTeamClubId))
+          .slice(0, 1),
       ].filter(Boolean);
     }
     return {
@@ -370,6 +451,7 @@ export function recordPlayerMatchInInstance(
   won: boolean,
   matchStats?: MatchStats,
   playerName = '玩家',
+  seriesScore?: { player: number; opponent: number },
 ): TournamentInstance {
   const playerClubId = instance.playerTeamClubId;
   if (!playerClubId) return instance;
@@ -384,7 +466,9 @@ export function recordPlayerMatchInInstance(
           ...match,
           completed: true,
           winnerClubId: won ? playerClubId : opponentClubId,
-          score: scoreForSeries(match.seriesType, won),
+          score: seriesScore
+            ? `${seriesScore.player}-${seriesScore.opponent}`
+            : scoreForSeries(match.seriesType, won),
           standoutPlayerIds: [`${won ? playerClubId : opponentClubId}:starter-1`],
         };
       }),
@@ -441,9 +525,9 @@ function awardFor(clubId: string, instance: TournamentInstance, award: string, r
   };
 }
 
-function placementFloorForElimination(stageIndex: number, totalStages: number): number {
+function placementFloorForElimination(stageIndex: number, totalStages: number, fieldSize: number): number {
   const remainingAfterStage = 2 ** Math.max(0, totalStages - stageIndex - 1);
-  return remainingAfterStage + 1;
+  return Math.min(remainingAfterStage + 1, Math.floor(fieldSize / 2) + 1);
 }
 
 function finalPlacementsFor(instance: TournamentInstance, championClubId: string, runnerUpClubId: string): Record<string, number> {
@@ -465,10 +549,10 @@ function finalPlacementsFor(instance: TournamentInstance, championClubId: string
     }
   });
 
-  const fallbackPlacement = placementFloorForElimination(0, totalStages);
+  const fallbackPlacement = placementFloorForElimination(0, totalStages, instance.teams.length);
   const assigned = new Set([championClubId, runnerUpClubId]);
   for (let stageIndex = totalStages - 1; stageIndex >= 0; stageIndex--) {
-    const placement = placementFloorForElimination(stageIndex, totalStages);
+    const placement = placementFloorForElimination(stageIndex, totalStages, instance.teams.length);
     const slotCount = Math.max(1, placement - 1);
     const losers = [...(eliminatedByStage.get(stageIndex) ?? [])]
       .filter((clubId) => !assigned.has(clubId))
@@ -550,7 +634,9 @@ export function summarizeTournamentInstance(instance: TournamentInstance): Tourn
     championClubId: instance.awards?.championClubId,
     runnerUpClubId: instance.awards?.runnerUpClubId,
     playerTeamClubId: instance.playerTeamClubId,
+    playerTeamName: playerTeam?.displayName,
     playerFinalPlacement: playerTeam?.finalPlacement,
+    playerMatches: instance.stages.flatMap((stage) => stage.matches.filter((match) => match.playerMatch && match.completed)),
     awards: instance.awards,
   };
 }
